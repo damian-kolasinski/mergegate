@@ -77,8 +77,7 @@ async fn serve(
     run(Command::from(command), req.into_body()).await
 }
 
-/// Runs `git http-backend` with the request body on its stdin and answers
-/// with what it prints, both streamed.
+/// Both bodies are streamed.
 async fn run(mut command: Command, body: Body) -> Result<Response, Failure> {
     let mut child = command
         .stdin(Stdio::piped())
@@ -114,8 +113,7 @@ async fn run(mut command: Command, body: Body) -> Result<Response, Failure> {
     Ok((status, headers, Body::from_stream(body)).into_response())
 }
 
-/// Reads CGI headers up to the blank line that ends them. `Status` sets the
-/// response's status; the rest are HTTP headers.
+/// `Status` sets the response's status; the rest are HTTP headers.
 async fn cgi_headers(stdout: &mut BufReader<ChildStdout>) -> Option<(StatusCode, HeaderMap)> {
     let mut status = StatusCode::OK;
     let mut headers = HeaderMap::new();

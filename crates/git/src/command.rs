@@ -24,8 +24,8 @@ pub(crate) fn git(home: &Path) -> Command {
     cmd
 }
 
-/// Runs `git` with `args` and returns its stdout. `doing` names the step in
-/// errors, as in "fetching main from /src/app failed: ...".
+/// `doing` names the step in errors, as in "fetching main from /src/app
+/// failed: ...".
 pub(crate) fn run<I, S>(home: &Path, doing: &str, args: I) -> Result<String, GitError>
 where
     I: IntoIterator<Item = S>,
