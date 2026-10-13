@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture"
+  short_description: "Apply mergegate's slice and boundary rules"
+  default_prompt: "Use $architecture to decide where this change belongs and what it may depend on."
