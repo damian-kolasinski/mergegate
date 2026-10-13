@@ -27,7 +27,7 @@ If the work is over the limit, ship it as a stack of PRs instead of one:
 - Before creating anything, look up existing PRs for every stack branch (`gh pr list --head <branch>`) and reuse them.
 - Review, push and publish each PR against its own base, bottom first. Then edit every body so it starts with the stack: its position, links to the other PRs, and that PRs merge bottom first with a merge commit (not squash or rebase).
 - To change a lower PR, commit to its branch, then merge each branch into the one directly above it, bottom up. Do not rebase published stack branches.
-- After a lower PR merges, retarget the PR above it to the base branch. If shipping ends before that, list the pending retargets in the report.
+- After a lower PR merges, delete its branch (GitHub then retargets the PR above it to the base branch) or retarget the PR above by hand. A PR whose base is still a merged stack branch lands in that branch, not the base branch, so never merge one. If shipping ends before the retargets, list them in the report.
 
 If the work has no seam that keeps every piece coherent under the limit, ship one PR and explain why in its body.
 
