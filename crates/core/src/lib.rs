@@ -2,6 +2,7 @@
 //! reached through the port traits defined here and implemented by adapters.
 
 pub mod decision;
+pub mod diff;
 pub mod doctor;
 #[cfg(test)]
 mod fake;
