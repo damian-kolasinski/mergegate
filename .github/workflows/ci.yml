@@ -33,3 +33,8 @@ jobs:
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
+      - name: Performance budgets
+        # Shared macOS runners are too noisy to gate on; there they only report.
+        env:
+          MG_ENFORCE_BUDGETS: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
+        run: cargo test --release --locked -p mg --test contract -- --ignored --nocapture

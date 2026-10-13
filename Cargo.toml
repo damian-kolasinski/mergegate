@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 api = { path = "crates/api", package = "mergegate-api" }
 store-sqlite = { path = "crates/store-sqlite", package = "mergegate-store-sqlite" }
+hub = { path = "crates/hub", package = "mergegate-hub" }
 testkit = { path = "crates/testkit", package = "mergegate-testkit" }
 
 [workspace.lints.rust]
