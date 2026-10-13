@@ -1,0 +1,19 @@
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-inactive);
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--background-subtle);
+}
+
+/* The bar keeps the selection visible to people who can't tell the fills
+   apart. */
+.row[aria-current="true"] {
+  background: var(--background-selected);
+  box-shadow: inset 3px 0 var(--border-brand);
+}

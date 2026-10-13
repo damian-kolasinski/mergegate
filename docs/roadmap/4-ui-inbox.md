@@ -23,11 +23,11 @@ Taken by the agent:
 10. `ui/design-system/tokens.css` holds the Figma ramps as private `--ramp-*` properties and the semantic tokens (`--text-primary`, `--background-page`, …) as the only ones features use, with Figma's names. Copied by hand, with the Figma node id at the top; no sync script.
 11. DM Sans is self-hosted as one variable woff2 (latin subset), preloaded, `font-display: swap`. Code and ids use the system `ui-monospace` stack; Figma defines no mono.
 12. The dense screens use Figma's small styles: p3 body, p4 meta, label3 chips, h4/h5 headings.
-13. Tokens Figma lacks are derived from its ramps and marked as such: brand fill and row selection (blue 50/900), focus ring (`border-brand`), spacing (4 px steps), radius.
+13. Tokens Figma lacks are derived from its ramps and marked as such: brand fill (blue 700/100) and row selection (blue 100/900), focus ring (`border-brand`), spacing (4 px steps), radius.
 14. Assets keep plain names, served with ETag and `no-cache`; no precompression on loopback. Hash routing, so `/api` and `/git` stay as they are.
 15. `mg doctor` reports a hub built with the stub page; `.agents/prompts/install.md` sets `MG_REQUIRE_UI=1`.
 16. First paint under 100 ms (tech-stack.md §9), measured by Playwright, enforced on the Ubuntu CI job.
-17. Figma's `background-error/success/warning` are solid badge fills with `background-page` text (≥ 5.7:1 in both themes); tinted rows use the ramp's 50 step with the matching `text-*` (≥ 7.3:1).
+17. Figma's `background-error/success/warning` are solid badge fills with `background-page` text (≥ 5.7:1 in both themes); tinted rows use the ramp's lightest step (100, or 900 in dark) with the matching `text-*` (≥ 7.3:1).
 
 ## Where it lives
 
@@ -41,7 +41,7 @@ Taken by the agent:
 ## Stack
 
 - 4a `ui-1-build`: build.rs, embedding, stub page, `MG_REQUIRE_UI`, doctor check, ts-rs export, CI and check.sh, this brief. In review.
-- 4b `ui-2-design-system`: tokens, fonts, primitives, keyboard map. Planned.
+- 4b `ui-2-design-system`: tokens, fonts, primitives, keyboard map. In review.
 - 4c `ui-3-inbox`: inbox screen, SSE, Playwright scenarios and first-paint budget. Planned.
 
 ## Open

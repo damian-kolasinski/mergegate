@@ -8,7 +8,7 @@ Set up two installations of mergegate that never share state:
 ## Stable
 
 1. Find the latest release: `gh release view --repo damian-kolasinski/mergegate --json tagName --jq .tagName`. If there is none yet, use `main`.
-2. Install it: `cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --tag <tag> mg` (`--branch main` when there is no release). This puts `mg` in `~/.cargo/bin`. Check that `command -v mg` resolves there.
+2. Install it: `MG_REQUIRE_UI=1 cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --tag <tag> mg` (`--branch main` when there is no release). The build needs pnpm and Node 22 for the UI; `MG_REQUIRE_UI=1` makes it fail rather than install an `mg` without one. This puts `mg` in `~/.cargo/bin`. Check that `command -v mg` resolves there.
 3. Start the hub: `mg hub start`. Its data lives in `~/.mergegate`.
 4. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer.
 5. Run `mg doctor` and fix what it reports.
@@ -28,6 +28,7 @@ Prefer fixing forward to rolling back: a rollback loses review state written sin
 2. Point every dev command at its own data directory, as an absolute path: `export MERGEGATE_HOME="<absolute path to this checkout>/.mg-dev"`. The CLI finds the dev hub's address there.
 3. Run the dev hub in the foreground on its own port: `target/debug/mg hub start --foreground --port 7801`.
 4. Try changes on a scratch clone, never on this checkout: `mg init` there would replace the stable hub's `mergegate` remote.
+5. For UI work, run `pnpm --dir ui watch` and start the dev hub with `MG_UI_DIR="$PWD/ui/dist"`. It then serves the UI from disk, so a reload shows each rebuild without rebuilding `mg`.
 
 `.mg-dev/` is ignored by git. Delete it to start from an empty hub.
 

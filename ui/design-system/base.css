@@ -1,0 +1,64 @@
+/* Element defaults. Everything else is styled by a primitive's own module. */
+
+/* One variable file covers every weight; index.html preloads it. */
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("@fontsource-variable/dm-sans/files/dm-sans-latin-wght-normal.woff2")
+    format("woff2");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background-page);
+  color: var(--text-primary);
+  font: var(--type-p3);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+code,
+kbd {
+  font: var(--type-mono);
+}
+
+a {
+  color: var(--text-brand);
+}
+
+a:hover {
+  color: var(--text-brand-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--background-selected);
+}
