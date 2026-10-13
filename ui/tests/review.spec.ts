@@ -113,6 +113,61 @@ test("f6 a gap between hunks expands", async ({ page, hub }) => {
   await expect(line).toBeVisible();
 });
 
+test("f6 v marks the current file viewed and moves on", async ({
+  page,
+  hub,
+}) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const screen = page.getByRole("region", { name: "app#1" });
+  const current = screen
+    .getByRole("navigation", { name: "Files" })
+    .locator("li[aria-current=true]");
+  const changed = page.getByText("changed 10", { exact: true });
+  await expect(changed).toBeVisible();
+  await page.keyboard.press("v");
+  await expect(current).toContainText("gone.txt");
+  await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
+  await expect(screen.getByText("1/4 viewed")).toBeVisible();
+  // Collapsed to its header, and out of the cursor's way.
+  await expect(changed).toHaveCount(0);
+  const cursor = page.locator("[data-line][data-selected-line]");
+  await expect(cursor).toHaveText("bye");
+  await page.keyboard.press("k");
+  await expect(cursor).toHaveText("bye");
+
+  // The hub keeps it.
+  await page.reload();
+  await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
+  await expect(page.getByText("bye", { exact: true })).toBeVisible();
+  await expect(changed).toHaveCount(0);
+
+  await page.keyboard.press("v");
+  await expect(screen.getByLabel("Viewed a.txt")).not.toBeChecked();
+  await expect(changed).toBeVisible();
+  await expect(current).toContainText("a.txt");
+  await expect(screen.getByText("0/4 viewed")).toBeVisible();
+});
+
+test("f6 a file's checkbox marks it viewed", async ({ page, hub }) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const files = page.getByRole("navigation", { name: "Files" });
+  await files.getByLabel("Viewed new.txt").check();
+  await expect(page.getByText("1/4 viewed")).toBeVisible();
+  await expect(page.getByText("hello", { exact: true })).toHaveCount(0);
+  // The checkbox doesn't keep the keys.
+  await page.keyboard.press("n");
+  await expect(files.locator("li[aria-current=true]")).toContainText(
+    "gone.txt",
+  );
+
+  await page.reload();
+  await expect(files.getByLabel("Viewed new.txt")).toBeChecked();
+});
+
 test("f6 escape goes back to the inbox", async ({ page, hub }) => {
   submitChange(hub);
   await page.goto(`${hub.url}#/items/app%231`);

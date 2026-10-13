@@ -32,7 +32,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
-| 5 | Review screen | Diff API, diff view, file list, keyboard navigation, replacing the `#/items/<id>` stub | F6 (viewing) | — |
 | 6 | Feedback loop | Draft comments, submitting a review, event log (also on the UI's SSE stream), `mg wait` (cursor, exit codes 0/75/3), `mg feedback`, `mg reply`, replies in the UI | F3, F6, F7 | — |
 | 7 | Approve and merge (local) | Test-merge, push into the operator's repo, hold when the checkout is dirty, `merge.conflict`, `mg abandon`, dropping a closed item's revision pins | F8, F9, F14 | — |
 | 8 | Agent skill | Embedded skill, `mg skill install`, `mg resume`, `--wake`; a test that every command the skill names exists | F3, F14 | — |

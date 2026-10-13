@@ -1,7 +1,8 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import type { File } from "../api/File";
 import type { ItemDiff } from "../api/ItemDiff";
-import { getJson } from "../app/hub";
+import type { MarkViewed } from "../api/MarkViewed";
+import { getJson, putJson } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { inboxHref } from "../app/router";
 import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
@@ -45,9 +46,43 @@ function Review(props: { diff: ItemDiff }) {
   const blobUrl = (id: string) =>
     `/api/projects/${encodeURIComponent(project())}/blobs/${id}`;
 
-  // `j/k` walk every file's lines as one list.
-  const lines = createMemo(() => props.diff.files.flatMap(rowsOf));
-  const [cursor, setCursor] = createSignal<number>();
+  // Marks made here, shown before the hub confirms them.
+  const [marks, setMarks] = createSignal<ReadonlyMap<string, boolean>>(
+    new Map(),
+  );
+  const [failure, setFailure] = createSignal<string>();
+  const isViewed = (file: File) => marks().get(file.path) ?? file.viewed;
+  const viewed = createMemo(
+    () =>
+      new Set(
+        props.diff.files.filter(isViewed).map((file) => file.path),
+      ) as ReadonlySet<string>,
+  );
+  const mark = (path: string, value: boolean) => {
+    const id = props.diff.item.id;
+    const body: MarkViewed = {
+      revision: props.diff.item.revision.number,
+      path,
+      viewed: value,
+    };
+    setFailure(undefined);
+    setMarks((all) => new Map(all).set(path, value));
+    putJson(`/api/items/${encodeURIComponent(id)}/viewed`, body).catch(
+      (error: unknown) => {
+        setMarks((all) => new Map(all).set(path, !value));
+        setFailure(error instanceof Error ? error.message : String(error));
+      },
+    );
+  };
+
+  // `j/k` walk every file's lines as one list; a viewed file's are hidden.
+  const lines = createMemo(() =>
+    props.diff.files.filter((file) => !viewed().has(file.path)).flatMap(rowsOf),
+  );
+  const order = createMemo(
+    () => new Map(props.diff.files.map((file, index) => [file.path, index])),
+  );
+  const [cursor, setCursor] = createSignal<Line>();
   // The file at the top of the diff, or the one last moved to.
   const [scrolled, setCurrent] = createSignal<string>();
   const current = () => scrolled() ?? props.diff.files[0]?.path;
@@ -56,7 +91,7 @@ function Review(props: { diff: ItemDiff }) {
   const moveCursor = (index: number) => {
     const line = lines()[index];
     if (!line) return;
-    setCursor(index);
+    setCursor(line);
     setCurrent(line.path);
     view?.showRow(line);
   };
@@ -72,32 +107,49 @@ function Review(props: { diff: ItemDiff }) {
     view?.showFile(path);
   };
   const stepFile = (step: number) => {
-    const files = props.diff.files;
-    const index = files.findIndex((file) => file.path === current());
-    const next = files[index + step];
+    const next = props.diff.files[(order().get(current() ?? "") ?? 0) + step];
     if (next) showFile(next.path);
   };
-  /** The cursor, or before the current file's first line when it has none. */
-  const position = () =>
-    cursor() ?? lines().findIndex((line) => line.path === current()) - 1;
+  /**
+   * The cursor's index in `lines`, or a half step before the first line at
+   * or after the current file when the cursor is on none of them.
+   */
+  const position = () => {
+    const all = lines();
+    const at = all.findIndex((line) => same(line, cursor()));
+    if (at !== -1) return at;
+    const from = order().get(current() ?? "") ?? 0;
+    const next = all.findIndex((line) => (order().get(line.path) ?? 0) >= from);
+    return (next === -1 ? all.length : next) - 0.5;
+  };
+  const after = (at: number, step: number) =>
+    step > 0 ? Math.floor(at) + 1 : Math.ceil(at) - 1;
   const stepLine = (step: number) => {
-    const at = position();
-    moveCursor(Math.min(Math.max(at + step, 0), lines().length - 1));
+    const at = after(position(), step);
+    moveCursor(Math.min(Math.max(at, 0), lines().length - 1));
   };
   const stepHunk = (step: number) => {
     const all = lines();
-    for (let at = position() + step; at >= 0 && at < all.length; at += step) {
+    for (
+      let at = after(position(), step);
+      at >= 0 && at < all.length;
+      at += step
+    ) {
       if (all[at]?.hunkStart) return moveCursor(at);
     }
   };
   const onRow = (row: Line) => {
-    const index = lines().findIndex(
-      (line) =>
-        line.path === row.path &&
-        line.side === row.side &&
-        line.line === row.line,
-    );
-    if (index !== -1) setCursor(index);
+    const line = lines().find((line) => same(line, row));
+    if (line) setCursor(line);
+  };
+  /** Marking the current file viewed moves on to the next one. */
+  const toggleViewed = () => {
+    const file = props.diff.files[order().get(current() ?? "") ?? -1];
+    if (!file) return;
+    const value = !viewed().has(file.path);
+    mark(file.path, value);
+    if (value && file !== props.diff.files.at(-1)) stepFile(1);
+    else showFile(file.path);
   };
 
   useKeys({
@@ -107,6 +159,7 @@ function Review(props: { diff: ItemDiff }) {
     k: () => stepLine(-1),
     "]": () => stepHunk(1),
     "[": () => stepHunk(-1),
+    v: toggleViewed,
   });
 
   return (
@@ -123,6 +176,12 @@ function Review(props: { diff: ItemDiff }) {
           additions={props.diff.item.revision.additions}
           deletions={props.diff.item.revision.deletions}
         />
+        <Meta>
+          {viewed().size}/{props.diff.files.length} viewed
+        </Meta>
+        <Show when={failure()}>
+          {(message) => <Meta tone="removed">{message()}</Meta>}
+        </Show>
       </header>
       <nav class={styles.files} aria-label="Files">
         <ul>
@@ -133,7 +192,11 @@ function Review(props: { diff: ItemDiff }) {
                 onSelect={() => showFile(file.path)}
                 onOpen={() => undefined}
               >
-                <FileEntry file={file} />
+                <FileEntry
+                  file={file}
+                  viewed={viewed().has(file.path)}
+                  onViewed={(value) => mark(file.path, value)}
+                />
               </Row>
             )}
           </For>
@@ -146,6 +209,7 @@ function Review(props: { diff: ItemDiff }) {
         >
           <DiffView
             files={props.diff.files}
+            viewed={viewed()}
             blobUrl={blobUrl}
             onFile={setCurrent}
             onRow={onRow}
@@ -159,9 +223,34 @@ function Review(props: { diff: ItemDiff }) {
   );
 }
 
-function FileEntry(props: { file: File }) {
+function same(line: Line, other: Line | undefined): boolean {
+  return (
+    line.path === other?.path &&
+    line.side === other.side &&
+    line.line === other.line
+  );
+}
+
+function FileEntry(props: {
+  file: File;
+  viewed: boolean;
+  onViewed: (viewed: boolean) => void;
+}) {
   return (
     <>
+      <input
+        type="checkbox"
+        class={styles.viewed}
+        checked={props.viewed}
+        aria-label={`Viewed ${props.file.path}`}
+        // The row would show the file too.
+        onClick={(event) => event.stopPropagation()}
+        onChange={(event) => {
+          props.onViewed(event.currentTarget.checked);
+          // A focused field keeps keys from the shortcuts.
+          event.currentTarget.blur();
+        }}
+      />
       <span class={styles.path} title={props.file.path}>
         <Mono>{props.file.path}</Mono>
       </span>
