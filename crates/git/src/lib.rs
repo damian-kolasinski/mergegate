@@ -3,6 +3,7 @@
 //! transport and repo format the operator's repos may use.
 
 mod command;
+mod diff;
 mod http;
 mod inspect;
 mod items;

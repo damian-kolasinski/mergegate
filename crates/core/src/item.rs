@@ -1,6 +1,7 @@
 //! Items: units of work submitted for review, one revision per submit.
 
 mod branch;
+mod diff_files;
 mod error;
 mod git;
 mod id;
@@ -11,7 +12,7 @@ mod submit;
 
 pub use branch::valid_branch;
 pub use error::ItemError;
-pub use git::{FileStat, ItemGit, valid_commit};
+pub use git::{ChangedFile, FileStat, ItemGit, valid_commit};
 pub use id::{IdError, ItemId};
 pub use inbox::{Inbox, inbox};
 pub use state::ItemState;
@@ -45,8 +46,8 @@ pub struct Revision {
     pub submitted_at: String,
 }
 
-/// Totals over a revision's files. Binary files count as changed files with
-/// no lines.
+/// Totals over a revision's files. Files whose change isn't text count as
+/// changed files with no lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DiffStat {
     pub files: u32,

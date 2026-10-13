@@ -1,4 +1,4 @@
-use mergegate_core::item::FileStat;
+use mergegate_core::item::{ChangedFile, FileStat};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 
 use super::*;
@@ -28,14 +28,22 @@ fn revision(head: char) -> NewRevision {
         base: "0".repeat(40),
         files: vec![
             FileStat {
-                path: "src/new.rs".into(),
-                old_path: Some("src/old.rs".into()),
+                file: ChangedFile {
+                    path: "src/new.rs".into(),
+                    old_path: Some("src/old.rs".into()),
+                    old_blob: Some("1".repeat(40)),
+                    new_blob: Some(head.to_string().repeat(40)),
+                },
                 additions: Some(5),
                 deletions: Some(2),
             },
             FileStat {
-                path: "logo.png".into(),
-                old_path: None,
+                file: ChangedFile {
+                    path: "logo.png".into(),
+                    old_path: None,
+                    old_blob: None,
+                    new_blob: Some("2".repeat(40)),
+                },
                 additions: None,
                 deletions: None,
             },

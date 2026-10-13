@@ -30,7 +30,7 @@ Opening an item shows its diff: every changed file in one scrolling column with 
 ## Stack
 
 - `review-1-diff`: the diff engine, plus this brief. *Done.*
-- `review-2-cache`: blob IDs from git, diffs computed and cached at submit, migration `0004`. *Planned.*
+- `review-2-cache`: blob IDs from git, diffs computed and cached at submit, migration `0004`. *Done.*
 - `review-3-api`: `GET /api/items/{id}` and the blob route. *Planned.*
 - `review-4-screen`: CodeView wrapper, review screen, file list, keys, expansion, Playwright spec and scroll benchmark. *Planned.*
 - `review-5-viewed`: viewed marks (migration `0005`, routes, `v`, checkboxes), F6 wording, deleting this brief and roadmap row 5. *Planned.*

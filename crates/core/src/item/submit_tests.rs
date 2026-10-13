@@ -1,4 +1,5 @@
 use super::*;
+use crate::diff::Content;
 use crate::fake::{FakeGit, FakeStore, commit};
 use crate::item::{DiffStat, ItemId};
 use crate::project::{Backend, Project, ProjectError, ProjectName};
@@ -104,6 +105,37 @@ fn a_new_head_adds_a_revision_and_returns_the_item_for_review() {
     assert_ne!(item.revision.submitted_at, first.revision.submitted_at);
     assert_eq!(git.pins()["refs/mergegate/items/1/r2"], commit(3));
     assert_eq!(store.items().len(), 1);
+}
+
+#[test]
+fn caches_each_files_diff_and_reuses_it_in_later_revisions() {
+    let (mut store, git) = setup();
+    let git = git.commit(&commit(5), Some(&commit(3)), "Changelog", &["CHANGELOG"]);
+    git.push("app", "login", &commit(3));
+    submit(&mut store, &git, request("app", "login", 3)).unwrap();
+    let login = (None, Some(format!("{}\n{}\n", commit(2), commit(3))));
+    let Content::Text(hunks) = &store.diffs()[&login].content else {
+        panic!("not text");
+    };
+    assert_eq!(
+        (hunks[0].old_start, hunks[0].new_start, hunks[0].lines.len()),
+        (0, 1, 2)
+    );
+    let read = git.blobs_read().len();
+
+    git.push("app", "login", &commit(5));
+    let item = submit(&mut store, &git, request("app", "login", 5))
+        .unwrap()
+        .item;
+    assert_eq!(git.blobs_read()[read..], [format!("{}\n", commit(5))]);
+    assert_eq!(
+        item.revision.stat,
+        DiffStat {
+            files: 3,
+            additions: 4,
+            deletions: 0
+        }
+    );
 }
 
 #[test]

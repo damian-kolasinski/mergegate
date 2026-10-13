@@ -5,9 +5,11 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::git::{Git, GitError, Repo};
 use crate::item::{
-    DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem, NewRevision, Revision,
+    ChangedFile, DiffStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem, NewRevision,
+    Revision,
 };
 use crate::project::{Project, ProjectName, ProjectStore};
 use crate::store::StoreError;
@@ -34,6 +36,7 @@ pub(crate) struct FakeGit {
     synced: RefCell<Vec<(String, PathBuf, String)>>,
     fetched: RefCell<Vec<(String, String)>>,
     pins: RefCell<BTreeMap<String, String>>,
+    blobs_read: RefCell<Vec<String>>,
 }
 
 impl Default for FakeGit {
@@ -48,6 +51,7 @@ impl Default for FakeGit {
             synced: RefCell::default(),
             fetched: RefCell::default(),
             pins: RefCell::default(),
+            blobs_read: RefCell::default(),
         }
     }
 }
@@ -85,7 +89,8 @@ impl FakeGit {
         self
     }
 
-    /// Adds commit `id` on top of `parent`, changing `files` by one line each.
+    /// Adds commit `id` on top of `parent`, adding a line to each of `files`:
+    /// the commit's ID.
     pub fn commit(mut self, id: &str, parent: Option<&str>, subject: &str, files: &[&str]) -> Self {
         let commit = Commit {
             parent: parent.map(Into::into),
@@ -125,6 +130,11 @@ impl FakeGit {
         self.pins.borrow().clone()
     }
 
+    /// Every blob `blobs` was asked for.
+    pub fn blobs_read(&self) -> Vec<String> {
+        self.blobs_read.borrow().clone()
+    }
+
     /// Newest first.
     fn history(&self, id: &str) -> Vec<String> {
         let mut history = Vec::new();
@@ -134,6 +144,21 @@ impl FakeGit {
             history.push(id);
         }
         history
+    }
+
+    /// `path`'s blob at `commit`, empty if it doesn't exist there. A blob's
+    /// ID is its content.
+    fn blob(&self, commit: &str, path: &str) -> String {
+        self.history(commit)
+            .iter()
+            .rev()
+            .filter(|id| {
+                self.commits
+                    .get(*id)
+                    .is_some_and(|c| c.files.iter().any(|f| f == path))
+            })
+            .map(|id| format!("{id}\n"))
+            .collect()
     }
 
     /// Newest first.
@@ -239,20 +264,20 @@ impl ItemGit for FakeGit {
         _project: &ProjectName,
         base: &str,
         head: &str,
-    ) -> Result<Vec<FileStat>, GitError> {
-        let mut lines: BTreeMap<String, u64> = BTreeMap::new();
-        for id in self.range(base, head) {
-            for file in &self.commits[&id].files {
-                *lines.entry(file.clone()).or_default() += 1;
-            }
-        }
-        Ok(lines
+    ) -> Result<Vec<ChangedFile>, GitError> {
+        let paths: BTreeSet<&String> = self
+            .range(base, head)
+            .iter()
+            .flat_map(|id| &self.commits[id].files)
+            .collect();
+        let blob = |commit, path| Some(self.blob(commit, path)).filter(|b| !b.is_empty());
+        Ok(paths
             .into_iter()
-            .map(|(path, added)| FileStat {
-                path,
+            .map(|path| ChangedFile {
+                path: path.clone(),
                 old_path: None,
-                additions: Some(added),
-                deletions: Some(0),
+                old_blob: blob(base, path),
+                new_blob: blob(head, path),
             })
             .collect())
     }
@@ -277,11 +302,27 @@ impl ItemGit for FakeGit {
     }
 }
 
+impl DiffGit for FakeGit {
+    fn blobs(
+        &self,
+        _project: &ProjectName,
+        ids: &[&str],
+    ) -> Result<Vec<Option<Vec<u8>>>, GitError> {
+        self.blobs_read
+            .borrow_mut()
+            .extend(ids.iter().map(|id| (*id).to_owned()));
+        Ok(ids.iter().map(|id| Some(id.as_bytes().to_vec())).collect())
+    }
+}
+
+type BlobPair = (Option<String>, Option<String>);
+
 #[derive(Default)]
 pub(crate) struct FakeStore {
     projects: BTreeMap<ProjectName, Project>,
     /// Oldest first.
     items: Vec<Item>,
+    diffs: BTreeMap<BlobPair, FileDiff>,
     clock: u32,
 }
 
@@ -297,6 +338,10 @@ impl FakeStore {
     fn now(&mut self) -> String {
         self.clock += 1;
         format!("2026-01-01T00:00:{:02}Z", self.clock)
+    }
+
+    pub fn diffs(&self) -> &BTreeMap<BlobPair, FileDiff> {
+        &self.diffs
     }
 
     fn revision(&mut self, number: u32, revision: NewRevision) -> Revision {
@@ -401,4 +446,24 @@ impl ItemStore for FakeStore {
         item.revision = revision;
         Ok(item.clone())
     }
+}
+
+impl DiffStore for FakeStore {
+    fn diff(&self, old: Option<&str>, new: Option<&str>) -> Result<Option<FileDiff>, StoreError> {
+        Ok(self.diffs.get(&pair(old, new)).cloned())
+    }
+
+    fn insert_diff(
+        &mut self,
+        old: Option<&str>,
+        new: Option<&str>,
+        diff: &FileDiff,
+    ) -> Result<(), StoreError> {
+        self.diffs.insert(pair(old, new), diff.clone());
+        Ok(())
+    }
+}
+
+fn pair(old: Option<&str>, new: Option<&str>) -> BlobPair {
+    (old.map(Into::into), new.map(Into::into))
 }
