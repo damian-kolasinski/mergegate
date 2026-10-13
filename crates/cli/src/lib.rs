@@ -3,8 +3,12 @@
 mod client;
 mod doctor_cmd;
 mod hub_cmd;
+mod inbox_cmd;
+mod init_cmd;
 pub mod output;
 mod project_cmd;
+mod repo;
+mod submit_cmd;
 
 use std::ffi::OsString;
 use std::process::ExitCode;
@@ -43,6 +47,21 @@ enum Command {
     /// Register repos as projects and change their settings
     #[command(subcommand)]
     Project(project_cmd::ProjectCommand),
+    /// In a clone: add the `mergegate` remote, pointing at its project
+    Init {
+        /// Project to push to [default: the one registered for this repo]
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// Push the current branch to the hub and submit it for review; again
+    /// from the same branch, add a revision
+    Submit {
+        /// Item title [default: the first commit's subject]
+        #[arg(long)]
+        title: Option<String>,
+    },
+    /// Open items: those waiting for review, with their agents, merging
+    Inbox,
     /// Check that the hub, git and every project are set up to work
     Doctor,
 }
@@ -62,6 +81,9 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
     match command {
         Command::Hub(command) => hub_cmd::run(command),
         Command::Project(command) => project_cmd::run(command),
+        Command::Init { project } => init_cmd::run(project),
+        Command::Submit { title } => submit_cmd::run(title),
+        Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),
     }
 }
