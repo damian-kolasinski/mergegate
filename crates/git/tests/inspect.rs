@@ -44,6 +44,50 @@ fn a_bare_repo_is_rooted_at_its_git_dir() {
 }
 
 #[test]
+fn a_file_inside_the_repo_finds_the_repo() {
+    let repo = TestRepo::new("app");
+    let file = repo.root().join("README.md");
+    std::fs::write(&file, "hi").unwrap();
+    assert_eq!(hub_git().inspect(&file).unwrap().root, repo.root());
+}
+
+#[test]
+fn worktrees_of_a_bare_repo_resolve_to_the_bare_repo() {
+    let repo = TestRepo::new("app");
+    let bare = repo.bare_clone("layout/.bare");
+    let layout = bare.parent().unwrap();
+    // The bare-repo layout: `.git` is a file pointing at `.bare`, and each
+    // branch is checked out as a linked worktree next to it.
+    std::fs::write(layout.join(".git"), "gitdir: ./.bare\n").unwrap();
+    let wip = layout.join("wip");
+    testkit::git(
+        &bare,
+        [
+            std::ffi::OsStr::new("worktree"),
+            "add".as_ref(),
+            "--quiet".as_ref(),
+            "-b".as_ref(),
+            "wip".as_ref(),
+            wip.as_os_str(),
+        ],
+    );
+
+    for path in [layout.to_owned(), wip] {
+        let found = hub_git().inspect(&path).unwrap();
+        assert_eq!(found.root, bare, "{path:?}");
+        assert_eq!(found.branches, ["main", "wip"], "{path:?}");
+    }
+}
+
+#[test]
+fn a_repo_that_cannot_be_read_is_not_reported_as_missing() {
+    let repo = TestRepo::new("app");
+    std::fs::write(repo.root().join(".git/config"), "[core\n").unwrap();
+    let err = hub_git().inspect(repo.root()).unwrap_err();
+    assert!(matches!(err, GitError::Failed(_)), "{err:?}");
+}
+
+#[test]
 fn a_repo_without_commits_has_no_branches() {
     let repo = TestRepo::empty("app");
     let found = hub_git().inspect(repo.root()).unwrap();
