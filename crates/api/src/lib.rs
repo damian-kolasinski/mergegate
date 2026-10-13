@@ -1,8 +1,10 @@
 //! Wire types shared by the CLI, the hub and (later) the UI.
 
 pub mod decision;
+pub mod doctor;
 pub mod error;
 pub mod hub;
+pub mod project;
 
 /// Version of the HTTP API between `mg` and the hub. A CLI refuses to talk to
 /// a hub with a different API version, except through the endpoints every

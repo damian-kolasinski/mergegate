@@ -652,6 +652,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mergegate-core"
+version = "0.1.0"
+dependencies = [
+ "mergegate-api",
+ "thiserror",
+]
+
+[[package]]
 name = "mergegate-hub"
 version = "0.1.0"
 dependencies = [
