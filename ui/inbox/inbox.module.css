@@ -17,11 +17,6 @@
   color: var(--text-primary);
 }
 
-.revision {
-  flex: none;
-  width: 4em;
-}
-
 .figure {
   flex: none;
   width: 5em;
