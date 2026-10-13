@@ -16,6 +16,7 @@ crates/
   <adapter>/       one crate per port implementation, e.g. backend-github, store-sqlite
   hub/             composition root of the daemon
   cli/             composition root of mg
+  testkit/         test harness: drives the real hub, git and mg binaries
 ui/
   design-system/   tokens and primitives; all styling goes through it
   <feature>/       UI features

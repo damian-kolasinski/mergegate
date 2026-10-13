@@ -1,6 +1,6 @@
 # mergegate — system & UX design
 
-Status: draft v0.1 · 2026-10-12 · tech stack in [tech-stack.md](tech-stack.md)
+Status: draft v0.1 · 2026-10-13 · tech stack in [tech-stack.md](tech-stack.md)
 
 ## 1. Problem
 
@@ -21,6 +21,7 @@ Goals
 - Local review UI that replaces the GitHub web UI for day-to-day review, while keeping GitHub (or plain git) as the system of record.
 - Files ordered by review relevance; trusted file kinds pushed out of the way.
 - Inbox across all pending work, ordered by priority.
+- Stacked items: an agent splits work too big for one review into a stack, each item reviewed on its own and landed bottom first (§5.1).
 - A CLI that any agent (Claude Code, Codex, opencode, Cursor, …) can use to submit work and receive feedback, so the feedback loop is closed without copy-paste.
 - External reviewers keep working: cloud bots (Codex / Claude GitHub connectors) and any human who comments on the GitHub PR. Their comments flow into mergegate, the agent addresses them, and the operator sees each comment's status.
 - Works across machines on a tailnet: agents on worker machines, UI on the operator's machine.
@@ -34,7 +35,6 @@ Non-goals (v1)
 - Editing code in the UI.
 - GitLab / Bitbucket backends (but the backend is an interface, see §8).
 - Multi-repo inbox UX (but the data model is multi-project from day one).
-- Stacked / dependent items. Every agent works in its own worktree off the target branch.
 - CI integration and "merge when green". CI status may be displayed if present, but nothing waits on it.
 - Posting anything back to GitHub other than branches, PRs, and merges.
 
@@ -50,9 +50,10 @@ Non-goals (v1)
 | **External reviewer** | Anyone commenting on the GitHub PR who isn't the operator: cloud bots or human teammates. |
 | **Item** | A unit of work awaiting review (≈ a PR). Identified by project + branch. |
 | **Revision** | One submitted snapshot of an item (`r1`, `r2`, …). Every `mg submit` on the same branch adds a revision. |
+| **Stack** | Items built on each other. An item submitted with `--on <item>` is that item's *child*: its diff is against the parent, and it lands after it. |
 | **Authoring agent** | The agent that produced the item. Submits it, waits for feedback, and addresses it. |
 | **Operator agent** | The agent the operator talks to that plans and dispatches work. It knows what blocks what, so it sets item priority. |
-| **Event** | Anything an authoring agent should react to: operator review, external comments, merge conflict, merged. |
+| **Event** | Anything an authoring agent should react to: operator review, external comments, merge conflict, a change to its parent item, merged. |
 | **Tier** | Which group a changed file is in: `review` (ordered by importance) or `trusted` (hidden). |
 | **Rule** | A deterministic matcher that assigns a tier. |
 | **Judge** | Optional model that ranks and annotates files (and can help rank items). Pluggable provider. |
@@ -86,7 +87,7 @@ Principles
   - `github`: the hub pushes the branch to GitHub and opens or updates the PR. Merging uses the GitHub API.
   - `local`: the hub merges in staging (`git merge-tree`, no working tree needed), then pushes the result to the operator's repo with `receive.denyCurrentBranch=updateInstead` semantics. If the target branch is checked out and clean, the checkout fast-forwards in place. If it has uncommitted changes, the merge is held and the UI says why. Nothing is ever force-updated.
 - **Workers take the target from the hub.** `git fetch mergegate` returns the latest target (mirrored from the upstream), so new worktrees start from what was actually merged.
-- **Diffs are computed on the hub** from staging: the merge-base against the target, and interdiffs between revisions.
+- **Diffs are computed on the hub** from staging: the merge-base against the target (or the parent revision for a stacked item, §5.1), and interdiffs between revisions.
 
 ### Multi-machine & security
 
@@ -116,9 +117,21 @@ Principles
 ```
 
 - External review runs **in parallel** with operator review, mirroring today's workflow. Items enter *needs review* immediately; external comments and the agent's responses appear as they come in.
-- **Approve means merge.** There's no CI to wait for, so an approval merges right away. If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries.
+- **Approve means merge.** There's no CI to wait for, so an approval merges right away (a stacked item right after its parent, §5.1). If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
 - Conflicts are detected early: the hub test-merges every open item whenever the target moves, and sends conflicts to the authoring agent before the operator gets to the item.
+
+### 5.1 Stacked items
+
+An agent splits work too big for one review into a stack: `mg submit --on app#41` makes the new item a child of `app#41`. Stacks are for splitting one piece of work; independent work still starts from the target. A child always uses its parent's project, backend and target.
+
+- **Own diff only.** A child's diff is against the parent revision it is built on: the newest revision of the parent that its branch contains. The operator reviews only what the child adds, even while the child is behind its parent.
+- **The agent keeps the child current; the hub never writes to an item's branch.** The child's agent gets `parent.updated` when the parent gets a new revision, or lands without its commits reaching the target (squash or rebase merge). The event carries the exact command (`git rebase --onto <new base> <old parent revision>`), and the agent submits the result. Until then the inbox shows the child as behind its parent.
+- **Viewed marks and approval follow the own diff.** On a new child revision, a file stays viewed if its own diff is unchanged, and an approval stays only if the whole own diff is unchanged. Whether the rebase was clean doesn't matter.
+- **Land bottom first.** Approving a child ("Approve, merge after app#41") parks it in *merging*. Once the parent has merged and the child is up to date with it, the hub retargets the child to the target and merges it. Children that aren't approved are retargeted too and keep their state.
+- **Conflicts.** Children are test-merged against the target like any item. A conflict their parent also has is reported on the parent only.
+- **Parent abandoned.** Children get `parent.abandoned`, lose any approval and go back to their agent. The agent rebases them and moves them with `mg submit --on <other item>`, or `--on none` to put them onto the target.
+- **GitHub.** A child's PR targets its parent's branch. The hub never deletes a branch that open children target, so GitHub never closes their PRs.
 
 ## 6. Agent interface (CLI)
 
@@ -133,7 +146,7 @@ Command design rules:
 ### 6.0 Setup and configuration
 
 ```
-mg hub start | stop | status
+mg hub start [--foreground] [--port N] | stop | status
 mg hub set listen local|tailnet
 mg hub devices | allow <device> | deny <device>         Tailscale devices allowed to connect
 mg hub token create                                      Fallback auth for non-Tailscale networks
@@ -152,14 +165,17 @@ mg doctor                                                Check hub, auth, remote
 mg skill install [--dir PATH]                            Install the agent skill (§11)
 ```
 
+`MERGEGATE_HOME` selects the data directory (default `~/.mergegate`) for both the hub and the CLI, which finds the hub's address there. A development build can run next to the installed one without sharing state.
+
 Changing a project's backend or target applies to new items. Open items keep their settings until they close, and the command lists them in its `needs_decision` so the operator knows.
 
 ### 6.1 Authoring agent commands
 
 ```
-mg submit [--title T] [--base main] [--guide FILE|-] [--attach FILE]...
+mg submit [--title T] [--base main] [--on <item>|none] [--guide FILE|-] [--attach FILE]...
           [--priority p0|p1|p2|p3] [--note TEXT] [--json]
     Push HEAD to the hub and create the item, or add a revision if this branch already has an open item.
+    --on: stack the item on an open item (§5.1); `none` moves a stacked item back onto the target.
     --guide: the agent's reviewer guide (intent, risk areas, suggested file order, self-review notes).
     --attach: demo screenshots / recordings.
     --priority/--note: initial priority, passed down from the operator agent's task brief.
@@ -211,7 +227,7 @@ mg rules list | propose ... | show <id>                See §7.3.
 }
 ```
 
-Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.conflict`, `item.merged`, `item.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
+Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.conflict`, `item.merged`, `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
 
 ### 6.4 Push extension point
 
@@ -302,6 +318,7 @@ Any hosted provider sees diff content, so it's opt-in per project. Judge results
 | Operator comments | Local only | Local only |
 | Agent replies | Local only, shown next to each comment | Local only |
 | Merge | GitHub merge API (configurable strategy) | Merge in staging, push to the operator's repo (`updateInstead`) |
+| Stacked item | PR targets the parent's branch; retargeted to the target after the parent merges | Merged in staging after its parent |
 
 The only things mergegate writes to GitHub are branches, PRs and merges. Agent replies stay in mergegate, which keeps the GitHub thread clean for human reviewers there.
 
@@ -329,6 +346,7 @@ GitHub sync polls (ETag-conditional requests) at a short interval for open items
 
 - Order: explicit priority (set by the operator agent or the operator) → conflict pressure (merging this unblocks others) → age.
 - "To review" counts only `review`-tier lines. That is the real cost of the item.
+- A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
 - Keyboard-first: `j/k` move, `enter` open, `p` set priority.
 
 ### 9.2 Review screen
@@ -356,6 +374,7 @@ GitHub sync polls (ETag-conditional requests) at a short interval for open items
 
 - **Revision selector** defaults to "since last review": you see the interdiff only. A file that hasn't changed since you marked it viewed stays viewed.
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open). You can agree, or override a rejection. An override becomes your comment and an event for the agent. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
+- **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
 - **Demo panel** at the top for screenshots and recordings attached with `mg submit --attach`.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event.
 - **New revision mid-review:** a banner appears. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
@@ -367,7 +386,7 @@ mergegate doesn't try to know the plan. The operator agent does.
 
 - **Initial, at submit:** the operator agent includes priority and a "why" note in the task brief it dispatches. The authoring agent passes them to `mg submit --priority --note`, so items arrive already prioritized.
 - **Updates, any time:** `mg prioritize` (operator agent, when the plan changes) or drag/keys in the UI (operator). The latest write wins, and the note is shown in the inbox.
-- **Derived signals** for tie-breaking and display: pairwise conflicts between open items, age, review-tier size, open external comments.
+- **Derived signals** for tie-breaking and display: pairwise conflicts between open items, items stacked on it, age, review-tier size, open external comments.
 - **Optional judge pass** over the inbox: rank items given notes and signals. This is never needed for correctness.
 - `mg events --follow` lets the operator agent react to merges and start dependent work.
 
@@ -396,8 +415,8 @@ Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` wi
 |---|---|---|
 | 1 | Local backend: where do merges land? | On the target branch of the operator's repo on the main machine (§4). |
 | 2 | GitHub branch protection / self-approval | Not a constraint. |
-| 3 | CI / merge when green | No CI; approve = merge. CI status may be shown if present, nothing waits on it. |
-| 4 | Stacked items | No; each agent works in an isolated worktree off the target. |
+| 3 | CI / merge when green | No CI; approve = merge (a stacked item right after its parent). CI status may be shown if present, nothing waits on it. |
+| 4 | Stacked items | Yes: `mg submit --on <item>`. Each item shows its own diff and lands after its parent. Agents keep children current by rebasing; the hub never writes to item branches (§5.1). |
 | 5 | Mirror agent replies to GitHub | No. Shown in mergegate only, for bot and human external comments alike. |
 | 6 | Who sets priority | Both: the authoring agent at submit (from the operator agent's brief); the operator agent or operator updates it via `mg prioritize` / UI. |
 | 7 | Who runs setup | The operator's agent, end to end. Commands never prompt; decisions come back as `needs_decision` for the agent to ask. Every setting can be changed later. |
