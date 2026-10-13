@@ -1,8 +1,7 @@
 //! Which branch a new project's items merge into.
 
-use api::decision::{DecisionOption, NeedsDecision};
-
 use super::ProjectError;
+use crate::decision::{Decision, DecisionOption};
 use crate::git::Repo;
 
 /// Branch names that, alone in a repo, are the target without asking.
@@ -14,7 +13,7 @@ const MAX_OPTIONS: usize = 10;
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Target {
     Chosen(String),
-    Decide(NeedsDecision),
+    Decide(Decision),
 }
 
 pub(super) fn choose(repo: &Repo, requested: Option<&str>) -> Result<Target, ProjectError> {
@@ -56,7 +55,7 @@ pub(super) fn choose(repo: &Repo, requested: Option<&str>) -> Result<Target, Pro
     let default = head
         .filter(|h| candidates.contains(h))
         .unwrap_or(candidates[0]);
-    Ok(Target::Decide(NeedsDecision {
+    Ok(Target::Decide(Decision {
         question: format!(
             "Which branch of {} should the project's items merge into?",
             repo.root.display()

@@ -66,7 +66,7 @@ ui/
 Ports (traits in `core`): `Git`, `Backend`, `Store`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
 
 - **The lasting layout and boundary rules live in the `architecture` skill** (`.claude/skills/architecture`). Slice-specific decisions stay in this doc until the slice is implemented; after that the code is the reference and the section can be removed.
-- **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates; a CI check fails the build if it does. Adapters depend on `core` and `api` only, never on each other.
+- **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates or on any other workspace crate, `api` included; a test in CI (`crates/testkit/tests/boundaries.rs`) fails the build if it does. `core` has its own domain types; `hub` and `cli` map them to the wire types in `api`. Adapters depend on `core` and `api` only, never on each other.
 - **Three ways to plug in:**
   - runtime, per project, via config: backend, judge;
   - build time via cargo features: optional adapters;

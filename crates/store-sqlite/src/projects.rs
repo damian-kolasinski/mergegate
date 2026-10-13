@@ -90,11 +90,8 @@ fn read(row: &Row) -> rusqlite::Result<Result<Project, StoreError>> {
     let target: String = row.get(2)?;
     let upstream: String = row.get(3)?;
     Ok((|| {
-        let backend = match backend.as_str() {
-            "github" => Backend::Github,
-            "local" => Backend::Local,
-            other => return Err(StoreError::new(format!("unknown backend {other:?}"))),
-        };
+        let backend = Backend::parse(&backend)
+            .ok_or_else(|| StoreError::new(format!("unknown backend {backend:?}")))?;
         Ok(Project {
             name: ProjectName::parse(&name).map_err(StoreError::new)?,
             backend,

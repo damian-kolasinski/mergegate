@@ -6,8 +6,9 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use api::decision::{NeedsDecision, NeedsDecisionEnvelope};
+use api::decision::{DecisionOption, NeedsDecision, NeedsDecisionEnvelope};
 use api::error::{ErrorBody, ErrorEnvelope};
+use mergegate_core::decision::Decision;
 
 pub(crate) struct Failure {
     status: StatusCode,
@@ -67,7 +68,20 @@ pub(crate) async fn wrong_method() -> Failure {
 }
 
 /// Nothing changed; the client re-sends the request with the decision made.
-pub(crate) fn decision(needs_decision: NeedsDecision) -> Response {
+pub(crate) fn decision(decision: Decision) -> Response {
+    let needs_decision = NeedsDecision {
+        question: decision.question,
+        flag: decision.flag,
+        options: decision
+            .options
+            .into_iter()
+            .map(|o| DecisionOption {
+                value: o.value,
+                description: o.description,
+            })
+            .collect(),
+        default: decision.default,
+    };
     (
         StatusCode::CONFLICT,
         Json(NeedsDecisionEnvelope { needs_decision }),
