@@ -32,9 +32,8 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
-| 4 | UI foundation and inbox | UI build and embedding, design tokens and primitives, inbox screen, Playwright setup | F6 (inbox) | — |
-| 5 | Review screen | Diff API, diff view, file list, keyboard navigation | F6 (viewing) | — |
-| 6 | Feedback loop | Draft comments, submitting a review, event log, `mg wait` (cursor, exit codes 0/75/3), `mg feedback`, `mg reply`, replies in the UI | F3, F6, F7 | — |
+| 5 | Review screen | Diff API, diff view, file list, keyboard navigation, replacing the `#/items/<id>` stub | F6 (viewing) | — |
+| 6 | Feedback loop | Draft comments, submitting a review, event log (also on the UI's SSE stream), `mg wait` (cursor, exit codes 0/75/3), `mg feedback`, `mg reply`, replies in the UI | F3, F6, F7 | — |
 | 7 | Approve and merge (local) | Test-merge, push into the operator's repo, hold when the checkout is dirty, `merge.conflict`, `mg abandon`, dropping a closed item's revision pins | F8, F9, F14 | — |
 | 8 | Agent skill | Embedded skill, `mg skill install`, `mg resume`, `--wake`; a test that every command the skill names exists | F3, F14 | — |
 | 9 | GitHub backend | Push the branch, open and update the PR, merge through the API, switch a project's backend (listing open items in a `needs_decision`, as a target change does) | F1, F4, F8, F15 | GitHub |
@@ -46,7 +45,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 15 | Highlighting | tree-sitter in WASM, language packs, `mg lang`, highlighted diffs | — | — (packs built in CI, installed with `--from`) |
 | 16 | Demo attachments | `--attach`, `mg attach`, demo panel | F4, F6 | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs |
-| 18 | Hooks and distribution | `on_event` hooks, full `mg doctor`, cargo-dist releases, launchd/systemd units | F1 | — |
+| 18 | Hooks and distribution | `on_event` hooks, full `mg doctor`, cargo-dist releases, launchd/systemd units; drop `## Stage` from AGENTS.md | F1 | — |
 | 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow` | F2 | Tailscale |
 
 ## Why this order

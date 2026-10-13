@@ -10,7 +10,15 @@ const solidAsErrors = Object.fromEntries(
 );
 
 export default tseslint.config(
-  { ignores: ["node_modules/", "dist/", "api/"] },
+  {
+    ignores: [
+      "node_modules/",
+      "dist/",
+      "api/",
+      "test-results/",
+      "playwright-report/",
+    ],
+  },
   ...tseslint.configs.strict,
   {
     files: ["**/*.{ts,tsx}"],

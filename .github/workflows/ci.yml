@@ -59,7 +59,8 @@ jobs:
         working-directory: ui
     steps:
       - uses: actions/checkout@v5
-      # `pnpm typecheck` generates the API types with cargo first.
+      # `pnpm typecheck` generates the API types with cargo, and `pnpm e2e`
+      # builds the mg it tests.
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
@@ -74,3 +75,13 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: End-to-end tests and the first-paint budget
+        env:
+          MG_ENFORCE_BUDGETS: 1
+        run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: ui/playwright-report/

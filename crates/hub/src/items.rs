@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use api::event::UiEvent;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
@@ -35,6 +36,9 @@ async fn submit(
         .blocking(move |store, git| item::submit(store, git, request))
         .await
         .map_err(failure)?;
+    if submitted.new_revision {
+        state.events.send(UiEvent::InboxChanged);
+    }
     let opened = submitted.new_revision && submitted.item.revision.number == 1;
     let status = if opened {
         StatusCode::CREATED

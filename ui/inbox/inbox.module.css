@@ -1,0 +1,25 @@
+/* Fixed widths line the figures up into columns across rows and groups. */
+
+.id {
+  flex: none;
+  width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.figure {
+  flex: none;
+  width: 5em;
+  text-align: right;
+  white-space: nowrap;
+}

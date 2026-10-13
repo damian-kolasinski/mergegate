@@ -6,7 +6,8 @@
 # Usage: .claude/scripts/check.sh [all|lint|test] [CRATE...|ui] [-- TEST_ARGS...]
 #   all (default)  lint, then tests; stops at the first failure
 #   lint           cargo fmt, clippy, then the UI's Biome, ESLint and tsc
-#   test           tests only, without formatting
+#   test           tests only, without formatting; the UI's are Playwright's,
+#                  which need `pnpm --dir ui exec playwright install chromium`
 #   CRATE          a directory under crates/ (core, cli, ...); limits clippy
 #                  and tests to those crates
 #   ui             the UI in ui/; checked when no CRATE is named
@@ -165,6 +166,12 @@ if [ "$mode" != lint ] && [ "$rust" = 1 ]; then
   fi
   passed="$({ grep -oE 'test result: ok\. [0-9]+ passed' <<<"$output" || true; } | awk '{n += $4} END {print n + 0}')"
   summary=("$passed tests passed" ${summary[@]+"${summary[@]}"})
+fi
+
+if [ "$mode" != lint ] && [ "$ui" = 1 ]; then
+  ui_run UI_TEST_ERROR e2e
+  passed="$(sed -n -E 's/^ *([0-9]+) passed.*/\1/p' <<<"$output" | tail -1)"
+  summary+=("${passed:-0} UI tests passed")
 fi
 
 if [ "$(cksum Cargo.lock 2>/dev/null || true)" != "$lock_before" ]; then

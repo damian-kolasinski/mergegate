@@ -1,6 +1,7 @@
 //! The hub daemon: composition root of everything that runs inside it.
 
 mod doctor;
+mod events;
 mod git_http;
 mod guard;
 mod home;
