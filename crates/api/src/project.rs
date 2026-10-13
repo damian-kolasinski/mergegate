@@ -56,7 +56,7 @@ pub struct SetProject {
     pub value: String,
 }
 
-/// `GET /api/projects/at`: the project whose repo contains `path`.
+/// `GET /api/project-at?path=`: the project whose repo contains `path`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectAt {
     pub path: String,

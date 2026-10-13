@@ -18,7 +18,7 @@ The principle behind most choices below: **precompute at submit time, display at
 | 2 | UI | Web UI served by the hub. A native shell (WKWebView) or PWA install can come later without a second UI. |
 | 3 | Syntax highlighting | Server-side tree-sitter, cached per blob. Grammars are optional per-language downloads (§6). |
 | 4 | Git | Split: gitoxide for reads, the `git` binary for writes and anything that must match git exactly (§5). |
-| 5 | Config format | TOML (`rules.toml`, `hub.toml`, project config). YAML breaks on unquoted globs (`**/*.swift` is an alias) and Rust's YAML crates are unmaintained or forked. |
+| 5 | Config format | TOML for files the operator edits by hand (`rules.toml`, `hub.toml`). Project settings live in the database and change only through `mg project set`, which validates them and re-syncs what depends on them. YAML breaks on unquoted globs (`**/*.swift` is an alias) and Rust's YAML crates are unmaintained or forked. |
 | 6 | Agent surface | Self-describing CLI + one skill embedded in the binary + `mg resume` prompt. No MCP server (§8). |
 
 ## 3. Stack
@@ -46,7 +46,7 @@ crates/
   core/                  domain: item state machine, revisions, events, triage policy,
                          inbox ordering, comment anchoring. No I/O dependencies.
   api/                   wire types (serde + generated TS)
-  git/                   GitRepo port impl: gix reads + git-cli writes
+  git/                   Git port impl: gix reads + git-cli writes
   backend-github/
   backend-local/
   store-sqlite/
@@ -63,7 +63,7 @@ ui/
   screens/               inbox, review
 ```
 
-Ports (traits in `core`): `GitRepo`, `Backend`, `Store`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
+Ports (traits in `core`): `Git`, `Backend`, `Store`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
 
 - **The lasting layout and boundary rules live in the `architecture` skill** (`.claude/skills/architecture`). Slice-specific decisions stay in this doc until the slice is implemented; after that the code is the reference and the section can be removed.
 - **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates; a CI check fails the build if it does. Adapters depend on `core` and `api` only, never on each other.
@@ -82,7 +82,7 @@ Ports (traits in `core`): `GitRepo`, `Backend`, `Store`, `Highlighter`, `Judge`,
 | Read blobs, trees, history | gix | No process spawn per call (~2–5 ms each on macOS); typed results. |
 | File diffs, interdiffs | gix tree diff + imara-diff (histogram) | In-memory; yields the line mapping that comment anchoring needs. |
 
-Everything goes through the single `GitRepo` port, so any operation can move between gix and the `git` binary without callers changing. Subprocess calls on the hub's own repos run with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, an isolated `HOME` and `XDG_CONFIG_HOME`, explicit `-c` overrides and hooks disabled, so the operator's personal git config can't change output.
+Everything goes through the single `Git` port, so any operation can move between gix and the `git` binary without callers changing. Subprocess calls on the hub's own repos run with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, an isolated `HOME` and `XDG_CONFIG_HOME`, explicit `-c` overrides and hooks disabled, so the operator's personal git config can't change output.
 
 The `local` backend's push into the operator's repo is the exception. The receiving side runs in that repo, so its config and hooks apply, which is intended because it's the operator's repo. `-c` overrides don't reach a local `receive-pack`, so the hub passes `--receive-pack="git -c receive.denyCurrentBranch=updateInstead receive-pack"` instead of changing the operator's repo config.
 
@@ -123,10 +123,10 @@ mg lang update                          Refresh packs to versions compatible wit
 
 | Slice | Responsibility | Port |
 |---|---|---|
-| Git operations | Staging repos, receive, test-merge, merge, push upstream | `GitRepo` |
+| Git operations | Staging repos, receive, test-merge, merge, push upstream | `Git` |
 | Backend | `github` / `local`: open/update/merge, external comment sync, polling | `Backend` |
-| Diff engine | Merge-base diffs, interdiffs (range-diff semantics), viewed-state carry-over | in `core`, over `GitRepo` |
-| Stacks | Parent links, own-diff base, `parent.*` events, landing order, retargeting | in `core`, over `GitRepo` and `Backend` |
+| Diff engine | Merge-base diffs, interdiffs (range-diff semantics), viewed-state carry-over | in `core`, over `Git` |
+| Stacks | Parent links, own-diff base, `parent.*` events, landing order, retargeting | in `core`, over `Git` and `Backend` |
 | Comment anchoring | Re-map drafts and old comments onto new revisions; flag unmappable ones | in `core` |
 | File triage | Pipeline: guards → rules (only stage that can hide) → rankers (agent guide, structural heuristics, judge) | `FileRanker` |
 | Inbox prioritization | Explicit priority → conflict pressure and stacked children → age → optional judge | `ItemRanker` |

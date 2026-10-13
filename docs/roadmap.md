@@ -20,8 +20,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
-| 2 | Projects | `mg project add/show/set` (local backend), basic `mg doctor` | F1 (local), F15 | — |
-| 3 | Submit | Pushing to the hub, `mg init`, `mg submit`, revisions, `mg inbox --json`, diff against the base | F4 | — |
+| 3 | Submit | Pushing to the hub, `mg init`, `mg submit`, revisions, `mg inbox --json`, diff against the base; `mg project set` lists open items in its `needs_decision` before changing the backend or target | F4, F15 (open items) | — |
 | 4 | UI foundation and inbox | UI build and embedding (a plain `cargo build` or `cargo install` yields a binary with the UI), design tokens and primitives, inbox screen, Playwright setup | F6 (inbox) | — |
 | 5 | Review screen | Diff API, diff view, file list, keyboard navigation | F6 (viewing) | — |
 | 6 | Feedback loop | Draft comments, submitting a review, event log, `mg wait` (cursor, exit codes 0/75/3), `mg feedback`, `mg reply`, replies in the UI | F3, F6, F7 | — |

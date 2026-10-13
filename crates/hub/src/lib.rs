@@ -1,8 +1,11 @@
 //! The hub daemon: composition root of everything that runs inside it.
 
+mod doctor;
 mod guard;
 mod home;
 mod lifecycle;
+mod projects;
+mod reply;
 mod server;
 
 use std::io::IsTerminal;
@@ -47,7 +50,7 @@ pub fn run(home: Home, port: u16) -> Result<(), HubError> {
         .enable_all()
         .build()
         .map_err(io("starting the async runtime"))?;
-    runtime.block_on(server::serve(&home, port, schema_version))
+    runtime.block_on(server::serve(&home, port, schema_version, store))
 }
 
 /// Logs to stderr, which a backgrounded hub sends to its `hub.log`.

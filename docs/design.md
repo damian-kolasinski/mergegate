@@ -151,9 +151,10 @@ mg hub set listen local|tailnet
 mg hub devices | allow <device> | deny <device>         Tailscale devices allowed to connect
 mg hub token create                                      Fallback auth for non-Tailscale networks
 
-mg project add [PATH] [--backend github|local] [--target BRANCH] [--upstream PATH]
+mg project add [PATH] [--name NAME] [--backend github|local] [--target BRANCH]
+                                                         PATH in a linked worktree registers its main repo
 mg project set <project> <key> <value>                   backend, target, upstream, bots, …
-mg project show [<project>]
+mg project show [<project>]                              Default: the project at the current directory
 mg judge set none|jev|anthropic|openai-compatible|command [provider options]
 mg lang list [--available]                               Syntax highlighting language packs (hub only)
 mg lang add <name>... | --detect [<project>] | --from FILE

@@ -67,6 +67,17 @@ impl Home {
         self.root.join("hub.log")
     }
 
+    /// Per-project data, such as staging repos, one folder per project.
+    pub fn projects(&self) -> PathBuf {
+        self.root.join("projects")
+    }
+
+    /// What the hub's git commands see as `HOME`, so the settings of the user
+    /// running the hub never apply to them.
+    pub fn git_home(&self) -> PathBuf {
+        self.root.join("git-home")
+    }
+
     fn info_path(&self) -> PathBuf {
         self.root.join("hub.json")
     }

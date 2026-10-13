@@ -234,7 +234,7 @@ sequenceDiagram
   OA->>CLI: mg hub status
   CLI-->>OA: not running
   OA->>CLI: mg hub start
-  CLI->>Hub: start daemon on 127.0.0.1:7420
+  CLI->>Hub: start daemon on 127.0.0.1:7800
   OA->>CLI: mg project add .
   CLI-->>OA: needs_decision, backend github or local, target branch
   OA->>Op: GitHub detected. Use GitHub, target main?
@@ -253,7 +253,7 @@ sequenceDiagram
   end
   OA->>CLI: mg skill install, mg init, mg doctor
   CLI-->>OA: all checks pass
-  OA-->>Op: mergegate ready at http://localhost:7420
+  OA-->>Op: mergegate ready at http://localhost:7800
         </pre></div>
         <ul class="rules">
           <li>Commands never prompt. When a decision is needed, the command returns <code>needs_decision</code> with options, and the agent asks you.</li>
@@ -280,7 +280,7 @@ sequenceDiagram
   participant W as Worker (via Tailscale SSH)
   Op->>OA: let worker-2 submit to my hub
   OA->>Hub: mg hub set listen tailnet
-  Hub-->>OA: reachable at http://main:7420
+  Hub-->>OA: reachable at http://main:7800
   OA->>W: install mg, mg skill install
   OA->>W: mg connect main
   W->>Hub: connect
