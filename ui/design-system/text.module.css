@@ -8,12 +8,12 @@
   color: var(--text-subtle);
 }
 
-.meta[data-tone="success"] {
-  color: var(--text-success);
+.meta[data-tone="added"] {
+  color: var(--text-added);
 }
 
-.meta[data-tone="error"] {
-  color: var(--text-error);
+.meta[data-tone="removed"] {
+  color: var(--text-removed);
 }
 
 .mono {

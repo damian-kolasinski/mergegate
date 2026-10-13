@@ -134,6 +134,12 @@
   --text-warning-hover: var(--ramp-yellow-900);
   /* Derived: text on the solid fills (badges), ≥ 5.7:1 in both themes. */
   --text-on-fill: var(--background-page);
+  /* Derived: added and removed line counts. Figma's success and error text
+     sits at the ramps' darkest steps (lightest in dark), which reads as grey
+     at meta size; these are the most saturated steps that keep ≥ 4.9:1 on
+     the page and on a selected row in both themes. */
+  --text-added: var(--ramp-green-600);
+  --text-removed: var(--ramp-red-600);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -180,5 +186,7 @@
     --text-success-hover: var(--ramp-green-200);
     --text-warning: var(--ramp-yellow-100);
     --text-warning-hover: var(--ramp-yellow-200);
+    --text-added: var(--ramp-green-400);
+    --text-removed: var(--ramp-red-400);
   }
 }
