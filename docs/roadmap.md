@@ -16,6 +16,18 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **Size:** a PR changes at most 25 files; larger work ships as a stack of PRs (`ship` skill).
 - **The skill grows with the CLI.** PR 8 writes it for the commands that exist; each later PR adds its own commands to it, and the PR 8 test keeps the two in sync.
 
+## Working on a step
+
+- **Each step gets a brief** at `docs/roadmap/<n>-<slug>.md` (say, `docs/roadmap/3-submit.md`). It is written in the session where the operator settles the step's decisions, before any code, and ships with the step's first PR.
+- **A brief fits on about one screen** and points at sections of [design.md](design.md), [user-flows.html](user-flows.html) and [tech-stack.md](tech-stack.md) by heading instead of copying them. Its sections:
+  - **Scope:** what ships, and which steps of which flows.
+  - **Decisions:** numbered, the ones settled with the operator first, then the small ones the agent took.
+  - **Where it lives:** the crates and modules touched, new ports, migrations.
+  - **Stack:** one line per PR, with its branch and status (planned, in review, merged).
+  - **Open:** deferred work and doc drift to fix.
+- **Implementation starts from the brief,** one session per PR of the stack. Each session updates the Stack and Open lines as it ships.
+- **The step's last PR deletes the brief** along with its row below. Decisions that still matter move into design.md or tech-stack.md first.
+
 ## PRs
 
 | # | PR | Delivers | Flows | Faked |

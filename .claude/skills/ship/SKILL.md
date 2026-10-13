@@ -13,7 +13,7 @@ Inspect status, staged/unstaged diffs, and recent commits. Identify the intended
 
 Stage only task-owned changes. Preserve user work and keep credentials and unrelated generated artifacts out of the commit.
 
-Run the relevant checks if they have not already passed for these changes. Do not rebuild solely because shipping began.
+Run the relevant checks (`.claude/scripts/check.sh`) if they have not already passed for these changes. Do not rebuild solely because shipping began.
 
 ## Size limit
 
