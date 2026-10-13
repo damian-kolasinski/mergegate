@@ -53,8 +53,20 @@ export function onHubEvent(type: UiEvent["type"], listener: Listener): void {
   connect();
 }
 
+// Each open stream holds one of the browser's six HTTP/1.1 connections to
+// the hub, so a hidden tab gives its stream up; reopening refetches.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    connect();
+  } else if (source) {
+    source.close();
+    source = undefined;
+  }
+});
+
 function connect() {
-  if (source) return;
+  const listening = [...listeners.values()].some((forType) => forType.size);
+  if (source || document.hidden || !listening) return;
   // One stream for the whole page; EventSource reconnects by itself.
   source = new EventSource("/api/events/ui");
   source.onmessage = (message: MessageEvent<string>) => {

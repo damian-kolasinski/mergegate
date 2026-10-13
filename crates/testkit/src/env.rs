@@ -70,7 +70,8 @@ impl Env {
         let mut cmd = Command::new(&self.mg);
         cmd.args(args)
             .env("MERGEGATE_HOME", self.home())
-            .env_remove("MG_JSON");
+            .env_remove("MG_JSON")
+            .env_remove("MG_UI_DIR");
         cmd
     }
 

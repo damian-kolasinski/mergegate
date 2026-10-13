@@ -63,9 +63,9 @@ export class Project {
     readonly dir: string,
   ) {}
 
-  /** Commits `files` on a new `branch` and submits it, as an agent would. */
+  /** Commits `files` on a new `branch` off `main` and submits it. */
   submit(branch: string, title: string, files: Record<string, string>) {
-    git(this.dir, "switch", "--quiet", "-c", branch);
+    git(this.dir, "switch", "--quiet", "-c", branch, "main");
     this.revise(title, files);
   }
 
