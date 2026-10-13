@@ -6,6 +6,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
+use mergegate_core::doctor::{Check, CheckStatus};
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -27,5 +28,20 @@ async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::
                 None,
             )
         })?;
-    Ok(Json(api::doctor::Report { checks }))
+    Ok(Json(api::doctor::Report {
+        checks: checks.into_iter().map(to_api).collect(),
+    }))
+}
+
+fn to_api(check: Check) -> api::doctor::Check {
+    api::doctor::Check {
+        name: check.name,
+        status: match check.status {
+            CheckStatus::Ok => api::doctor::CheckStatus::Ok,
+            CheckStatus::Warn => api::doctor::CheckStatus::Warn,
+            CheckStatus::Fail => api::doctor::CheckStatus::Fail,
+        },
+        message: check.message,
+        fix: check.fix,
+    }
 }

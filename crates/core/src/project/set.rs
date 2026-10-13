@@ -22,15 +22,15 @@ pub enum Setting {
 impl Setting {
     pub fn parse(key: &str, value: &str) -> Result<Self, ProjectError> {
         match key {
-            "backend" => match value {
-                "github" => Ok(Self::Backend(Backend::Github)),
-                "local" => Ok(Self::Backend(Backend::Local)),
-                _ => Err(ProjectError::InvalidValue {
-                    key: "backend",
-                    value: value.into(),
-                    expected: "github, local",
-                }),
-            },
+            "backend" => {
+                Backend::parse(value)
+                    .map(Self::Backend)
+                    .ok_or_else(|| ProjectError::InvalidValue {
+                        key: "backend",
+                        value: value.into(),
+                        expected: "github, local",
+                    })
+            }
             "target" => Ok(Self::Target(value.into())),
             "upstream" => Ok(Self::Upstream(value.into())),
             _ => Err(ProjectError::UnknownSetting(key.into())),
