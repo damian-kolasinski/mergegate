@@ -83,7 +83,7 @@ async fn blob(
     ))
 }
 
-fn file_to_api(DiffedFile { file, diff }: DiffedFile) -> api::diff::File {
+fn file_to_api(DiffedFile { file, diff, viewed }: DiffedFile) -> api::diff::File {
     let FileDiff {
         additions,
         deletions,
@@ -103,6 +103,7 @@ fn file_to_api(DiffedFile { file, diff }: DiffedFile) -> api::diff::File {
             Content::Binary => api::diff::Content::Binary,
             Content::TooLarge => api::diff::Content::TooLarge,
         },
+        viewed,
     }
 }
 

@@ -34,7 +34,8 @@ Opening an item shows its diff: every changed file in one scrolling column with 
 - `review-2-cache`: blob IDs from git, diffs computed and cached at submit, migration `0004`. *Done.*
 - `review-3-api`: `GET /api/items/{id}` and the blob route. *Done.*
 - `review-4-screen`: CodeView wrapper, review screen, file list, keys, expansion, Playwright spec and scroll benchmark. *Done.*
-- `review-5-viewed`: viewed marks (migration `0005`, routes, `v`, checkboxes), F6 wording, deleting this brief and roadmap row 5. *Planned.*
+- `review-5-viewed`: viewed marks in the store and `PUT /api/items/{id}/viewed` (migration `0005`). *Done.*
+- `review-6-viewed-ui`: `v`, checkboxes and the viewed count, the doc drift below, deleting this brief and roadmap row 5. *Planned.*
 
 ## Open
 

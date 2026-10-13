@@ -8,6 +8,7 @@ pub mod event;
 pub mod hub;
 pub mod item;
 pub mod project;
+pub mod viewed;
 
 /// Version of the HTTP API between `mg` and the hub. A CLI refuses to talk to
 /// a hub with a different API version, except through the endpoints every

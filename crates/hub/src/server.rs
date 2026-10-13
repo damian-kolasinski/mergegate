@@ -12,7 +12,7 @@ use store_sqlite::Store;
 
 use crate::{
     Home, HubError, HubInfo, diff, doctor, events, git_http, guard, io, items, lifecycle, projects,
-    reply, ui,
+    reply, ui, viewed,
 };
 
 pub(crate) struct AppState {
@@ -79,6 +79,7 @@ pub(crate) async fn serve(
         .merge(projects::routes())
         .merge(items::routes())
         .merge(diff::routes())
+        .merge(viewed::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
         .merge(events::routes())

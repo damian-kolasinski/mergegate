@@ -12,6 +12,7 @@ mod projects;
 mod reply;
 mod server;
 mod ui;
+mod viewed;
 
 use std::io::IsTerminal;
 
