@@ -64,7 +64,7 @@ ui/
 
 Ports (traits in `core`): `GitRepo`, `Backend`, `Store`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
 
-- **Agents follow these rules through the `architecture` skill** (`.claude/skills/architecture`).
+- **The `architecture` skill (`.claude/skills/architecture`) is the lasting home of these rules.** It is self-contained and outlives this doc.
 - **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates; a CI check fails the build if it does. Adapters depend on `core` and `api` only, never on each other.
 - **Three ways to plug in:**
   - runtime, per project, via config: backend, judge;
