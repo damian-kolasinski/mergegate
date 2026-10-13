@@ -5,15 +5,16 @@ mod error;
 mod git;
 mod id;
 mod inbox;
+mod state;
 mod store;
 mod submit;
 
-pub use api::item::ItemState;
 pub use branch::valid_branch;
 pub use error::ItemError;
 pub use git::{FileStat, ItemGit, valid_commit};
 pub use id::{IdError, ItemId};
-pub use inbox::inbox;
+pub use inbox::{Inbox, inbox};
+pub use state::ItemState;
 pub use store::{ItemStore, NewItem, NewRevision};
 pub use submit::{Submit, Submitted, submit};
 
@@ -72,26 +73,5 @@ impl Item {
             self.id.number(),
             self.revision.number
         )
-    }
-
-    pub fn to_api(&self) -> api::item::Item {
-        api::item::Item {
-            id: self.id.to_string(),
-            title: self.title.clone(),
-            branch: self.branch.clone(),
-            state: self.state,
-            backend: self.backend,
-            target: self.target.clone(),
-            revision: api::item::Revision {
-                number: self.revision.number,
-                head: self.revision.head.clone(),
-                base: self.revision.base.clone(),
-                files: self.revision.stat.files,
-                additions: self.revision.stat.additions,
-                deletions: self.revision.stat.deletions,
-                submitted_at: self.revision.submitted_at.clone(),
-            },
-            created_at: self.created_at.clone(),
-        }
     }
 }

@@ -8,7 +8,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use mergegate_core::item::{self, ItemError, Submit};
+use mergegate_core::item::{self, Item, ItemError, ItemState, Submit};
 
 use crate::projects;
 use crate::reply::Failure;
@@ -44,7 +44,7 @@ async fn submit(
     Ok((
         status,
         Json(api::item::Submitted {
-            item: submitted.item.to_api(),
+            item: to_api(&submitted.item),
             new_revision: submitted.new_revision,
         }),
     ))
@@ -55,7 +55,59 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
         .blocking(|store, _| item::inbox(store))
         .await
         .map_err(|e| failure(e.into()))?;
-    Ok(Json(inbox))
+    let entries = |items: Vec<Item>| items.iter().map(inbox_entry).collect();
+    Ok(Json(api::item::Inbox {
+        needs_you: entries(inbox.needs_you),
+        with_agents: entries(inbox.with_agents),
+        merging: entries(inbox.merging),
+    }))
+}
+
+fn to_api(item: &Item) -> api::item::Item {
+    let revision = &item.revision;
+    api::item::Item {
+        id: item.id.to_string(),
+        title: item.title.clone(),
+        branch: item.branch.clone(),
+        state: state_to_api(item.state),
+        backend: projects::backend_to_api(item.backend),
+        target: item.target.clone(),
+        revision: api::item::Revision {
+            number: revision.number,
+            head: revision.head.clone(),
+            base: revision.base.clone(),
+            files: revision.stat.files,
+            additions: revision.stat.additions,
+            deletions: revision.stat.deletions,
+            submitted_at: revision.submitted_at.clone(),
+        },
+        created_at: item.created_at.clone(),
+    }
+}
+
+fn inbox_entry(item: &Item) -> api::item::InboxItem {
+    let revision = &item.revision;
+    api::item::InboxItem {
+        id: item.id.to_string(),
+        title: item.title.clone(),
+        branch: item.branch.clone(),
+        revision: revision.number,
+        files: revision.stat.files,
+        additions: revision.stat.additions,
+        deletions: revision.stat.deletions,
+        created_at: item.created_at.clone(),
+        updated_at: revision.submitted_at.clone(),
+    }
+}
+
+fn state_to_api(state: ItemState) -> api::item::ItemState {
+    match state {
+        ItemState::NeedsReview => api::item::ItemState::NeedsReview,
+        ItemState::ChangesRequested => api::item::ItemState::ChangesRequested,
+        ItemState::Merging => api::item::ItemState::Merging,
+        ItemState::Merged => api::item::ItemState::Merged,
+        ItemState::Abandoned => api::item::ItemState::Abandoned,
+    }
 }
 
 fn failure(e: ItemError) -> Failure {

@@ -2,9 +2,8 @@
 
 use std::path::PathBuf;
 
-use api::decision::NeedsDecision;
-
 use super::{Backend, Project, ProjectError, ProjectStore, find};
+use crate::decision::Decision;
 use crate::git::Git;
 use crate::item::ItemStore;
 
@@ -22,15 +21,15 @@ pub enum Setting {
 impl Setting {
     pub fn parse(key: &str, value: &str) -> Result<Self, ProjectError> {
         match key {
-            "backend" => match value {
-                "github" => Ok(Self::Backend(Backend::Github)),
-                "local" => Ok(Self::Backend(Backend::Local)),
-                _ => Err(ProjectError::InvalidValue {
-                    key: "backend",
-                    value: value.into(),
-                    expected: "github, local",
-                }),
-            },
+            "backend" => {
+                Backend::parse(value)
+                    .map(Self::Backend)
+                    .ok_or_else(|| ProjectError::InvalidValue {
+                        key: "backend",
+                        value: value.into(),
+                        expected: "github, local",
+                    })
+            }
             "target" => Ok(Self::Target(value.into())),
             "upstream" => Ok(Self::Upstream(value.into())),
             _ => Err(ProjectError::UnknownSetting(key.into())),
@@ -42,7 +41,7 @@ impl Setting {
 pub enum Changed {
     Project(Project),
     /// Nothing changed; re-run with `--confirm`.
-    Decide(NeedsDecision),
+    Decide(Decision),
 }
 
 /// Applies `setting` to the project named `name`. Settings that point at a
@@ -108,7 +107,7 @@ fn keeping_target(
     store: &impl ItemStore,
     project: &Project,
     target: &str,
-) -> Result<Option<NeedsDecision>, ProjectError> {
+) -> Result<Option<Decision>, ProjectError> {
     let open = store.open_items(Some(&project.name))?;
     if let Some(item) = open.iter().find(|item| item.branch == target) {
         return Err(ProjectError::BranchUnderReview {
@@ -129,7 +128,7 @@ fn keeping_target(
             staying.len()
         ),
     };
-    Ok(Some(NeedsDecision {
+    Ok(Some(Decision {
         question: format!(
             "{keep}: {}. New items will target {target}. Change it?",
             staying.join(", ")
