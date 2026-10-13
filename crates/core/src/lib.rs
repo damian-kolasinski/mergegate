@@ -6,5 +6,6 @@ pub mod doctor;
 #[cfg(test)]
 mod fake;
 pub mod git;
+pub mod item;
 pub mod project;
 pub mod store;
