@@ -149,10 +149,15 @@ fn decision_text(d: &NeedsDecision) -> String {
             out.push_str(&format!(" · {description}"));
         }
     }
-    out.push_str(&format!(
-        "\nre-run with {} set to the chosen option",
-        d.flag
-    ));
+    if d.options.is_empty() {
+        // A yes-or-no question: the flag alone is the yes.
+        out.push_str(&format!("\nre-run with {} to go ahead", d.flag));
+    } else {
+        out.push_str(&format!(
+            "\nre-run with {} set to the chosen option",
+            d.flag
+        ));
+    }
     out
 }
 

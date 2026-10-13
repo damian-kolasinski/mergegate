@@ -49,11 +49,16 @@ pub struct AddProject {
     pub target: Option<String>,
 }
 
-/// `PATCH /api/projects/{name}`: changes one setting.
+/// `PATCH /api/projects/{name}`: changes one setting. Answers with the
+/// [`Project`], or with a `needs_decision` when open items keep the old
+/// backend or target.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetProject {
     pub key: String,
     pub value: String,
+    /// Apply even though open items keep the old setting.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub confirm: bool,
 }
 
 /// `GET /api/project-at?path=`: the project whose repo contains `path`.
