@@ -11,9 +11,11 @@ Deliver a reviewed PR for the requested changes. An optional user-provided title
 
 Inspect status, staged/unstaged diffs, and recent commits. Identify the intended base from the user or existing PR; otherwise use the repository's default branch. Fetch it when needed for an accurate comparison.
 
+When the work is part of a roadmap step, update the Stack and Open lines of its brief in `docs/roadmap/` on the PR's branch, so a fresh session can pick up the next PR. The step's last PR deletes the brief instead.
+
 Stage only task-owned changes. Preserve user work and keep credentials and unrelated generated artifacts out of the commit.
 
-Run the relevant checks if they have not already passed for these changes. Do not rebuild solely because shipping began.
+Run the relevant checks (`.claude/scripts/check.sh`) if they have not already passed for these changes. Do not rebuild solely because shipping began.
 
 ## Size limit
 

@@ -4,6 +4,12 @@ mergegate is a local, agent-operated code review hub: coding agents submit work 
 
 Commits and PRs carry only the operator's authorship: no AI co-author trailers, session links, or mentions of models, agents, or AI tools in commit messages or PR descriptions.
 
+## Working
+
+- Work on a roadmap step starts from its brief in `docs/roadmap/`; write one first if it is missing ("Working on a step" in `docs/roadmap.md`).
+- Read docs by section: find the heading, then read that range. Don't read `design.md`, `user-flows.html` or `tech-stack.md` whole, or `cat` several files at once.
+- Run checks with `.claude/scripts/check.sh` (usage at its top), not cargo directly.
+
 ## Code
 
 - Organize by feature: one module per command, route group or table, so a new feature adds files instead of growing shared ones. Split a slice into layers only once it is too big on its own.

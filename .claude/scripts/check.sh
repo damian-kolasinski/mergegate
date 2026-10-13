@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# The checks CI runs, with output sized for agents: "OK - ..." on success,
+# otherwise the first failing step's diagnostics. VERBOSE=1 prints cargo's
+# full output instead.
+#
+# Usage: .claude/scripts/check.sh [all|lint|test] [CRATE...] [-- TEST_ARGS...]
+#   all (default)  cargo fmt, clippy, then tests; stops at the first failure
+#   lint           cargo fmt, then clippy
+#   test           tests only, without formatting
+#   CRATE          a directory under crates/ (core, cli, ...); limits clippy
+#                  and tests to those crates
+#   TEST_ARGS      passed to the test binaries, e.g. a test name filter
+# Exit codes: 0 ok, 1 a check failed, 64 usage.
+
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+VERBOSE="${VERBOSE:-0}"
+
+# rustup's proxies pick the toolchain from rust-toolchain.toml. Homebrew's
+# rustup is keg-only, so they are often not on PATH.
+if ! command -v cargo >/dev/null; then
+  for dir in "$HOME/.cargo/bin" /opt/homebrew/opt/rustup/bin /usr/local/opt/rustup/bin; do
+    if [ -x "$dir/cargo" ]; then
+      PATH="$dir:$PATH"
+      break
+    fi
+  done
+fi
+if ! command -v cargo >/dev/null; then
+  echo "SETUP_ERROR: cargo not found; install rustup"
+  exit 1
+fi
+
+mode=all
+case "${1:-}" in
+  all | lint | test) mode="$1"; shift ;;
+esac
+
+packages=()
+while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+  manifest="crates/$1/Cargo.toml"
+  if [ ! -f "$manifest" ]; then
+    echo "USAGE_ERROR: no crate at crates/$1"
+    exit 64
+  fi
+  packages+=(-p "$(sed -n 's/^name = "\(.*\)"$/\1/p' "$manifest" | head -1)")
+  shift
+done
+if [ $# -gt 0 ]; then shift; fi
+if [ ${#packages[@]} -eq 0 ]; then packages=(--workspace); fi
+# bash 3.2 (macOS) treats an empty array as unset under `set -u`.
+test_args=("--" "$@")
+
+output=""
+toolchain_retried=0
+
+# Runs a command, keeping its combined output in $output. A fresh checkout
+# may lack the pinned toolchain; install it and retry once.
+run() {
+  if output="$("$@" 2>&1)"; then
+    return 0
+  fi
+  if [ "$toolchain_retried" = 0 ] && grep -q "is not installed" <<<"$output"; then
+    toolchain_retried=1
+    if ! rustup toolchain install >/dev/null 2>&1; then
+      echo "SETUP_ERROR: rustup toolchain install failed; run it to see why"
+      exit 1
+    fi
+    run "$@"
+    return
+  fi
+  return 1
+}
+
+# Compiler and clippy diagnostics, one line each (--message-format=short).
+# $1 picks the severities: clippy denies warnings, so they are its errors;
+# under cargo test they are noise next to a failing test.
+diagnostics() {
+  grep -E "^[^ ]+:[0-9]+:[0-9]+: ($1)|^error(\[|:)" <<<"$output" |
+    grep -v -E 'could not compile|aborting due to|test failed, to rerun' |
+    head -10 || true
+}
+
+fail() {
+  local label="$1" detail="$2"
+  if [ "$VERBOSE" = 1 ]; then
+    echo "$output"
+  elif [ -n "$detail" ]; then
+    echo "$label: $detail"
+  else
+    echo "ERROR_EXTRACTION_FAILED: $label; last lines follow, rerun with VERBOSE=1 for all"
+    tail -15 <<<"$output"
+  fi
+  exit 1
+}
+
+summary=()
+# Unlike CI, no --locked: a new dependency should update Cargo.lock here, and
+# the summary says so, so the lockfile gets committed and CI's --locked passes.
+lock_before="$(cksum Cargo.lock 2>/dev/null || true)"
+
+if [ "$mode" != test ]; then
+  run cargo fmt --all -- -l || fail FMT_ERROR "$(grep -E '^error' -A3 <<<"$output" | head -10)"
+  formatted="$(grep -c '\.rs$' <<<"$output" || true)"
+  if [ "$formatted" -gt 0 ]; then summary+=("rustfmt changed $formatted file(s)"); fi
+
+  run cargo clippy "${packages[@]}" --all-targets --message-format=short -- -D warnings ||
+    fail CLIPPY_ERROR "$(diagnostics 'error|warning')"
+  summary+=("clippy clean")
+fi
+
+if [ "$mode" != lint ]; then
+  if ! run cargo test "${packages[@]}" --message-format=short "${test_args[@]}"; then
+    detail="$(diagnostics error)"
+    if [ -z "$detail" ]; then
+      failed="$(sed -n -E 's/^---- (.+) stdout ----$/\1/p' <<<"$output" | head -10 | paste -sd, -)"
+      if [ -n "$failed" ]; then
+        detail="$(
+          echo "failed: $failed"
+          grep -A4 -m2 'panicked at' <<<"$output" || true
+          grep -m1 'to rerun pass' <<<"$output" || true
+        )"
+      fi
+    fi
+    fail TEST_ERROR "$detail"
+  fi
+  passed="$({ grep -oE 'test result: ok\. [0-9]+ passed' <<<"$output" || true; } | awk '{n += $4} END {print n + 0}')"
+  summary=("$passed tests passed" ${summary[@]+"${summary[@]}"})
+fi
+
+if [ "$(cksum Cargo.lock 2>/dev/null || true)" != "$lock_before" ]; then
+  summary+=("Cargo.lock updated, commit it")
+fi
+
+line="OK"
+for part in "${summary[@]}"; do
+  if [ "$line" = OK ]; then line="OK - $part"; else line="$line, $part"; fi
+done
+echo "$line"

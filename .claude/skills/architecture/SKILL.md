@@ -36,8 +36,13 @@ ui/
 
 Choose for runtime speed and correctness, not human ergonomics. Before adding a crate or package, check that it is maintained, that it doesn't pull I/O into `core`, and that it doesn't add work to the CLI's startup path.
 
+Notes on dependency APIs live in `references/`, one file per dependency. Read the one you need before opening the crate's source; when you had to dig an API out of a crate's source, add what you found there.
+
+- [gix](references/gix.md): reading repositories in the git adapter.
+
 ## Before finishing
 
 - The code lives in the slice that owns the behaviour.
 - `core` gained no I/O dependency; no adapter imports another adapter.
 - This skill reflects any change to the layout or the rules above.
+- A dependency API you had to dig out of its source is noted in `references/`.
