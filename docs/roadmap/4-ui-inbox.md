@@ -27,6 +27,7 @@ Taken by the agent:
 14. Assets keep plain names, served with ETag and `no-cache`; no precompression on loopback. Hash routing, so `/api` and `/git` stay as they are.
 15. `mg doctor` reports a hub built with the stub page; `.agents/prompts/install.md` sets `MG_REQUIRE_UI=1`.
 16. First paint under 100 ms (tech-stack.md §9), measured by Playwright, enforced on the Ubuntu CI job.
+17. Figma's `background-error/success/warning` are solid badge fills with `background-page` text (≥ 5.7:1 in both themes); tinted rows use the ramp's 50 step with the matching `text-*` (≥ 7.3:1).
 
 ## Where it lives
 
@@ -45,6 +46,5 @@ Taken by the agent:
 
 ## Open
 
-- Figma's light `background-error/success/warning` are dark solid fills (`#732222`), inverted from the other backgrounds: read them as badge fills, and use the 50 ramp step for tinted rows until the file says otherwise.
 - tech-stack.md §3: name pnpm and the Solid plugin next to esbuild.
 - Roadmap PR 18 row: drop `## Stage` from AGENTS.md.
