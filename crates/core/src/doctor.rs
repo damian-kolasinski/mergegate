@@ -1,10 +1,26 @@
 //! The checks behind `mg doctor` that only the hub can run.
 
-use api::doctor::{Check, CheckStatus};
-
 use crate::git::{self, Git, GitError};
 use crate::project::{Project, ProjectStore};
 use crate::store::StoreError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckStatus {
+    Ok,
+    Warn,
+    Fail,
+}
+
+/// One thing `mg doctor` verified.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Check {
+    /// Stable, machine-readable name, e.g. `git` or `project app`.
+    pub name: String,
+    pub status: CheckStatus,
+    pub message: String,
+    /// The command that fixes a `Warn` or `Fail`, when there is one.
+    pub fix: Option<String>,
+}
 
 pub fn checks(store: &impl ProjectStore, git: &impl Git) -> Result<Vec<Check>, StoreError> {
     let mut checks = vec![git_version(git)];

@@ -1,10 +1,9 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use api::decision::NeedsDecision;
-
 use super::target::{Target, choose};
 use super::{Backend, Project, ProjectError, ProjectName, ProjectStore};
+use crate::decision::Decision;
 use crate::git::Git;
 
 #[derive(Debug, Clone, Default)]
@@ -20,7 +19,7 @@ pub struct AddProject {
 pub enum Added {
     Project(Project),
     /// Nothing was registered; re-run with the decision's flag set.
-    Decide(NeedsDecision),
+    Decide(Decision),
 }
 
 /// Registers the repo containing `request.path` and creates its staging repo.

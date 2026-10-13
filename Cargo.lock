@@ -1543,7 +1543,6 @@ dependencies = [
 name = "mergegate-core"
 version = "0.1.0"
 dependencies = [
- "mergegate-api",
  "thiserror",
 ]
 

@@ -10,7 +10,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use mergegate_core::project::{
-    self, AddProject, Added, Changed, ProjectError, ProjectStore, Setting,
+    self, AddProject, Added, Backend, Changed, Project, ProjectError, ProjectStore, Setting,
 };
 
 use crate::reply::{self, Failure};
@@ -32,7 +32,7 @@ async fn list(State(state): State<Arc<AppState>>) -> Reply<api::project::Project
         .await
         .map_err(|e| failure(e.into()))?;
     Ok(Json(api::project::Projects {
-        projects: projects.iter().map(project::Project::to_api).collect(),
+        projects: projects.iter().map(to_api).collect(),
     }))
 }
 
@@ -44,7 +44,7 @@ async fn add(
     let request = AddProject {
         path: absolute(&request.path)?,
         name: request.name,
-        backend: request.backend,
+        backend: request.backend.map(backend_from_api),
         target: request.target,
     };
     match state
@@ -52,7 +52,7 @@ async fn add(
         .await
     {
         Ok(Added::Project(project)) => {
-            Ok((StatusCode::CREATED, Json(project.to_api())).into_response())
+            Ok((StatusCode::CREATED, Json(to_api(&project))).into_response())
         }
         Ok(Added::Decide(decision)) => Ok(reply::decision(decision)),
         Err(e) => Err(failure(e)),
@@ -68,7 +68,7 @@ async fn show(
         .blocking(move |store, _| project::find(store, &name))
         .await
         .map_err(failure)?;
-    Ok(Json(project.to_api()))
+    Ok(Json(to_api(&project)))
 }
 
 async fn at(
@@ -81,7 +81,7 @@ async fn at(
         .blocking(move |store, git| project::at(store, git, &path))
         .await
         .map_err(failure)?;
-    Ok(Json(project.to_api()))
+    Ok(Json(to_api(&project)))
 }
 
 async fn set(
@@ -100,8 +100,31 @@ async fn set(
         .await
         .map_err(failure)?
     {
-        Changed::Project(project) => Ok(Json(project.to_api()).into_response()),
+        Changed::Project(project) => Ok(Json(to_api(&project)).into_response()),
         Changed::Decide(decision) => Ok(reply::decision(decision)),
+    }
+}
+
+fn to_api(project: &Project) -> api::project::Project {
+    api::project::Project {
+        name: project.name.to_string(),
+        backend: backend_to_api(project.backend),
+        target: project.target.clone(),
+        upstream: project.upstream.display().to_string(),
+    }
+}
+
+pub(crate) fn backend_to_api(backend: Backend) -> api::project::Backend {
+    match backend {
+        Backend::Github => api::project::Backend::Github,
+        Backend::Local => api::project::Backend::Local,
+    }
+}
+
+fn backend_from_api(backend: api::project::Backend) -> Backend {
+    match backend {
+        api::project::Backend::Github => Backend::Github,
+        api::project::Backend::Local => Backend::Local,
     }
 }
 
