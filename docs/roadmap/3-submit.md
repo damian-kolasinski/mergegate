@@ -11,7 +11,7 @@ Flows: F4 steps 3–6 and 8 (no `--guide`, `--attach`, `--priority`, `--note`, G
 The agent took all of these; none is settled with the operator yet. Confirm or change them in review.
 
 1. **The hub is a smart-HTTP remote at `<hub>/git/<project>`.** axum runs `git http-backend` as a CGI with bodies streamed both ways, under the same sanitized environment as every other git call (tech-stack §5).
-2. **Workers can't write the hub's refs.** `receive.hideRefs` hides `refs/mergegate` and the project's target. Fetches still see the target, re-synced from the upstream on every `git fetch mergegate`.
+2. **Workers can't write the hub's pins.** `transfer.hideRefs` hides `refs/mergegate` from pushes and fetches. The target stays visible, so a push sends only the commits the hub lacks. The hub force-fetches the target from the upstream before every use (a submit, a `git fetch mergegate`), so a push to it doesn't stick.
 3. **Every revision is pinned** at `refs/mergegate/items/<n>/r<rev>`, so a later force-push to the branch can't drop the commits an older revision points at.
 4. **`git push` and `git fetch` pass the CSRF guard by their content type** (`application/x-git-*-request`), which a browser can't send cross-origin without a preflight. Everything else still needs `x-mergegate-client`.
 5. **`mg init [--project NAME]`** adds (or re-points) the `mergegate` remote. The project defaults to the one registered for the current repo.
@@ -33,7 +33,7 @@ The agent took all of these; none is settled with the operator yet. Confirm or c
 ## Stack
 
 - `submit-1-domain`: brief, wire types, core item slice — in review
-- `submit-2-adapters`: SQLite and git adapters — planned
+- `submit-2-adapters`: SQLite and git adapters — in review
 - `submit-3-commands`: hub routes, smart-HTTP, CLI, scenario tests — planned
 
 ## Open

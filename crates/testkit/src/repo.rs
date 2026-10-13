@@ -60,6 +60,10 @@ impl TestRepo {
         self.git(["commit", "--quiet", "--allow-empty", "-m", message]);
     }
 
+    pub fn commit_files(&self, message: &str, files: &[(&str, &str)]) {
+        commit_files(&self.root, message, files);
+    }
+
     pub fn branch(&self, name: &str) {
         self.git(["branch", name]);
     }
@@ -99,6 +103,17 @@ impl TestRepo {
         ]);
         path
     }
+}
+
+/// Commits everything in the worktree, not only `files`.
+pub fn commit_files(dir: &Path, message: &str, files: &[(&str, &str)]) {
+    for (path, contents) in files {
+        let path = dir.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+    git(dir, ["add", "--all"]);
+    git(dir, ["commit", "--quiet", "-m", message]);
 }
 
 /// Runs git in `dir` with none of the developer's git settings and a fixed

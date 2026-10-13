@@ -62,23 +62,7 @@ fn mirror(home: &Path, dir: &Path, upstream: &Path, target: &str) -> Result<(), 
             ],
         )?;
     }
-    // Forced: staging mirrors the target, whatever happened upstream.
-    let refspec = format!("+{branch}:{branch}");
-    run(
-        home,
-        &format!("fetching {target} from {}", upstream.display()),
-        [
-            git_dir.as_os_str(),
-            arg("fetch"),
-            arg("--quiet"),
-            arg("--no-tags"),
-            arg("--no-write-fetch-head"),
-            // A shallow upstream makes staging shallow too, instead of failing.
-            arg("--update-shallow"),
-            upstream.as_os_str(),
-            arg(&refspec),
-        ],
-    )?;
+    fetch(home, dir, upstream, target)?;
     run(
         home,
         "pointing the staging repo at the target",
@@ -87,6 +71,35 @@ fn mirror(home: &Path, dir: &Path, upstream: &Path, target: &str) -> Result<(), 
             arg("symbolic-ref"),
             arg("HEAD"),
             arg(&branch),
+        ],
+    )?;
+    Ok(())
+}
+
+/// Makes the staging repo's `target` mirror `upstream`'s. Forced: staging
+/// follows the target, whatever happened upstream or was pushed to it.
+pub(crate) fn fetch(
+    home: &Path,
+    dir: &Path,
+    upstream: &Path,
+    target: &str,
+) -> Result<(), GitError> {
+    let mut git_dir = OsString::from("--git-dir=");
+    git_dir.push(dir);
+    let refspec = format!("+refs/heads/{target}:refs/heads/{target}");
+    run(
+        home,
+        &format!("fetching {target} from {}", upstream.display()),
+        [
+            git_dir.as_os_str(),
+            OsStr::new("fetch"),
+            OsStr::new("--quiet"),
+            OsStr::new("--no-tags"),
+            OsStr::new("--no-write-fetch-head"),
+            // A shallow upstream makes staging shallow too, instead of failing.
+            OsStr::new("--update-shallow"),
+            upstream.as_os_str(),
+            OsStr::new(&refspec),
         ],
     )?;
     Ok(())

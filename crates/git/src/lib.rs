@@ -3,13 +3,17 @@
 //! transport and repo format the operator's repos may use.
 
 mod command;
+mod http;
 mod inspect;
+mod items;
 mod staging;
 
 use std::path::{Path, PathBuf};
 
 use mergegate_core::git::{Git, GitError, Repo};
 use mergegate_core::project::ProjectName;
+
+pub use http::HttpRequest;
 
 pub struct HubGit {
     projects: PathBuf,
