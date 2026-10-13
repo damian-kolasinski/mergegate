@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": ["**", "!api", "!dist", "!test-results", "!playwright-report"]
+  },
+  "formatter": { "indentStyle": "space" },
+  "linter": { "enabled": false },
+  "assist": { "enabled": false }
+}

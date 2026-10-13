@@ -56,9 +56,14 @@ fn a_fresh_hub_passes_with_a_warning_until_a_project_is_added() {
     assert_eq!(doctor["ok"], true);
     assert_eq!(
         statuses(&doctor),
-        pairs(&[("hub", "ok"), ("git", "ok"), ("projects", "warn")])
+        pairs(&[
+            ("hub", "ok"),
+            ("ui", "ok"),
+            ("git", "ok"),
+            ("projects", "warn")
+        ])
     );
-    assert_eq!(doctor["checks"][2]["fix"], "mg project add PATH");
+    assert_eq!(doctor["checks"][3]["fix"], "mg project add PATH");
 }
 
 #[test]
@@ -72,9 +77,14 @@ fn a_lost_staging_repo_fails_until_its_fix_runs() {
     let doctor = env.mg(&["--json", "doctor"]).assert_code(1).json();
     assert_eq!(
         statuses(&doctor),
-        pairs(&[("hub", "ok"), ("git", "ok"), ("project app", "fail")])
+        pairs(&[
+            ("hub", "ok"),
+            ("ui", "ok"),
+            ("git", "ok"),
+            ("project app", "fail")
+        ])
     );
-    let fix = doctor["checks"][2]["fix"].as_str().unwrap();
+    let fix = doctor["checks"][3]["fix"].as_str().unwrap();
     assert_eq!(fix, "mg project set app target main");
 
     let args: Vec<&str> = fix.split(' ').skip(1).collect();

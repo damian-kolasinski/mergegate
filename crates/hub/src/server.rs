@@ -11,7 +11,7 @@ use git::HubGit;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, doctor, git_http, guard, io, items, lifecycle, projects, reply,
+    Home, HubError, HubInfo, doctor, git_http, guard, io, items, lifecycle, projects, reply, ui,
 };
 
 pub(crate) struct AppState {
@@ -77,6 +77,7 @@ pub(crate) async fn serve(
         .merge(items::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
+        .merge(ui::routes())
         .fallback(reply::no_route)
         .method_not_allowed_fallback(reply::wrong_method)
         .layer(middleware::from_fn_with_state(state.clone(), guard::guard))

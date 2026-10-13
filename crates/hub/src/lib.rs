@@ -9,6 +9,7 @@ mod lifecycle;
 mod projects;
 mod reply;
 mod server;
+mod ui;
 
 use std::io::IsTerminal;
 

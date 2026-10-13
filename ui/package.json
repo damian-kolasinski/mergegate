@@ -1,0 +1,35 @@
+{
+  "name": "mergegate-ui",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.12.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "gen": "TS_RS_EXPORT_DIR=\"$PWD/api\" TS_RS_LARGE_INT=number cargo test --quiet -p mergegate-api --features ts export_bindings",
+    "typecheck": "pnpm gen && tsc --noEmit",
+    "lint": "eslint --max-warnings 0 .",
+    "format": "biome format --write .",
+    "format:check": "biome format ."
+  },
+  "dependencies": {
+    "solid-js": "1.9.17"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "esbuild": "0.28.2",
+    "esbuild-plugin-solid": "0.6.0",
+    "eslint": "10.12.0",
+    "eslint-plugin-solid": "0.18.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

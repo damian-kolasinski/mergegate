@@ -11,3 +11,8 @@ workspace = true
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
+ts-rs = { version = "12.0.1", optional = true }
+
+[features]
+# TypeScript bindings for the UI, exported by `pnpm gen` in `ui/`.
+ts = ["dep:ts-rs"]

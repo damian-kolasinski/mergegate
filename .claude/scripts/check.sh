@@ -3,12 +3,14 @@
 # otherwise the first failing step's diagnostics. VERBOSE=1 prints cargo's
 # full output instead.
 #
-# Usage: .claude/scripts/check.sh [all|lint|test] [CRATE...] [-- TEST_ARGS...]
-#   all (default)  cargo fmt, clippy, then tests; stops at the first failure
-#   lint           cargo fmt, then clippy
+# Usage: .claude/scripts/check.sh [all|lint|test] [CRATE...|ui] [-- TEST_ARGS...]
+#   all (default)  lint, then tests; stops at the first failure
+#   lint           cargo fmt, clippy, then the UI's Biome, ESLint and tsc
 #   test           tests only, without formatting
 #   CRATE          a directory under crates/ (core, cli, ...); limits clippy
 #                  and tests to those crates
+#   ui             the UI in ui/; checked when no CRATE is named, skipped
+#                  then if pnpm is missing
 #   TEST_ARGS      passed to the test binaries, e.g. a test name filter
 # Exit codes: 0 ok, 1 a check failed, 64 usage.
 
@@ -38,7 +40,15 @@ case "${1:-}" in
 esac
 
 packages=()
+# ui: 0 skip, 1 named (pnpm required), auto (no target named)
+ui=auto
 while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+  if [ "$ui" = auto ]; then ui=0; fi
+  if [ "$1" = ui ]; then
+    ui=1
+    shift
+    continue
+  fi
   manifest="crates/$1/Cargo.toml"
   if [ ! -f "$manifest" ]; then
     echo "USAGE_ERROR: no crate at crates/$1"
@@ -48,7 +58,20 @@ while [ $# -gt 0 ] && [ "$1" != "--" ]; do
   shift
 done
 if [ $# -gt 0 ]; then shift; fi
-if [ ${#packages[@]} -eq 0 ]; then packages=(--workspace); fi
+rust=1
+if [ "$ui" = auto ]; then
+  packages=(--workspace)
+elif [ ${#packages[@]} -eq 0 ]; then
+  rust=0
+fi
+ui_skipped=0
+if [ "$ui" = auto ]; then
+  if command -v pnpm >/dev/null; then ui=1; else ui=0 ui_skipped=1; fi
+fi
+if [ "$ui" = 1 ] && ! command -v pnpm >/dev/null; then
+  echo "SETUP_ERROR: pnpm not found; install it (mise use pnpm, or corepack enable)"
+  exit 1
+fi
 # bash 3.2 (macOS) treats an empty array as unset under `set -u`.
 test_args=("--" "$@")
 
@@ -100,7 +123,7 @@ summary=()
 # the summary says so, so the lockfile gets committed and CI's --locked passes.
 lock_before="$(cksum Cargo.lock 2>/dev/null || true)"
 
-if [ "$mode" != test ]; then
+if [ "$mode" != test ] && [ "$rust" = 1 ]; then
   run cargo fmt --all -- -l || fail FMT_ERROR "$(grep -E '^error' -A3 <<<"$output" | head -10)"
   formatted="$(grep -c '\.rs$' <<<"$output" || true)"
   if [ "$formatted" -gt 0 ]; then summary+=("rustfmt changed $formatted file(s)"); fi
@@ -110,7 +133,25 @@ if [ "$mode" != test ]; then
   summary+=("clippy clean")
 fi
 
-if [ "$mode" != lint ]; then
+# The UI tools print their own short diagnostics; the tail holds them.
+ui_run() {
+  local label="$1"
+  shift
+  run pnpm --dir ui "$@" || fail "$label" "$(grep -v '^[[:space:]]*$' <<<"$output" | tail -20)"
+}
+
+if [ "$mode" != test ] && [ "$ui" = 1 ]; then
+  ui_run UI_INSTALL_ERROR install --frozen-lockfile --prefer-offline
+  ui_run UI_FORMAT_ERROR format
+  fixed="$(sed -n -E 's/.*Fixed ([0-9]+) file.*/\1/p' <<<"$output")"
+  if [ -n "$fixed" ]; then summary+=("biome changed $fixed file(s)"); fi
+  ui_run UI_LINT_ERROR lint
+  ui_run UI_TYPE_ERROR typecheck
+  summary+=("UI clean")
+fi
+if [ "$ui_skipped" = 1 ]; then summary+=("UI skipped, no pnpm"); fi
+
+if [ "$mode" != lint ] && [ "$rust" = 1 ]; then
   if ! run cargo test "${packages[@]}" --message-format=short "${test_args[@]}"; then
     detail="$(diagnostics error)"
     if [ -z "$detail" ]; then
@@ -134,7 +175,7 @@ if [ "$(cksum Cargo.lock 2>/dev/null || true)" != "$lock_before" ]; then
 fi
 
 line="OK"
-for part in "${summary[@]}"; do
+for part in ${summary[@]+"${summary[@]}"}; do
   if [ "$line" = OK ]; then line="OK - $part"; else line="$line, $part"; fi
 done
 echo "$line"

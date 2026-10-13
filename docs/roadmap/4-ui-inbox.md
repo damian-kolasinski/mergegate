@@ -10,7 +10,7 @@ Settled with the operator:
 
 1. **Build:** `crates/hub/build.rs` runs `pnpm install --frozen-lockfile && pnpm build` into `OUT_DIR` and the hub embeds the result. Without pnpm it embeds a stub page and warns; `MG_REQUIRE_UI=1` turns that into an error. Nothing built is committed.
 2. **Bundler:** esbuild with `esbuild-plugin-solid` (Solid's JSX needs its Babel transform).
-3. **Wire types:** ts-rs on `api` behind a `ts` feature; `build.rs` exports them into gitignored `ui/api/` before bundling, `pnpm gen` does the same for editors.
+3. **Wire types:** ts-rs on `api` behind a `ts` feature; `pnpm gen` exports them into gitignored `ui/api/` through ts-rs's export tests, and `pnpm typecheck` runs it first. esbuild drops types, so the bundle needs none and `build.rs` doesn't export them.
 4. **Live updates:** SSE at `GET /api/events/ui` carrying a bare `inbox.changed`; PR 6 puts the event log on it.
 5. **Inbox fields:** only what `GET /api/inbox` has today: id, title, revision, files, +/−, age, grouped as needs you / with agents / merging. Later PRs add their own columns.
 6. **Keys:** `j/k` move, `enter` opens `#/items/<id>`, a stub until PR 5.
@@ -31,16 +31,16 @@ Taken by the agent:
 
 ## Where it lives
 
-- `crates/hub`: `build.rs`, a `ui` route module serving the embedded files, an `events` route module for SSE, a broadcast sender in `AppState` that `items` fires on submit.
+- `crates/hub`: `build.rs`, a `ui` route module serving the embedded files (or `MG_UI_DIR` from disk) and the doctor's `ui` check, an `events` route module for SSE, a broadcast sender in `AppState` that `items` fires on submit.
 - `crates/api`: optional `ts` feature deriving ts-rs.
-- `crates/cli`: doctor check for the stub UI.
+- `crates/cli`: tests of the served UI and the doctor's `ui` check.
 - `ui/`: `package.json`, `app/` (shell, router, keyboard map), `design-system/` (tokens, fonts, primitives), `inbox/`, `tests/` (Playwright, `globalSetup` runs `mg` with a temporary `MERGEGATE_HOME`).
 - CI: Node and pnpm in the test job, a UI job with `MG_REQUIRE_UI=1` running lint, typecheck and Playwright; `check.sh` runs the UI checks when pnpm is present.
 - No migrations.
 
 ## Stack
 
-- 4a `ui-1-build`: build.rs, embedding, stub page, `MG_REQUIRE_UI`, doctor check, ts-rs export, CI and check.sh, this brief. Planned.
+- 4a `ui-1-build`: build.rs, embedding, stub page, `MG_REQUIRE_UI`, doctor check, ts-rs export, CI and check.sh, this brief. In review.
 - 4b `ui-2-design-system`: tokens, fonts, primitives, keyboard map. Planned.
 - 4c `ui-3-inbox`: inbox screen, SSE, Playwright scenarios and first-paint budget. Planned.
 

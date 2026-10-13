@@ -14,6 +14,8 @@ env:
 
 jobs:
   lint:
+    # Rust only: without pnpm the hub embeds the stub UI, which is all clippy
+    # needs.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,13 +30,47 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # The tests drive the real UI; a stub build would fail them less clearly.
+      MG_REQUIRE_UI: 1
     steps:
       - uses: actions/checkout@v5
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ui/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
       - run: cargo test --workspace --locked
       - name: Performance budgets
         # Shared macOS runners are too noisy to gate on; there they only report.
         env:
           MG_ENFORCE_BUDGETS: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
         run: cargo test --release --locked -p mg --test contract -- --ignored --nocapture
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v5
+      # `pnpm typecheck` generates the API types with cargo first.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ui/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck

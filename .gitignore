@@ -1,3 +1,7 @@
 .claude/worktrees/
 .mg-dev/
 /target/
+/ui/node_modules/
+/ui/dist/
+/ui/api/
+/ui/.build.lock
