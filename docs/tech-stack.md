@@ -56,6 +56,7 @@ crates/
   hub/                   axum server, scheduler, hooks runner; composition root of the daemon
   cli/                   mg commands
   skill/                 SKILL.md + references, embedded
+  testkit/               test harness: real hub, git repos and mg binaries in temp dirs
 ui/
   design-system/         tokens, primitives, keyboard map
   diff-view/             virtualized renderer; consumes pre-tokenized lines only
@@ -125,9 +126,10 @@ mg lang update                          Refresh packs to versions compatible wit
 | Git operations | Staging repos, receive, test-merge, merge, push upstream | `GitRepo` |
 | Backend | `github` / `local`: open/update/merge, external comment sync, polling | `Backend` |
 | Diff engine | Merge-base diffs, interdiffs (range-diff semantics), viewed-state carry-over | in `core`, over `GitRepo` |
+| Stacks | Parent links, own-diff base, `parent.*` events, landing order, retargeting | in `core`, over `GitRepo` and `Backend` |
 | Comment anchoring | Re-map drafts and old comments onto new revisions; flag unmappable ones | in `core` |
 | File triage | Pipeline: guards → rules (only stage that can hide) → rankers (agent guide, structural heuristics, judge) | `FileRanker` |
-| Inbox prioritization | Explicit priority → conflict pressure → age → optional judge | `ItemRanker` |
+| Inbox prioritization | Explicit priority → conflict pressure and stacked children → age → optional judge | `ItemRanker` |
 | Judge | Provider for both rankers | `Judge` |
 | Events & delivery | Event log, cursors, debounce, long-poll, `--wake`, hooks | in `hub` |
 | Identity & transport | Listen modes, Tailscale whois, tokens | `Auth` |
@@ -163,8 +165,8 @@ The UI also prefetches the next item and next file, and updates optimistically (
 
 - Real git repos in temp dirs for git, diff, merge and anchoring tests.
 - Golden files for diffs, interdiffs, highlighting spans and triage output.
-- A fake GitHub server with recorded fixtures for the backend.
-- Playwright end-to-end tests against a hub with a fixture database.
+- A stateful fake GitHub server for the backend; an optional contract test checks it against the real API.
+- Playwright end-to-end tests against a real hub, with state created through `mg` commands rather than a prepared database.
 - Benchmarks for every budget in §9; a regression fails the build.
 
 ## 11. Open questions

@@ -136,7 +136,7 @@ footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line);
   <header class="top">
     <div class="eyebrow">mergegate · design v0.1 · 2026-10-12</div>
     <h1>User flows</h1>
-    <p class="lede">Every path through mergegate, from first install to merged code. Each flow lists who takes part, where it starts and ends, and the rules that shape it. Flow numbers (F1–F15) are stable IDs, so we can refer to them in later sessions.</p>
+    <p class="lede">Every path through mergegate, from first install to merged code. Each flow lists who takes part, where it starts and ends, and the rules that shape it. Flow numbers (F1–F16) are stable IDs, so we can refer to them in later sessions.</p>
     <p class="lede">You rarely run <code>mg</code> yourself. You ask your agent, it runs the commands, and it asks you when a decision is yours.</p>
     <div class="actors" aria-label="Actors">
       <div class="actor"><b>Operator</b><span>you, reviewing in the UI</span></div>
@@ -173,6 +173,7 @@ footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line);
           <li><a href="#f7"><span class="n">F7</span><span class="t">Request changes</span></a></li>
           <li><a href="#f8"><span class="n">F8</span><span class="t">Approve and merge</span></a></li>
           <li><a href="#f9"><span class="n">F9</span><span class="t">Merge conflicts</span></a></li>
+          <li><a href="#f16"><span class="n">F16</span><span class="t">Stacked items</span></a></li>
         </ol>
       </div>
       <div>
@@ -201,6 +202,9 @@ flowchart LR
   MG --> MD["Merged"]
   MG -->|"F9 conflict"| CR
   MG -.->|"F8 upstream checkout dirty, retry"| MG
+  MG -.->|"F16 stacked item waits for its parent"| MG
+  MG -->|"F16 parent abandoned"| CR
+  MG -->|"F14 abandon"| AB
   NR -.->|"F5 external comments"| NR
   NR -.->|"F9 target moved, conflict"| CR
   NR -->|"F14 abandon"| AB["Abandoned"]
@@ -584,6 +588,48 @@ sequenceDiagram
         <ul class="rules">
           <li>Conflicts go to the agent, not to you. You usually only see the badge.</li>
           <li>The hub also tests open items against each other. "Conflicts with item 45" in the inbox tells you which item to merge first.</li>
+        </ul>
+      </section>
+
+      <!-- F16 -->
+      <section class="flow" id="f16">
+        <div class="flow-head"><span class="flow-id">F16</span><h2>Stacked items</h2></div>
+        <div class="who"><span>Authoring agent</span><span>mg CLI</span><span>Hub</span><span>Operator</span></div>
+        <div class="bounds">
+          <div class="bound"><span class="k">Starts when</span>An agent's work is too big for one review and it splits it.</div>
+          <div class="bound end"><span class="k">Ends when</span>Every item in the stack is merged, bottom first.</div>
+        </div>
+        <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant AA as Authoring agent
+  participant CLI as mg CLI
+  participant Hub
+  actor Op as Operator
+  AA->>CLI: mg submit, the bottom part
+  CLI-->>AA: item 41
+  AA->>CLI: mg submit --on 41, the next part
+  CLI-->>AA: item 42, stacked on 41
+  Hub-->>Op: inbox shows 41 with 42 under it
+  Op->>Hub: Request changes on 41
+  AA->>CLI: mg submit, 41 r2
+  Hub-->>CLI: event parent.updated for 42
+  CLI-->>AA: mg wait returns, with the rebase command
+  AA->>AA: rebase 42 onto 41 r2, resolve if needed
+  AA->>CLI: mg submit, 42 r2
+  Hub->>Hub: own diff of 42 unchanged, viewed marks kept
+  Op->>Hub: Approve 42 (merge after 41)
+  Hub-->>Op: 42 waits in Merging for 41
+  Op->>Hub: Approve and merge 41
+  Hub->>Hub: merge 41, retarget 42 to the target
+  Hub->>Hub: merge 42
+        </pre></div>
+        <ul class="rules">
+          <li>Each item shows only its own changes, against the parent revision it is built on.</li>
+          <li>The hub never writes to an item's branch. The agent rebases with the command the event gives it, and submits.</li>
+          <li>Viewed marks and an approval survive a rebase only where the own diff is unchanged.</li>
+          <li>If 41 lands by squash, 42 gets <code>parent.updated</code> and is rebased onto the target before it merges.</li>
+          <li>If 41 is abandoned, 42 goes back to its agent with <code>parent.abandoned</code>, and the agent moves it with <code>mg submit --on</code>.</li>
         </ul>
       </section>
 
