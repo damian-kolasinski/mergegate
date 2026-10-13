@@ -76,7 +76,7 @@ Ports (traits in `core`): `Git`, `Backend`, `Store`, `Highlighter`, `Judge`, `Fi
 
 | Operation | Implementation | Why |
 |---|---|---|
-| Receive pushes from workers | `git http-backend` (CGI) behind axum | gix has no server side. |
+| Receive pushes from workers | `git http-backend` (CGI) behind axum, bodies streamed both ways, `refs/mergegate` hidden | gix has no server side. |
 | Test-merge, merge | `git merge-tree --write-tree` | Must match git's `ort` merge exactly, or conflicts are detected wrongly. |
 | Push to GitHub / operator repo | `git push` (`updateInstead` for local) | gix push is incomplete; must respect git semantics. |
 | Read blobs, trees, history | gix | No process spawn per call (~2–5 ms each on macOS); typed results. |
@@ -173,3 +173,4 @@ The UI also prefetches the next item and next file, and updates optimistically (
 
 - Should a tiny core set of languages (Markdown, JSON, TOML) be bundled, so highlighting works offline before any `mg lang add`?
 - Per-platform Tailscale LocalAPI discovery on macOS: decide between the LocalAPI and the `tailscale` CLI after a spike.
+- A target renamed to or from a nested name (`release` and `release/1.0`) can't coexist in staging while an open item keeps the old one, and the fetch fails with git's error. Mirror targets under their own ref namespace?

@@ -97,6 +97,10 @@ impl Client {
         self.read(request.send_json(body))
     }
 
+    pub fn remote(&self, project: &str) -> String {
+        format!("{}/git/{}", self.url, segment(project))
+    }
+
     fn url(&self, path: &str) -> String {
         format!("{}{path}", self.url)
     }

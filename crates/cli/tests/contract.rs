@@ -1,10 +1,10 @@
 //! The CLI contract agents rely on: exit codes, `--json`, `MG_JSON`, errors
-//! that name the next command, and the cold-start budget.
+//! that name the next command, and the cold-start and inbox budgets.
 
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use testkit::Env;
+use testkit::{Env, TestRepo};
 
 fn env() -> Env {
     Env::new(env!("CARGO_BIN_EXE_mg"))
@@ -88,6 +88,40 @@ fn cold_start_budget() {
     samples.sort();
     let median = samples[samples.len() / 2];
     println!("mg --version: median {median:?}, budget {BUDGET:?}");
+    if std::env::var_os("MG_ENFORCE_BUDGETS").is_some_and(|v| v == "1") {
+        assert!(median < BUDGET, "median {median:?} over budget {BUDGET:?}");
+    }
+}
+
+/// Budget: `mg inbox --json` under 30 ms (tech-stack §9), over a hub with 20
+/// open items. Run and enforced like `cold_start_budget`.
+#[test]
+#[ignore]
+fn inbox_budget() {
+    const BUDGET: Duration = Duration::from_millis(30);
+    let env = env();
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    env.mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    env.mg_at(repo.root(), &["--json", "init"]).assert_code(0);
+    for n in 0..20 {
+        let branch = format!("work-{n}");
+        repo.checkout("main");
+        repo.git(["switch", "--quiet", "-c", &branch]);
+        repo.commit_files(&branch, &[(&format!("{branch}.txt"), "a\nb\n")]);
+        env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    }
+    let mut samples: Vec<Duration> = (0..30)
+        .map(|_| {
+            let started = Instant::now();
+            env.mg(&["--json", "inbox"]).assert_code(0);
+            started.elapsed()
+        })
+        .collect();
+    samples.sort();
+    let median = samples[samples.len() / 2];
+    println!("mg inbox --json: median {median:?}, budget {BUDGET:?}");
     if std::env::var_os("MG_ENFORCE_BUDGETS").is_some_and(|v| v == "1") {
         assert!(median < BUDGET, "median {median:?} over budget {BUDGET:?}");
     }

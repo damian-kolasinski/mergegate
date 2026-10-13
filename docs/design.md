@@ -86,7 +86,8 @@ Principles
 - **Where code lands depends on the backend.** The project's *upstream* is either GitHub (`github`) or the operator's existing repo on the hub machine (`local`).
   - `github`: the hub pushes the branch to GitHub and opens or updates the PR. Merging uses the GitHub API.
   - `local`: the hub merges in staging (`git merge-tree`, no working tree needed), then pushes the result to the operator's repo with `receive.denyCurrentBranch=updateInstead` semantics. If the target branch is checked out and clean, the checkout fast-forwards in place. If it has uncommitted changes, the merge is held and the UI says why. Nothing is ever force-updated.
-- **Workers take the target from the hub.** `git fetch mergegate` returns the latest target (mirrored from the upstream), so new worktrees start from what was actually merged.
+- **Workers take the target from the hub.** `git fetch mergegate` returns the latest target (mirrored from the upstream), so new worktrees start from what was actually merged. The hub re-fetches the target from the upstream before every fetch and submit, so a worker's push to it doesn't stick.
+- **Every revision is pinned.** The hub keeps each revision's head at `refs/mergegate/items/<n>/r<rev>`, hidden from workers' pushes and fetches, so a force-push to the branch can't drop the commits an older revision points at.
 - **Diffs are computed on the hub** from staging: the merge-base against the target (or the parent revision for a stacked item, §5.1), and interdiffs between revisions.
 
 ### Multi-machine & security
@@ -116,6 +117,7 @@ Principles
  └──────────────┘
 ```
 
+- **Items are numbered per project** (`app#42`), with one open item per project and branch. A new revision puts the item back in *needs review*, whatever open state it was in.
 - External review runs **in parallel** with operator review, mirroring today's workflow. Items enter *needs review* immediately; external comments and the agent's responses appear as they come in.
 - **Approve means merge.** There's no CI to wait for, so an approval merges right away (a stacked item right after its parent, §5.1). If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
