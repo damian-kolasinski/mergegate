@@ -14,9 +14,12 @@ pub fn run(title: Option<String>) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
     let project = remote_project()?;
     let switch = "git switch -c NAME";
-    let branch = repo::read(&["symbolic-ref", "--quiet", "--short", "HEAD"])?.ok_or_else(|| {
-        CliError::new("detached_head", "HEAD is detached; submit from a branch").hint(switch)
-    })?;
+    // The full ref: `--short` gives `heads/NAME` when a tag shares the name.
+    let branch = repo::read(&["symbolic-ref", "--quiet", "HEAD"])?
+        .and_then(|head| head.strip_prefix("refs/heads/").map(str::to_owned))
+        .ok_or_else(|| {
+            CliError::new("detached_head", "HEAD is detached; submit from a branch").hint(switch)
+        })?;
     let head = repo::read(&["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])?
         .ok_or_else(|| CliError::new("no_commits", format!("{branch} has no commits yet")))?;
     let project: Project = client.get(&route(&project)?)?;

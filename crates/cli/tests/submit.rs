@@ -376,4 +376,37 @@ fn f15_asks_before_moving_the_target_away_from_open_items() {
     let question = back["needs_decision"]["question"].as_str().unwrap();
     assert!(question.contains("app#2 (next onto develop)"), "{question}");
     assert!(!question.contains("app#1"), "{question}");
+
+    // An open item's branch can't become the target, even confirmed.
+    let taken = env
+        .mg(&[
+            "--json",
+            "project",
+            "set",
+            "app",
+            "target",
+            "next",
+            "--confirm",
+        ])
+        .assert_code(1)
+        .json();
+    assert_eq!(error_code(&taken), "branch_under_review", "{taken}");
+}
+
+#[test]
+fn f4_submits_a_branch_a_tag_shares_its_name_with() {
+    let (env, repo) = hub_with_app();
+    repo.git(["tag", "main"]);
+    let target = submit(&env, repo.root());
+    assert_eq!(error_code(&target), "target_branch", "{target}");
+
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Feature", &[("f", "1\n")]);
+    repo.git(["tag", "feature"]);
+    let submitted = submit(&env, repo.root());
+    assert_eq!(submitted["item"]["branch"], "feature", "{submitted}");
+    assert_eq!(
+        rev(&staging(&env, "app"), "refs/heads/feature"),
+        repo.rev("HEAD")
+    );
 }
