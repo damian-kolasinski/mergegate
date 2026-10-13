@@ -70,3 +70,20 @@ fn errors_go_to_stdout_as_json_and_to_stderr_as_text() {
     assert!(stdout.is_empty());
     assert_eq!(stderr, "error: port 7800 is already in use\nhint: --port N");
 }
+
+#[test]
+fn a_yes_or_no_decision_names_the_flag_alone() {
+    let decision = Outcome::NeedsDecision(NeedsDecision {
+        question: "1 open item keeps its target. Change it?".into(),
+        flag: "--confirm".into(),
+        options: Vec::new(),
+        default: None,
+    });
+    let (stdout, _, code) = render(false, Ok(decision));
+    assert_eq!(code, exit::NEEDS_DECISION);
+    assert_eq!(
+        stdout,
+        "needs decision: 1 open item keeps its target. Change it?\n\
+         re-run with --confirm to go ahead"
+    );
+}

@@ -33,6 +33,9 @@ pub enum ProjectCommand {
         project: String,
         key: String,
         value: String,
+        /// Apply even though open items keep the old backend or target
+        #[arg(long)]
+        confirm: bool,
     },
 }
 
@@ -71,19 +74,27 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
             project,
             key,
             value,
+            confirm,
         } => {
             let value = match key.as_str() {
                 "upstream" => absolute(Path::new(&value))?,
                 _ => value,
             };
-            let project = client.patch(&route(&project)?, &SetProject { key, value })?;
-            Ok(one(&project))
+            let request = SetProject {
+                key,
+                value,
+                confirm,
+            };
+            match client.patch::<Project>(&route(&project)?, &request)? {
+                Reply::Done(project) => Ok(one(&project)),
+                Reply::Decide(decision) => Ok(Outcome::NeedsDecision(decision)),
+            }
         }
     }
 }
 
 /// The route of one project. An empty name would address no route at all.
-fn route(name: &str) -> Result<String, CliError> {
+pub(crate) fn route(name: &str) -> Result<String, CliError> {
     if name.is_empty() {
         return Err(
             CliError::new("project_not_found", "the project name is empty").hint("mg project show"),
@@ -115,14 +126,18 @@ fn add(
 }
 
 fn show_here(client: &Client) -> Result<Outcome, CliError> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| CliError::new("io_error", format!("reading the current directory: {e}")))?;
-    let path = absolute(&cwd)?;
-    match client.get_query::<Project>("/api/project-at", &[("path", &path)]) {
+    match project_here(client) {
         Ok(project) => Ok(one(&project)),
         Err(e) if matches!(e.body.code.as_str(), "no_project" | "not_a_repo") => all(client),
         Err(e) => Err(e),
     }
+}
+
+pub(crate) fn project_here(client: &Client) -> Result<Project, CliError> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| CliError::new("io_error", format!("reading the current directory: {e}")))?;
+    let path = absolute(&cwd)?;
+    client.get_query("/api/project-at", &[("path", &path)])
 }
 
 fn all(client: &Client) -> Result<Outcome, CliError> {

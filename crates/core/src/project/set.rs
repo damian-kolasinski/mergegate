@@ -1,12 +1,11 @@
 //! Changing a project's settings after setup (F15).
-//!
-//! TODO(PR 3): once items exist, changing `backend` or `target` lists the
-//! open items that keep their settings in a `needs_decision` before applying.
 
 use std::path::PathBuf;
 
 use super::{Backend, Project, ProjectError, ProjectStore, find};
+use crate::decision::Decision;
 use crate::git::Git;
+use crate::item::ItemStore;
 
 /// The keys `mg project set` accepts.
 pub const KEYS: &[&str] = &["backend", "target", "upstream"];
@@ -38,17 +37,29 @@ impl Setting {
     }
 }
 
+#[derive(Debug)]
+pub enum Changed {
+    Project(Project),
+    /// Nothing changed; re-run with `--confirm`.
+    Decide(Decision),
+}
+
 /// Applies `setting` to the project named `name`. Settings that point at a
 /// branch are checked against the repo, and the staging repo follows them.
-pub fn set(
-    store: &mut impl ProjectStore,
+///
+/// A new backend or target applies to new items only. While open items keep
+/// the old one, nothing changes until the caller `confirm`s, having been
+/// told which items those are.
+pub fn set<S: ProjectStore + ItemStore>(
+    store: &mut S,
     git: &impl Git,
     name: &str,
     setting: Setting,
-) -> Result<Project, ProjectError> {
+    confirm: bool,
+) -> Result<Changed, ProjectError> {
     let mut project = find(store, name)?;
     match setting {
-        Setting::Backend(Backend::Local) => return Ok(project),
+        Setting::Backend(Backend::Local) => return Ok(Changed::Project(project)),
         Setting::Backend(backend) => return Err(ProjectError::BackendUnavailable(backend)),
         Setting::Target(target) => {
             let repo = git.inspect(&project.upstream)?;
@@ -58,13 +69,17 @@ pub fn set(
                     upstream: repo.root,
                 });
             }
+            let decision = keeping_target(store, &project, &target)?;
+            if !confirm && let Some(decision) = decision {
+                return Ok(Changed::Decide(decision));
+            }
             project.target = target;
         }
         Setting::Upstream(path) => {
             let repo = git.inspect(&path)?;
             if let Some(other) = store.project_with_upstream(&repo.root)? {
                 if other.name == project.name {
-                    return Ok(project);
+                    return Ok(Changed::Project(project));
                 }
                 return Err(ProjectError::AlreadyRegistered {
                     project: other.name,
@@ -82,7 +97,46 @@ pub fn set(
     }
     git.sync_staging(&project.name, &project.upstream, &project.target)?;
     store.update_project(&project)?;
-    Ok(project)
+    Ok(Changed::Project(project))
+}
+
+/// What to ask when open items would stay on another target than the one
+/// new items get. An open item's own branch can't become the target: staging
+/// mirrors the target from the upstream over what the worker pushed.
+fn keeping_target(
+    store: &impl ItemStore,
+    project: &Project,
+    target: &str,
+) -> Result<Option<Decision>, ProjectError> {
+    let open = store.open_items(Some(&project.name))?;
+    if let Some(item) = open.iter().find(|item| item.branch == target) {
+        return Err(ProjectError::BranchUnderReview {
+            branch: target.into(),
+            item: item.id.to_string(),
+        });
+    }
+    let staying: Vec<String> = open
+        .into_iter()
+        .filter(|item| item.target != target)
+        .map(|item| format!("{} ({} onto {})", item.id, item.branch, item.target))
+        .collect();
+    let keep = match staying.len() {
+        0 => return Ok(None),
+        1 => "1 open item keeps its target until it closes",
+        _ => &format!(
+            "{} open items keep their targets until they close",
+            staying.len()
+        ),
+    };
+    Ok(Some(Decision {
+        question: format!(
+            "{keep}: {}. New items will target {target}. Change it?",
+            staying.join(", ")
+        ),
+        flag: "--confirm".into(),
+        options: Vec::new(),
+        default: None,
+    }))
 }
 
 #[cfg(test)]

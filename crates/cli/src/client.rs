@@ -89,12 +89,12 @@ impl Client {
         &self,
         path: &str,
         body: &impl Serialize,
-    ) -> Result<T, CliError> {
+    ) -> Result<Reply<T>, CliError> {
         let request = self
             .agent
             .patch(self.url(path))
             .header(api::CLIENT_HEADER, "mg");
-        done(self.read(request.send_json(body)))
+        self.read(request.send_json(body))
     }
 
     fn url(&self, path: &str) -> String {

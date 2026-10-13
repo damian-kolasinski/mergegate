@@ -16,7 +16,7 @@ pub use backend::Backend;
 pub use error::ProjectError;
 pub use find::{at, find};
 pub use name::{NameError, ProjectName};
-pub use set::{KEYS, Setting, set};
+pub use set::{Changed, KEYS, Setting, set};
 pub use store::ProjectStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

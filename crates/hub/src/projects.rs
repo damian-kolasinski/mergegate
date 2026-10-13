@@ -10,7 +10,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use mergegate_core::project::{
-    self, AddProject, Added, Backend, Project, ProjectError, ProjectStore, Setting,
+    self, AddProject, Added, Backend, Changed, Project, ProjectError, ProjectStore, Setting,
 };
 
 use crate::reply::{self, Failure};
@@ -88,17 +88,21 @@ async fn set(
     State(state): State<Arc<AppState>>,
     name: Result<extract::Path<String>, PathRejection>,
     request: Result<Json<api::project::SetProject>, JsonRejection>,
-) -> Reply<api::project::Project> {
+) -> Result<Response, Failure> {
     let (extract::Path(name), Json(request)) = (name?, request?);
     let setting = Setting::parse(&request.key, &request.value).map_err(failure)?;
     if let Setting::Upstream(path) = &setting {
         absolute(&path.to_string_lossy())?;
     }
-    let project = state
-        .blocking(move |store, git| project::set(store, git, &name, setting))
+    let confirm = request.confirm;
+    match state
+        .blocking(move |store, git| project::set(store, git, &name, setting, confirm))
         .await
-        .map_err(failure)?;
-    Ok(Json(to_api(&project)))
+        .map_err(failure)?
+    {
+        Changed::Project(project) => Ok(Json(to_api(&project)).into_response()),
+        Changed::Decide(decision) => Ok(reply::decision(decision)),
+    }
 }
 
 fn to_api(project: &Project) -> api::project::Project {
@@ -110,7 +114,7 @@ fn to_api(project: &Project) -> api::project::Project {
     }
 }
 
-fn backend_to_api(backend: Backend) -> api::project::Backend {
+pub(crate) fn backend_to_api(backend: Backend) -> api::project::Backend {
     match backend {
         Backend::Github => api::project::Backend::Github,
         Backend::Local => api::project::Backend::Local,
@@ -138,7 +142,7 @@ fn absolute(path: &str) -> Result<PathBuf, Failure> {
     ))
 }
 
-fn failure(e: ProjectError) -> Failure {
+pub(crate) fn failure(e: ProjectError) -> Failure {
     use ProjectError as E;
     use StatusCode as S;
     let (status, code, hint) = match &e {
@@ -158,6 +162,7 @@ fn failure(e: ProjectError) -> Failure {
             Some(format!("mg project show {project}")),
         ),
         E::UnknownBranch { .. } => (S::BAD_REQUEST, "unknown_branch", None),
+        E::BranchUnderReview { .. } => (S::CONFLICT, "branch_under_review", None),
         E::BackendUnavailable(_) => (
             S::BAD_REQUEST,
             "backend_unavailable",
