@@ -89,7 +89,6 @@ fn f4_submits_a_branch_and_its_revisions() {
         (&r1["files"], &r1["additions"], &r1["deletions"]),
         (&json!(2), &json!(3), &json!(0))
     );
-    // The hub has the branch and pins the revision.
     let staging = staging(&env, "app");
     assert_eq!(rev(&staging, "feature"), head);
     assert_eq!(rev(&staging, "refs/mergegate/items/1/r1"), head);

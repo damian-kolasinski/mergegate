@@ -5,7 +5,6 @@ use std::process::{Command, Output, Stdio};
 
 use crate::output::CliError;
 
-/// The remote `mg init` adds and `mg submit` pushes through.
 pub(crate) const REMOTE: &str = "mergegate";
 
 fn output(args: &[&str]) -> Result<Output, CliError> {
@@ -27,7 +26,7 @@ pub(crate) fn read(args: &[&str]) -> Result<Option<String>, CliError> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()))
 }
 
-/// Runs git for its effect; `doing` names the step if it fails.
+/// `doing` names the step if it fails.
 pub(crate) fn run(doing: &str, args: &[&str]) -> Result<(), CliError> {
     let output = output(args)?;
     if output.status.success() {

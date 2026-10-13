@@ -97,7 +97,6 @@ impl Client {
         self.read(request.send_json(body))
     }
 
-    /// The URL of the project's git remote on this hub.
     pub fn remote(&self, project: &str) -> String {
         format!("{}/git/{}", self.url, segment(project))
     }
