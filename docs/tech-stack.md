@@ -58,8 +58,8 @@ crates/
   skill/                 SKILL.md + references, embedded
   testkit/               test harness: real hub, git repos and mg binaries in temp dirs
 ui/
-  app/                   entry point, routing, hub client
-  design-system/         tokens, primitives, keyboard map
+  app/                   entry point, routing, hub client, keyboard map
+  design-system/         tokens, primitives
   inbox/  item/          one directory per screen
   diff-view/             virtualized renderer; consumes pre-tokenized lines only
   tests/                 Playwright against the real hub
@@ -137,7 +137,7 @@ mg lang update                          Refresh packs to versions compatible wit
 | Identity & transport | Listen modes, Tailscale whois, tokens | `Auth` |
 | Highlighting | Language packs, tokenization, cache | `Highlighter` |
 | Store | Schema, migrations, attachments | `Store` |
-| Design system | Tokens, primitives, keyboard map | `ui/design-system` |
+| Design system | Tokens, primitives | `ui/design-system` |
 | Agent surface | CLI contract, skill, resume prompt | `cli`, `skill` |
 
 Rules are stored in `rules.toml`. Proposals waiting for approval live in the database and are written to the file only once approved. The hub watches the file and validates hand edits. A hand edit that tightens applies immediately. A hand edit that loosens (moves anything toward `trusted`) is held as a pending proposal until approved in the UI, because the hub can't tell the operator's edit from an agent's. Every rule in effect therefore has the operator's approval.

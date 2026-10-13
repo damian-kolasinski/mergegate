@@ -18,7 +18,8 @@ crates/
   cli/             composition root of mg
   testkit/         test harness: drives the real hub, git and mg binaries
 ui/                SolidJS bundled by esbuild; one pnpm package
-  app/             entry point and routing; wires features, owns none
+  app/             entry point, routing, hub client and keyboard map; wires
+                   features and owns none
   design-system/   tokens and primitives; all styling goes through it
   <feature>/       UI features
   tests/           Playwright against the real hub; state comes from mg commands
