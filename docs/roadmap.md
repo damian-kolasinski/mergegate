@@ -20,7 +20,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
-| 1 | Foundation | Workspace, CI, `testkit`, `mg hub start/stop/status` (`--foreground`, `--port`), `MERGEGATE_HOME`, SQLite store with a database backup before each migration, the CLI contract (`--json`, exit codes, `needs_decision`). The CLI package is named `mg`. | — | — |
 | 2 | Projects | `mg project add/show/set` (local backend), basic `mg doctor` | F1 (local), F15 | — |
 | 3 | Submit | Pushing to the hub, `mg init`, `mg submit`, revisions, `mg inbox --json`, diff against the base | F4 | — |
 | 4 | UI foundation and inbox | UI build and embedding (a plain `cargo build` or `cargo install` yields a binary with the UI), design tokens and primitives, inbox screen, Playwright setup | F6 (inbox) | — |
