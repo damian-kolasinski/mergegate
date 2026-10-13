@@ -29,9 +29,7 @@ pub(crate) struct FakeGit {
     fail_sync: bool,
     /// Commits of every repo, by ID. Each has at most one parent.
     commits: BTreeMap<String, Commit>,
-    /// Branch heads in the upstream repos, by root and branch.
     upstream: BTreeMap<(PathBuf, String), String>,
-    /// Branches in each project's staging repo, with their heads.
     staging: RefCell<BTreeMap<String, BTreeMap<String, String>>>,
     synced: RefCell<Vec<(String, PathBuf, String)>>,
     fetched: RefCell<Vec<(String, String)>>,
@@ -55,7 +53,6 @@ impl Default for FakeGit {
 }
 
 impl FakeGit {
-    /// Adds the repo at `root`, replacing one already there.
     pub fn repo(self, root: &str, branches: &[&str], head: Option<&str>) -> Self {
         let mut git = self.without_repo(root);
         let mut branches: Vec<String> = branches.iter().map(|b| (*b).into()).collect();
@@ -99,14 +96,13 @@ impl FakeGit {
         self
     }
 
-    /// Points `branch` of the upstream repo at `root` to `commit`.
     pub fn upstream(mut self, root: &str, branch: &str, commit: &str) -> Self {
         self.upstream
             .insert((root.into(), branch.into()), commit.into());
         self
     }
 
-    /// What a worker's `git push` does: points `branch` in staging at `commit`.
+    /// What a worker's `git push` does.
     pub fn push(&self, project: &str, branch: &str, commit: &str) {
         self.staging
             .borrow_mut()
@@ -125,12 +121,11 @@ impl FakeGit {
         self.fetched.borrow().clone()
     }
 
-    /// Pinned refs with their commits.
     pub fn pins(&self) -> BTreeMap<String, String> {
         self.pins.borrow().clone()
     }
 
-    /// `id` and its ancestors, newest first.
+    /// Newest first.
     fn history(&self, id: &str) -> Vec<String> {
         let mut history = Vec::new();
         let mut next = Some(id.to_owned());
@@ -141,7 +136,7 @@ impl FakeGit {
         history
     }
 
-    /// The commits after `base` up to `head`, newest first.
+    /// Newest first.
     fn range(&self, base: &str, head: &str) -> Vec<String> {
         self.history(head)
             .into_iter()
@@ -287,17 +282,14 @@ pub(crate) struct FakeStore {
     projects: BTreeMap<ProjectName, Project>,
     /// Oldest first.
     items: Vec<Item>,
-    /// Ticks once per stamped time.
     clock: u32,
 }
 
 impl FakeStore {
-    /// Every item, open or not, oldest first.
     pub fn items(&self) -> &[Item] {
         &self.items
     }
 
-    /// Moves an item to `state`, as reviews and merges will.
     pub fn set_state(&mut self, id: &ItemId, state: ItemState) {
         self.items.iter_mut().find(|i| i.id == *id).unwrap().state = state;
     }

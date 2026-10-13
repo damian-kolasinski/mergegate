@@ -10,7 +10,6 @@ use crate::project::{ProjectStore, find};
 pub struct Submit {
     pub project: String,
     pub branch: String,
-    /// The commit the worker pushed `branch` to.
     pub head: String,
     pub title: Option<String>,
 }
@@ -18,14 +17,11 @@ pub struct Submit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submitted {
     pub item: Item,
-    /// False when the branch was already submitted at this head.
     pub new_revision: bool,
 }
 
-/// Opens an item for `request.branch`, or adds a revision to the branch's
-/// open item. The branch must already be pushed to staging at
-/// `request.head`. Its diff is taken against the merge-base with the item's
-/// target, fetched fresh from the upstream.
+/// The branch must already be pushed to staging at `request.head`. The
+/// target is fetched fresh first, so the merge-base is current.
 pub fn submit<S: ProjectStore + ItemStore>(
     store: &mut S,
     git: &impl ItemGit,
