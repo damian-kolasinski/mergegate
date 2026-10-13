@@ -1,13 +1,17 @@
 //! `mg`: the mergegate CLI, and the hub it starts. Composition root of the CLI.
 
+mod client;
+mod doctor_cmd;
 mod hub_cmd;
 pub mod output;
+mod project_cmd;
 
 use std::ffi::OsString;
 use std::process::ExitCode;
 
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
+use hub::Home;
 
 use output::{CliError, EXIT_CODES_HELP, Outcome, exit};
 
@@ -36,6 +40,11 @@ enum Command {
     /// Run and inspect the hub
     #[command(subcommand)]
     Hub(hub_cmd::HubCommand),
+    /// Register repos as projects and change their settings
+    #[command(subcommand)]
+    Project(project_cmd::ProjectCommand),
+    /// Check that the hub, git and every project are set up to work
+    Doctor,
 }
 
 pub fn main() -> ExitCode {
@@ -52,7 +61,16 @@ pub fn main() -> ExitCode {
 fn dispatch(command: Command) -> Result<Outcome, CliError> {
     match command {
         Command::Hub(command) => hub_cmd::run(command),
+        Command::Project(command) => project_cmd::run(command),
+        Command::Doctor => doctor_cmd::run(),
     }
+}
+
+fn home() -> Result<Home, CliError> {
+    Home::from_env().map_err(|e| {
+        CliError::new("invalid_home", e.to_string())
+            .hint(format!("set {} to an absolute path", hub::HOME_ENV))
+    })
 }
 
 /// clap exits with 2 on usage errors, which the contract reserves for

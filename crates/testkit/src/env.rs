@@ -53,11 +53,28 @@ impl Env {
     }
 
     pub fn mg_with_env(&self, args: &[&str], vars: &[(&str, &str)]) -> Run {
+        let mut cmd = self.command(args);
+        cmd.envs(vars.iter().copied());
+        Self::run(cmd)
+    }
+
+    /// Runs `mg` with `dir` as its working directory, as an agent in that
+    /// repo would.
+    pub fn mg_at(&self, dir: &Path, args: &[&str]) -> Run {
+        let mut cmd = self.command(args);
+        cmd.current_dir(dir);
+        Self::run(cmd)
+    }
+
+    fn command(&self, args: &[&str]) -> Command {
         let mut cmd = Command::new(&self.mg);
         cmd.args(args)
             .env("MERGEGATE_HOME", self.home())
-            .env_remove("MG_JSON")
-            .envs(vars.iter().copied());
+            .env_remove("MG_JSON");
+        cmd
+    }
+
+    fn run(mut cmd: Command) -> Run {
         let output = cmd.output().expect("run mg");
         Run {
             code: output.status.code().unwrap_or(-1),

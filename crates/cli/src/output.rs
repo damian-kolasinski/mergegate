@@ -32,7 +32,13 @@ Exit codes: 0 ok · 1 error · 2 needs a decision (re-run with the named flag) �
 3 item closed · 64 usage · 69 hub unavailable · 75 timed out (call again)";
 
 pub enum Outcome {
-    Done { json: Value, text: String },
+    /// A result, printed on stdout even when `exit` reports a failure, as
+    /// `mg doctor` does when a check fails.
+    Done {
+        json: Value,
+        text: String,
+        exit: u8,
+    },
     NeedsDecision(NeedsDecision),
 }
 
@@ -41,6 +47,18 @@ impl Outcome {
         Self::Done {
             json: serde_json::to_value(value).expect("output types serialize"),
             text: text.into(),
+            exit: exit::OK,
+        }
+    }
+
+    pub fn exit(self, code: u8) -> Self {
+        match self {
+            Self::Done { json, text, .. } => Self::Done {
+                json,
+                text,
+                exit: code,
+            },
+            decision => decision,
         }
     }
 }
@@ -88,9 +106,13 @@ pub fn emit(json: bool, result: Result<Outcome, CliError>) -> ExitCode {
 
 fn render(json: bool, result: Result<Outcome, CliError>) -> (String, String, u8) {
     match result {
-        Ok(Outcome::Done { json: value, text }) => {
+        Ok(Outcome::Done {
+            json: value,
+            text,
+            exit,
+        }) => {
             let out = if json { value.to_string() } else { text };
-            (out, String::new(), exit::OK)
+            (out, String::new(), exit)
         }
         Ok(Outcome::NeedsDecision(decision)) => {
             let out = if json {

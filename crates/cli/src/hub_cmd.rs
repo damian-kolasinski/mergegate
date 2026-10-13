@@ -1,6 +1,6 @@
 //! `mg hub start | stop | status`.
 
-mod probe;
+pub(crate) mod probe;
 mod report;
 mod spawn;
 mod start;
@@ -11,7 +11,6 @@ use std::io;
 use std::time::Duration;
 
 use clap::Subcommand;
-use hub::Home;
 
 use crate::output::{CliError, Outcome};
 
@@ -35,10 +34,7 @@ pub enum HubCommand {
 }
 
 pub fn run(command: HubCommand) -> Result<Outcome, CliError> {
-    let home = Home::from_env().map_err(|e| {
-        CliError::new("invalid_home", e.to_string())
-            .hint(format!("set {} to an absolute path", hub::HOME_ENV))
-    })?;
+    let home = crate::home()?;
     match command {
         HubCommand::Start { foreground, port } => start::run(home, foreground, port),
         HubCommand::Stop => stop::run(&home),

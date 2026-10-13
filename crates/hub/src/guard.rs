@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use axum::Json;
 use axum::extract::{Request, State};
 use axum::http::{Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
+use crate::reply::Failure;
 use crate::server::AppState;
 
 /// Accepts only requests addressed to the loopback interface (against DNS
@@ -35,12 +35,5 @@ pub(crate) async fn guard(
 }
 
 fn forbidden(message: &str) -> Response {
-    let body = api::error::ErrorEnvelope {
-        error: api::error::ErrorBody {
-            code: "forbidden".into(),
-            message: message.into(),
-            hint: None,
-        },
-    };
-    (StatusCode::FORBIDDEN, Json(body)).into_response()
+    Failure::new(StatusCode::FORBIDDEN, "forbidden", message, None).into_response()
 }

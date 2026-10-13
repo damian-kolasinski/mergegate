@@ -6,7 +6,7 @@ use hub::{Home, HubInfo};
 
 use super::report::HubStatus;
 
-pub(super) struct Running {
+pub(crate) struct Running {
     info: HubInfo,
     pub health: api::hub::Health,
 }
@@ -20,7 +20,7 @@ impl Running {
         self.health.api_version == api::API_VERSION
     }
 
-    pub fn status(&self, home: &Home) -> HubStatus {
+    pub(super) fn status(&self, home: &Home) -> HubStatus {
         HubStatus {
             running: true,
             url: Some(self.url()),
@@ -56,7 +56,7 @@ impl Running {
 
 /// The hub named in `hub.json`, if it answers as that process. Home paths
 /// aren't compared: symlinks give one directory many spellings.
-pub(super) fn probe(home: &Home) -> Option<Running> {
+pub(crate) fn probe(home: &Home) -> Option<Running> {
     let info = home.read_info()?;
     let health: api::hub::Health = agent()
         .get(format!("http://{}/api/health", info.addr))
