@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ship"
+  short_description: "Commit, review, push, and open a PR"
+  default_prompt: "Use $ship to publish the current changes as a GitHub pull request."
