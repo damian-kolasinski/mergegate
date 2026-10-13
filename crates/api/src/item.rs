@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::project::Backend;
 
-/// Where an item is in its lifecycle (design §5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemState {
@@ -32,19 +31,16 @@ impl ItemState {
         }
     }
 
-    /// Whether the item can still change: not merged or abandoned.
     pub fn is_open(self) -> bool {
         !matches!(self, Self::Merged | Self::Abandoned)
     }
 }
 
-/// `POST /api/items`: registers a pushed branch as a new item, or as a new
-/// revision of the branch's open item. Answers with [`Submitted`].
+/// `POST /api/items`, answered with [`Submitted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Submit {
     pub project: String,
     pub branch: String,
-    /// The commit the worker pushed the branch to.
     pub head: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -59,26 +55,24 @@ pub struct Submitted {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Item {
-    /// Project-scoped, as in `app#42`.
+    /// As in `app#42`.
     pub id: String,
     pub title: String,
     pub branch: String,
     pub state: ItemState,
-    /// The project's backend and target when the item was opened; the item
-    /// keeps them until it closes.
+    /// Kept from when the item was opened, whatever the project says now.
     pub backend: Backend,
     pub target: String,
-    /// The newest revision.
+    /// The newest one.
     pub revision: Revision,
     pub created_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revision {
-    /// 1 for the first submit, then counting up.
     pub number: u32,
     pub head: String,
-    /// Merge-base of the head and the target when it was submitted.
+    /// Merge-base with the target at submit time.
     pub base: String,
     pub files: u32,
     pub additions: u64,
@@ -86,12 +80,10 @@ pub struct Revision {
     pub submitted_at: String,
 }
 
-/// `GET /api/inbox`: open items by who has to act next, oldest first.
+/// `GET /api/inbox`: open items, oldest first.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Inbox {
-    /// Waiting for the operator's review.
     pub needs_you: Vec<InboxItem>,
-    /// Sent back to their agents.
     pub with_agents: Vec<InboxItem>,
     pub merging: Vec<InboxItem>,
 }
@@ -101,7 +93,7 @@ pub struct InboxItem {
     pub id: String,
     pub title: String,
     pub branch: String,
-    /// Number of the newest revision.
+    /// The newest revision's number.
     pub revision: u32,
     pub files: u32,
     pub additions: u64,
