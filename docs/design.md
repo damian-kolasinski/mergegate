@@ -329,6 +329,8 @@ GitHub sync polls (ETag-conditional requests) at a short interval for open items
 
 ## 9. UX
 
+Colours and type come from the Academy Figma; light and dark follow the OS. Status shows as solid badges or tinted rows, and every text-on-fill pair keeps at least 4.5:1 contrast in both themes. The UI updates live: the hub pushes what changed over SSE and the page refetches it.
+
 ### 9.1 Inbox
 
 ```
