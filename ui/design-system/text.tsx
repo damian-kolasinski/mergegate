@@ -3,7 +3,7 @@ import styles from "./text.module.css";
 
 /** Secondary detail next to a primary line: ages, counts, branches. */
 export function Meta(props: {
-  tone?: "subtle" | "success" | "error";
+  tone?: "subtle" | "added" | "removed";
   children: JSX.Element;
 }) {
   return (
