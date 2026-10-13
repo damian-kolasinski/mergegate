@@ -8,7 +8,7 @@ Status: draft v0.1 · 2026-10-13 · companion to [design.md](design.md)
 - **Agents maintain the codebase.** We choose for outcome quality and runtime speed, not for human ergonomics. Strict compilers and enforced boundaries beat conventions written in a README.
 - **Pluggable parts.** Every slice sits behind an interface and can be swapped or extended without touching the others.
 
-The principle behind most choices below: **precompute at submit time, display at review time.** Diffs, tiers and highlighting are computed once per revision and cached by blob, so opening an item is a database read.
+The principle behind most choices below: **precompute at submit time, display at review time.** Diffs and highlighting are computed once and cached by blob. Tiers are computed per revision and recomputed for open items when the rules change, so they are keyed by rules version too. Opening an item is a database read.
 
 ## 2. Decisions
 
@@ -25,12 +25,12 @@ The principle behind most choices below: **precompute at submit time, display at
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Hub + CLI | Rust, single binary `mg` | ~1 ms startup, no GC. `mg hub …` runs the daemon, every other command is client mode. |
+| Hub + CLI | Rust, single binary `mg` | ~1 ms startup, no GC. `mg hub start` launches the daemon; every other command, `mg hub` admin commands included, is a client of it. |
 | HTTP | axum + tokio | API, long-poll `mg wait`, SSE for the UI, git smart-HTTP. |
 | CLI | clap; blocking HTTP client | Output contract (`--json`, exit codes, `needs_decision`) lives in one module. |
 | Storage | SQLite, WAL (rusqlite) | Event log is an append-only table; its rowid is the `mg wait` cursor. Attachments stored on disk by content hash. |
 | Git reads | gitoxide (`gix`) + imara-diff | Blob/tree reads, tree diffs, rev walks, line mapping for comment anchoring. |
-| Git writes | `git` ≥ 2.38 subprocess | `http-backend` (receive), `merge-tree --write-tree`, push upstream, `updateInstead`. Always run with a sanitized environment (no user/system config, no hooks). |
+| Git writes | `git` ≥ 2.38 subprocess | `http-backend` (receive), `merge-tree --write-tree`, push upstream, `updateInstead`. Run with a sanitized environment (§5). |
 | GitHub | HTTP client with typed endpoints, ETag-conditional polling | Token from `gh auth token`. No octocrab. |
 | Highlighting | tree-sitter, grammars loaded as WASM at runtime | See §6. |
 | Tailscale | LocalAPI `whois` (or `tailscale whois --json`), cached per peer | No Go client library in Rust; the macOS app exposes the LocalAPI differently from Linux, so this is an adapter with per-platform discovery. |
@@ -65,7 +65,7 @@ ui/
 Ports (traits in `core`): `GitRepo`, `Backend`, `Store`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
 
 - **Agents follow these rules through the `architecture` skill** (`.claude/skills/architecture`).
-- **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates; a CI check fails the build if it does. Adapters depend on `core`, never on each other.
+- **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates; a CI check fails the build if it does. Adapters depend on `core` and `api` only, never on each other.
 - **Three ways to plug in:**
   - runtime, per project, via config: backend, judge;
   - build time via cargo features: optional adapters;
@@ -81,7 +81,9 @@ Ports (traits in `core`): `GitRepo`, `Backend`, `Store`, `Highlighter`, `Judge`,
 | Read blobs, trees, history | gix | No process spawn per call (~2–5 ms each on macOS); typed results. |
 | File diffs, interdiffs | gix tree diff + imara-diff (histogram) | In-memory; yields the line mapping that comment anchoring needs. |
 
-Everything goes through the single `GitRepo` port, so any operation can move between gix and the `git` binary without callers changing. Subprocess calls run with `GIT_CONFIG_NOSYSTEM=1`, an isolated `HOME`, explicit `-c` overrides and hooks disabled, so the operator's personal git config can't change output.
+Everything goes through the single `GitRepo` port, so any operation can move between gix and the `git` binary without callers changing. Subprocess calls on the hub's own repos run with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, an isolated `HOME` and `XDG_CONFIG_HOME`, explicit `-c` overrides and hooks disabled, so the operator's personal git config can't change output.
+
+The `local` backend's push into the operator's repo is the exception. The receiving side runs in that repo, so its config and hooks apply, which is intended because it's the operator's repo. `-c` overrides don't reach a local `receive-pack`, so the hub passes `--receive-pack="git -c receive.denyCurrentBranch=updateInstead receive-pack"` instead of changing the operator's repo config.
 
 **Interdiff after the base moved.** If the target advanced between r1 and r2, a raw r1→r2 diff includes upstream changes. The diff engine compares each revision against its own merge-base (range-diff semantics) and shows only the item's own changes.
 
@@ -134,7 +136,7 @@ mg lang update                          Refresh packs to versions compatible wit
 | Design system | Tokens, primitives, keyboard map | `ui/design-system` |
 | Agent surface | CLI contract, skill, resume prompt | `cli`, `skill` |
 
-Rules are stored in `rules.toml`. Proposals waiting for approval live in the database and are written to the file only once approved, so everything in the file has the operator's approval. The hub watches the file and validates it after hand edits.
+Rules are stored in `rules.toml`. Proposals waiting for approval live in the database and are written to the file only once approved. The hub watches the file and validates hand edits. A hand edit that tightens applies immediately. A hand edit that loosens (moves anything toward `trusted`) is held as a pending proposal until approved in the UI, because the hub can't tell the operator's edit from an agent's. Every rule in effect therefore has the operator's approval.
 
 ## 8. Agent surface
 

@@ -142,7 +142,9 @@ mg project add [PATH] [--backend github|local] [--target BRANCH] [--upstream PAT
 mg project set <project> <key> <value>                   backend, target, upstream, bots, …
 mg project show [<project>]
 mg judge set none|jev|anthropic|openai-compatible|command [provider options]
-mg lang list | add <name>...|--detect | remove <name>    Syntax highlighting language packs (hub only)
+mg lang list [--available]                               Syntax highlighting language packs (hub only)
+mg lang add <name>... | --detect [<project>] | --from FILE
+mg lang remove <name> | update
 
 mg connect <hub>                                         On a worker: point the CLI at a hub
 mg init                                                  In any clone: add the `mergegate` remote
@@ -278,7 +280,7 @@ Matchers (v1): path glob, change kind (added / deleted / renamed / generated), c
 
 ### 7.4 Judge providers
 
-Interface: `classify(files, item context) → [{path, tier_suggestion, rank, reason, flags, confidence}]`.
+Interface: `classify(files, item context) → [{path, promote, rank, reason, flags, confidence}]`. `promote` can only move a rule-trusted file to `review` (§7.2); there's no way to suggest `trusted`.
 
 | Provider | Notes |
 |---|---|

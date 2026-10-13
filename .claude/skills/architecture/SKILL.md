@@ -18,12 +18,12 @@ The source of truth is `docs/tech-stack.md` (stack, slices, budgets) and `docs/d
 
 ## Fixed rules
 
-- **Only rules can hide files.** The agent guide, heuristics and the judge rank, annotate and promote files; they never assign `trusted`. Make the ranker types unable to express it.
-- **Git split.** Reads (blobs, trees, history, diffs) go through `gix` and imara-diff. Receiving pushes, merges, test-merges and pushes go through the `git` binary with a sanitized environment: `GIT_CONFIG_NOSYSTEM=1`, isolated `HOME`, hooks disabled. Never reimplement merging.
-- **Precompute at submit, display at review.** Diffs, tiers and highlighting are computed once per revision and cached by blob. UI request paths only read.
+- **Only rules can hide files.** The agent guide, heuristics and the judge rank, annotate and promote files; they never assign `trusted`. Make the ranker and judge output types unable to express it (promote-only, see `docs/design.md` §7.4).
+- **Git split.** Reads (blobs, trees, history, diffs) go through `gix` and imara-diff. Receiving pushes, merges, test-merges and pushes go through the `git` binary with the sanitized environment in `docs/tech-stack.md` §5. Never reimplement merging.
+- **Precompute at submit, display at review.** Diffs and highlighting are cached by blob. Tiers are cached per revision and rules version, and recomputed for open items when rules change. UI request paths only read.
 - **CLI contract.** Never prompt; every input is a flag. A missing decision exits 2 with `needs_decision`. `--json` everywhere, stable exit codes, compact output (agents pay per byte).
 - **Highlighting is hub-only.** Grammars are WASM language packs; a missing language renders as plain text.
-- **Config is TOML.** Hand-editable files hold only operator-approved state; pending proposals live in the database.
+- **Config is TOML.** Pending rule proposals live in the database. Loosening found in a hand edit of `rules.toml` is held for operator approval like any other proposal.
 - **UI.** SolidJS + TypeScript. Styling uses the tokens and primitives in `ui/design-system`; no CSS frameworks or component libraries. `ui/diff-view` consumes pre-tokenized lines only.
 
 ## Dependencies
