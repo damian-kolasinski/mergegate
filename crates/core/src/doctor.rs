@@ -22,11 +22,11 @@ pub fn checks(store: &impl ProjectStore, git: &impl Git) -> Result<Vec<Check>, S
 }
 
 fn git_version(git: &impl Git) -> Check {
-    const FIX: &str = "install git 2.38 or newer";
     let (major, minor) = git::MIN_VERSION;
+    let fix = || Some(format!("install git {major}.{minor} or newer"));
     let output = match git.version() {
         Ok(output) => output,
-        Err(e) => return check("git", CheckStatus::Fail, e.to_string(), Some(FIX.into())),
+        Err(e) => return check("git", CheckStatus::Fail, e.to_string(), fix()),
     };
     let version = output.trim().trim_start_matches("git version ");
     match git::parse_version(&output) {
@@ -37,7 +37,7 @@ fn git_version(git: &impl Git) -> Check {
             "git",
             CheckStatus::Fail,
             format!("git {version} is older than {major}.{minor}"),
-            Some(FIX.into()),
+            fix(),
         ),
         None => check(
             "git",
@@ -55,8 +55,10 @@ fn project(git: &impl Git, project: &Project) -> Check {
     let set = |key: &str, value: &str| format!("mg project set {} {key} {value}", project.name);
 
     let repo = match git.inspect(&project.upstream) {
-        Ok(repo) => repo,
-        Err(GitError::NotARepo(_)) => {
+        Ok(repo) if repo.root == project.upstream => repo,
+        // A repo found further up (say, a dotfiles repo in the home
+        // directory) is not the project's.
+        Ok(_) | Err(GitError::NotARepo(_)) => {
             return fail(
                 format!("{upstream} is no longer a git repository"),
                 set("upstream", "PATH"),
@@ -179,6 +181,7 @@ mod tests {
         }
         let git = git
             .without_repo("/src/gone")
+            .repo("/src", &["main"], None)
             .repo("/src/moved", &["trunk"], None)
             .without_staging("unsynced");
 

@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 
 use api::decision::NeedsDecision;
 
@@ -46,9 +47,7 @@ pub fn add(
     }
     let name = match request.name {
         Some(name) => ProjectName::parse(&name)?,
-        None => repo
-            .root
-            .file_name()
+        None => naming_dir(&repo.root)
             .and_then(|dir| ProjectName::derive(&dir.to_string_lossy()))
             .ok_or_else(|| ProjectError::NoName(repo.root.clone()))?,
     };
@@ -69,6 +68,16 @@ pub fn add(
     };
     store.insert_project(&project)?;
     Ok(Added::Project(project))
+}
+
+/// The folder a repo is named after. A bare repo kept beside its worktrees,
+/// as in `app/.bare` or `app/.git`, is named after the folder holding it.
+fn naming_dir(root: &Path) -> Option<&OsStr> {
+    let dir = root.file_name()?;
+    if dir.as_encoded_bytes().starts_with(b".") {
+        return root.parent()?.file_name();
+    }
+    Some(dir)
 }
 
 #[cfg(test)]
@@ -108,6 +117,18 @@ mod tests {
                 "main".to_owned()
             )]
         );
+    }
+
+    #[test]
+    fn names_a_bare_repo_beside_its_worktrees_after_its_folder() {
+        let git = FakeGit::default()
+            .repo("/src/app/.bare", &["main"], None)
+            .repo("/src/api.git", &["main"], None);
+        let mut store = FakeStore::default();
+        let project = added(add(&mut store, &git, request("/src/app/.bare")));
+        assert_eq!(project.name.as_str(), "app");
+        let project = added(add(&mut store, &git, request("/src/api.git")));
+        assert_eq!(project.name.as_str(), "api");
     }
 
     #[test]
