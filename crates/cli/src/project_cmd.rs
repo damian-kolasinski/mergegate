@@ -133,7 +133,6 @@ fn show_here(client: &Client) -> Result<Outcome, CliError> {
     }
 }
 
-/// The project whose repo contains the current directory.
 pub(crate) fn project_here(client: &Client) -> Result<Project, CliError> {
     let cwd = std::env::current_dir()
         .map_err(|e| CliError::new("io_error", format!("reading the current directory: {e}")))?;
