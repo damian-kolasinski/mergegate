@@ -22,7 +22,6 @@ const UNTRACKED: &[&str] = &[
 ];
 
 fn main() {
-    println!("cargo::rerun-if-env-changed=MG_REQUIRE_UI");
     let manifest_dir = PathBuf::from(env("CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(env("OUT_DIR"));
     let ui = manifest_dir.join("../../ui");
@@ -33,6 +32,10 @@ fn main() {
         Ok(()) => true,
         Err(reason) if required => panic!("building the UI failed: {reason}"),
         Err(reason) => {
+            // Only the stub depends on MG_REQUIRE_UI. Watching it after a
+            // real build would rebuild the hub whenever a command sets it
+            // differently, as the Playwright setup does.
+            println!("cargo::rerun-if-env-changed=MG_REQUIRE_UI");
             println!(
                 "cargo::warning=the hub gets a stub UI: {reason}. \
                  Set MG_REQUIRE_UI=1 to make this an error."

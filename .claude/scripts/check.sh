@@ -10,8 +10,9 @@
 #                  which need `pnpm --dir ui exec playwright install chromium`
 #   CRATE          a directory under crates/ (core, cli, ...); limits clippy
 #                  and tests to those crates
-#   ui             the UI in ui/; checked when no CRATE is named, skipped
-#                  then if pnpm is missing
+#   ui             the UI in ui/; checked when no CRATE is named
+# pnpm is required except for lint of named crates: without it the hub embeds
+# a stub page, which the hub's tests fail on.
 #   TEST_ARGS      passed to the test binaries, e.g. a test name filter
 # Exit codes: 0 ok, 1 a check failed, 64 usage.
 
@@ -65,11 +66,8 @@ if [ "$ui" = auto ]; then
 elif [ ${#packages[@]} -eq 0 ]; then
   rust=0
 fi
-ui_skipped=0
-if [ "$ui" = auto ]; then
-  if command -v pnpm >/dev/null; then ui=1; else ui=0 ui_skipped=1; fi
-fi
-if [ "$ui" = 1 ] && ! command -v pnpm >/dev/null; then
+if [ "$ui" = auto ]; then ui=1; fi
+if { [ "$ui" = 1 ] || [ "$mode" != lint ]; } && ! command -v pnpm >/dev/null; then
   echo "SETUP_ERROR: pnpm not found; install it (mise use pnpm, or corepack enable)"
   exit 1
 fi
@@ -150,7 +148,6 @@ if [ "$mode" != test ] && [ "$ui" = 1 ]; then
   ui_run UI_TYPE_ERROR typecheck
   summary+=("UI clean")
 fi
-if [ "$ui_skipped" = 1 ]; then summary+=("UI skipped, no pnpm"); fi
 
 if [ "$mode" != lint ] && [ "$rust" = 1 ]; then
   if ! run cargo test "${packages[@]}" --message-format=short "${test_args[@]}"; then
