@@ -22,10 +22,12 @@ test("f6 lists open items with their figures", async ({ page, hub }) => {
   await expect(needsYou.getByRole("heading")).toHaveText(/^Needs you\s*1$/);
   const row = needsYou.getByRole("listitem");
   await expect(row).toHaveCount(1);
-  for (const text of ["app#1", "Add the parser", "r1", "+3", "−0", "2 files"]) {
+  for (const text of ["app#1", "Add the parser", "+3", "2 files"]) {
     await expect(row).toContainText(text);
   }
   await expect(row).toContainText("now");
+  // Nothing was removed, so the deletions cell stays empty.
+  await expect(row).not.toContainText("−");
 });
 
 test("f6 a submit shows without a reload", async ({ page, hub }) => {
@@ -36,10 +38,10 @@ test("f6 a submit shows without a reload", async ({ page, hub }) => {
 
   app.submit("parser", "Add the parser", { "parser.rs": "fn parse() {}\n" });
   await expect(rows).toHaveCount(1);
-  await expect(rows).toContainText("r1");
+  await expect(rows).toContainText("1 file");
 
-  app.revise("Handle empty input", { "parser.rs": "fn parse() { }\n" });
-  await expect(rows).toContainText("r2");
+  app.revise("Add the lexer", { "lexer.rs": "fn lex() {}\n" });
+  await expect(rows).toContainText("2 files");
 });
 
 test("f6 j and k move the selection, enter opens the item", async ({

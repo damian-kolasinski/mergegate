@@ -4,7 +4,7 @@ import type { InboxItem } from "../api/InboxItem";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { itemHref } from "../app/router";
-import { Badge, Empty, Meta, Mono, Row, Section } from "../design-system";
+import { Empty, Meta, Mono, Row, Section } from "../design-system";
 import styles from "./inbox.module.css";
 
 const GROUPS = [
@@ -134,18 +134,16 @@ function Entry(props: {
       <span class={styles.title} title={props.item.branch}>
         {props.item.title}
       </span>
-      <span class={styles.revision}>
-        <Badge>r{props.item.revision}</Badge>
+      {/* A zero count leaves its cell empty so the columns stay aligned. */}
+      <span class={styles.figure}>
+        <Show when={props.item.additions}>
+          <Meta tone="added">+{props.item.additions}</Meta>
+        </Show>
       </span>
       <span class={styles.figure}>
-        <Meta tone={props.item.additions ? "added" : "subtle"}>
-          +{props.item.additions}
-        </Meta>
-      </span>
-      <span class={styles.figure}>
-        <Meta tone={props.item.deletions ? "removed" : "subtle"}>
-          −{props.item.deletions}
-        </Meta>
+        <Show when={props.item.deletions}>
+          <Meta tone="removed">−{props.item.deletions}</Meta>
+        </Show>
       </span>
       <span class={styles.figure}>
         <Meta>
