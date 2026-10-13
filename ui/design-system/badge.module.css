@@ -1,0 +1,31 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font: var(--type-label3);
+  letter-spacing: var(--tracking-label);
+  white-space: nowrap;
+  color: var(--text-on-fill);
+}
+
+.badge[data-tone="neutral"] {
+  background: var(--background-secondary);
+  color: var(--text-primary);
+}
+
+.badge[data-tone="brand"] {
+  background: var(--background-brand);
+}
+
+.badge[data-tone="success"] {
+  background: var(--background-success);
+}
+
+.badge[data-tone="warning"] {
+  background: var(--background-warning);
+}
+
+.badge[data-tone="error"] {
+  background: var(--background-error);
+}

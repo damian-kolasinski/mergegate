@@ -1,0 +1,10 @@
+// Importing the design system loads its global styles once, before any
+// primitive's module, so tokens are defined wherever they're used.
+import "./tokens.css";
+import "./base.css";
+
+export { Badge, type Tone } from "./badge";
+export { Empty } from "./empty";
+export { Row } from "./row";
+export { Section } from "./section";
+export { Meta, Mono } from "./text";

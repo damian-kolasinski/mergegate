@@ -1,0 +1,22 @@
+.meta {
+  font: var(--type-p4);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meta[data-tone="subtle"] {
+  color: var(--text-subtle);
+}
+
+.meta[data-tone="success"] {
+  color: var(--text-success);
+}
+
+.meta[data-tone="error"] {
+  color: var(--text-error);
+}
+
+.mono {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}

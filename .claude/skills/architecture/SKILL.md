@@ -14,12 +14,14 @@ crates/
   core/            domain logic and port traits; no I/O, no wire types
   api/             wire types shared by CLI, hub and UI
   <adapter>/       one crate per port implementation, e.g. backend-github, store-sqlite
-  hub/             composition root of the daemon
+  hub/             composition root of the daemon; build.rs embeds the UI
   cli/             composition root of mg
   testkit/         test harness: drives the real hub, git and mg binaries
-ui/
+ui/                SolidJS bundled by esbuild; one pnpm package
+  app/             entry point and routing; wires features, owns none
   design-system/   tokens and primitives; all styling goes through it
   <feature>/       UI features
+  api/             TypeScript generated from `api` by `pnpm gen`; gitignored
 ```
 
 ## Rules
@@ -28,7 +30,7 @@ ui/
 - `core` depends on no other workspace crate, `api` included, and has no serde: it doesn't know the wire format.
 - `core` reaches every external system through a port trait it defines. Check the existing ports before adding one; a new external system means a new port or an extension of an existing one.
 - Adapters depend on `core` and `api` only, never on each other. Wiring happens only in `hub` and `cli`.
-- Wire types live in `api`. TypeScript types are generated from them; never hand-write API types in `ui/`.
+- Wire types live in `api`. TypeScript types are generated from them; never hand-write API types in `ui/`. A type the UI reads gets `#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]`.
 - The edge maps domain to wire: `core` defines its own types, and the `hub` route module or `cli` command that serves them converts to and from `api`.
 - Adapters are chosen per project through config, optional ones sit behind cargo features, and third-party extensions run out of process (JSON over stdio).
 - Expensive work runs when data arrives and is cached; request paths only read.

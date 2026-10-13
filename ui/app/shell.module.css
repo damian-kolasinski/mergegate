@@ -1,0 +1,32 @@
+.shell {
+  min-height: 100vh;
+}
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border-container);
+  background: var(--background-page);
+}
+
+.name {
+  font: var(--type-h4);
+  letter-spacing: var(--tracking-heading);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.name:hover {
+  color: var(--text-primary);
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-4) 0 var(--space-8);
+}
