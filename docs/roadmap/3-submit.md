@@ -20,7 +20,7 @@ The agent took all of these; none is settled with the operator yet. Confirm or c
 8. **Submitting** fetches the item's target, checks the pushed branch is at the given head, and records the merge-base and `git diff --numstat -M` against it (gix and imara-diff arrive with the diff view in PR 5). A head on the target is refused as nothing to submit; the same head again returns the current revision. The default title is the first commit's subject.
 9. **A new revision puts the item back in needs review**, whatever open state it was in.
 10. **`mg inbox --json`** groups open items as `needs_you`, `with_agents` and `merging`, oldest first until priorities arrive (PR 14).
-11. **`mg project set`** asks for `--confirm` when a target change leaves open items on the old target, listing them. Only the `local` backend exists yet, so backend changes get the same check with the GitHub backend (PR 9).
+11. **`mg project set`** asks for `--confirm` when a target change leaves open items on the old target, listing them, and refuses an open item's branch as the target. Only the `local` backend exists yet, so backend changes get the same check with the GitHub backend (PR 9).
 12. **The git port is split per slice** like the store: `ItemGit` sits next to `ItemStore`, and `HubGit` implements both.
 
 ## Where it lives

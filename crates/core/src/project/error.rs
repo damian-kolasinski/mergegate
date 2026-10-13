@@ -23,6 +23,8 @@ pub enum ProjectError {
     },
     #[error("{} has no branch {branch}", upstream.display())]
     UnknownBranch { branch: String, upstream: PathBuf },
+    #[error("{branch} is the branch of open item {item}, so it can't be the target")]
+    BranchUnderReview { branch: String, item: String },
     #[error("the {} backend is not available yet", .0.as_str())]
     BackendUnavailable(Backend),
     #[error("no project named {0}")]

@@ -201,3 +201,20 @@ fn asks_before_moving_the_target_away_from_open_items() {
         "main"
     );
 }
+
+#[test]
+fn refuses_an_open_items_branch_as_the_target() {
+    let git = git();
+    let mut store = setup(&git);
+    open_item(&mut store, "release", "main");
+    let release = || Setting::Target("release".into());
+    for confirm in [false, true] {
+        let err = set(&mut store, &git, "app", release(), confirm).unwrap_err();
+        assert!(
+            matches!(&err, ProjectError::BranchUnderReview { branch, item }
+                if branch == "release" && item == "app#1"),
+            "{err:?}"
+        );
+    }
+    assert_eq!(store.projects().unwrap()[0].target, "main");
+}

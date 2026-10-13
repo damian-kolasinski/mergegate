@@ -139,6 +139,7 @@ pub(crate) fn failure(e: ProjectError) -> Failure {
             Some(format!("mg project show {project}")),
         ),
         E::UnknownBranch { .. } => (S::BAD_REQUEST, "unknown_branch", None),
+        E::BranchUnderReview { .. } => (S::CONFLICT, "branch_under_review", None),
         E::BackendUnavailable(_) => (
             S::BAD_REQUEST,
             "backend_unavailable",
