@@ -7,15 +7,11 @@ pub trait ItemStore {
     /// Open items, oldest first; only `project`'s when given.
     fn open_items(&self, project: Option<&ProjectName>) -> Result<Vec<Item>, StoreError>;
 
-    /// The open item for `branch` in `project`, if there is one.
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError>;
 
-    /// Records a new item, numbered next in its project, with its first
-    /// revision.
+    /// Numbers the item next in its project.
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError>;
 
-    /// Records `revision` as the item's newest, sets its title and moves it to
-    /// `state`.
     fn add_revision(
         &mut self,
         id: &ItemId,

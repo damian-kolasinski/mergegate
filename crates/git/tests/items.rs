@@ -158,7 +158,6 @@ fn pins_a_revision() {
     assert_eq!(hub.staging_rev("refs/mergegate/items/1/r1"), base);
 }
 
-/// Runs `git http-backend` for a GET and returns what it printed.
 fn get(hub: &Hub, path: &str, query: &str) -> String {
     let request = HttpRequest {
         method: "GET",
