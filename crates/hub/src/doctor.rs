@@ -10,6 +10,7 @@ use mergegate_core::doctor::{Check, CheckStatus};
 
 use crate::reply::Failure;
 use crate::server::AppState;
+use crate::ui;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/doctor", get(doctor))
@@ -28,8 +29,9 @@ async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::
                 None,
             )
         })?;
+    let checks = std::iter::once(ui::check()).chain(checks);
     Ok(Json(api::doctor::Report {
-        checks: checks.into_iter().map(to_api).collect(),
+        checks: checks.map(to_api).collect(),
     }))
 }
 

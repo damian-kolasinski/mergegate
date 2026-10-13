@@ -11,5 +11,5 @@ mod http;
 mod repo;
 
 pub use env::{Env, Run};
-pub use http::http;
+pub use http::{Reply, http, http_reply};
 pub use repo::{TestRepo, commit_files, git};

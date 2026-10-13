@@ -57,6 +57,7 @@ pub struct Revision {
 }
 
 /// `GET /api/inbox`: open items, oldest first.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Inbox {
     pub needs_you: Vec<InboxItem>,
@@ -64,6 +65,7 @@ pub struct Inbox {
     pub merging: Vec<InboxItem>,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InboxItem {
     pub id: String,
