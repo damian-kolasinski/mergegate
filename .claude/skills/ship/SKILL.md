@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Commit scoped changes, review and fix them, and create or update a ready-for-review pull request when the user asks to ship or open a PR.
+description: Commit scoped changes, review and fix them, and create or update a ready-for-review pull request (or a stack of them when the work exceeds the PR size limit) when the user asks to ship or open a PR.
 ---
 
 # Ship
@@ -14,6 +14,21 @@ Inspect status, staged/unstaged diffs, and recent commits. Identify the intended
 Stage only task-owned changes. Preserve user work and keep credentials and unrelated generated artifacts out of the commit.
 
 Run the relevant checks if they have not already passed for these changes. Do not rebuild solely because shipping began.
+
+## Size limit
+
+A PR changes at most 25 files against its base. Lockfiles and generated files do not count. Check with `git diff --name-only <base>...HEAD` before reviewing.
+
+If the work is over the limit, ship it as a stack of PRs instead of one:
+
+- Split along the work's own seams (layer, crate, slice), bottom-up, so each PR builds only on the PRs below it.
+- Each PR stands on its own: it builds, its checks pass, and it carries the tests for the code it adds. Do not split one change across PRs just to meet the count.
+- The bottom PR targets the base branch; each PR above targets the branch of the PR below. Name the branches `<branch>-1-<slug>`, `<branch>-2-<slug>`, and so on.
+- Review and publish each PR against its own base. Every PR body starts with the stack: its position and links to the other PRs in it.
+- To change a lower PR, commit to its branch and merge that branch into every branch above it. Do not rebase published stack branches.
+- After a lower PR merges, retarget the PR above it to the base branch.
+
+If the work has no seam that keeps every piece coherent under the limit, ship one PR and explain why in its body.
 
 ## Review
 
@@ -35,4 +50,4 @@ Commit messages and PR bodies follow the authorship rule in `AGENTS.md`.
 
 Keep local body artifacts until publication is verified; remove only task-created temporary files afterward.
 
-Report the PR URL and validation. Shipping ends after publication is verified unless the user also asks to monitor CI, address subsequent feedback, or merge.
+Report the PR URL (every URL in a stack, bottom first) and validation. Shipping ends after publication is verified unless the user also asks to monitor CI, address subsequent feedback, or merge.
