@@ -10,6 +10,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+mergegate-core.workspace = true
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 thiserror = "2.0.21"
 

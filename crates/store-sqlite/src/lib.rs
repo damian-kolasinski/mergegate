@@ -2,6 +2,7 @@
 //! open.
 
 mod migrate;
+mod projects;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

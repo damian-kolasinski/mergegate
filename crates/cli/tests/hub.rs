@@ -27,7 +27,7 @@ fn start_status_stop() {
     let status = env.mg(&["--json", "hub", "status"]).assert_code(0).json();
     assert_eq!(status["running"], true);
     assert_eq!(status["pid"], started["pid"]);
-    assert_eq!(status["schema_version"], 1);
+    assert_eq!(status["schema_version"], hub::SCHEMA_VERSION);
 
     let stopped = env.mg(&["--json", "hub", "stop"]).assert_code(0).json();
     assert_eq!(
