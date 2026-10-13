@@ -12,30 +12,6 @@ pub enum ItemState {
     Abandoned,
 }
 
-impl ItemState {
-    pub const ALL: [Self; 5] = [
-        Self::NeedsReview,
-        Self::ChangesRequested,
-        Self::Merging,
-        Self::Merged,
-        Self::Abandoned,
-    ];
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::NeedsReview => "needs_review",
-            Self::ChangesRequested => "changes_requested",
-            Self::Merging => "merging",
-            Self::Merged => "merged",
-            Self::Abandoned => "abandoned",
-        }
-    }
-
-    pub fn is_open(self) -> bool {
-        !matches!(self, Self::Merged | Self::Abandoned)
-    }
-}
-
 /// `POST /api/items`, answered with [`Submitted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Submit {

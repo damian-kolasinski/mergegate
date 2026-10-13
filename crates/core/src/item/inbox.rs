@@ -1,9 +1,14 @@
-use api::item::{Inbox, InboxItem};
-
 use super::{Item, ItemState, ItemStore};
 use crate::store::StoreError;
 
 /// Open items grouped by who acts next, each group oldest first.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Inbox {
+    pub needs_you: Vec<Item>,
+    pub with_agents: Vec<Item>,
+    pub merging: Vec<Item>,
+}
+
 pub fn inbox(store: &impl ItemStore) -> Result<Inbox, StoreError> {
     let mut inbox = Inbox::default();
     for item in store.open_items(None)? {
@@ -13,23 +18,9 @@ pub fn inbox(store: &impl ItemStore) -> Result<Inbox, StoreError> {
             ItemState::Merging => &mut inbox.merging,
             ItemState::Merged | ItemState::Abandoned => continue,
         };
-        group.push(entry(&item));
+        group.push(item);
     }
     Ok(inbox)
-}
-
-fn entry(item: &Item) -> InboxItem {
-    InboxItem {
-        id: item.id.to_string(),
-        title: item.title.clone(),
-        branch: item.branch.clone(),
-        revision: item.revision.number,
-        files: item.revision.stat.files,
-        additions: item.revision.stat.additions,
-        deletions: item.revision.stat.deletions,
-        created_at: item.created_at.clone(),
-        updated_at: item.revision.submitted_at.clone(),
-    }
 }
 
 #[cfg(test)]

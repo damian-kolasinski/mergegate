@@ -100,11 +100,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Project, StoreError>> {
 }
 
 pub(crate) fn backend_named(name: &str) -> Result<Backend, StoreError> {
-    match name {
-        "github" => Ok(Backend::Github),
-        "local" => Ok(Backend::Local),
-        other => Err(StoreError::new(format!("unknown backend {other:?}"))),
-    }
+    Backend::parse(name).ok_or_else(|| StoreError::new(format!("unknown backend {name:?}")))
 }
 
 /// Paths are stored as text, so one that isn't UTF-8 can't be registered.

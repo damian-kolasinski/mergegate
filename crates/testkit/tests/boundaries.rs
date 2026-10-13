@@ -1,5 +1,6 @@
 //! The architecture's dependency rules, enforced on the crate graph:
-//! - `core` has no I/O: it depends only on the allowlist below.
+//! - `core` has no I/O and knows no wire format: it depends on no workspace
+//!   crate, `api` included, and on nothing outside the allowlist below.
 //! - `api` depends on no workspace crate.
 //! - Adapters (every other crate under `crates/` except the composition roots
 //!   and this harness) depend on no workspace crate but `core` and `api`.
@@ -9,8 +10,9 @@ use std::process::Command;
 use serde_json::Value;
 
 /// Everything `core` may depend on. Adding to it is an architecture decision:
-/// nothing here may do I/O or start a runtime.
-const CORE_ALLOWED: &[&str] = &["mergegate-api", "serde", "serde_json", "thiserror"];
+/// nothing here may do I/O, start a runtime or define a wire format. Wire
+/// types and the domain to wire mapping live in `hub` and `cli`.
+const CORE_ALLOWED: &[&str] = &["thiserror"];
 const ADAPTER_ALLOWED_WORKSPACE_DEPS: &[&str] = &["mergegate-core", "mergegate-api"];
 /// Crates allowed to depend on anything: the composition roots and the harness.
 const UNRESTRICTED: &[&str] = &["cli", "hub", "testkit"];
@@ -71,7 +73,7 @@ fn crate_graph_follows_the_architecture() {
     for krate in &crates {
         for dep in &krate.deps {
             let allowed = match krate.dir.as_str() {
-                "core" => CORE_ALLOWED.contains(&dep.name.as_str()),
+                "core" => !dep.workspace && CORE_ALLOWED.contains(&dep.name.as_str()),
                 "api" => !dep.workspace,
                 dir if UNRESTRICTED.contains(&dir) => true,
                 _ => !dep.workspace || ADAPTER_ALLOWED_WORKSPACE_DEPS.contains(&dep.name.as_str()),
