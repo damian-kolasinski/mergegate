@@ -1,6 +1,7 @@
 use hub::Home;
 
-use super::probe::{HubStatus, home_str, probe};
+use super::probe::probe;
+use super::report::HubStatus;
 use crate::output::{CliError, Outcome};
 
 pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
@@ -12,13 +13,12 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
     }
     let unresponsive = home.is_locked();
     let status = HubStatus {
-        home: home_str(home),
         unresponsive,
         pid: home
             .read_info()
             .map(|info| info.pid)
             .filter(|_| unresponsive),
-        ..HubStatus::default()
+        ..HubStatus::new(home)
     };
     let text = if unresponsive {
         "hub not responding (a hub process holds the data directory)"

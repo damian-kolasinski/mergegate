@@ -3,7 +3,8 @@ use std::time::{Duration, Instant};
 use hub::Home;
 
 use super::POLL;
-use super::probe::{HubStatus, agent, probe, unresponsive};
+use super::probe::{agent, probe};
+use super::report::{HubStatus, unresponsive};
 use crate::output::{CliError, Outcome, exit};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -17,7 +18,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
             break running;
         }
         if !home.is_locked() {
-            let status = HubStatus::stopped(home, Some(false));
+            let status = HubStatus::stopped(home, false);
             return Ok(Outcome::done(&status, "hub not running"));
         }
         if Instant::now() > deadline {
@@ -51,6 +52,6 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
         }
         std::thread::sleep(POLL);
     }
-    let status = HubStatus::stopped(home, Some(true));
+    let status = HubStatus::stopped(home, true);
     Ok(Outcome::done(&status, "hub stopped"))
 }

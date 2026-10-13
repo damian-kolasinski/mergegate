@@ -2,7 +2,8 @@ use std::time::{Duration, Instant};
 
 use hub::{Home, HubError, StoreError};
 
-use super::probe::{HubStatus, Running, probe, unresponsive};
+use super::probe::{Running, probe};
+use super::report::{HubStatus, unresponsive};
 use super::spawn::Spawned;
 use super::{POLL, io_error};
 use crate::output::{CliError, Outcome, exit};
@@ -25,7 +26,8 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
     let mut spawned: Option<Spawned> = None;
     let deadline = Instant::now() + TIMEOUT;
     loop {
-        // A locked home has a hub starting, stopping or hung: never race it.
+        // A locked home has a hub starting, stopping or hung: never race it;
+        // start ours once the lock is free.
         if spawned.is_none() && !home.is_locked() {
             spawned = Some(Spawned::new(&home, port)?);
         }
@@ -46,7 +48,7 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
             if err.body.code != "hub_locked" {
                 return Err(err);
             }
-            // A concurrent start won the race.
+            // A concurrent start won the race; wait for its hub.
             spawned = None;
         }
         if Instant::now() > deadline {
@@ -79,7 +81,7 @@ fn outcome(home: &Home, running: &Running, started: bool) -> Outcome {
 
 fn run_here(home: Home, port: u16) -> Result<Outcome, CliError> {
     hub::init_logging();
-    let status = HubStatus::stopped(&home, Some(true));
+    let status = HubStatus::stopped(&home, true);
     hub::run(home, port).map_err(hub_error)?;
     Ok(Outcome::done(&status, "hub stopped"))
 }

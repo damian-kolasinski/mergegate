@@ -1,4 +1,4 @@
-//! `mg`: the mergegate CLI, and the hub it starts.
+//! `mg`: the mergegate CLI, and the hub it starts. Composition root of the CLI.
 
 mod hub_cmd;
 pub mod output;

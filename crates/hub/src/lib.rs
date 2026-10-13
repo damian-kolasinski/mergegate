@@ -1,4 +1,4 @@
-//! The hub daemon.
+//! The hub daemon: composition root of everything that runs inside it.
 
 mod guard;
 mod home;

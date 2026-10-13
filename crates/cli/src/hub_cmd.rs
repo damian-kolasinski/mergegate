@@ -1,6 +1,7 @@
 //! `mg hub start | stop | status`.
 
 mod probe;
+mod report;
 mod spawn;
 mod start;
 mod status;
