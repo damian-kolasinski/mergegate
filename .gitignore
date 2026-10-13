@@ -5,3 +5,5 @@
 /ui/dist/
 /ui/api/
 /ui/.build.lock
+/ui/test-results/
+/ui/playwright-report/

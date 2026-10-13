@@ -1,8 +1,9 @@
-//! Wire types shared by the CLI, the hub and (later) the UI.
+//! Wire types shared by the CLI, the hub and the UI.
 
 pub mod decision;
 pub mod doctor;
 pub mod error;
+pub mod event;
 pub mod hub;
 pub mod item;
 pub mod project;

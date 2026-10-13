@@ -1,11 +1,23 @@
+import { createMemo, Match, Switch } from "solid-js";
 import { render } from "solid-js/web";
-import { Empty } from "../design-system";
+import { InboxScreen } from "../inbox/inbox";
+import { ItemScreen } from "../item/item";
+import { useRoute } from "./router";
 import { Shell } from "./shell";
 
 function App() {
+  const route = useRoute();
+  const item = createMemo(() => {
+    const current = route();
+    return current.screen === "item" ? current.id : undefined;
+  });
   return (
     <Shell>
-      <Empty>Nothing to review yet.</Empty>
+      <Switch fallback={<InboxScreen />}>
+        <Match when={item()} keyed>
+          {(id) => <ItemScreen id={id} />}
+        </Match>
+      </Switch>
     </Shell>
   );
 }

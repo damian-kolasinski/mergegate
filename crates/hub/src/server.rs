@@ -11,13 +11,15 @@ use git::HubGit;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, doctor, git_http, guard, io, items, lifecycle, projects, reply, ui,
+    Home, HubError, HubInfo, doctor, events, git_http, guard, io, items, lifecycle, projects,
+    reply, ui,
 };
 
 pub(crate) struct AppState {
     pub health: api::hub::Health,
     pub port: u16,
     pub shutdown: Notify,
+    pub events: events::Events,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -68,6 +70,7 @@ pub(crate) async fn serve(
         },
         port: addr.port(),
         shutdown: Notify::new(),
+        events: events::Events::new(),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
     });
@@ -77,6 +80,7 @@ pub(crate) async fn serve(
         .merge(items::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
+        .merge(events::routes())
         .merge(ui::routes())
         .fallback(reply::no_route)
         .method_not_allowed_fallback(reply::wrong_method)
@@ -99,6 +103,7 @@ pub(crate) async fn serve(
                 _ = sigterm.recv() => {}
             }
             tracing::info!("hub stopping");
+            state.events.stop();
         })
         .await
         .map_err(io("serving HTTP"));
