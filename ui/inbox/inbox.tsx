@@ -138,12 +138,12 @@ function Entry(props: {
         <Badge>r{props.item.revision}</Badge>
       </span>
       <span class={styles.figure}>
-        <Meta tone={props.item.additions ? "success" : "subtle"}>
+        <Meta tone={props.item.additions ? "added" : "subtle"}>
           +{props.item.additions}
         </Meta>
       </span>
       <span class={styles.figure}>
-        <Meta tone={props.item.deletions ? "error" : "subtle"}>
+        <Meta tone={props.item.deletions ? "removed" : "subtle"}>
           −{props.item.deletions}
         </Meta>
       </span>
