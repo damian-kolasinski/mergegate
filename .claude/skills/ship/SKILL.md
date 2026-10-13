@@ -17,16 +17,17 @@ Run the relevant checks if they have not already passed for these changes. Do no
 
 ## Size limit
 
-A PR changes at most 25 files against its base. Lockfiles and generated files do not count. Check with `git diff --name-only <base>...HEAD` before reviewing.
+A PR changes at most 25 files against its base. Lockfiles and files generated from committed sources (such as TypeScript types generated from `api`) do not count. After staging, check with `git diff --cached --name-only $(git merge-base origin/<base> HEAD)`, so committed, staged and new files are all counted.
 
 If the work is over the limit, ship it as a stack of PRs instead of one:
 
 - Split along the work's own seams (layer, crate, slice), bottom-up, so each PR builds only on the PRs below it.
 - Each PR stands on its own: it builds, its checks pass, and it carries the tests for the code it adds. Do not split one change across PRs just to meet the count.
-- The bottom PR targets the base branch; each PR above targets the branch of the PR below. Name the branches `<branch>-1-<slug>`, `<branch>-2-<slug>`, and so on.
-- Review and publish each PR against its own base. Every PR body starts with the stack: its position and links to the other PRs in it.
-- To change a lower PR, commit to its branch and merge that branch into every branch above it. Do not rebase published stack branches.
-- After a lower PR merges, retarget the PR above it to the base branch.
+- The bottom PR targets the base branch; each PR above targets the branch of the PR below. Name the branches `<branch>-1-<slug>`, `<branch>-2-<slug>`, and so on. If the working branch already has a PR, keep it as the top of the stack: merge the branch directly below into it and retarget its PR to that branch.
+- Before creating anything, look up existing PRs for every stack branch (`gh pr list --head <branch>`) and reuse them.
+- Review, push and publish each PR against its own base, bottom first. Then edit every body so it starts with the stack: its position, links to the other PRs, and that PRs merge bottom first with a merge commit (not squash or rebase).
+- To change a lower PR, commit to its branch, then merge each branch into the one directly above it, bottom up. Do not rebase published stack branches.
+- After a lower PR merges, retarget the PR above it to the base branch. If shipping ends before that, list the pending retargets in the report.
 
 If the work has no seam that keeps every piece coherent under the limit, ship one PR and explain why in its body.
 
@@ -42,7 +43,7 @@ Evaluate findings against the code before fixing. Fix supported issues within sc
 
 Commit messages and PR bodies follow the authorship rule in `AGENTS.md`.
 
-1. Commit the scoped changes with a concise explanation of the problem and result. Push the working branch; do not push directly to the base branch or force-push without task authorization.
+1. Commit the scoped changes with a concise explanation of the problem and result. Push the working branch (every branch of a stack); do not push directly to the base branch or force-push without task authorization.
 2. Inspect the existing PR with `gh pr view --json number,url,baseRefName,body`. Distinguish no PR from authentication/network errors.
 3. Write the exact PR body to a temporary file and publish with `--body-file`. Describe the problem/result and actual validation.
 4. Update the existing PR or create a ready-for-review PR with the intended base and head. Follow the repository template where present. Avoid duplicate PRs after an uncertain command result: inspect remote state first.
