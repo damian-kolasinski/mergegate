@@ -1,6 +1,6 @@
 # mergegate — system & UX design
 
-Status: draft v0.1 · 2026-10-12 · tech stack intentionally out of scope (next session)
+Status: draft v0.1 · 2026-10-12 · tech stack in [tech-stack.md](tech-stack.md)
 
 ## 1. Problem
 
@@ -142,6 +142,7 @@ mg project add [PATH] [--backend github|local] [--target BRANCH] [--upstream PAT
 mg project set <project> <key> <value>                   backend, target, upstream, bots, …
 mg project show [<project>]
 mg judge set none|jev|anthropic|openai-compatible|command [provider options]
+mg lang list | add <name>...|--detect | remove <name>    Syntax highlighting language packs (hub only)
 
 mg connect <hub>                                         On a worker: point the CLI at a hub
 mg init                                                  In any clone: add the `mergegate` remote
@@ -214,11 +215,10 @@ Event types: `review.submitted`, `external.comments` (each comment carries `auth
 
 Pulling (`mg wait`) is the core mechanism because every agent supports it. For harnesses that want to start an agent when something happens, the hub runs configured hooks:
 
-```yaml
-hooks:
-  on_event:
-    - match: { type: review.submitted }
-      run: "my-harness resume --item {item}"
+```toml
+[[hooks.on_event]]
+match = { type = "review.submitted" }
+run = "my-harness resume --item {item}"
 ```
 
 ### 6.5 Waiting and token cost
@@ -263,7 +263,7 @@ The asymmetry matters: the authoring agent grades its own work, and the judge ca
 
 ### 7.3 Rules are configured by agents and approved by the operator
 
-Rules live on the hub, per project (`~/.mergegate/projects/<p>/rules.yaml`). They're personal, hand-editable, and agent-editable through the CLI:
+Rules live on the hub, per project (`~/.mergegate/projects/<p>/rules.toml`). They're personal, hand-editable, and agent-editable through the CLI:
 
 ```
 mg rules propose --tier trusted --path '**/*Tests.swift' --reason "test-only; agent runs them before submit"
@@ -403,4 +403,4 @@ Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` wi
 | 9 | Agent integration | One generic skill. Each agent waits with its best native mechanism, chosen by capability. |
 | 10 | File groups | Two: `review` (ordered by importance) and `trusted` (hidden, rules only). No skim tier. |
 
-No open UX questions remain. Next session: tech stack (hub runtime, UI as web vs native macOS, storage, git and GitHub libraries, packaging).
+No open UX questions remain. Tech stack decisions are in [tech-stack.md](tech-stack.md).
