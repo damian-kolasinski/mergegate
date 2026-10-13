@@ -12,4 +12,4 @@ mod repo;
 
 pub use env::{Env, Run};
 pub use http::http;
-pub use repo::{TestRepo, git};
+pub use repo::{TestRepo, commit_files, git};

@@ -90,18 +90,21 @@ fn read(row: &Row) -> rusqlite::Result<Result<Project, StoreError>> {
     let target: String = row.get(2)?;
     let upstream: String = row.get(3)?;
     Ok((|| {
-        let backend = match backend.as_str() {
-            "github" => Backend::Github,
-            "local" => Backend::Local,
-            other => return Err(StoreError::new(format!("unknown backend {other:?}"))),
-        };
         Ok(Project {
             name: ProjectName::parse(&name).map_err(StoreError::new)?,
-            backend,
+            backend: backend_named(&backend)?,
             target,
             upstream: PathBuf::from(upstream),
         })
     })())
+}
+
+pub(crate) fn backend_named(name: &str) -> Result<Backend, StoreError> {
+    match name {
+        "github" => Ok(Backend::Github),
+        "local" => Ok(Backend::Local),
+        other => Err(StoreError::new(format!("unknown backend {other:?}"))),
+    }
 }
 
 /// Paths are stored as text, so one that isn't UTF-8 can't be registered.

@@ -1,6 +1,7 @@
 //! SQLite store: one database file per hub, in WAL mode, migrated forward on
 //! open.
 
+mod items;
 mod migrate;
 mod projects;
 
