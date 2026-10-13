@@ -33,10 +33,11 @@ where
         .map_err(|e| GitError::Failed(format!("{doing} failed: can't run git: {e}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(GitError::Failed(format!(
-            "{doing} failed: {}",
-            stderr.trim()
-        )));
+        let why = match stderr.trim() {
+            "" => output.status.to_string(),
+            stderr => stderr.to_owned(),
+        };
+        return Err(GitError::Failed(format!("{doing} failed: {why}")));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }

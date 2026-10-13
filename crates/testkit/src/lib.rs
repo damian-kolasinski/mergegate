@@ -3,7 +3,6 @@
 //!
 //! Integration tests of the `mg` package pass the binary in:
 //! `Env::new(env!("CARGO_BIN_EXE_mg"))`.
-
 //!
 //! [`TestRepo`] builds the real git repositories those hubs work on.
 

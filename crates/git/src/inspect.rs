@@ -9,9 +9,26 @@ pub(crate) fn inspect(path: &Path) -> Result<Repo, GitError> {
             path.display()
         ))
     };
+    let start = match std::fs::metadata(path) {
+        Ok(meta) if meta.is_file() => path.parent().unwrap_or(path),
+        Ok(_) => path,
+        Err(_) => return Err(GitError::NotARepo(path.to_owned())),
+    };
     // Isolated: only the repo's own config applies, as for the git binary.
-    let found = gix::discover_opts(path, Default::default(), gix::open::Options::isolated())
-        .map_err(|_| GitError::NotARepo(path.to_owned()))?;
+    let found = gix::discover_opts(start, Default::default(), gix::open::Options::isolated())
+        .map_err(|e| {
+            use gix::discover::upwards::Error as Upwards;
+            match e.downcast_any_ref::<Upwards>() {
+                Some(
+                    Upwards::NoGitRepository { .. }
+                    | Upwards::NoGitRepositoryWithinCeiling { .. }
+                    | Upwards::NoGitRepositoryWithinFs { .. },
+                ) => GitError::NotARepo(path.to_owned()),
+                // Anything else means a repo is there but can't be read, e.g. a
+                // corrupt `.git` or missing permissions; say so instead.
+                _ => failed(&e),
+            }
+        })?;
     // From a linked worktree, the repo that owns it.
     let repo = found.main_repo().map_err(|e| failed(&e))?;
 
