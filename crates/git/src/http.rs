@@ -8,7 +8,6 @@ use mergegate_core::project::ProjectName;
 use crate::HubGit;
 use crate::command::git;
 
-/// The parts of an HTTP request `git http-backend` reads.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HttpRequest<'a> {
     pub method: &'a str,
@@ -17,16 +16,14 @@ pub struct HttpRequest<'a> {
     pub query: &'a str,
     pub content_type: Option<&'a str>,
     pub content_length: Option<&'a str>,
-    /// `gzip` when the client compressed the body.
     pub content_encoding: Option<&'a str>,
-    /// The `Git-Protocol` header, which selects protocol v2.
+    /// Selects protocol v2.
     pub git_protocol: Option<&'a str>,
 }
 
 impl HubGit {
-    /// The `git http-backend` process that answers `request` for the
-    /// project's staging repo. Its stdin takes the request body; its stdout
-    /// gives CGI headers, a blank line, then the response body.
+    /// Stdin takes the request body; stdout gives CGI headers, a blank line,
+    /// then the response body.
     ///
     /// Pushes are accepted, except to `refs/mergegate`, where the hub pins
     /// revisions; those refs aren't advertised either. `hideRefs` binds only

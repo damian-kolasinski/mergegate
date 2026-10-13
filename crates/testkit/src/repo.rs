@@ -60,8 +60,6 @@ impl TestRepo {
         self.git(["commit", "--quiet", "--allow-empty", "-m", message]);
     }
 
-    /// Writes `files` (path and contents, creating folders as needed) into
-    /// the main worktree and commits everything.
     pub fn commit_files(&self, message: &str, files: &[(&str, &str)]) {
         commit_files(&self.root, message, files);
     }
@@ -107,7 +105,7 @@ impl TestRepo {
     }
 }
 
-/// Writes `files` into the worktree at `dir` and commits everything.
+/// Commits everything in the worktree, not only `files`.
 pub fn commit_files(dir: &Path, message: &str, files: &[(&str, &str)]) {
     for (path, contents) in files {
         let path = dir.join(path);
