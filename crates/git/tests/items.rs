@@ -196,6 +196,10 @@ fn serves_the_staging_repo_without_the_pins() {
         assert!(refs.contains("refs/heads/main"), "{refs}");
         assert!(!refs.contains("refs/mergegate"), "{refs}");
     }
+    // The dumb protocol would list the pins and serve their objects.
+    let dumb = get(&hub, "/info/refs", "");
+    assert!(dumb.contains("Status: 403"), "{dumb}");
+    assert!(!dumb.contains("refs/mergegate"), "{dumb}");
     let missing = get(&hub, "/nope", "");
     assert!(missing.starts_with("Status: 404"), "{missing}");
 }
