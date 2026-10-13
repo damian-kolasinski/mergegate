@@ -1,0 +1,21 @@
+[package]
+name = "mergegate-hub"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+api.workspace = true
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+store-sqlite.workspace = true
+thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "signal", "macros", "sync", "time"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "std"] }
