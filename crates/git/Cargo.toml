@@ -1,0 +1,18 @@
+[package]
+name = "mergegate-git"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+gix = { version = "0.89.0", default-features = false, features = ["sha1"] }
+mergegate-core.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
+testkit.workspace = true

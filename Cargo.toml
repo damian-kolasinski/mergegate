@@ -14,6 +14,7 @@ publish = false
 api = { path = "crates/api", package = "mergegate-api" }
 # Not `core`: that name would shadow the language's own `core` crate.
 mergegate-core = { path = "crates/core" }
+git = { path = "crates/git", package = "mergegate-git" }
 store-sqlite = { path = "crates/store-sqlite", package = "mergegate-store-sqlite" }
 hub = { path = "crates/hub", package = "mergegate-hub" }
 testkit = { path = "crates/testkit", package = "mergegate-testkit" }
