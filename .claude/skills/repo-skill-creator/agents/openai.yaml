@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Skill Creator"
+  short_description: "Create skills for Claude and Codex"
+  default_prompt: "Use $repo-skill-creator to create or update a repository-local skill."
