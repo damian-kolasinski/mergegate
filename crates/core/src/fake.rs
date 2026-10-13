@@ -322,6 +322,7 @@ pub(crate) struct FakeStore {
     projects: BTreeMap<ProjectName, Project>,
     /// Oldest first.
     items: Vec<Item>,
+    files: BTreeMap<(ItemId, u32), Vec<ChangedFile>>,
     diffs: BTreeMap<BlobPair, FileDiff>,
     clock: u32,
 }
@@ -344,7 +345,13 @@ impl FakeStore {
         &self.diffs
     }
 
-    fn revision(&mut self, number: u32, revision: NewRevision) -> Revision {
+    pub fn forget_diffs(&mut self) {
+        self.diffs.clear();
+    }
+
+    fn revision(&mut self, id: &ItemId, number: u32, revision: NewRevision) -> Revision {
+        let files = revision.files.iter().map(|f| f.file.clone()).collect();
+        self.files.insert((id.clone(), number), files);
         Revision {
             number,
             stat: DiffStat::of(&revision.files),
@@ -403,6 +410,18 @@ impl ItemStore for FakeStore {
             .find(|i| i.branch == branch))
     }
 
+    fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError> {
+        Ok(self.items.iter().find(|i| i.id == *id).cloned())
+    }
+
+    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<ChangedFile>, StoreError> {
+        Ok(self
+            .files
+            .get(&(id.clone(), revision))
+            .cloned()
+            .unwrap_or_default())
+    }
+
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
         assert!(
             self.open_item(&item.project, &item.branch)?.is_none(),
@@ -415,9 +434,10 @@ impl ItemStore for FakeStore {
             .filter(|i| *i.id.project() == item.project)
             .count() as u64
             + 1;
-        let revision = self.revision(1, item.revision);
+        let id = ItemId::new(item.project, number);
+        let revision = self.revision(&id, 1, item.revision);
         let item = Item {
-            id: ItemId::new(item.project, number),
+            id,
             branch: item.branch,
             title: item.title,
             state: item.state,
@@ -439,7 +459,7 @@ impl ItemStore for FakeStore {
     ) -> Result<Item, StoreError> {
         let index = self.items.iter().position(|i| i.id == *id).unwrap();
         let number = self.items[index].revision.number + 1;
-        let revision = self.revision(number, revision);
+        let revision = self.revision(id, number, revision);
         let item = &mut self.items[index];
         item.title = title.into();
         item.state = state;

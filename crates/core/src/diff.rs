@@ -1,10 +1,12 @@
 //! File diffs: computed from two blobs when work is submitted, cached by blob
 //! pair, and read back when an item is opened.
 
+mod blob;
 mod compute;
 mod git;
 mod store;
 
+pub use blob::blob;
 pub use compute::{CONTEXT, MAX_CHANGED_LINES, compute};
 pub use git::DiffGit;
 pub use store::DiffStore;

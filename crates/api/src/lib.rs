@@ -1,6 +1,7 @@
 //! Wire types shared by the CLI, the hub and the UI.
 
 pub mod decision;
+pub mod diff;
 pub mod doctor;
 pub mod error;
 pub mod event;

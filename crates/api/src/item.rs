@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::project::Backend;
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemState {
@@ -29,6 +30,7 @@ pub struct Submitted {
     pub new_revision: bool,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Item {
     /// As in `app#42`.
@@ -44,6 +46,7 @@ pub struct Item {
     pub created_at: String,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revision {
     pub number: u32,

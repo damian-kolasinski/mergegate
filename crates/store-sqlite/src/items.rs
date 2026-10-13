@@ -1,7 +1,7 @@
 //! The `items`, `revisions` and `revision_files` tables.
 
 use mergegate_core::item::{
-    DiffStat, Item, ItemId, ItemState, ItemStore, NewItem, NewRevision, Revision,
+    ChangedFile, DiffStat, Item, ItemId, ItemState, ItemStore, NewItem, NewRevision, Revision,
 };
 use mergegate_core::project::ProjectName;
 use mergegate_core::store::StoreError;
@@ -50,6 +50,46 @@ impl ItemStore for Store {
             .transpose()
     }
 
+    fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError> {
+        self.conn
+            .query_row(
+                &format!("{SELECT} WHERE p.name = ?1 AND i.number = ?2"),
+                params![id.project().as_str(), id.number() as i64],
+                read,
+            )
+            .optional()
+            .map_err(StoreError::new)?
+            .transpose()
+    }
+
+    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<ChangedFile>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT f.path, f.old_path, f.old_blob, f.new_blob
+                 FROM revision_files f
+                 JOIN items i ON i.id = f.item_id
+                 JOIN projects p ON p.id = i.project_id
+                 WHERE p.name = ?1 AND i.number = ?2 AND f.revision = ?3
+                 ORDER BY f.position",
+            )
+            .map_err(StoreError::new)?;
+        let rows = stmt
+            .query_map(
+                params![id.project().as_str(), id.number() as i64, revision],
+                |row| {
+                    Ok(ChangedFile {
+                        path: row.get(0)?,
+                        old_path: row.get(1)?,
+                        old_blob: row.get(2)?,
+                        new_blob: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(StoreError::new)?;
+        rows.collect::<Result<_, _>>().map_err(StoreError::new)
+    }
+
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
         let (project_id, number): (i64, i64) = tx
@@ -81,7 +121,7 @@ impl ItemStore for Store {
         insert_revision(&tx, tx.last_insert_rowid(), 1, &item.revision, &now)?;
         tx.commit().map_err(StoreError::new)?;
         let id = ItemId::new(item.project, number as u64);
-        self.item(&id)
+        self.written(&id)
     }
 
     fn add_revision(
@@ -111,19 +151,15 @@ impl ItemStore for Store {
         )
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)?;
-        self.item(id)
+        self.written(id)
     }
 }
 
 impl Store {
-    fn item(&self, id: &ItemId) -> Result<Item, StoreError> {
-        self.conn
-            .query_row(
-                &format!("{SELECT} WHERE p.name = ?1 AND i.number = ?2"),
-                params![id.project().as_str(), id.number() as i64],
-                read,
-            )
-            .map_err(StoreError::new)?
+    /// The item a write just committed.
+    fn written(&self, id: &ItemId) -> Result<Item, StoreError> {
+        self.item(id)?
+            .ok_or_else(|| StoreError::new(format!("{id} vanished after it was written")))
     }
 }
 
