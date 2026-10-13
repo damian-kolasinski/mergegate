@@ -70,7 +70,8 @@ pub fn set<S: ProjectStore + ItemStore>(
                     upstream: repo.root,
                 });
             }
-            if !confirm && let Some(decision) = keeping_target(store, &project, &target)? {
+            let decision = keeping_target(store, &project, &target)?;
+            if !confirm && let Some(decision) = decision {
                 return Ok(Changed::Decide(decision));
             }
             project.target = target;
@@ -101,14 +102,21 @@ pub fn set<S: ProjectStore + ItemStore>(
 }
 
 /// What to ask when open items would stay on another target than the one
-/// new items get.
+/// new items get. An open item's own branch can't become the target: staging
+/// mirrors the target from the upstream over what the worker pushed.
 fn keeping_target(
     store: &impl ItemStore,
     project: &Project,
     target: &str,
 ) -> Result<Option<NeedsDecision>, ProjectError> {
-    let staying: Vec<String> = store
-        .open_items(Some(&project.name))?
+    let open = store.open_items(Some(&project.name))?;
+    if let Some(item) = open.iter().find(|item| item.branch == target) {
+        return Err(ProjectError::BranchUnderReview {
+            branch: target.into(),
+            item: item.id.to_string(),
+        });
+    }
+    let staying: Vec<String> = open
         .into_iter()
         .filter(|item| item.target != target)
         .map(|item| format!("{} ({} onto {})", item.id, item.branch, item.target))

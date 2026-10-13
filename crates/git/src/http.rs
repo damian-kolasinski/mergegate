@@ -29,12 +29,16 @@ impl HubGit {
     /// gives CGI headers, a blank line, then the response body.
     ///
     /// Pushes are accepted, except to `refs/mergegate`, where the hub pins
-    /// revisions; those refs aren't advertised either.
+    /// revisions; those refs aren't advertised either. `hideRefs` binds only
+    /// the smart protocol, so the dumb one, which lists every ref and serves
+    /// any object, is off.
     pub fn http_backend(&self, project: &ProjectName, request: &HttpRequest) -> Command {
         let mut cmd = git(&self.home);
         cmd.args([
             "-c",
             "http.receivepack=true",
+            "-c",
+            "http.getanyfile=false",
             "-c",
             "transfer.hideRefs=refs/mergegate",
             "http-backend",
