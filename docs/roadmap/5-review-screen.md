@@ -25,14 +25,15 @@ Opening an item shows its diff: every changed file in one scrolling column with 
 - `git`: `diff --raw` for the file list, blob reads through gix.
 - `store-sqlite`: migration `0004_diffs.sql` adds blob IDs to `revision_files` and the `diffs` cache, its hunks kept as unified-diff text. Existing items are dropped rather than backfilled, which is allowed before PR 9. Entries are never evicted: a pair's diff never changes, and the cache is far smaller than the git objects it describes. `viewed` comes in `0005`.
 - `api::diff`: wire types. `hub::diff` and `hub::viewed`: the routes.
-- UI: `ui/diff-view/` wraps CodeView, `ui/item/` is the review screen (header, file list, keys), and `ui/tests/review.spec.ts` plus `ui/tests/scroll.bench.ts`.
+- UI: `ui/diff-view/` wraps CodeView, `ui/item/` is the review screen (header, file list, keys), and `ui/tests/review.spec.ts` holds the spec and the scroll budget, as `inbox.spec.ts` holds the first-paint one. `ui/build.mjs` leaves Shiki's grammars and themes out of the bundle until PR 15.
+- `hub::ui`: the CSP allows inline styles, since CodeView lays rows out with `style` attributes and themes itself with `<style>` elements.
 
 ## Stack
 
 - `review-1-diff`: the diff engine, plus this brief. *Done.*
 - `review-2-cache`: blob IDs from git, diffs computed and cached at submit, migration `0004`. *Done.*
 - `review-3-api`: `GET /api/items/{id}` and the blob route. *Done.*
-- `review-4-screen`: CodeView wrapper, review screen, file list, keys, expansion, Playwright spec and scroll benchmark. *Planned.*
+- `review-4-screen`: CodeView wrapper, review screen, file list, keys, expansion, Playwright spec and scroll benchmark. *Done.*
 - `review-5-viewed`: viewed marks (migration `0005`, routes, `v`, checkboxes), F6 wording, deleting this brief and roadmap row 5. *Planned.*
 
 ## Open

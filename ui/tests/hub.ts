@@ -63,21 +63,42 @@ export class Project {
     readonly dir: string,
   ) {}
 
+  /** Commits `files` on `main`, where later branches start. */
+  seed(files: Record<string, string | Buffer>) {
+    git(this.dir, "switch", "--quiet", "main");
+    this.write(files);
+    git(this.dir, "commit", "--quiet", "-m", "seed");
+  }
+
   /** Commits `files` on a new `branch` off `main` and submits it. */
-  submit(branch: string, title: string, files: Record<string, string>) {
+  submit(
+    branch: string,
+    title: string,
+    files: Record<string, string | Buffer | null>,
+  ) {
     git(this.dir, "switch", "--quiet", "-c", branch, "main");
     this.revise(title, files);
   }
 
   /** Commits `files` on the current branch and submits the new revision. */
-  revise(title: string, files: Record<string, string>) {
-    for (const [path, contents] of Object.entries(files)) {
-      mkdirSync(dirname(join(this.dir, path)), { recursive: true });
-      writeFileSync(join(this.dir, path), contents);
-    }
-    git(this.dir, "add", "--all");
+  revise(title: string, files: Record<string, string | Buffer | null>) {
+    this.write(files);
     git(this.dir, "commit", "--quiet", "-m", title);
     this.hub.mg(["submit"], this.dir);
+  }
+
+  /** Writes `files` and stages them; `null` deletes one. */
+  private write(files: Record<string, string | Buffer | null>) {
+    for (const [path, contents] of Object.entries(files)) {
+      const file = join(this.dir, path);
+      if (contents === null) {
+        rmSync(file);
+        continue;
+      }
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, contents);
+    }
+    git(this.dir, "add", "--all");
   }
 }
 
