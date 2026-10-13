@@ -1,4 +1,4 @@
-//! `mg`: the mergegate CLI, and the hub it starts. Composition root of the CLI.
+//! `mg`: the mergegate CLI, and the hub it starts.
 
 mod hub_cmd;
 pub mod output;
@@ -35,24 +35,7 @@ struct Cli {
 enum Command {
     /// Run and inspect the hub
     #[command(subcommand)]
-    Hub(HubCommand),
-}
-
-#[derive(Subcommand)]
-enum HubCommand {
-    /// Start the hub in the background (no-op if it is running)
-    Start {
-        /// Run in this process instead of the background
-        #[arg(long)]
-        foreground: bool,
-        /// Port to listen on, 127.0.0.1 only; 0 picks a free one
-        #[arg(long, default_value_t = hub::DEFAULT_PORT)]
-        port: u16,
-    },
-    /// Stop the hub (no-op if it is not running)
-    Stop,
-    /// Show whether the hub is running, and where
-    Status,
+    Hub(hub_cmd::HubCommand),
 }
 
 pub fn main() -> ExitCode {
@@ -68,9 +51,7 @@ pub fn main() -> ExitCode {
 
 fn dispatch(command: Command) -> Result<Outcome, CliError> {
     match command {
-        Command::Hub(HubCommand::Start { foreground, port }) => hub_cmd::start(foreground, port),
-        Command::Hub(HubCommand::Stop) => hub_cmd::stop(),
-        Command::Hub(HubCommand::Status) => hub_cmd::status(),
+        Command::Hub(command) => hub_cmd::run(command),
     }
 }
 

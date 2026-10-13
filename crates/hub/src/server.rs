@@ -1,24 +1,18 @@
-//! The hub's HTTP server.
-
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use axum::extract::{Request, State};
-use axum::http::{Method, StatusCode, header};
-use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::Router;
+use axum::middleware;
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
 
-use crate::{Home, HubError, HubInfo, io};
+use crate::{Home, HubError, HubInfo, guard, io, lifecycle};
 
-struct AppState {
-    health: api::Health,
-    port: u16,
-    shutdown: Notify,
+pub(crate) struct AppState {
+    pub health: api::hub::Health,
+    pub port: u16,
+    pub shutdown: Notify,
 }
 
 pub(crate) async fn serve(home: &Home, port: u16, schema_version: u32) -> Result<(), HubError> {
@@ -33,7 +27,7 @@ pub(crate) async fn serve(home: &Home, port: u16, schema_version: u32) -> Result
         .map_err(io("reading the bound address"))?;
     let pid = std::process::id();
     let state = Arc::new(AppState {
-        health: api::Health {
+        health: api::hub::Health {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             api_version: api::API_VERSION,
             schema_version,
@@ -44,9 +38,8 @@ pub(crate) async fn serve(home: &Home, port: u16, schema_version: u32) -> Result
         shutdown: Notify::new(),
     });
     let app = Router::new()
-        .route("/api/health", get(health))
-        .route("/api/hub/shutdown", post(shutdown))
-        .layer(middleware::from_fn_with_state(state.clone(), guard))
+        .merge(lifecycle::routes())
+        .layer(middleware::from_fn_with_state(state.clone(), guard::guard))
         .with_state(state.clone());
 
     let mut sigterm = signal(SignalKind::terminate()).map_err(io("handling SIGTERM"))?;
@@ -70,46 +63,4 @@ pub(crate) async fn serve(home: &Home, port: u16, schema_version: u32) -> Result
         .map_err(io("serving HTTP"));
     home.remove_info(pid);
     result
-}
-
-/// Accepts only requests addressed to the loopback interface (against DNS
-/// rebinding) and mutating requests that carry the client header (against
-/// cross-site requests from a browser).
-async fn guard(State(state): State<Arc<AppState>>, req: Request, next: Next) -> Response {
-    let host = req
-        .headers()
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or_default();
-    let port = state.port;
-    if host != format!("127.0.0.1:{port}") && host != format!("localhost:{port}") {
-        return forbidden("requests must address the hub as 127.0.0.1 or localhost");
-    }
-    if req.method() != Method::GET && !req.headers().contains_key(api::CLIENT_HEADER) {
-        return forbidden(&format!(
-            "requests must carry the {} header",
-            api::CLIENT_HEADER
-        ));
-    }
-    next.run(req).await
-}
-
-fn forbidden(message: &str) -> Response {
-    let body = api::ErrorEnvelope {
-        error: api::ErrorBody {
-            code: "forbidden".into(),
-            message: message.into(),
-            hint: None,
-        },
-    };
-    (StatusCode::FORBIDDEN, Json(body)).into_response()
-}
-
-async fn health(State(state): State<Arc<AppState>>) -> Json<api::Health> {
-    Json(state.health.clone())
-}
-
-async fn shutdown(State(state): State<Arc<AppState>>) -> StatusCode {
-    state.shutdown.notify_one();
-    StatusCode::ACCEPTED
 }

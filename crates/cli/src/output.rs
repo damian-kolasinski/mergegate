@@ -7,7 +7,8 @@
 
 use std::process::ExitCode;
 
-use api::{ErrorBody, ErrorEnvelope, NeedsDecision, NeedsDecisionEnvelope};
+use api::decision::{NeedsDecision, NeedsDecisionEnvelope};
+use api::error::{ErrorBody, ErrorEnvelope};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -140,7 +141,7 @@ fn to_json(value: &impl Serialize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use api::DecisionOption;
+    use api::decision::DecisionOption;
 
     fn decision() -> Outcome {
         Outcome::NeedsDecision(NeedsDecision {

@@ -1,6 +1,8 @@
-//! The hub daemon: composition root of everything that runs inside it.
+//! The hub daemon.
 
+mod guard;
 mod home;
+mod lifecycle;
 mod server;
 
 use std::io::IsTerminal;
