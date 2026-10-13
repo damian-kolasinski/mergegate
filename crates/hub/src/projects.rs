@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{self, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -35,14 +36,11 @@ async fn list(State(state): State<Arc<AppState>>) -> Reply<api::project::Project
 
 async fn add(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<api::project::AddProject>,
-) -> Response {
-    let path = match absolute(&request.path) {
-        Ok(path) => path,
-        Err(failure) => return failure.into_response(),
-    };
+    request: Result<Json<api::project::AddProject>, JsonRejection>,
+) -> Result<Response, Failure> {
+    let Json(request) = request?;
     let request = AddProject {
-        path,
+        path: absolute(&request.path)?,
         name: request.name,
         backend: request.backend,
         target: request.target,
@@ -52,17 +50,18 @@ async fn add(
         .await
     {
         Ok(Added::Project(project)) => {
-            (StatusCode::CREATED, Json(project.to_api())).into_response()
+            Ok((StatusCode::CREATED, Json(project.to_api())).into_response())
         }
-        Ok(Added::Decide(decision)) => reply::decision(decision),
-        Err(e) => failure(e).into_response(),
+        Ok(Added::Decide(decision)) => Ok(reply::decision(decision)),
+        Err(e) => Err(failure(e)),
     }
 }
 
 async fn show(
     State(state): State<Arc<AppState>>,
-    extract::Path(name): extract::Path<String>,
+    name: Result<extract::Path<String>, PathRejection>,
 ) -> Reply<api::project::Project> {
+    let extract::Path(name) = name?;
     let project = state
         .blocking(move |store, _| project::find(store, &name))
         .await
@@ -72,8 +71,9 @@ async fn show(
 
 async fn at(
     State(state): State<Arc<AppState>>,
-    Query(query): Query<api::project::ProjectAt>,
+    query: Result<Query<api::project::ProjectAt>, QueryRejection>,
 ) -> Reply<api::project::Project> {
+    let Query(query) = query?;
     let path = absolute(&query.path)?;
     let project = state
         .blocking(move |store, git| project::at(store, git, &path))
@@ -84,9 +84,10 @@ async fn at(
 
 async fn set(
     State(state): State<Arc<AppState>>,
-    extract::Path(name): extract::Path<String>,
-    Json(request): Json<api::project::SetProject>,
+    name: Result<extract::Path<String>, PathRejection>,
+    request: Result<Json<api::project::SetProject>, JsonRejection>,
 ) -> Reply<api::project::Project> {
+    let (extract::Path(name), Json(request)) = (name?, request?);
     let setting = Setting::parse(&request.key, &request.value).map_err(failure)?;
     if let Setting::Upstream(path) = &setting {
         absolute(&path.to_string_lossy())?;

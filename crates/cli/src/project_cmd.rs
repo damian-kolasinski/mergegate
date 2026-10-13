@@ -63,7 +63,7 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
         ProjectCommand::Show {
             project: Some(name),
         } => {
-            let project = client.get(&format!("/api/projects/{}", segment(&name)))?;
+            let project = client.get(&route(&name)?)?;
             Ok(one(&project))
         }
         ProjectCommand::Show { project: None } => show_here(&client),
@@ -76,13 +76,20 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
                 "upstream" => absolute(Path::new(&value))?,
                 _ => value,
             };
-            let project = client.patch(
-                &format!("/api/projects/{}", segment(&project)),
-                &SetProject { key, value },
-            )?;
+            let project = client.patch(&route(&project)?, &SetProject { key, value })?;
             Ok(one(&project))
         }
     }
+}
+
+/// The route of one project. An empty name would address no route at all.
+fn route(name: &str) -> Result<String, CliError> {
+    if name.is_empty() {
+        return Err(
+            CliError::new("project_not_found", "the project name is empty").hint("mg project show"),
+        );
+    }
+    Ok(format!("/api/projects/{}", segment(name)))
 }
 
 fn add(

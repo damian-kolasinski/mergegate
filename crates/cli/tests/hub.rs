@@ -235,3 +235,35 @@ fn rejects_mutating_requests_without_the_client_header() {
     let status = env.mg(&["--json", "hub", "status"]).json();
     assert_eq!(status["running"], true);
 }
+
+#[test]
+fn malformed_requests_are_answered_in_the_error_envelope() {
+    let env = env();
+    env.start_hub();
+    let addr = env.hub_addr();
+    let send = |request_line: &str, body: &str| {
+        http(
+            &addr,
+            &format!(
+                "{request_line} HTTP/1.1\r\nHost: {addr}\r\n{}: test\r\n\
+                 Content-Type: application/json\r\nContent-Length: {}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                api::CLIENT_HEADER,
+                body.len()
+            ),
+        )
+    };
+    for (request_line, body, expected_status, expected_code) in [
+        ("POST /api/projects", "{}", 422, "invalid_request"),
+        ("POST /api/projects", "not json", 400, "invalid_request"),
+        ("GET /api/project-at", "", 400, "invalid_request"),
+        ("GET /api/projects/", "", 404, "not_found"),
+        ("DELETE /api/projects", "", 405, "method_not_allowed"),
+    ] {
+        let (status, reply) = send(request_line, body);
+        assert_eq!(status, expected_status, "{request_line}: {reply}");
+        let reply: serde_json::Value = serde_json::from_str(&reply)
+            .unwrap_or_else(|e| panic!("{request_line}: not JSON ({e}): {reply}"));
+        assert_eq!(reply["error"]["code"], expected_code, "{request_line}");
+    }
+}

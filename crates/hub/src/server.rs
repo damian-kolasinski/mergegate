@@ -10,7 +10,7 @@ use tokio::sync::Notify;
 use git::HubGit;
 use store_sqlite::Store;
 
-use crate::{Home, HubError, HubInfo, doctor, guard, io, lifecycle, projects};
+use crate::{Home, HubError, HubInfo, doctor, guard, io, lifecycle, projects, reply};
 
 pub(crate) struct AppState {
     pub health: api::hub::Health,
@@ -73,6 +73,8 @@ pub(crate) async fn serve(
         .merge(lifecycle::routes())
         .merge(projects::routes())
         .merge(doctor::routes())
+        .fallback(reply::no_route)
+        .method_not_allowed_fallback(reply::wrong_method)
         .layer(middleware::from_fn_with_state(state.clone(), guard::guard))
         .with_state(state.clone());
 
