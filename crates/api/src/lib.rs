@@ -4,6 +4,7 @@ pub mod decision;
 pub mod doctor;
 pub mod error;
 pub mod hub;
+pub mod item;
 pub mod project;
 
 /// Version of the HTTP API between `mg` and the hub. A CLI refuses to talk to
