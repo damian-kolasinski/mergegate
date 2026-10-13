@@ -64,7 +64,7 @@ fn workspace_crates() -> Vec<Crate> {
 fn crate_graph_follows_the_architecture() {
     let crates = workspace_crates();
     assert!(
-        crates.iter().any(|c| c.dir == "hub"),
+        crates.iter().any(|c| c.dir == "testkit"),
         "metadata lists the workspace"
     );
     let mut violations = Vec::new();
