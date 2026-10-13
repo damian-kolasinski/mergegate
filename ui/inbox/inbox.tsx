@@ -30,7 +30,8 @@ export function InboxScreen() {
       setInbox(next);
       setFailure(undefined);
     } catch (error) {
-      if (request === latest) setFailure(String(error));
+      if (request !== latest) return;
+      setFailure(error instanceof Error ? error.message : String(error));
     }
   };
   void load();
@@ -66,49 +67,51 @@ export function InboxScreen() {
     Enter: () => open(),
   });
 
+  // A failed refresh keeps the last inbox on screen, under the message.
   return (
-    <Show
-      when={inbox()}
-      fallback={
-        <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
-      }
-    >
-      {(current) => (
-        <For each={GROUPS}>
-          {(group) => (
-            <Show
-              when={group.key === "needs_you" || current()[group.key].length}
-            >
-              <Section title={group.title} count={current()[group.key].length}>
-                <Show
-                  when={current()[group.key].length}
-                  fallback={
-                    <Empty>
-                      Nothing to review. Items show up here when an agent runs{" "}
-                      <code>mg submit</code>.
-                    </Empty>
-                  }
+    <>
+      <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
+      <Show when={inbox()}>
+        {(current) => (
+          <For each={GROUPS}>
+            {(group) => (
+              <Show
+                when={group.key === "needs_you" || current()[group.key].length}
+              >
+                <Section
+                  title={group.title}
+                  count={current()[group.key].length}
                 >
-                  <ul>
-                    <For each={current()[group.key]}>
-                      {(item) => (
-                        <Entry
-                          item={item}
-                          now={now()}
-                          selected={item.id === selected()}
-                          onSelect={() => setSelectedId(item.id)}
-                          onOpen={() => open(item.id)}
-                        />
-                      )}
-                    </For>
-                  </ul>
-                </Show>
-              </Section>
-            </Show>
-          )}
-        </For>
-      )}
-    </Show>
+                  <Show
+                    when={current()[group.key].length}
+                    fallback={
+                      <Empty>
+                        Nothing to review. Items show up here when an agent runs{" "}
+                        <code>mg submit</code>.
+                      </Empty>
+                    }
+                  >
+                    <ul>
+                      <For each={current()[group.key]}>
+                        {(item) => (
+                          <Entry
+                            item={item}
+                            now={now()}
+                            selected={item.id === selected()}
+                            onSelect={() => setSelectedId(item.id)}
+                            onOpen={() => open(item.id)}
+                          />
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                </Section>
+              </Show>
+            )}
+          </For>
+        )}
+      </Show>
+    </>
   );
 }
 
