@@ -16,6 +16,10 @@ A project's backend decides where approved work lands. `local` squash-merges int
 
 `mg project show` prints the project at the current directory, or every project. `mg project set <project> <key> <value>` changes `backend`, `target`, `upstream` or `github` (as `OWNER/REPO`) later; when open items would keep the old setting it returns `needs_decision`, and `--confirm` applies it anyway.
 
+## Highlighting
+
+Diffs are highlighted by language packs the operator installs; without one a file shows as plain text, and its header names the pack that would highlight it. `mg lang add --from PATH` installs a pack archive (`.tar.gz`), or every archive in the folder `PATH`, and `mg lang list` prints what is installed and which files each pack highlights. `mg lang remove <name>` removes a pack. Two packs can't claim the same grammar: remove the installed one first.
+
 ## Clones
 
 Every clone or worktree you work in needs `mg init` once. It adds a `mergegate` remote pointing at the project; `--project NAME` picks the project when the clone isn't the registered repo.

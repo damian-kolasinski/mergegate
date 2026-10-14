@@ -89,8 +89,11 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "content": {"kind": "text", "hunks": [{
                     "old_start": 1, "old_lines": 2, "new_start": 1, "new_lines": 2,
                     "lines": [" title", "-body", "\\ No newline at end of file", "+body"],
+                    "spans": [[], [], [], []],
                 }]},
                 "viewed": false,
+                "grammar": null,
+                "missing_pack": null,
             },
             {
                 "path": "gone.txt",
@@ -102,8 +105,11 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "content": {"kind": "text", "hunks": [{
                     "old_start": 1, "old_lines": 1, "new_start": 0, "new_lines": 0,
                     "lines": ["-bye"],
+                    "spans": [[]],
                 }]},
                 "viewed": false,
+                "grammar": null,
+                "missing_pack": null,
             },
             {
                 "path": "logo.bin",
@@ -114,6 +120,8 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "deletions": null,
                 "content": {"kind": "binary"},
                 "viewed": false,
+                "grammar": null,
+                "missing_pack": null,
             },
             {
                 "path": "src/new.rs",
@@ -125,8 +133,13 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "content": {"kind": "text", "hunks": [{
                     "old_start": 1, "old_lines": 4, "new_start": 1, "new_lines": 4,
                     "lines": [" fn a() {}", " fn b() {}", " fn c() {}", "-fn d() {}", "+fn e() {}"],
+                    "spans": [[], [], [], [], []],
                 }]},
                 "viewed": false,
+                // No pack is installed; the header names the one that would
+                // highlight it.
+                "grammar": null,
+                "missing_pack": "rust",
             },
         ])
     );

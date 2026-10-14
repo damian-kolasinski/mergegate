@@ -2,6 +2,7 @@ use super::*;
 use crate::fake::{FakeGit, FakeGithub, FakeStore, PullState, commit};
 use crate::feedback::{Event, EventKind};
 use crate::github::GithubRepo;
+use crate::highlight::{HighlightStore, Highlights};
 use crate::item::{Submit, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
@@ -112,7 +113,7 @@ fn a_blank_reason_is_none() {
 }
 
 #[test]
-fn drops_its_pins_and_the_diffs_no_open_item_uses() {
+fn drops_its_pins_and_the_diffs_and_spans_no_open_item_uses() {
     let (mut store, git) = two_items();
     git.push("app", "login", &commit(3));
     let request = Submit {
@@ -125,6 +126,12 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     assert_eq!(store.diffs().len(), 3);
+    let (login, more) = (format!("{}\n", commit(2)), format!("{}\n", commit(3)));
+    for blob in [&login, &more] {
+        store
+            .insert_highlights(blob, "rs", "1", &Highlights::default())
+            .unwrap();
+    }
     assert_eq!(
         git.pins().keys().collect::<Vec<_>>(),
         [
@@ -143,8 +150,8 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
     .unwrap();
     // app#2 still has README.md and src/login.rs; only r2's src/more.rs goes.
     assert_eq!(store.diffs().len(), 2, "{:?}", store.diffs().keys());
-    let more = (None, Some(format!("{}\n", commit(3))));
-    assert!(!store.diffs().contains_key(&more));
+    assert!(!store.diffs().contains_key(&(None, Some(more))));
+    assert_eq!(store.highlighted(), [(login, "rs".into(), "1".into())]);
     assert_eq!(
         git.pins().keys().collect::<Vec<_>>(),
         ["refs/mergegate/items/2/r1"]
@@ -158,6 +165,7 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
     )
     .unwrap();
     assert!(store.diffs().is_empty());
+    assert!(store.highlighted().is_empty());
     assert!(git.pins().is_empty());
 }
 

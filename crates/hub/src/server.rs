@@ -10,12 +10,14 @@ use tokio::sync::Notify;
 
 use backend_github::GithubClient;
 use git::HubGit;
+use highlight::Languages;
+use mergegate_core::highlight::Pack;
 use store_sqlite::Store;
 
 use crate::{
     Home, HubError, HubInfo, abandon, comments, conversation, diff, doctor, draft_replies, events,
-    external, feedback, git_http, guard, io, items, lifecycle, merge, projects, replies, reply,
-    resume, reviews, ui, viewed, wake,
+    external, feedback, git_http, guard, highlights, io, items, languages, lifecycle, merge,
+    projects, replies, reply, resume, reviews, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -29,6 +31,12 @@ pub(crate) struct AppState {
     /// storing what it said, so a slower poll can't store older bodies over
     /// what a `mg sync` just brought in.
     pub pulling: tokio::sync::Mutex<()>,
+    pub languages: Arc<Languages>,
+    /// The packs mg can name for a file no installed pack highlights.
+    pub known_packs: Vec<Pack>,
+    /// Wakes the background highlight pass; a wake while it runs makes it
+    /// run once more.
+    pub highlight: Notify,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -72,6 +80,18 @@ impl AppState {
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
+
+    /// Runs `f` off the async workers without the store, for slow work that
+    /// only reads git objects, which a concurrent sync never rewrites.
+    pub(crate) async fn blocking_git<T: Send + 'static>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&HubGit) -> T + Send + 'static,
+    ) -> T {
+        let state = Arc::clone(self);
+        tokio::task::spawn_blocking(move || f(&state.git))
+            .await
+            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
 }
 
 pub(crate) async fn serve(
@@ -90,6 +110,11 @@ pub(crate) async fn serve(
         .local_addr()
         .map_err(io("reading the bound address"))?;
     let pid = std::process::id();
+    let (languages, warnings) =
+        Languages::open(&home.languages()).map_err(io("opening the language packs"))?;
+    for warning in warnings {
+        tracing::warn!("{warning}");
+    }
     let state = Arc::new(AppState {
         health: api::hub::Health {
             version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -104,6 +129,9 @@ pub(crate) async fn serve(
         wakes: wake::Wakes::default(),
         wake_logs: home.wake_logs(),
         pulling: tokio::sync::Mutex::new(()),
+        languages: Arc::new(languages),
+        known_packs: highlight::known(),
+        highlight: Notify::new(),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
         github: GithubClient::from_env(),
@@ -115,6 +143,8 @@ pub(crate) async fn serve(
         .merge(abandon::routes())
         .merge(merge::routes())
         .merge(diff::routes())
+        .merge(highlights::routes())
+        .merge(languages::routes())
         .merge(conversation::routes())
         .merge(viewed::routes())
         .merge(reviews::routes())
@@ -143,6 +173,7 @@ pub(crate) async fn serve(
 
     tokio::spawn(wake::run(state.clone()));
     tokio::spawn(external::run(state.clone()));
+    tokio::spawn(highlights::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

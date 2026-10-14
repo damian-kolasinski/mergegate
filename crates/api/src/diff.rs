@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::highlight::Span;
 use crate::item::Item;
 use crate::merge::Blocked;
 use crate::review::Conversation;
@@ -34,6 +35,12 @@ pub struct File {
     pub content: Content,
     /// Marked viewed in this revision.
     pub viewed: bool,
+    /// The installed grammar that highlights the file, by its path; `GET
+    /// /api/highlights/{grammar}/{blob}` reads a side's spans.
+    pub grammar: Option<String>,
+    /// The language pack that would highlight the file, when it isn't
+    /// installed.
+    pub missing_pack: Option<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -63,4 +70,9 @@ pub struct Hunk {
     /// line break, and followed by `\ No newline at end of file` when the
     /// line has none.
     pub lines: Vec<String>,
+    /// Each of `lines`' spans, in column order and without the prefix: a
+    /// removed line's from the old side, any other's from the new. Empty
+    /// while the hub is still computing them, and for `\ No newline`
+    /// lines.
+    pub spans: Vec<Vec<Span>>,
 }

@@ -42,6 +42,7 @@ async fn submit(
     // A new wake command may be due for events already logged.
     state.wakes.recheck();
     if submitted.new_revision {
+        state.highlight.notify_one();
         state.events.send(UiEvent::InboxChanged);
         state.events.send(UiEvent::ItemChanged {
             item: submitted.item.id.to_string(),

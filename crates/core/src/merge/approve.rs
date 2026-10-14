@@ -4,6 +4,7 @@ use super::land::{land, through};
 use super::{Merge, MergeBackend, MergeError};
 use crate::diff::DiffStore;
 use crate::feedback::FeedbackStore;
+use crate::highlight::HighlightStore;
 use crate::item::{ItemGit, ItemId, ItemState, ItemStore};
 use crate::project::ProjectStore;
 use crate::review::{NewReview, ReviewStore, Verdict};
@@ -20,7 +21,9 @@ pub struct Approve {
 /// Sends the item's drafts to its agent as an `approved` review, moving it
 /// to Merging, then lands it. The review is recorded first, so the agent
 /// learns of the approval even if the merge never finishes.
-pub fn approve<S: ProjectStore + ItemStore + ReviewStore + DiffStore + FeedbackStore>(
+pub fn approve<
+    S: ProjectStore + ItemStore + ReviewStore + DiffStore + HighlightStore + FeedbackStore,
+>(
     store: &mut S,
     git: &impl ItemGit,
     backends: &[&dyn MergeBackend],

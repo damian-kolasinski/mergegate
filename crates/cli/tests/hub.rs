@@ -1,7 +1,9 @@
 //! Running the hub: `mg hub start | stop | status` against real hub processes.
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::os::fd::AsRawFd;
+use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 use serde_json::json;
@@ -69,6 +71,24 @@ fn concurrent_starts_share_one_hub() {
     std::thread::sleep(Duration::from_millis(600));
     let status = env.mg(&["--json", "hub", "status"]).json();
     assert_eq!(status["running"], false, "{status}");
+}
+
+/// One leaked into `mg`, as a parent spawning on several threads can on
+/// macOS, would keep that parent waiting for its end while the hub runs.
+#[test]
+#[allow(unsafe_code)]
+fn the_hub_holds_no_descriptor_its_starter_inherited() {
+    let env = env();
+    let (mut ours, theirs) = UnixStream::pair().unwrap();
+    ours.set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    // SAFETY: clears close-on-exec on a descriptor this test owns, so the
+    // `mg` it runs inherits it.
+    unsafe { libc::fcntl(theirs.as_raw_fd(), libc::F_SETFD, 0) };
+    env.start_hub();
+    drop(theirs);
+    let read = ours.read(&mut [0]);
+    assert!(matches!(read, Ok(0)), "still open in the hub: {read:?}");
 }
 
 #[test]

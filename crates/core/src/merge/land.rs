@@ -3,13 +3,14 @@
 use super::{Landing, Merge, MergeBackend, MergeError};
 use crate::diff::DiffStore;
 use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
+use crate::highlight::HighlightStore;
 use crate::item::{Item, ItemGit, ItemState, ItemStore, close};
 use crate::project::{ProjectStore, find};
 use crate::store::StoreError;
 
 /// Lands `item`, which is in Merging, and tells its agent how that went:
 /// merged closes it, a conflict hands it back, anything else holds it.
-pub(super) fn land<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
+pub(super) fn land<S: ProjectStore + ItemStore + DiffStore + HighlightStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
     backend: &dyn MergeBackend,

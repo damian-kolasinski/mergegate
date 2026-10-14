@@ -5,11 +5,12 @@ use super::land::{land, through};
 use super::{Merge, MergeBackend, MergeError};
 use crate::diff::DiffStore;
 use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
+use crate::highlight::HighlightStore;
 use crate::item::{Item, ItemGit, ItemId, ItemState, ItemStore};
 use crate::project::ProjectStore;
 
 /// Lands the item again, as approve would have.
-pub fn retry<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
+pub fn retry<S: ProjectStore + ItemStore + DiffStore + HighlightStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
     backends: &[&dyn MergeBackend],

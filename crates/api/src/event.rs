@@ -15,4 +15,8 @@ pub enum UiEvent {
         /// As in `app#42`.
         item: String,
     },
+    /// Spans were computed, or a language pack installed or removed, so an
+    /// open diff may show more highlighting, or less.
+    #[serde(rename = "highlights.changed")]
+    HighlightsChanged,
 }

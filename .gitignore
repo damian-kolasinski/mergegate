@@ -7,3 +7,5 @@
 /ui/.build.lock
 /ui/test-results/
 /ui/playwright-report/
+/langs/.work/
+/langs/dist/

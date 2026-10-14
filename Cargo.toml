@@ -17,6 +17,7 @@ mergegate-core = { path = "crates/core" }
 git = { path = "crates/git", package = "mergegate-git" }
 backend-github = { path = "crates/backend-github", package = "mergegate-backend-github" }
 store-sqlite = { path = "crates/store-sqlite", package = "mergegate-store-sqlite" }
+highlight = { path = "crates/highlight", package = "mergegate-highlight" }
 hub = { path = "crates/hub", package = "mergegate-hub" }
 skill = { path = "crates/skill", package = "mergegate-skill" }
 testkit = { path = "crates/testkit", package = "mergegate-testkit" }
