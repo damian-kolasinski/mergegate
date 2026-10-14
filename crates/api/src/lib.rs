@@ -1,5 +1,6 @@
 //! Wire types shared by the CLI, the hub and the UI.
 
+pub mod attachment;
 pub mod decision;
 pub mod diff;
 pub mod doctor;
@@ -14,6 +15,7 @@ pub mod merge;
 pub mod project;
 pub mod resume;
 pub mod review;
+pub mod settings;
 pub mod viewed;
 
 /// Version of the HTTP API between `mg` and the hub. A CLI refuses to talk to

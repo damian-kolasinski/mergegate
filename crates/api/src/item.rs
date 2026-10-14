@@ -118,4 +118,6 @@ pub struct InboxItem {
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,
     pub link: Option<Link>,
+    /// Some revision has attachments.
+    pub demo: bool,
 }
