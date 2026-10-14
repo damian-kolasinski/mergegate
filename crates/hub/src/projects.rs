@@ -182,7 +182,6 @@ pub(crate) fn failure(e: ProjectError) -> Failure {
             "no_github_repo",
             Some(format!("mg project set {project} github OWNER/REPO")),
         ),
-        E::GithubInUse { .. } => (S::CONFLICT, "github_in_use", None),
         E::Github(_) => unreachable!("answered above"),
         E::NotFound(_) => (
             S::NOT_FOUND,

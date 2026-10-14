@@ -51,8 +51,8 @@ pub enum Changed {
 /// Applies `setting` to the project named `name`. Settings that point at a
 /// branch are checked against the repo, and the staging repo follows them.
 ///
-/// A new backend or target applies to new items only. While open items keep
-/// the old one, nothing changes until the caller `confirm`s, having been
+/// A new backend, GitHub repository or target applies to new items only.
+/// While open items keep the old one, nothing changes until the caller `confirm`s, having been
 /// told which items those are. Moving to `github` takes the repository from
 /// the `github` setting or the remotes, and GitHub must let the operator
 /// push to it.
@@ -91,29 +91,18 @@ pub fn set<S: ProjectStore + ItemStore>(
             if project.github.as_ref() == Some(&github_repo) {
                 return Ok(Changed::Project(project));
             }
-            let publishing: Vec<String> = store
-                .open_items(Some(&project.name))?
-                .into_iter()
-                .filter(|item| item.backend.kind() == Backend::Github)
-                .map(|item| item.id.to_string())
-                .collect();
-            if let Some(current) = &project.github
-                && !publishing.is_empty()
-            {
-                return Err(ProjectError::GithubInUse {
-                    repo: current.to_string(),
-                    items: publishing,
-                });
-            }
-            if project.backend == Backend::Github {
-                github.check_access(&github_repo)?;
-            }
-            project.github = Some(github_repo);
             if project.backend == Backend::Local {
                 // Nothing reads it until the backend moves to github.
+                project.github = Some(github_repo);
                 store.update_project(&project)?;
                 return Ok(Changed::Project(project));
             }
+            github.check_access(&github_repo)?;
+            let decision = keeping_github(store, &project, &github_repo)?;
+            if !confirm && let Some(decision) = decision {
+                return Ok(Changed::Decide(decision));
+            }
+            project.github = Some(github_repo);
         }
         Setting::Target(target) => {
             let repo = git.inspect(&project.upstream)?;
@@ -170,7 +159,7 @@ fn keeping_backend(
     let listed: Vec<String> = staying
         .iter()
         .map(|item| match &item.backend {
-            ItemBackend::Github { pull } => format!("{} ({}, {pull})", item.id, item.branch),
+            ItemBackend::Github { pull, .. } => format!("{} ({}, {pull})", item.id, item.branch),
             ItemBackend::Local => format!("{} ({})", item.id, item.branch),
         })
         .collect();
@@ -193,6 +182,42 @@ fn keeping_backend(
         question: format!(
             "{keep}: {}. New items will land {lands}. Switch?",
             listed.join(", ")
+        ),
+        flag: "--confirm".into(),
+        options: Vec::new(),
+        default: None,
+    }))
+}
+
+/// What to ask when open items would stay on another repository than the one
+/// new items publish to.
+fn keeping_github(
+    store: &impl ItemStore,
+    project: &Project,
+    github_repo: &GithubRepo,
+) -> Result<Option<Decision>, ProjectError> {
+    let staying: Vec<String> = store
+        .open_items(Some(&project.name))?
+        .into_iter()
+        .filter_map(|item| match &item.backend {
+            ItemBackend::Github { repo, pull } if repo != github_repo => {
+                Some(format!("{} ({}, {repo}{pull})", item.id, item.branch))
+            }
+            _ => None,
+        })
+        .collect();
+    let keep = match staying.len() {
+        0 => return Ok(None),
+        1 => "1 open item keeps its repository until it closes",
+        _ => &format!(
+            "{} open items keep their repositories until they close",
+            staying.len()
+        ),
+    };
+    Ok(Some(Decision {
+        question: format!(
+            "{keep}: {}. New items will publish to {github_repo}. Change it?",
+            staying.join(", ")
         ),
         flag: "--confirm".into(),
         options: Vec::new(),

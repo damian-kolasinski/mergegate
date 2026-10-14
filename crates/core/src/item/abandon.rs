@@ -5,7 +5,6 @@ use super::{Item, ItemBackend, ItemError, ItemGit, ItemId, ItemState, ItemStore}
 use crate::diff::DiffStore;
 use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::github::Github;
-use crate::project::{ProjectError, ProjectStore, find};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Abandon {
@@ -18,7 +17,7 @@ pub struct Abandon {
 /// who abandoned it and why from an `item.abandoned` event. A `github`
 /// item's pull request is closed and its branch deleted first; the item stays
 /// open if GitHub fails, so nothing is left behind there unnoticed.
-pub fn abandon<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
+pub fn abandon<S: ItemStore + DiffStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
     github: &impl Github,
@@ -31,13 +30,9 @@ pub fn abandon<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
     if !item.state.is_open() {
         return Err(ItemError::Closed(id));
     }
-    if let ItemBackend::Github { pull } = &item.backend {
-        let project = find(store, item.id.project().as_str())?;
-        let repo = project
-            .github
-            .ok_or(ProjectError::NoGithubSet(project.name))?;
-        github.close_pull(&repo, pull.number)?;
-        github.delete_branch(&repo, &item.branch)?;
+    if let ItemBackend::Github { repo, pull } = &item.backend {
+        github.close_pull(repo, pull.number)?;
+        github.delete_branch(repo, &item.branch)?;
     }
     let reason = reason
         .map(|r| r.trim().to_owned())

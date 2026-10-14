@@ -262,6 +262,7 @@ fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
         title: branch.into(),
         state: ItemState::NeedsReview,
         backend: ItemBackend::Github {
+            repo: GithubRepo::parse("acme/app").unwrap(),
             pull: Pull {
                 number: 7,
                 url: "https://github.com/acme/app/pull/7".into(),
@@ -371,7 +372,7 @@ fn switches_to_github_only_where_the_operator_can_push() {
 }
 
 #[test]
-fn sets_the_github_repo_until_items_publish_to_it() {
+fn sets_the_github_repo_for_new_items() {
     let git = git();
     let mut store = setup(&git);
     let acme = || Setting::Github(GithubRepo::parse("acme/app").unwrap());
@@ -386,11 +387,26 @@ fn sets_the_github_repo_until_items_publish_to_it() {
     change(&mut store, &git, "app", Setting::Backend(Backend::Github)).unwrap();
 
     github_item(&mut store, "login");
-    let mine = Setting::Github(GithubRepo::parse("me/app").unwrap());
-    let err = change(&mut store, &git, "app", mine).unwrap_err();
+    let mine = || Setting::Github(GithubRepo::parse("me/app").unwrap());
+    let github = FakeGithub::default();
+    let Changed::Decide(decision) = set(&mut store, &git, &github, "app", mine(), false).unwrap()
+    else {
+        panic!("applied without asking");
+    };
     assert_eq!(
-        err.to_string(),
-        "open items publish to acme/app: app#1; it can change once they close"
+        decision.question,
+        "1 open item keeps its repository until it closes: app#1 (login, acme/app#7). \
+         New items will publish to me/app. Change it?"
     );
+    assert_eq!(
+        store.projects().unwrap()[0].github,
+        GithubRepo::parse("acme/app")
+    );
+    let Changed::Project(project) = set(&mut store, &git, &github, "app", mine(), true).unwrap()
+    else {
+        panic!("asked again");
+    };
+    assert_eq!(project.github, GithubRepo::parse("me/app"));
+    // Back to the repository the item publishes to: nothing to ask.
     assert!(change(&mut store, &git, "app", acme()).is_ok());
 }

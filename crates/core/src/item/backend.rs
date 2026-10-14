@@ -1,11 +1,13 @@
-use crate::github::Pull;
+use crate::github::{GithubRepo, Pull};
 use crate::project::Backend;
 
 /// The backend an item lands through, and what the item has there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemBackend {
-    /// Opened or adopted by the item's first submit.
+    /// The repository the item was opened on, and its pull request there,
+    /// opened or adopted by its first submit.
     Github {
+        repo: GithubRepo,
         pull: Pull,
     },
     Local,

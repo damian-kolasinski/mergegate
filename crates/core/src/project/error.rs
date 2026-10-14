@@ -30,8 +30,6 @@ pub enum ProjectError {
     NoGithubRepo(PathBuf),
     #[error("project {0} has no GitHub repository set")]
     NoGithubSet(ProjectName),
-    #[error("open items publish to {repo}: {}; it can change once they close", items.join(", "))]
-    GithubInUse { repo: String, items: Vec<String> },
     #[error("no project named {0}")]
     NotFound(String),
     #[error("no project is registered for the repo at {}", .0.display())]

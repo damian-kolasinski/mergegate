@@ -128,12 +128,12 @@ fn holds_what_github_refuses_or_cant_be_asked() {
         "{reason}"
     );
 
-    let unlinked = Project {
-        github: None,
-        ..project
+    let local = Item {
+        backend: ItemBackend::Local,
+        ..item
     };
     let landing = GithubBackend::new(&git, &github)
-        .land(&unlinked, &item, "")
+        .land(&project, &local, "")
         .unwrap();
     assert_eq!(
         landing,

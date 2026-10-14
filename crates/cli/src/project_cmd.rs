@@ -38,7 +38,8 @@ pub enum ProjectCommand {
         project: String,
         key: String,
         value: String,
-        /// Apply even though open items keep the old backend or target
+        /// Apply even though open items keep the old backend, repository or
+        /// target
         #[arg(long)]
         confirm: bool,
     },

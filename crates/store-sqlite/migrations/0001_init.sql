@@ -22,8 +22,9 @@ CREATE TABLE projects (
 ) STRICT;
 
 -- Units of work submitted for review. `number` counts per project, as in
--- app#42. An item keeps the backend and target it was opened with; a GitHub
--- item has its pull request from its first submit on. `delivered` is the
+-- app#42. An item keeps the backend, GitHub repository and target it was
+-- opened with; a GitHub item has its pull request there from its first
+-- submit on. `delivered` is the
 -- cursor of the newest event the item's agent acknowledged.
 CREATE TABLE items (
     id          INTEGER PRIMARY KEY,
@@ -37,10 +38,12 @@ CREATE TABLE items (
     target      TEXT NOT NULL,
     created_at  TEXT NOT NULL,
     delivered   INTEGER NOT NULL DEFAULT 0,
+    github      TEXT,
     pull_number INTEGER CHECK (pull_number >= 1),
     pull_url    TEXT,
     UNIQUE (project_id, number),
-    CHECK ((backend = 'github') = (pull_number IS NOT NULL)),
+    CHECK ((backend = 'github') = (github IS NOT NULL)),
+    CHECK ((github IS NULL) = (pull_number IS NULL)),
     CHECK ((pull_number IS NULL) = (pull_url IS NULL))
 ) STRICT;
 

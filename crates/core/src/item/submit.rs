@@ -10,7 +10,7 @@ use crate::agent::{self, AgentStore};
 use crate::diff::{DiffGit, DiffStore};
 use crate::git::Upstream;
 use crate::github::Github;
-use crate::project::{ProjectStore, fetch_from, find};
+use crate::project::{Backend, ProjectError, ProjectStore, find};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submit {
@@ -88,10 +88,24 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
         }
         Some(_) => {}
     }
-    let backend = existing
-        .as_ref()
-        .map_or(project.backend, |item| item.backend.kind());
-    let upstream = fetch_from(&project, backend, github)?;
+    // An open item stays where it was opened, whatever the project says now.
+    let github_repo = match existing.as_ref().map(|item| &item.backend) {
+        Some(ItemBackend::Github { repo, .. }) => Some(repo.clone()),
+        Some(ItemBackend::Local) => None,
+        None => match project.backend {
+            Backend::Github => Some(
+                project
+                    .github
+                    .clone()
+                    .ok_or_else(|| ProjectError::NoGithubSet(project.name.clone()))?,
+            ),
+            Backend::Local => None,
+        },
+    };
+    let upstream = match &github_repo {
+        Some(repo) => Upstream::Remote(github.remote(repo)?),
+        None => Upstream::Repo(project.upstream.clone()),
+    };
     git.fetch_target(&project.name, &upstream, &target)?;
     let Some(base) = git.merge_base(&project.name, &head, &target)? else {
         return Err(ItemError::Unrelated { branch, target });
@@ -109,13 +123,13 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
             .filter(|subject| !subject.trim().is_empty())
             .unwrap_or_else(|| branch.clone()),
     };
-    let backend = match (&upstream, &project.github) {
-        (Upstream::Remote(remote), Some(repo)) => ItemBackend::Github {
-            pull: publish(
+    let backend = match (&upstream, github_repo) {
+        (Upstream::Remote(remote), Some(repo)) => {
+            let pull = publish(
                 git,
                 github,
                 &project.name,
-                (repo, remote),
+                (&repo, remote),
                 existing.as_ref(),
                 Revision {
                     branch: &branch,
@@ -123,8 +137,9 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
                     target: &target,
                     title: &title,
                 },
-            )?,
-        },
+            )?;
+            ItemBackend::Github { repo, pull }
+        }
         _ => ItemBackend::Local,
     };
     let revision = NewRevision { head, base, files };

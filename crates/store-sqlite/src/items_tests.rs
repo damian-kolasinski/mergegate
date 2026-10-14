@@ -110,6 +110,7 @@ fn keeps_a_github_items_pull_request() {
     web.github = GithubRepo::parse("acme/web");
     store.update_project(&web).unwrap();
     let backend = ItemBackend::Github {
+        repo: GithubRepo::parse("acme/web").unwrap(),
         pull: Pull {
             number: 12,
             url: "https://github.com/acme/web/pull/12".into(),

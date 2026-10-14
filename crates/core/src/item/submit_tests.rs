@@ -388,7 +388,7 @@ const GITHUB_APP: &str = "https://github.com/acme/app.git";
 
 fn pull_number(item: &Item) -> u64 {
     match &item.backend {
-        ItemBackend::Github { pull } => pull.number,
+        ItemBackend::Github { pull, .. } => pull.number,
         ItemBackend::Local => panic!("{} lands locally", item.id),
     }
 }
@@ -404,6 +404,7 @@ fn a_github_item_pushes_its_branch_and_opens_a_pull_request() {
     assert_eq!(
         item.backend,
         ItemBackend::Github {
+            repo: GithubRepo::parse("acme/app").unwrap(),
             pull: Pull {
                 number: 1,
                 url: "https://github.com/acme/app/pull/1".into(),
@@ -515,10 +516,7 @@ fn records_nothing_when_github_fails() {
     let github = FakeGithub::default().logged_out();
     let err = submit(&mut store, &git, &github, request("app", "login", 2)).unwrap_err();
     assert!(
-        matches!(
-            err,
-            ItemError::Project(ProjectError::Github(GithubError::NotLoggedIn(_)))
-        ),
+        matches!(err, ItemError::Github(GithubError::NotLoggedIn(_))),
         "{err:?}"
     );
     assert!(store.items().is_empty());
@@ -581,4 +579,34 @@ fn open_items_keep_their_backend_when_the_project_switches() {
     assert_eq!(item.backend, ItemBackend::Local);
     assert!(github.pulls().is_empty());
     assert_eq!(git.upstream_branch(GITHUB_APP, "login"), None);
+}
+
+#[test]
+fn open_items_keep_their_repo_when_the_project_moves() {
+    let (mut store, git) = on_github();
+    let github = FakeGithub::default();
+    git.push("app", "login", &commit(2));
+    submit(&mut store, &git, &github, request("app", "login", 2)).unwrap();
+    let app = Project {
+        backend: Backend::Github,
+        github: Some(GithubRepo::parse("me/app").unwrap()),
+        ..project("app", "/src/app", "main")
+    };
+    store.update_project(&app).unwrap();
+    let me_app = "https://github.com/me/app.git";
+    let git = git.upstream(me_app, "main", &commit(1));
+
+    git.push("app", "login", &commit(3));
+    let item = submit(&mut store, &git, &github, request("app", "login", 3))
+        .unwrap()
+        .item;
+    assert_eq!(pull_number(&item), 1);
+    assert_eq!(git.upstream_branch(GITHUB_APP, "login"), Some(commit(3)));
+    assert_eq!(git.upstream_branch(me_app, "login"), None);
+
+    git.push("app", "search", &commit(2));
+    submit(&mut store, &git, &github, request("app", "search", 2)).unwrap();
+    assert_eq!(git.upstream_branch(me_app, "search"), Some(commit(2)));
+    let repos: Vec<String> = github.pulls().iter().map(|p| p.repo.to_string()).collect();
+    assert_eq!(repos, ["acme/app", "me/app"]);
 }

@@ -32,7 +32,7 @@ pub(super) fn publish(
         title,
     } = revision;
     let open = existing.and_then(|item| match &item.backend {
-        ItemBackend::Github { pull } => Some((item, pull)),
+        ItemBackend::Github { pull, .. } => Some((item, pull)),
         ItemBackend::Local => None,
     });
     let pushed = open.map(|(item, _)| item.revision.head.as_str());

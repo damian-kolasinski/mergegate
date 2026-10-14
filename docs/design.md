@@ -178,7 +178,7 @@ mg skill install [--dir PATH]                            Write the agent skill a
 
 A repo with a GitHub remote is asked which backend to use (a `needs_decision`, defaulting to `github`); one without lands on `local`. The GitHub repository is origin's if origin is on github.com, else the only github.com remote, else a `needs_decision`; `--github` names it and implies `--backend github`. The hub checks that the operator can push to it before registering. A local project keeps its GitHub repository, so switching backends back and forth needs no flags.
 
-Changing a project's backend or target applies to new items. Open items keep their settings until they close, and the command lists them in its `needs_decision` so the operator knows.
+Changing a project's backend, GitHub repository or target applies to new items. Open items keep their settings until they close, and the command lists them in its `needs_decision` so the operator knows.
 
 ### 6.1 Authoring agent commands
 

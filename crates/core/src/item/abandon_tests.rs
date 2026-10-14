@@ -257,6 +257,13 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
         wake: None,
     };
     submit(&mut store, &git, &github, request).unwrap();
+    // The item still closes on the repository it was opened on.
+    store
+        .update_project(&Project {
+            github: GithubRepo::parse("me/app"),
+            ..store.projects().unwrap()[0].clone()
+        })
+        .unwrap();
 
     let logged_out = FakeGithub::default().logged_out();
     let err = abandon(

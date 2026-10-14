@@ -108,7 +108,7 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
 
 fn link(backend: &ItemBackend) -> Option<api::item::Link> {
     match backend {
-        ItemBackend::Github { pull } => Some(api::item::Link {
+        ItemBackend::Github { pull, .. } => Some(api::item::Link {
             label: pull.to_string(),
             title: "Pull request on GitHub".into(),
             url: pull.url.clone(),
