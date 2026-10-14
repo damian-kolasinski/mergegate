@@ -28,6 +28,11 @@ pub fn submit<S: ItemStore + ReviewStore>(
         .item(&id)?
         .ok_or_else(|| ReviewError::NoItem(id.clone()))?;
     reviewable(&item)?;
+    // An approval that didn't merge would leave the agent waiting on a merge
+    // that never comes.
+    if verdict == Verdict::Approved {
+        return Err(ReviewError::Approval);
+    }
     if revision == 0 || revision > item.revision.number {
         return Err(ReviewError::NoRevision { id, revision });
     }
@@ -40,7 +45,7 @@ pub fn submit<S: ItemStore + ReviewStore>(
     }
     let state = match verdict {
         Verdict::ChangesRequested => ItemState::ChangesRequested,
-        Verdict::Comment => item.state,
+        Verdict::Comment | Verdict::Approved => item.state,
     };
     let review = NewReview {
         item: id,

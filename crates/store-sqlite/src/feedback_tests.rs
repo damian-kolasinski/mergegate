@@ -126,6 +126,66 @@ fn a_notice_moves_the_item_and_reads_back_after_reviews() {
 }
 
 #[test]
+fn every_merge_notice_reads_back_as_written() {
+    let (_dir, mut store) = store();
+    let app = id("app#1");
+    store
+        .insert_review(
+            NewReview {
+                verdict: Verdict::Approved,
+                ..review("app#1", 2, "")
+            },
+            ItemState::Merging,
+        )
+        .unwrap();
+    let kinds = [
+        (
+            ItemState::Merging,
+            NoticeKind::MergeHeld {
+                reason: "main has changes".into(),
+            },
+        ),
+        (ItemState::NeedsReview, NoticeKind::MergeCancelled),
+        (
+            ItemState::ChangesRequested,
+            NoticeKind::MergeConflict {
+                target_commit: "b".repeat(40),
+                paths: vec!["README.md".into(), "src/a b.rs".into()],
+            },
+        ),
+        (
+            ItemState::ChangesRequested,
+            NoticeKind::MergeConflict {
+                target_commit: "b".repeat(40),
+                paths: Vec::new(),
+            },
+        ),
+        (
+            ItemState::Merged,
+            NoticeKind::Merged {
+                commit: "c".repeat(40),
+            },
+        ),
+    ];
+    let mut written = Vec::new();
+    for (state, kind) in kinds {
+        let notice = Notice {
+            revision: 2,
+            source: Source::Operator,
+            kind,
+        };
+        written.push(store.notify(&app, state, notice).unwrap());
+        assert_eq!(store.item(&app).unwrap().unwrap().state, state);
+    }
+    let events = store.events(&app, 0).unwrap();
+    let EventKind::ReviewSubmitted(approval) = &events[0].kind else {
+        panic!("{:?}", events[0]);
+    };
+    assert_eq!(approval.verdict, Verdict::Approved);
+    assert_eq!(events[1..], written);
+}
+
+#[test]
 fn a_notice_for_an_unknown_item_changes_nothing() {
     let (_dir, mut store) = store();
     let notice = Notice {

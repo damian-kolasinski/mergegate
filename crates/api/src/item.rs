@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::feedback::Source;
+use crate::merge::Blocked;
 use crate::project::Backend;
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -93,4 +94,6 @@ pub struct InboxItem {
     pub created_at: String,
     /// When the newest revision was submitted.
     pub updated_at: String,
+    /// Set while the newest revision's merge is held or conflicts.
+    pub blocked: Option<Blocked>,
 }

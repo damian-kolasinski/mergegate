@@ -103,13 +103,13 @@ fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
         events: read
             .events
             .into_iter()
-            .map(|e| event_to_api(id, e))
+            .map(|e| event_to_api(id, &read.item.target, e))
             .collect(),
         cursor: read.cursor,
     }
 }
 
-fn event_to_api(id: &ItemId, event: Event) -> api::feedback::Event {
+fn event_to_api(id: &ItemId, target: &str, event: Event) -> api::feedback::Event {
     let revision = event.revision();
     let source = source_to_api(event.source());
     let body = match event.kind {
@@ -121,6 +121,22 @@ fn event_to_api(id: &ItemId, event: Event) -> api::feedback::Event {
         },
         EventKind::Notice(notice) => match notice.kind {
             NoticeKind::Abandoned { reason } => api::feedback::EventBody::ItemAbandoned { reason },
+            NoticeKind::MergeHeld { reason } => api::feedback::EventBody::MergeHeld { reason },
+            NoticeKind::MergeCancelled => api::feedback::EventBody::MergeCancelled {},
+            NoticeKind::MergeConflict {
+                target_commit,
+                paths,
+            } => api::feedback::EventBody::MergeConflict {
+                target_commit,
+                paths,
+                // Run in the agent's worktree, whose `mergegate` remote
+                // `mg init` set up.
+                commands: vec![
+                    "git fetch mergegate".to_owned(),
+                    format!("git rebase mergegate/{target}"),
+                ],
+            },
+            NoticeKind::Merged { commit } => api::feedback::EventBody::ItemMerged { commit },
         },
     };
     api::feedback::Event {

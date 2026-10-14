@@ -17,6 +17,10 @@
   color: var(--text-primary);
 }
 
+.flag {
+  flex: none;
+}
+
 .figure {
   flex: none;
   width: 5em;

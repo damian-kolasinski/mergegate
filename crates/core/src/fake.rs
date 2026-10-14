@@ -12,6 +12,7 @@ use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
     NewRevision, Revision, Submit, submit,
 };
+use crate::merge::{Landing, MergeBackend};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
     Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
@@ -775,4 +776,49 @@ impl FeedbackStore for FakeStore {
 
 fn pair(old: Option<&str>, new: Option<&str>) -> BlobPair {
     (old.map(Into::into), new.map(Into::into))
+}
+
+/// A merge backend that lands the way the test scripted, oldest first, and
+/// lands everything after the script runs out as merged at c9.
+pub(crate) struct FakeBackend {
+    kind: Backend,
+    script: RefCell<Vec<Result<Landing, GitError>>>,
+    landed: RefCell<Vec<(String, String)>>,
+}
+
+impl FakeBackend {
+    pub fn new(kind: Backend) -> Self {
+        Self {
+            kind,
+            script: RefCell::default(),
+            landed: RefCell::default(),
+        }
+    }
+
+    pub fn then(self, landing: Result<Landing, GitError>) -> Self {
+        self.script.borrow_mut().push(landing);
+        self
+    }
+
+    /// The `(item, message)` of every land, oldest first.
+    pub fn landed(&self) -> Vec<(String, String)> {
+        self.landed.borrow().clone()
+    }
+}
+
+impl MergeBackend for FakeBackend {
+    fn kind(&self) -> Backend {
+        self.kind
+    }
+
+    fn land(&self, _project: &Project, item: &Item, message: &str) -> Result<Landing, GitError> {
+        self.landed
+            .borrow_mut()
+            .push((item.id.to_string(), message.to_owned()));
+        let mut script = self.script.borrow_mut();
+        if script.is_empty() {
+            return Ok(Landing::Merged { commit: commit(9) });
+        }
+        script.remove(0)
+    }
 }

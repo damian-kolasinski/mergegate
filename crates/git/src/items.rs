@@ -148,7 +148,7 @@ impl ItemGit for HubGit {
 }
 
 impl HubGit {
-    fn git_dir(&self, project: &ProjectName) -> OsString {
+    pub(crate) fn git_dir(&self, project: &ProjectName) -> OsString {
         let mut git_dir = OsString::from("--git-dir=");
         git_dir.push(self.staging(project));
         git_dir

@@ -56,6 +56,25 @@ pub enum EventBody {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// The approved revision didn't land; the item waits in Merging for the
+    /// operator to retry or cancel. `reason` is git's.
+    #[serde(rename = "merge.held")]
+    MergeHeld { reason: String },
+    /// The operator gave up on the held merge; the item needs review again.
+    #[serde(rename = "merge.cancelled")]
+    MergeCancelled {},
+    /// The approved revision conflicts with the target at `target_commit`,
+    /// so the item is back with its agent, who runs `commands` in its
+    /// worktree to rebase, then submits again.
+    #[serde(rename = "merge.conflict")]
+    MergeConflict {
+        target_commit: String,
+        paths: Vec<String>,
+        commands: Vec<String>,
+    },
+    /// The approved revision landed on the target as `commit`.
+    #[serde(rename = "item.merged")]
+    ItemMerged { commit: String },
 }
 
 /// Which events end a wait; `for` on the feedback route.

@@ -84,8 +84,9 @@ Principles
 - **Git moves the code; the hub API handles coordination.** The hub is a git remote (`mergegate`). `mg submit` pushes commits to it and then registers the revision via the API. The hub never reaches into a worker's filesystem.
 - **One code path for both backends.** Code always arrives at the hub's *staging* bare repo the same way. It is the hub's private workspace, so the daemon never touches the operator's working tree while you work.
 - **Where code lands depends on the backend.** The project's *upstream* is either GitHub (`github`) or the operator's existing repo on the hub machine (`local`).
-  - `github`: the hub pushes the branch to GitHub and opens or updates the PR. Merging uses the GitHub API.
-  - `local`: the hub merges in staging (`git merge-tree`, no working tree needed), then pushes the result to the operator's repo with `receive.denyCurrentBranch=updateInstead` semantics. If the target branch is checked out and clean, the checkout fast-forwards in place. If it has uncommitted changes, the merge is held and the UI says why. Nothing is ever force-updated.
+  - `github`: the hub pushes the branch to GitHub and opens or updates the PR. Merging squashes through the GitHub API.
+  - `local`: the hub squashes the item in staging (`git merge-tree`, no working tree needed), then pushes that one commit to the operator's repo with `receive.denyCurrentBranch=updateInstead` semantics. If the target branch is checked out and clean, the checkout fast-forwards in place. If it has uncommitted changes, the merge is held and the UI says why. Nothing is ever force-updated.
+- **Every item lands as one squash commit** on the target, on both backends: authored and committed by the operator (their repo's `user.name` and `user.email`), with the subject `<title> (app#42)`. Nothing in it names an agent. Since git doesn't see the item's branch as merged afterwards, agents delete it with `git branch -D`.
 - **Workers take the target from the hub.** `git fetch mergegate` returns the latest target (mirrored from the upstream), so new worktrees start from what was actually merged. The hub re-fetches the target from the upstream before every fetch and submit, so a worker's push to it doesn't stick.
 - **Every revision is pinned.** The hub keeps each revision's head at `refs/mergegate/items/<n>/r<rev>`, hidden from workers' pushes and fetches, so a force-push to the branch can't drop the commits an older revision points at.
 - **Diffs are computed on the hub** from staging: the merge-base against the target (or the parent revision for a stacked item, §5.1), and interdiffs between revisions.
@@ -119,10 +120,12 @@ Principles
 
 - **Items are numbered per project** (`app#42`), with one open item per project and branch. A new revision puts the item back in *needs review*, whatever open state it was in.
 - External review runs **in parallel** with operator review, mirroring today's workflow. Items enter *needs review* immediately; external comments and the agent's responses appear as they come in.
-- **Approve means merge.** There's no CI to wait for, so an approval merges right away (a stacked item right after its parent, §5.1). If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries.
+- **Approve means merge.** There's no CI to wait for, so an approval merges right away (a stacked item right after its parent, §5.1). If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event that names the paths and the commands to rebase. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries; nothing retries on its own. The operator can cancel a held merge instead, which puts the item back in *needs review*, as a new revision does.
+- **The agent hears every operator action on its item:** the approval (`review.submitted` with verdict `approved`), a hold (`merge.held`, so it doesn't push over an approval), a cancelled hold (`merge.cancelled`), the merge (`item.merged`, with the squash commit) and an abandon (`item.abandoned`, with who and why).
+- **A merge cut short by a restart** leaves the item in *merging*, where Retry runs it again. If the push had landed, the merged tree equals the target's and the item closes as merged at the target commit.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
 - Conflicts are detected early: the hub test-merges every open item whenever the target moves, and sends conflicts to the authoring agent before the operator gets to the item.
-- **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins and deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
+- **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins (a merged item keeps its newest revision's) and deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history and that pin, which a squash needs when it auto-merged a file the target also changed; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
 
 ### 5.1 Stacked items
 
@@ -243,7 +246,7 @@ mg rules list | propose ... | show <id>                See §7.3.
 
 The cursor is the event's position in the item's log, and comment IDs are hub-wide. A comment anchors to a line range on one side of a file in one revision and quotes the last few of its lines, so the agent needn't open the file to know what it means. Comments are on lines only; a whole-file remark goes in the review's summary. `replies` are the operator's answers to the agent's replies on earlier comments. Only events the agent acts on enter the log; its own submits and replies don't.
 
-Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.conflict`, `item.merged`, `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
+Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
 
 ### 6.4 Push extension point
 
@@ -333,7 +336,7 @@ Any hosted provider sees diff content, so it's opt-in per project. Judge results
 | External comments | Hub polls PR comments (bots and humans) → `external.comments` events | n/a |
 | Operator comments | Local only | Local only |
 | Agent replies | Local only, shown next to each comment | Local only |
-| Merge | GitHub merge API (configurable strategy) | Merge in staging, push to the operator's repo (`updateInstead`) |
+| Merge | Squash through the GitHub merge API | Squash in staging, push to the operator's repo (`updateInstead`) |
 | Stacked item | PR targets the parent's branch; retargeted to the target after the parent merges | Merged in staging after its parent |
 
 The only things mergegate writes to GitHub are branches, PRs and merges. Agent replies stay in mergegate, which keeps the GitHub thread clean for human reviewers there.
@@ -400,6 +403,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
 - **Demo panel** at the top for screenshots and recordings attached with `mg submit --attach`.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.
+- **Approve & merge** asks first, showing how many files are still unviewed without blocking on them; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge shows the upstream's reason under the header with Retry and Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.
 - **Replies thread under each comment:** the agent's, with their status (addressed in rN, rejected, question), and yours, drafted like comments and sent with the next review. "Addressed in rN" is the first revision submitted after the reply. Replies show as they arrive: the UI's stream carries `item.changed` pings and the screen rereads the item's conversation, as it does on reconnect.
 - **Conversation list** in the header: every comment as `path:line @rN` with its latest status and replies. A comment shows inline only on the revision it was written on until it is re-mapped, so older ones are answered here.
 - **New revision mid-review:** a banner appears. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
@@ -448,5 +452,6 @@ Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` wi
 | 8 | Worker auth | Tailscale identity: same-owner devices trusted automatically, others via `mg hub allow`. Tokens only as a fallback. |
 | 9 | Agent integration | One generic skill. Each agent waits with its best native mechanism, chosen by capability. |
 | 10 | File groups | Two: `review` (ordered by importance) and `trusted` (hidden, rules only). No skim tier. |
+| 11 | Merge strategy | Squash, on both backends: one commit per item, authored by the operator (§4). |
 
 No open UX questions remain. Tech stack decisions are in [tech-stack.md](tech-stack.md).

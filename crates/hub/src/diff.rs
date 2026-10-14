@@ -15,7 +15,7 @@ use mergegate_core::item::{self, DiffedFile, ItemId};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{conversation, items, projects};
+use crate::{conversation, items, merge, projects};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -33,11 +33,17 @@ async fn show(
     let found = {
         let id = id.clone();
         state
-            .blocking(move |store, git| item::item_diff(store, git, &id))
+            .blocking(move |store, git| {
+                let Some(diff) = item::item_diff(store, git, &id)? else {
+                    return Ok(None);
+                };
+                let blocked = merge::blocked(store, &diff.item)?;
+                Ok(Some((diff, blocked)))
+            })
             .await
             .map_err(items::failure)?
     };
-    let diff = found.ok_or_else(|| {
+    let (diff, blocked) = found.ok_or_else(|| {
         Failure::new(
             StatusCode::NOT_FOUND,
             "item_not_found",
@@ -47,6 +53,7 @@ async fn show(
     })?;
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
+        blocked,
         files: diff.files.into_iter().map(file_to_api).collect(),
         conversation: conversation::to_api(&diff.conversation),
     }))
