@@ -106,3 +106,38 @@ fn warns_when_there_is_no_list() {
     );
     assert!(Guide::parse("").warnings("", &[]).is_empty());
 }
+
+#[test]
+fn reads_a_numbered_list() {
+    let guide = Guide::parse("## Files\n1. `b.rs` — first\n2) `a.rs`\n10. `c.rs`\n");
+    assert_eq!(
+        files(&guide),
+        [("b.rs", Some("first")), ("a.rs", None), ("c.rs", None)]
+    );
+}
+
+#[test]
+fn a_sub_bullet_adds_to_the_reason_above() {
+    let guide = Guide::parse(
+        "## Files\n- `auth.rs` — the token check\n  - `refresh()` retries once\n- `b.rs`\n",
+    );
+    assert_eq!(
+        files(&guide),
+        [
+            (
+                "auth.rs",
+                Some("the token check - `refresh()` retries once")
+            ),
+            ("b.rs", None),
+        ]
+    );
+    assert_eq!(guide.warnings("", &[]).len(), 2);
+}
+
+#[test]
+fn a_refused_bullets_wrapped_text_belongs_to_no_file() {
+    let guide = Guide::parse(
+        "## Files\n- `a.rs` — x\n- `a.rs` again\n  more\n- no path\n  still none\nProse.\n  not a reason\n",
+    );
+    assert_eq!(files(&guide), [("a.rs", Some("x"))]);
+}

@@ -51,6 +51,7 @@ crates/
   backend-github/
   backend-local/
   store-sqlite/
+  rules-toml/            RulesFile port impl: reads and writes the operator's rules.toml
   highlight/             tree-sitter + WASM grammar loader + language manager
   judge-anthropic/  judge-openai/  judge-command/  judge-jev/
   auth-tailscale/  auth-token/
@@ -61,13 +62,13 @@ crates/
 ui/
   app/                   entry point, routing, hub client, keyboard map
   design-system/         tokens, primitives
-  inbox/  item/          one directory per screen
+  inbox/  item/  rules/  one directory per screen
   diff-view/             wraps @pierre/diffs' CodeView; fed the hub's hunks
   tests/                 Playwright against the real hub
 langs/                   language pack builder: pinned grammars, queries, build.mjs
 ```
 
-Ports (traits in `core`): `Git`, `Backend`, `Store`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
+Ports (traits in `core`): `Git`, `Backend`, `Store`, `RulesFile`, `Highlighter`, `Judge`, `FileRanker`, `ItemRanker`, `Auth`, `Clock`.
 
 - **The lasting layout and boundary rules live in the `architecture` skill** (`.claude/skills/architecture`). Slice-specific decisions stay in this doc until the slice is implemented; after that the code is the reference and the section can be removed.
 - **Boundaries are enforced by the crate graph.** `core` may not depend on I/O crates or on any other workspace crate, `api` included; a test in CI (`crates/testkit/tests/boundaries.rs`) fails the build if it does. `core` has its own domain types; `hub` and `cli` map them to the wire types in `api`. Adapters depend on `core` and `api` only, never on each other.

@@ -23,12 +23,16 @@ pub struct GuideFile {
 
 impl Guide {
     /// Reads the bullets of `text`'s `## Files` section, as in
-    /// `` - `src/auth.rs` — the token check moved here ``. Anything else in
-    /// the text is for the operator to read and ignored here.
+    /// `` - `src/auth.rs` — the token check moved here `` or numbered as
+    /// `` 1. `src/auth.rs` ``. Anything else in the text is for the operator
+    /// to read and ignored here.
     pub fn parse(text: &str) -> Self {
         let mut guide = Self::default();
         let mut in_files = false;
         let mut fenced = false;
+        // The bullet indented lines continue: `Some(None)` under one that
+        // was refused, whose wrapped text belongs to no file.
+        let mut open: Option<Option<usize>> = None;
         for line in text.lines() {
             let trimmed = line.trim_start();
             if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
@@ -41,27 +45,30 @@ impl Guide {
             if let Some(title) = heading(trimmed) {
                 in_files = trimmed.starts_with("## ") && title.eq_ignore_ascii_case("files");
                 guide.listed |= in_files;
+                open = None;
                 continue;
             }
             if !in_files || trimmed.is_empty() {
                 continue;
             }
-            let Some(bullet) = ["- ", "* ", "+ "]
-                .iter()
-                .find_map(|marker| trimmed.strip_prefix(marker))
-            else {
-                // A wrapped reason continues on an indented line.
-                if line.starts_with([' ', '\t'])
-                    && let Some(last) = guide.files.last_mut()
-                {
-                    let reason = last.reason.get_or_insert_with(String::new);
+            // A wrapped reason or a sub-bullet adds to the bullet above.
+            if line.starts_with([' ', '\t'])
+                && let Some(current) = open
+            {
+                if let Some(file) = current.map(|i| &mut guide.files[i]) {
+                    let reason = file.reason.get_or_insert_with(String::new);
                     if !reason.is_empty() {
                         reason.push(' ');
                     }
                     reason.push_str(trimmed.trim_end());
                 }
                 continue;
+            }
+            let Some(bullet) = bullet(trimmed) else {
+                open = None;
+                continue;
             };
+            open = Some(None);
             let Some((path, rest)) = bullet
                 .strip_prefix('`')
                 .and_then(|rest| rest.split_once('`'))
@@ -85,6 +92,7 @@ impl Guide {
                     rest.strip_prefix(separator).unwrap_or(rest)
                 })
                 .trim();
+            open = Some(Some(guide.files.len()));
             guide.files.push(GuideFile {
                 path,
                 reason: (!reason.is_empty()).then(|| reason.to_owned()),
@@ -134,6 +142,22 @@ impl Guide {
         }
         warnings
     }
+}
+
+/// What follows a list item's marker: `-`, `*`, `+`, or a number with `.`
+/// or `)`, since an ordered list is the natural way to write an order.
+fn bullet(line: &str) -> Option<&str> {
+    let rest = ["- ", "* ", "+ "]
+        .iter()
+        .find_map(|marker| line.strip_prefix(marker));
+    rest.or_else(|| {
+        let digits = line.bytes().take_while(u8::is_ascii_digit).count();
+        let rest = &line[digits..];
+        (digits > 0)
+            .then(|| rest.strip_prefix(". ").or_else(|| rest.strip_prefix(") ")))
+            .flatten()
+    })
+    .map(str::trim_start)
 }
 
 /// The title of an ATX heading, as in `## Files`.
