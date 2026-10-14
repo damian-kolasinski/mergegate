@@ -758,6 +758,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-imara-diff"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c48eccd894bd15555b0346470e63491ded94aefe76b3fcb1052084b5a393238"
+dependencies = [
+ "bstr",
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "gix-lock"
 version = "26.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1544,6 +1554,7 @@ dependencies = [
 name = "mergegate-core"
 version = "0.1.0"
 dependencies = [
+ "gix-imara-diff",
  "thiserror",
 ]
 
