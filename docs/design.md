@@ -122,6 +122,7 @@ Principles
 - **Approve means merge.** There's no CI to wait for, so an approval merges right away (a stacked item right after its parent, §5.1). If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
 - Conflicts are detected early: the hub test-merges every open item whenever the target moves, and sends conflicts to the authoring agent before the operator gets to the item.
+- **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins and deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
 
 ### 5.1 Stacked items
 
@@ -362,28 +363,33 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 │ │ Retries once on 401 using refresh token…  │ │ [▶ recording.mp4] [img] [img]   │ │
 │ │ Risk: logout race. Self-review: …         │ └─────────────────────────────────┘ │
 │ └───────────────────────────────────────────┘                                     │
-├─ Files ───────────────────────┬─ Sources/Auth/TokenStore.swift ───────────────────┤
-│ REVIEW                        │  85   func refresh() async throws {               │
-│ ☐ TokenStore.swift            │  86 +   guard !isLoggingOut else { return }       │
-│   ↳ core logic, logout race   │  87 +   let t = try await api.refresh(…)          │
-│ ☐ APIClient.swift             │  88 +   store(t)                                  │
-│   ↳ retry policy              │     ┌ codex-bot ─────────────────────────────────┐│
-│ ☐ TokenStoreTests.swift       │     │ store() can run after logout completes.    ││
-│ ☐ Localizable+Plural.swift    │     │ agent: rejected r2 — "guarded on line 86"  ││
-│ TRUSTED (14) auto-viewed ▸    │     │ [agree] [override → must fix]              ││
+├─ Files · 0/18 viewed ─────────┬─ Diff ────────────────────────────────────────────┤
+│ REVIEW                        │ Sources/Auth/TokenStore.swift ──────────────── +3 │
+│ ☐ TokenStore.swift            │  85   func refresh() async throws {               │
+│   ↳ core logic, logout race   │  86 +   guard !isLoggingOut else { return }       │
+│ ☐ APIClient.swift             │  87 +   let t = try await api.refresh(…)          │
+│   ↳ retry policy              │  88 +   store(t)                                  │
+│ ☐ TokenStoreTests.swift       │     ┌ codex-bot ─────────────────────────────────┐│
+│ ☐ Localizable+Plural.swift    │     │ store() can run after logout completes.    ││
+│ TRUSTED (14) auto-viewed ▸    │     │ agent: rejected r2 — "guarded on line 86"  ││
+│                               │     │ [agree] [override → must fix]              ││
 │                               │     └────────────────────────────────────────────┘│
+│                               │  ⋯ 40 unmodified lines                            │
+│                               │ Sources/Net/APIClient.swift ────────────── +12 −4 │
+│                               │  31   func send(_ r: Request) async throws {      │
 ├───────────────────────────────┴───────────────────────────────────────────────────┤
 │ 2 draft comments            [Comment]  [Request changes]  [Approve & merge]       │
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+- **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A viewed file collapses to its header and counts toward the viewed total.
 - **Revision selector** defaults to "since last review": you see the interdiff only. A file that hasn't changed since you marked it viewed stays viewed.
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open). You can agree, or override a rejection. An override becomes your comment and an event for the agent. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
 - **Demo panel** at the top for screenshots and recordings attached with `mg submit --attach`.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event.
 - **New revision mid-review:** a banner appears. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
-- Keyboard: `n/p` file, `]/[` hunk, `v` viewed, `c` comment, `a` approve, `r` request changes.
+- Keyboard: `n/p` file, `]/[` hunk, `j/k` line, `v` viewed (and on to the next file), `Escape` back to the inbox, `c` comment on the line, `a` approve, `r` request changes.
 
 ## 10. Prioritization
 

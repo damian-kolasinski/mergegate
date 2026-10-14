@@ -14,9 +14,26 @@ export class HubError extends Error {
 
 /** `GET`s a hub endpoint. The UI is served by the hub, so paths are relative. */
 export async function getJson<T>(path: string): Promise<T> {
+  return (await send(path, { headers: { accept: "application/json" } })) as T;
+}
+
+/** `PUT`s `body` to a hub endpoint that answers with no content. */
+export async function putJson(path: string, body: unknown): Promise<void> {
+  await send(path, {
+    method: "PUT",
+    // The hub refuses a change without it, which a cross-site page can't add.
+    headers: { "content-type": "application/json", [clientHeader]: "ui" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** `api::CLIENT_HEADER`. */
+const clientHeader = "x-mergegate-client";
+
+async function send(path: string, init: RequestInit): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(path, { headers: { accept: "application/json" } });
+    response = await fetch(path, init);
   } catch {
     throw new HubError("The hub isn't running.", "hub_unreachable");
   }
@@ -28,7 +45,7 @@ export async function getJson<T>(path: string): Promise<T> {
       error?.code ?? "unexpected_response",
     );
   }
-  return body as T;
+  return body;
 }
 
 type Listener = () => void;

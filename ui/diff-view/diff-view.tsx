@@ -1,5 +1,5 @@
 import { CodeView, type CodeViewDiffItem } from "@pierre/diffs";
-import { createEffect, onCleanup, onMount } from "solid-js";
+import { createEffect, onCleanup, onMount, untrack } from "solid-js";
 import type { File } from "../api/File";
 import styles from "./diff-view.module.css";
 import { type Row, toFileDiff } from "./patch";
@@ -20,6 +20,8 @@ export type DiffViewControl = {
  */
 export function DiffView(props: {
   files: readonly File[];
+  /** Paths shown collapsed to their header. */
+  viewed: ReadonlySet<string>;
   /** Where a blob's bytes are, for expanding gaps. */
   blobUrl: (id: string) => string;
   /** The file at the top of the view, as it scrolls. */
@@ -30,6 +32,7 @@ export function DiffView(props: {
 }) {
   let root!: HTMLDivElement;
   const byPath = new Map<string, File>();
+  const items = new Map<string, CodeViewDiffItem>();
   const view = new CodeView({
     diffStyle: "unified",
     stickyHeaders: true,
@@ -55,6 +58,7 @@ export function DiffView(props: {
       };
     },
     renderHeaderMetadata: (diff) => {
+      if (items.get(diff.name)?.collapsed) return "Viewed";
       switch (byPath.get(diff.name)?.content.kind) {
         case "binary":
           return "Binary file not shown";
@@ -78,16 +82,34 @@ export function DiffView(props: {
 
   createEffect(() => {
     byPath.clear();
-    for (const file of props.files) byPath.set(file.path, file);
-    view.setItems(
-      props.files.map(
-        (file): CodeViewDiffItem => ({
-          id: file.path,
-          type: "diff",
-          fileDiff: toFileDiff(file),
-        }),
-      ),
-    );
+    items.clear();
+    const viewed = untrack(() => props.viewed);
+    for (const file of props.files) {
+      byPath.set(file.path, file);
+      items.set(file.path, {
+        id: file.path,
+        type: "diff",
+        fileDiff: toFileDiff(file),
+        collapsed: viewed.has(file.path),
+      });
+    }
+    view.setItems([...items.values()]);
+  });
+
+  // Only the files whose mark changed render again.
+  createEffect(() => {
+    const viewed = props.viewed;
+    for (const item of items.values()) {
+      const collapsed = viewed.has(item.id);
+      if (item.collapsed === collapsed) continue;
+      const changed = {
+        ...item,
+        collapsed,
+        version: (item.version ?? 0) + 1,
+      };
+      items.set(item.id, changed);
+      view.updateItem(changed);
+    }
   });
 
   onMount(() => {
