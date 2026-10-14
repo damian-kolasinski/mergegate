@@ -1,5 +1,6 @@
 //! `mg`: the mergegate CLI, and the hub it starts. Composition root of the CLI.
 
+mod abandon_cmd;
 mod client;
 mod doctor_cmd;
 mod feedback_cmd;
@@ -99,6 +100,14 @@ enum Command {
         #[arg(long)]
         body: Option<String>,
     },
+    /// Close an item without merging it; its pinned revisions and diffs go
+    Abandon {
+        /// The item, as in app#42
+        item: String,
+        /// Why, for the operator
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Open items: those waiting for review, with their agents, merging
     Inbox,
     /// Check that the hub, git and every project are set up to work
@@ -134,6 +143,7 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             status,
             body,
         } => reply_cmd::run(comment, status, body),
+        Command::Abandon { item, reason } => abandon_cmd::run(item, reason),
         Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),
     }

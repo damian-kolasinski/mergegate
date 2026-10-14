@@ -42,8 +42,9 @@ impl ReviewStore for Store {
         )
         .map_err(StoreError::new)?;
         tx.execute(
-            "INSERT INTO events (item_id, type, review_id) VALUES (?1, 'review.submitted', ?2)",
-            params![item_id, id],
+            "INSERT INTO events (item_id, type, revision, source, review_id)
+             VALUES (?1, 'review.submitted', ?2, 'operator', ?3)",
+            params![item_id, review.revision, id],
         )
         .map_err(StoreError::new)?;
         comments::attach(&tx, item_id, id)?;

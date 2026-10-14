@@ -118,6 +118,33 @@ impl ItemGit for HubGit {
         )?;
         Ok(())
     }
+
+    fn unpin(&self, project: &ProjectName, prefix: &str) -> Result<(), GitError> {
+        let git_dir = self.git_dir(project);
+        let refs = run(
+            &self.home,
+            &format!("listing {prefix}"),
+            [
+                git_dir.as_os_str(),
+                arg("for-each-ref"),
+                arg("--format=%(refname)"),
+                arg(prefix),
+            ],
+        )?;
+        for reference in refs.lines() {
+            run(
+                &self.home,
+                &format!("unpinning {reference}"),
+                [
+                    git_dir.as_os_str(),
+                    arg("update-ref"),
+                    arg("-d"),
+                    arg(reference),
+                ],
+            )?;
+        }
+        Ok(())
+    }
 }
 
 impl HubGit {

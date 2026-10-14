@@ -30,10 +30,13 @@ pub struct Event {
     pub body: EventBody,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     Operator,
+    /// The item's own agent, through `mg`.
+    Agent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +49,12 @@ pub enum EventBody {
         comments: Vec<Comment>,
         /// The operator's answers on comments earlier reviews sent.
         replies: Vec<Reply>,
+    },
+    /// The item closed without merging; `source` says who closed it.
+    #[serde(rename = "item.abandoned")]
+    ItemAbandoned {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
     },
 }
 

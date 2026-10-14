@@ -1,4 +1,6 @@
 use mergegate_core::diff::compute;
+use mergegate_core::item::{ChangedFile, FileStat, ItemState, ItemStore, NewItem, NewRevision};
+use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 
 use super::*;
 
@@ -79,4 +81,83 @@ fn rejects_a_malformed_body() {
     ] {
         assert!(decode(body).is_err(), "{body:?}");
     }
+}
+
+/// A file of a revision, by its blob pair.
+fn changed(old: Option<&str>, new: &str) -> FileStat {
+    FileStat {
+        file: ChangedFile {
+            path: format!("{new}.rs"),
+            old_path: None,
+            old_blob: old.map(Into::into),
+            new_blob: Some(new.into()),
+        },
+        additions: None,
+        deletions: None,
+    }
+}
+
+fn revision(files: Vec<FileStat>) -> NewRevision {
+    NewRevision {
+        head: "a".repeat(40),
+        base: "0".repeat(40),
+        files,
+    }
+}
+
+#[test]
+fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
+    let (_dir, mut store) = store();
+    store
+        .insert_project(&Project {
+            name: ProjectName::parse("app").unwrap(),
+            backend: Backend::Local,
+            target: "main".into(),
+            upstream: "/src/app".into(),
+        })
+        .unwrap();
+    let item = |branch: &str, files| NewItem {
+        project: ProjectName::parse("app").unwrap(),
+        branch: branch.into(),
+        title: branch.into(),
+        state: ItemState::NeedsReview,
+        backend: Backend::Local,
+        target: "main".into(),
+        revision: revision(files),
+    };
+    // app#1 has `a`, then `b` and `c`; app#2 (open) has `b`; app#3 (merged) `c`.
+    let one = store
+        .insert_item(item("one", vec![changed(Some("x"), "a")]))
+        .unwrap();
+    let files = vec![changed(None, "b"), changed(Some("x"), "c")];
+    store
+        .add_revision(&one.id, "one", ItemState::NeedsReview, revision(files))
+        .unwrap();
+    store
+        .insert_item(item("two", vec![changed(None, "b")]))
+        .unwrap();
+    let three = store
+        .insert_item(item("three", vec![changed(Some("x"), "c")]))
+        .unwrap();
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged' WHERE number = 3", [])
+        .unwrap();
+    for (old, new) in [(Some("x"), "a"), (None, "b"), (Some("x"), "c"), (None, "z")] {
+        store
+            .insert_diff(old, Some(new), &FileDiff::binary())
+            .unwrap();
+    }
+
+    // Pruning ignores the item's own state, as it runs while it closes.
+    store.prune_diffs(&one.id).unwrap();
+    let kept =
+        |store: &Store, old: Option<&str>, new| store.diff(old, Some(new)).unwrap().is_some();
+    assert!(!kept(&store, Some("x"), "a"));
+    assert!(kept(&store, None, "b"));
+    assert!(!kept(&store, Some("x"), "c"));
+    assert!(kept(&store, None, "z"), "not any item's");
+    store.prune_diffs(&three.id).unwrap();
+    store.prune_diffs(&ItemId::parse("app#9").unwrap()).unwrap();
+    assert!(kept(&store, None, "b"));
 }

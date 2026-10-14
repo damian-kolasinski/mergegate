@@ -6,11 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::diff::{DiffGit, DiffStore, FileDiff};
-use crate::feedback::{Event, EventKind, FeedbackStore};
+use crate::feedback::{Event, EventKind, FeedbackStore, Notice};
 use crate::git::{Git, GitError, Repo};
 use crate::item::{
-    ChangedFile, DiffStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem, NewRevision,
-    Revision, Submit, submit,
+    ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
+    NewRevision, Revision, Submit, submit,
 };
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
@@ -34,6 +34,7 @@ pub(crate) struct FakeGit {
     repos: Vec<Repo>,
     version: Option<String>,
     fail_sync: bool,
+    fail_unpin: bool,
     /// Commits of every repo, by ID. Each has at most one parent.
     commits: BTreeMap<String, Commit>,
     upstream: BTreeMap<(PathBuf, String), String>,
@@ -50,6 +51,7 @@ impl Default for FakeGit {
             repos: Vec::new(),
             version: Some("git version 2.50.1".into()),
             fail_sync: false,
+            fail_unpin: false,
             commits: BTreeMap::new(),
             upstream: BTreeMap::new(),
             staging: RefCell::default(),
@@ -86,6 +88,11 @@ impl FakeGit {
 
     pub fn failing_sync(mut self) -> Self {
         self.fail_sync = true;
+        self
+    }
+
+    pub fn failing_unpin(mut self) -> Self {
+        self.fail_unpin = true;
         self
     }
 
@@ -305,6 +312,14 @@ impl ItemGit for FakeGit {
             .insert(reference.into(), commit.into());
         Ok(())
     }
+
+    fn unpin(&self, _project: &ProjectName, prefix: &str) -> Result<(), GitError> {
+        if self.fail_unpin {
+            return Err(GitError::Failed("update-ref failed".into()));
+        }
+        self.pins.borrow_mut().retain(|r, _| !r.starts_with(prefix));
+        Ok(())
+    }
 }
 
 impl DiffGit for FakeGit {
@@ -327,7 +342,7 @@ pub(crate) struct FakeStore {
     projects: BTreeMap<ProjectName, Project>,
     /// Oldest first.
     items: Vec<Item>,
-    files: BTreeMap<(ItemId, u32), Vec<ChangedFile>>,
+    files: BTreeMap<(ItemId, u32), Vec<FileStat>>,
     diffs: BTreeMap<BlobPair, FileDiff>,
     viewed: BTreeSet<(ItemId, u32, String)>,
     reviews: Vec<Review>,
@@ -409,8 +424,8 @@ impl FakeStore {
     }
 
     fn revision(&mut self, id: &ItemId, number: u32, revision: NewRevision) -> Revision {
-        let files = revision.files.iter().map(|f| f.file.clone()).collect();
-        self.files.insert((id.clone(), number), files);
+        self.files
+            .insert((id.clone(), number), revision.files.clone());
         Revision {
             number,
             stat: DiffStat::of(&revision.files),
@@ -473,7 +488,7 @@ impl ItemStore for FakeStore {
         Ok(self.items.iter().find(|i| i.id == *id).cloned())
     }
 
-    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<ChangedFile>, StoreError> {
+    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<FileStat>, StoreError> {
         Ok(self
             .files
             .get(&(id.clone(), revision))
@@ -539,6 +554,26 @@ impl DiffStore for FakeStore {
         diff: &FileDiff,
     ) -> Result<(), StoreError> {
         self.diffs.insert(pair(old, new), diff.clone());
+        Ok(())
+    }
+
+    fn prune_diffs(&mut self, id: &ItemId) -> Result<(), StoreError> {
+        let pairs = |items: &mut dyn Iterator<Item = &(ItemId, u32)>| -> BTreeSet<BlobPair> {
+            items
+                .flat_map(|key| &self.files[key])
+                .map(|f| (f.file.old_blob.clone(), f.file.new_blob.clone()))
+                .collect()
+        };
+        let open: BTreeSet<&ItemId> = self
+            .items
+            .iter()
+            .filter(|i| i.state.is_open())
+            .map(|i| &i.id)
+            .collect();
+        let kept = pairs(&mut self.files.keys().filter(|(item, _)| open.contains(item)));
+        let closing = pairs(&mut self.files.keys().filter(|(item, _)| item == id));
+        self.diffs
+            .retain(|pair, _| !closing.contains(pair) || kept.contains(pair));
         Ok(())
     }
 }
@@ -720,6 +755,21 @@ impl FeedbackStore for FakeStore {
     fn set_delivered(&mut self, id: &ItemId, cursor: u64) -> Result<(), StoreError> {
         self.delivered.insert(id.clone(), cursor);
         Ok(())
+    }
+
+    fn notify(
+        &mut self,
+        id: &ItemId,
+        state: ItemState,
+        notice: Notice,
+    ) -> Result<Event, StoreError> {
+        self.set_state(id, state);
+        let event = Event {
+            cursor: self.events.len() as u64 + 1,
+            kind: EventKind::Notice(notice),
+        };
+        self.events.push((id.clone(), event.clone()));
+        Ok(event)
     }
 }
 

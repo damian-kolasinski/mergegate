@@ -145,15 +145,8 @@ fn adds_revisions_with_their_files() {
     assert_eq!(files[3], (2, "logo.png".into(), None, None));
 
     let changed = |revision| store.revision_files(&item.id, revision).unwrap();
-    let files_of = |head| {
-        revision(head)
-            .files
-            .into_iter()
-            .map(|f| f.file)
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(changed(1), files_of('a'));
-    assert_eq!(changed(2), files_of('b'));
+    assert_eq!(changed(1), revision('a').files);
+    assert_eq!(changed(2), revision('b').files);
     assert!(changed(3).is_empty());
 }
 

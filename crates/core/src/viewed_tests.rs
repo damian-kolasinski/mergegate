@@ -56,7 +56,9 @@ fn marking(revision: u32, path: &str, viewed: bool) -> Mark {
 }
 
 fn viewed_in_diff(store: &FakeStore) -> Vec<String> {
-    let diff = item_diff(store, &id("app#1")).unwrap().unwrap();
+    let diff = item_diff(store, &FakeGit::default(), &id("app#1"))
+        .unwrap()
+        .unwrap();
     diff.files
         .into_iter()
         .filter(|f| f.viewed)

@@ -138,6 +138,8 @@ pub(crate) fn failure(e: ItemError) -> Failure {
             (S::CONFLICT, "not_pushed", Some("mg submit".to_owned()))
         }
         E::Unrelated { .. } => (S::BAD_REQUEST, "unrelated_history", None),
+        E::NoItem(_) => (S::NOT_FOUND, "item_not_found", Some("mg inbox".to_owned())),
+        E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::NothingToSubmit { .. } => (S::BAD_REQUEST, "nothing_to_submit", None),
         E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),

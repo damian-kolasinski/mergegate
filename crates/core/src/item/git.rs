@@ -43,6 +43,9 @@ pub trait ItemGit {
     ) -> Result<Option<String>, GitError>;
 
     fn pin(&self, project: &ProjectName, reference: &str, commit: &str) -> Result<(), GitError>;
+
+    /// Deletes every ref under `prefix`, which ends in `/`. None is fine.
+    fn unpin(&self, project: &ProjectName, prefix: &str) -> Result<(), GitError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

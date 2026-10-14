@@ -1,4 +1,4 @@
-use super::{ChangedFile, FileStat, Item, ItemId, ItemState};
+use super::{FileStat, Item, ItemId, ItemState};
 use crate::project::{Backend, ProjectName};
 use crate::store::StoreError;
 
@@ -12,8 +12,8 @@ pub trait ItemStore {
     /// Any item, open or closed.
     fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError>;
 
-    /// The files `revision` changes, in path order.
-    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<ChangedFile>, StoreError>;
+    /// The files `revision` changes, in path order, with their line counts.
+    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<FileStat>, StoreError>;
 
     /// Numbers the item next in its project.
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError>;

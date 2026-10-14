@@ -9,7 +9,9 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use mergegate_core::feedback::{self, Event, EventKind, Feedback, FeedbackError, Source, Wake};
+use mergegate_core::feedback::{
+    self, Event, EventKind, Feedback, FeedbackError, NoticeKind, Source, Wake,
+};
 use mergegate_core::item::ItemId;
 use serde::Deserialize;
 use tokio::time::Instant;
@@ -109,15 +111,16 @@ fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
 
 fn event_to_api(id: &ItemId, event: Event) -> api::feedback::Event {
     let revision = event.revision();
-    let source = match event.source() {
-        Source::Operator => api::feedback::Source::Operator,
-    };
+    let source = source_to_api(event.source());
     let body = match event.kind {
         EventKind::ReviewSubmitted(review) => api::feedback::EventBody::ReviewSubmitted {
             verdict: reviews::verdict_to_api(review.verdict),
             summary: review.summary,
             comments: review.comments.iter().map(comments::to_api).collect(),
             replies: review.replies.iter().map(replies::sent).collect(),
+        },
+        EventKind::Notice(notice) => match notice.kind {
+            NoticeKind::Abandoned { reason } => api::feedback::EventBody::ItemAbandoned { reason },
         },
     };
     api::feedback::Event {
@@ -126,6 +129,20 @@ fn event_to_api(id: &ItemId, event: Event) -> api::feedback::Event {
         revision,
         source,
         body,
+    }
+}
+
+pub(crate) fn source_to_api(source: Source) -> api::feedback::Source {
+    match source {
+        Source::Operator => api::feedback::Source::Operator,
+        Source::Agent => api::feedback::Source::Agent,
+    }
+}
+
+pub(crate) fn source_from_api(source: api::feedback::Source) -> Source {
+    match source {
+        api::feedback::Source::Operator => Source::Operator,
+        api::feedback::Source::Agent => Source::Agent,
     }
 }
 

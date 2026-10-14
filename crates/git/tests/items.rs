@@ -212,6 +212,27 @@ fn pins_a_revision() {
     assert_eq!(hub.staging_rev("refs/mergegate/items/1/r1"), base);
 }
 
+#[test]
+fn unpins_one_items_revisions() {
+    let hub = Hub::new();
+    let head = hub.repo.rev("login");
+    for reference in [
+        "refs/mergegate/items/1/r1",
+        "refs/mergegate/items/1/r2",
+        "refs/mergegate/items/10/r1",
+    ] {
+        hub.git.pin(&app(), reference, &head).unwrap();
+    }
+    hub.git.unpin(&app(), "refs/mergegate/items/1/").unwrap();
+    let refs = git(
+        &hub.staging,
+        ["for-each-ref", "--format=%(refname)", "refs/mergegate"],
+    );
+    assert_eq!(refs.trim(), "refs/mergegate/items/10/r1");
+    assert_eq!(hub.staging_rev("login"), head, "branches stay");
+    hub.git.unpin(&app(), "refs/mergegate/items/1/").unwrap();
+}
+
 fn get(hub: &Hub, path: &str, query: &str) -> String {
     let request = HttpRequest {
         method: "GET",

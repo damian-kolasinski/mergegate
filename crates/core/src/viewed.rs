@@ -62,7 +62,7 @@ pub fn mark<S: ItemStore + ViewedStore>(store: &mut S, mark: Mark) -> Result<(),
     if !store
         .revision_files(&id, revision)?
         .iter()
-        .any(|file| file.path == path)
+        .any(|stat| stat.file.path == path)
     {
         return Err(ViewedError::NoFile { id, revision, path });
     }
