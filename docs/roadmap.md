@@ -42,7 +42,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 16 | Demo attachments | `--attach`, `mg attach`, demo panel | F4, F6 | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs |
 | 18 | Hooks and distribution | `on_event` hooks, full `mg doctor`, cargo-dist releases, launchd/systemd units; drop `## Stage` from AGENTS.md | F1 | — |
-| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers | F2 | Tailscale |
+| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale |
 
 ## Why this order
 

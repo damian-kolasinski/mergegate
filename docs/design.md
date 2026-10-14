@@ -97,7 +97,7 @@ Principles
 - **Tailscale identity instead of tokens.** For each tailnet connection, the hub asks the local Tailscale daemon who is calling (`whois`). Devices owned by the same Tailscale user as the hub are trusted automatically. Other devices need `mg hub allow <device>`. There's nothing to copy between machines, so an agent can connect a worker end to end (F2).
 - Fallback for networks without Tailscale: `mg hub token create` on the hub, `mg connect <url> --token T` on the worker.
 - `mg wait` connections are resumable via an event cursor, so a dropped connection never loses feedback.
-- Only a worker on the hub's machine may set `mg submit --wake`: the hub runs whatever command it is given.
+- Only a worker on the hub's machine may set `mg submit --wake`: the hub runs whatever command it is given. The hub decides by the connection, not by anything the client sends: a `--wake` that arrives over the tailnet or with a token is refused with an error, so the agent knows to wait with `mg wait` instead. Since a wake runs in the worktree of the item's latest submit, a submit from another machine clears the item's wake, so a remote worker can't choose the directory a trusted command starts in.
 
 ## 5. Item lifecycle
 
@@ -276,7 +276,7 @@ The agent picks the cheapest way to wait that its environment supports. The skil
 | be resumed by a shell command | `mg submit --wake "<resume cmd>"`, then ends its turn | none |
 | neither | loops `mg wait --timeout N`, N just under its tool-call limit | one small turn per timeout |
 
-A wake runs as `sh -c CMD` in the worktree of the item's latest submit, with `{item}` replaced and `MG_ITEM`, `MG_CURSOR` and `MERGEGATE_HOME` set, in its own process group. It runs when the item has events from the operator its agent hasn't acknowledged (its own, like an `mg abandon`, never wake it), but not while a read of the item is in flight, not for events a read already returned, and only one at a time per item, looking again when the command exits. Each event wakes at most once, across hub restarts. The command's stderr goes to `wakes/<item>.log` in the hub's home, not a pipe, since the session it starts may outlive the hub; the hub logs a failed command and doesn't retry. `mg resume` shows the wake an earlier session left, so a new one replaces it. The external-comment debounce (PR 10) will apply to wakes too, and once workers connect from other machines (PR 19) they can't set one (§4).
+A wake runs as `sh -c CMD` in the worktree of the item's latest submit, with `{item}` replaced and `MG_ITEM`, `MG_CURSOR` and `MERGEGATE_HOME` set, in its own process group. It runs when the item has events from the operator its agent hasn't acknowledged (its own, like an `mg abandon`, never wake it), but not while a read of the item is in flight, not for events a read already returned, and only one at a time per item, looking again when the command exits. Each event wakes at most once, across hub restarts. The command's stderr goes to `wakes/<item>.log` in the hub's home, not a pipe, since the session it starts may outlive the hub; the hub logs a failed command and doesn't retry. `mg resume` shows the wake an earlier session left, so a new one replaces it. The external-comment debounce (PR 10) will apply to wakes too, and once workers connect from other machines (PR 19) they can't set one or move where one runs (§4).
 
 ## 7. File triage
 
