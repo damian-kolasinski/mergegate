@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import type { File } from "../api/File";
 import type { ItemState } from "../api/ItemState";
+import type { Verdict } from "../api/Verdict";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { MarkViewed } from "../api/MarkViewed";
 import { getJson, putJson } from "../app/hub";
@@ -18,28 +19,15 @@ import { ReviewBar } from "./review-bar";
  */
 export function ItemScreen(props: { id: string }) {
   const [diff, setDiff] = createSignal<ItemDiff>();
-  // The item as last fetched; its files stay those first shown.
-  const [state, setState] = createSignal<ItemState>();
   const [failure, setFailure] = createSignal<string>();
-  const fetchDiff = () =>
-    getJson<ItemDiff>(`/api/items/${encodeURIComponent(props.id)}`);
   // main.tsx keys the route, so this runs once per screen.
   createEffect(() => {
-    void fetchDiff().then(
-      (fetched) => {
-        setState(fetched.item.state);
-        setDiff(fetched);
-      },
+    void getJson<ItemDiff>(`/api/items/${encodeURIComponent(props.id)}`).then(
+      setDiff,
       (error: unknown) =>
         setFailure(error instanceof Error ? error.message : String(error)),
     );
   });
-  const refresh = () => {
-    void fetchDiff().then(
-      (fetched) => setState(fetched.item.state),
-      () => undefined,
-    );
-  };
 
   useKeys({
     Escape: () => {
@@ -50,24 +38,20 @@ export function ItemScreen(props: { id: string }) {
   return (
     <section class={styles.screen} aria-label={props.id}>
       <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
-      <Show when={diff()}>
-        {(current) => (
-          <Review
-            diff={current()}
-            state={state() ?? current().item.state}
-            onReviewed={refresh}
-          />
-        )}
-      </Show>
+      <Show when={diff()}>{(current) => <Review diff={current()} />}</Show>
     </section>
   );
 }
 
-function Review(props: {
-  diff: ItemDiff;
-  state: ItemState;
-  onReviewed: () => void;
-}) {
+function Review(props: { diff: ItemDiff }) {
+  // As the hub moves it: Request changes hands the item back, Comment keeps
+  // it with the operator.
+  const [moved, setMoved] = createSignal<ItemState>();
+  const state = () => moved() ?? props.diff.item.state;
+  const reviewed = (verdict: Verdict) => {
+    if (verdict === "changes_requested") setMoved("changes_requested");
+  };
+
   // Ids are `<project>#<number>`, and blobs are read per project.
   const project = () => props.diff.item.id.split("#")[0] ?? "";
   const blobUrl = (id: string) =>
@@ -195,7 +179,7 @@ function Review(props: {
         <Mono>{props.diff.item.id}</Mono>
         <h1 class={styles.title}>{props.diff.item.title}</h1>
         <Badge tone="brand">r{props.diff.item.revision.number}</Badge>
-        <Badge tone={stateTone[props.state]}>{stateLabel[props.state]}</Badge>
+        <Badge tone={stateTone[state()]}>{stateLabel[state()]}</Badge>
         <Meta>
           <Mono>{props.diff.item.branch}</Mono> →{" "}
           <Mono>{props.diff.item.target}</Mono>
@@ -247,11 +231,11 @@ function Review(props: {
           />
         </Show>
       </div>
-      <Show when={reviewable(props.state)}>
+      <Show when={reviewable(state())}>
         <ReviewBar
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
-          onSubmitted={props.onReviewed}
+          onSubmitted={reviewed}
         />
       </Show>
     </>

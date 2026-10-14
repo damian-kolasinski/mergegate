@@ -9,6 +9,7 @@ export function TextArea(props: {
   value: string;
   placeholder?: string;
   rows?: number;
+  disabled?: boolean;
   onInput: (value: string) => void;
   ref?: (element: HTMLTextAreaElement) => void;
 }) {
@@ -19,6 +20,7 @@ export function TextArea(props: {
       aria-label={props.label}
       placeholder={props.placeholder}
       rows={props.rows ?? 2}
+      disabled={props.disabled}
       value={props.value}
       onInput={(event) => props.onInput(event.currentTarget.value)}
       onKeyDown={(event) => {

@@ -13,7 +13,7 @@ import styles from "./review-bar.module.css";
 export function ReviewBar(props: {
   item: string;
   revision: number;
-  onSubmitted: () => void;
+  onSubmitted: (verdict: Verdict) => void;
 }) {
   const [summary, setSummary] = createSignal("");
   const [sending, setSending] = createSignal(false);
@@ -36,7 +36,7 @@ export function ReviewBar(props: {
             text: `Sent to the agent on r${body.revision}`,
             failed: false,
           });
-          props.onSubmitted();
+          props.onSubmitted(verdict);
         },
         (error: unknown) =>
           setStatus({
@@ -51,28 +51,30 @@ export function ReviewBar(props: {
   useKeys({ r: () => field?.focus() });
 
   return (
-    <form
-      class={styles.bar}
-      aria-label="Review"
-      onSubmit={(event) => event.preventDefault()}
-    >
-      <TextArea
-        label="Review summary"
-        placeholder="Summary for the agent (r)"
-        value={summary()}
-        onInput={setSummary}
-        ref={(element) => {
-          field = element;
-        }}
-      />
+    <form class={styles.bar} aria-label="Review">
+      <div class={styles.summary}>
+        <TextArea
+          label="Review summary"
+          placeholder="Summary for the agent (r)"
+          value={summary()}
+          // What's typed while sending would be cleared with the rest.
+          disabled={sending()}
+          onInput={setSummary}
+          ref={(element) => {
+            field = element;
+          }}
+        />
+      </div>
       <div class={styles.actions}>
-        <Show when={status()}>
-          {(current) => (
-            <Meta tone={current().failed ? "removed" : "subtle"}>
-              {current().text}
-            </Meta>
-          )}
-        </Show>
+        <p role="status" class={styles.status}>
+          <Show when={status()}>
+            {(current) => (
+              <Meta tone={current().failed ? "removed" : "subtle"}>
+                {current().text}
+              </Meta>
+            )}
+          </Show>
+        </p>
         <Button
           disabled={sending() || empty()}
           onClick={() => submit("comment")}
