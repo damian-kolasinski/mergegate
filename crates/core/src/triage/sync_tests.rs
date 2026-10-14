@@ -61,7 +61,7 @@ fn applies_new_rules_to_every_revision_of_open_items() {
         );
     }
     let stat = store.item(&id()).unwrap().unwrap().revision.stat;
-    assert_eq!(stat.review_additions + 1, stat.additions);
+    assert_eq!(stat.review_files + 1, stat.files);
     assert_eq!(sync(&mut store, &file, &app()).unwrap(), Synced::Unchanged);
 }
 

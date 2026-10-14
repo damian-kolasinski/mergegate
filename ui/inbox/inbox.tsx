@@ -167,11 +167,6 @@ function Entry(props: {
         )}
       </Show>
       {/* A zero count leaves its cell empty so the columns stay aligned. */}
-      <span class={styles.review} title="Lines changed outside trusted files">
-        <Show when={trusts(props.item)}>
-          <Meta>{toReview(props.item)} to review</Meta>
-        </Show>
-      </span>
       <span class={styles.figure}>
         <Show when={props.item.additions}>
           <Meta tone="added">+{props.item.additions}</Meta>
@@ -182,10 +177,8 @@ function Entry(props: {
           <Meta tone="removed">−{props.item.deletions}</Meta>
         </Show>
       </span>
-      <span class={styles.figure}>
-        <Meta>
-          {props.item.files} {props.item.files === 1 ? "file" : "files"}
-        </Meta>
+      <span class={styles.files} title={trusted(props.item)}>
+        <Meta>{files(props.item)}</Meta>
       </span>
       <span class={styles.figure} title={props.item.updated_at}>
         <Meta>{age(props.item.updated_at, props.now)}</Meta>
@@ -194,16 +187,17 @@ function Entry(props: {
   );
 }
 
-/** Whether rules trusted any of the item's changed lines. */
-function trusts(item: InboxItem): boolean {
-  return (
-    item.review_additions !== item.additions ||
-    item.review_deletions !== item.deletions
-  );
+/** `4 of 6 files` when rules trusted some, so the total sets them apart. */
+function files(item: InboxItem): string {
+  const all = `${item.files} ${item.files === 1 ? "file" : "files"}`;
+  if (item.review_files === item.files) return all;
+  return `${item.review_files} of ${all}`;
 }
 
-function toReview(item: InboxItem): number {
-  return item.review_additions + item.review_deletions;
+function trusted(item: InboxItem): string | undefined {
+  const count = item.files - item.review_files;
+  if (!count) return undefined;
+  return `${item.review_files} to review, ${count} trusted by the rules`;
 }
 
 function why(blocked: Blocked): string {

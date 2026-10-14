@@ -62,20 +62,18 @@ pub struct DiffStat {
     pub files: u32,
     pub additions: u64,
     pub deletions: u64,
-    /// Lines of the files in the `review` tier: what reviewing costs.
-    pub review_additions: u64,
-    pub review_deletions: u64,
+    /// The files in the `review` tier, which trusted ones leave out.
+    pub review_files: u32,
 }
 
 impl DiffStat {
     pub fn of(files: &[FileStat]) -> Self {
-        let review = || files.iter().filter(|f| f.triage.tier == Tier::Review);
+        let review = files.iter().filter(|f| f.triage.tier == Tier::Review);
         Self {
             files: u32::try_from(files.len()).unwrap_or(u32::MAX),
             additions: files.iter().filter_map(|f| f.additions).sum(),
             deletions: files.iter().filter_map(|f| f.deletions).sum(),
-            review_additions: review().filter_map(|f| f.additions).sum(),
-            review_deletions: review().filter_map(|f| f.deletions).sum(),
+            review_files: u32::try_from(review.count()).unwrap_or(u32::MAX),
         }
     }
 }

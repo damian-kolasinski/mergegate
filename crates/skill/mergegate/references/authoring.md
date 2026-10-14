@@ -46,7 +46,7 @@ On an item with a GitHub pull request, the hub reads the pull request's comments
 
 ## The queue
 
-`mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging, each with the lines the operator has to read and its whole diff's.
+`mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging, each with the files the operator has to read when rules trust some, as in `4 of 6 files to review`.
 
 ## Giving up
 

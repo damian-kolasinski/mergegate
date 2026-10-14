@@ -28,9 +28,9 @@
   white-space: nowrap;
 }
 
-.review {
+.files {
   flex: none;
-  width: 9em;
+  width: 8em;
   text-align: right;
   white-space: nowrap;
 }

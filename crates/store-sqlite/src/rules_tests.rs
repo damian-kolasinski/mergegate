@@ -97,7 +97,7 @@ fn keeps_each_projects_rules_in_order() {
 }
 
 #[test]
-fn stores_each_files_triage_and_counts_only_reviewed_lines() {
+fn stores_each_files_triage_and_counts_only_reviewed_files() {
     let (_dir, mut store) = store();
     let guarded = Triage {
         tier: Tier::Review,
@@ -126,7 +126,7 @@ fn stores_each_files_triage_and_counts_only_reviewed_lines() {
     assert_eq!(store.revision_files(&item.id, 1).unwrap(), files);
     let stat = item.revision.stat;
     assert_eq!((stat.additions, stat.deletions), (46, 3));
-    assert_eq!((stat.review_additions, stat.review_deletions), (6, 2));
+    assert_eq!((stat.files, stat.review_files), (3, 2));
 
     store
         .set_triage(
@@ -146,5 +146,11 @@ fn stores_each_files_triage_and_counts_only_reviewed_lines() {
         .collect();
     assert_eq!(triage, [guarded, Triage::default(), trusted_by(7)]);
     let stat = store.item(&item.id).unwrap().unwrap().revision.stat;
-    assert_eq!((stat.review_additions, stat.review_deletions), (41, 2));
+    assert_eq!(stat.review_files, 2);
+
+    store
+        .set_triage(&item.id, 1, &[("src/a.rs".into(), Triage::default())])
+        .unwrap();
+    let stat = store.item(&item.id).unwrap().unwrap().revision.stat;
+    assert_eq!(stat.review_files, 3);
 }

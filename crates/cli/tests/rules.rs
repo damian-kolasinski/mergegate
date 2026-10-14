@@ -1,6 +1,6 @@
 //! Triage (F12): the operator's rules.toml sorts each submitted file into
 //! review or trusted, the hub serves the tiers with their reasons, and the
-//! inbox counts only the lines left to review.
+//! inbox counts only the files left to review.
 
 use std::fs;
 
@@ -128,11 +128,11 @@ fn f12_rules_sort_files_into_review_and_trusted() {
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     let item = &inbox["needs_you"][0];
     assert_eq!(
-        [&item["additions"], &item["review_additions"]],
-        [&json!(7), &json!(2)]
+        [&item["files"], &item["review_files"]],
+        [&json!(4), &json!(2)]
     );
     let text = env.mg(&["inbox"]).assert_code(0).stdout;
-    assert!(text.contains("2 lines to review, +7 -0"), "{text}");
+    assert!(text.contains("2 of 4 files to review, +7 -0"), "{text}");
 }
 
 #[test]
@@ -156,7 +156,7 @@ fn f12_without_rules_every_file_is_reviewed() {
     let tiers: Vec<_> = triage(&env).iter().map(|f| f["tier"].clone()).collect();
     assert_eq!(tiers, [json!("trusted"), json!("trusted")]);
     let item = &env.mg(&["--json", "inbox"]).assert_code(0).json()["needs_you"][0];
-    assert_eq!(item["review_additions"], 0);
+    assert_eq!(item["review_files"], 0);
 }
 
 #[test]

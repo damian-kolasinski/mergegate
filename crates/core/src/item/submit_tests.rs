@@ -88,8 +88,7 @@ fn opens_an_item_against_the_merge_base() {
             files: 2,
             additions: 3,
             deletions: 0,
-            review_additions: 3,
-            review_deletions: 0,
+            review_files: 2,
         }
     );
     assert_eq!(git.fetched(), [("app".into(), "main".into())]);
@@ -170,8 +169,7 @@ fn caches_each_files_diff_and_reuses_it_in_later_revisions() {
             files: 3,
             additions: 4,
             deletions: 0,
-            review_additions: 4,
-            review_deletions: 0,
+            review_files: 3,
         }
     );
 }
@@ -646,5 +644,5 @@ fn triages_each_file_by_the_applied_rules() {
         ]
     );
     let stat = item.revision.stat;
-    assert_eq!((stat.review_additions, stat.additions), (2, 3));
+    assert_eq!((stat.review_files, stat.files), (1, 2));
 }

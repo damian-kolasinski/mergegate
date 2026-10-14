@@ -373,10 +373,10 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 ```
 ┌ mergegate ─ app ───────────────────────────────────────────────────────────────┐
 │ NEEDS YOU (5)                                              ⚠ 1 rule to approve │
-│ p0  app#42  Token refresh on 401          r2  +212/−40 (68 to review)          │
+│ p0  app#42  Token refresh on 401          r2  +212/−40 · 9 of 14 files         │
 │     "blocks auth refactor — 3 agents waiting"  · worker-2 · codex: 2 → 2 fixed │
 │     ⚡ conflicts with app#45                                       ▶ demo · 2h │
-│ p1  app#47  Settings screen redesign      r1  +540/−120 (31 to review)         │
+│ p1  app#47  Settings screen redesign      r1  +540/−120 · 6 of 8 files         │
 │     claude · worker-1 · codex: running                             ▶ demo · 5h │
 │ p2  …                                                                          │
 │                                                                                │
@@ -387,7 +387,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 ```
 
 - Order: explicit priority (set by the operator agent or the operator) → conflict pressure (merging this unblocks others) → age.
-- "To review" counts only `review`-tier lines. That is the real cost of the item.
+- When rules trust some files, the file count shows the ones left to review next to the total ("9 of 14 files"). That is the real cost of the item.
 - A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
 - Keyboard-first: `j/k` move, `enter` open, `p` set priority.
 

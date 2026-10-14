@@ -18,9 +18,7 @@ const SELECT: &str = "
     SELECT p.name, i.number, i.branch, i.title, i.state, i.backend, i.target, i.created_at,
            r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
            i.github, i.pull_number, i.pull_url,
-           (SELECT coalesce(sum(additions), 0) FROM revision_files
-            WHERE item_id = i.id AND revision = r.number AND tier = 'review'),
-           (SELECT coalesce(sum(deletions), 0) FROM revision_files
+           (SELECT count(*) FROM revision_files
             WHERE item_id = i.id AND revision = r.number AND tier = 'review')
     FROM items i
     JOIN projects p ON p.id = i.project_id
@@ -75,9 +73,7 @@ impl ItemStore for Store {
             .conn
             .prepare_cached(
                 "SELECT r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
-                        (SELECT coalesce(sum(additions), 0) FROM revision_files
-                         WHERE item_id = r.item_id AND revision = r.number AND tier = 'review'),
-                        (SELECT coalesce(sum(deletions), 0) FROM revision_files
+                        (SELECT count(*) FROM revision_files
                          WHERE item_id = r.item_id AND revision = r.number AND tier = 'review')
                  FROM revisions r
                  JOIN items i ON i.id = r.item_id
@@ -96,8 +92,7 @@ impl ItemStore for Store {
                         files: row.get(3)?,
                         additions: row.get::<_, i64>(4)? as u64,
                         deletions: row.get::<_, i64>(5)? as u64,
-                        review_additions: row.get::<_, i64>(7)? as u64,
-                        review_deletions: row.get::<_, i64>(8)? as u64,
+                        review_files: row.get(7)?,
                     },
                     submitted_at: row.get(6)?,
                 })
@@ -295,8 +290,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             files: row.get(11)?,
             additions: row.get::<_, i64>(12)? as u64,
             deletions: row.get::<_, i64>(13)? as u64,
-            review_additions: row.get::<_, i64>(18)? as u64,
-            review_deletions: row.get::<_, i64>(19)? as u64,
+            review_files: row.get(18)?,
         },
         submitted_at: row.get(14)?,
     };

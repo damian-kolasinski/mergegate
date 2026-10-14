@@ -1,5 +1,5 @@
 // The review part of F12: files the operator's rules trust fold into a group
-// of their own, count as viewed, and leave the inbox's review figure.
+// of their own, count as viewed, and leave the inbox's count of files to review.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -84,7 +84,7 @@ test("f12 v skips trusted files", async ({ page, hub }) => {
   await expect(current).toContainText("src/main.rs");
 });
 
-test("f12 the inbox counts the lines to review", async ({ page, hub }) => {
+test("f12 the inbox counts the files to review", async ({ page, hub }) => {
   submitChange(hub);
   const plain = hub.project("web");
   plain.submit("copy", "Fix the copy", { "index.html": "<p>hi</p>\n" });
@@ -93,12 +93,11 @@ test("f12 the inbox counts the lines to review", async ({ page, hub }) => {
   const rows = page
     .getByRole("region", { name: "Needs you" })
     .getByRole("listitem");
-  await expect(rows.filter({ hasText: "app#1" })).toContainText("1 to review");
+  await expect(rows.filter({ hasText: "app#1" })).toContainText("1 of 2 files");
   await expect(rows.filter({ hasText: "app#1" })).toContainText("+4");
   // Nothing trusted, nothing to set apart.
-  await expect(rows.filter({ hasText: "web#1" })).not.toContainText(
-    "to review",
-  );
+  await expect(rows.filter({ hasText: "web#1" })).toContainText("1 file");
+  await expect(rows.filter({ hasText: "web#1" })).not.toContainText(" of ");
 });
 
 test("f12 a changed .gitattributes stays in review", async ({ page, hub }) => {

@@ -93,8 +93,7 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
             files: 2,
             additions: 5,
             deletions: 2,
-            review_additions: 5,
-            review_deletions: 2,
+            review_files: 2,
         }
     );
     assert_eq!(a.created_at, a.revision.submitted_at);
