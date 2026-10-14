@@ -1,0 +1,20 @@
+.files {
+  overflow-y: auto;
+  border-right: 1px solid var(--border-container);
+}
+
+.viewed {
+  flex: none;
+  align-self: center;
+  margin: 0;
+  accent-color: var(--border-brand);
+  cursor: pointer;
+}
+
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
