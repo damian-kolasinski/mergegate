@@ -30,3 +30,17 @@
   margin: 0 auto;
   padding: var(--space-4) 0 var(--space-8);
 }
+
+.shell[data-fill] {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.shell[data-fill] .main {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  width: 100%;
+  padding: 0;
+}

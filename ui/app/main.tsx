@@ -12,7 +12,7 @@ function App() {
     return current.screen === "item" ? current.id : undefined;
   });
   return (
-    <Shell>
+    <Shell fill={item() !== undefined}>
       <Switch fallback={<InboxScreen />}>
         <Match when={item()} keyed>
           {(id) => <ItemScreen id={id} />}

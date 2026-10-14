@@ -1,0 +1,11 @@
+/* CodeView scrolls this element and renders into a shadow root, which the
+   `--diffs-*` properties inherit into. Its line height must stay 20px, the
+   height CodeView assumes when it lays out lines it hasn't measured. */
+.view {
+  height: 100%;
+  overflow-y: auto;
+  --diffs-font-family: var(--font-mono);
+  --diffs-header-font-family: var(--font-sans);
+  --diffs-font-size: 13px;
+  --diffs-line-height: 20px;
+}

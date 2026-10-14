@@ -25,6 +25,27 @@ await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
 await copyFile("index.html", join(outdir, "index.html"));
 
+// Shiki loads every grammar and theme through a dynamic import, which esbuild
+// inlines: 10 MB. The diff view renders plain text with Pierre's two themes
+// until highlighting lands (roadmap PR 15), so the rest resolve to a module
+// that throws if anything ever asks for one.
+const shikiAssets = {
+  name: "shiki-assets",
+  setup(build) {
+    const kept = /^@pierre\/theme\/pierre-(light|dark)$/;
+    build.onResolve(
+      { filter: /^(@shikijs\/(langs|themes)\/|@pierre\/theme\/|shiki\/wasm$)/ },
+      (args) =>
+        kept.test(args.path)
+          ? undefined
+          : { path: args.path, namespace: "shiki-asset" },
+    );
+    build.onLoad({ filter: /.*/, namespace: "shiki-asset" }, (args) => ({
+      contents: `throw new Error(${JSON.stringify(`${args.path} isn't bundled`)});`,
+    }));
+  },
+};
+
 const options = {
   entryPoints: { main: "app/main.tsx" },
   outdir: join(outdir, "assets"),
@@ -37,7 +58,7 @@ const options = {
   assetNames: "[name]",
   loader: { ".woff2": "file" },
   logLevel: "warning",
-  plugins: [solidPlugin()],
+  plugins: [solidPlugin(), shikiAssets],
 };
 
 if (values.watch) {

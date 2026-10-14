@@ -23,9 +23,12 @@ pub(crate) const DIR_ENV: &str = "MG_UI_DIR";
 
 /// The UI talks only to this hub and loads nothing from elsewhere, so a
 /// script injected through rendered agent text can't reach out either.
+/// Inline styles are allowed because the diff view lays rows out with style
+/// attributes and themes itself with `<style>` elements; with every other
+/// source limited to the hub, an injected style can't send anything away.
 const POLICY: &str = "default-src 'self'; connect-src 'self'; img-src 'self' data:; \
-     style-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; \
-     form-action 'none'";
+     style-src 'self' 'unsafe-inline'; font-src 'self'; frame-ancestors 'none'; \
+     base-uri 'none'; form-action 'none'";
 
 struct Asset {
     /// Relative to the site root, `/`-separated.
