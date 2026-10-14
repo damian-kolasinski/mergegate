@@ -1,6 +1,7 @@
 //! A hand edit to the rules file that loosens the applied rules, held for
 //! the operator's approval in the UI.
 
+use super::file::Place;
 use super::sync::retriage;
 use super::{ChangeError, Decision, Preview, Rules, RulesFile, RulesStore};
 use crate::diff::DiffStore;
@@ -33,13 +34,31 @@ pub fn decide_edit<S: RulesStore + ItemStore + DiffStore>(
             moved
         }
         Decision::Reject => {
-            let text = store.applied_text(project)?.unwrap_or_default();
+            let text = applied_text(store, file, project)?;
             file.write(project, &text)?;
             Vec::new()
         }
     };
     store.set_held_edit(project, None)?;
     Ok(moved)
+}
+
+/// The text the applied rules were read from, or one written from the
+/// rules when none was kept, as in a database from before texts were: an
+/// empty one would drop every rule.
+pub(super) fn applied_text<S: RulesStore>(
+    store: &S,
+    file: &impl RulesFile,
+    project: &ProjectName,
+) -> Result<String, ChangeError> {
+    if let Some(text) = store.applied_text(project)? {
+        return Ok(text);
+    }
+    let rules = store.applied_rules(project)?;
+    let text = rules.rules().try_fold(String::new(), |text, rule| {
+        file.insert(&text, rule, Place::Last)
+    })?;
+    Ok(text)
 }
 
 #[cfg(test)]

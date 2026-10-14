@@ -173,7 +173,7 @@ fn proposed(proposal: &Proposal) -> String {
 fn show(proposal: &Proposal) -> String {
     let state = match proposal.state {
         ProposalState::Pending => "waits for the operator's approval in the UI",
-        ProposalState::Applied => "applies",
+        ProposalState::Applied => "was approved by the operator",
         ProposalState::Rejected => "was rejected by the operator",
     };
     let mut out = vec![

@@ -209,3 +209,26 @@ fn closed_items_keep_their_triage() {
             .all(|(_, tier)| *tier == Tier::Review)
     );
 }
+
+#[test]
+fn a_hand_added_rule_cant_take_a_retired_id() {
+    let mut store = FakeStore::with_item(1);
+    let file = FakeRulesFile::default();
+    let r1 = rule(1, Tier::Review, "src/**");
+    let both = Rules::new(vec![r1.clone(), rule(2, Tier::Review, "*.md")]).unwrap();
+    approved(&mut store, &file, &both);
+    approved(&mut store, &file, &Rules::new(vec![r1.clone()]).unwrap());
+
+    file.edit([&r1, &rule(2, Tier::Review, "docs/**")]);
+    assert_eq!(
+        sync(&mut store, &file, &app()).unwrap(),
+        Synced::Invalid("R2 is taken by an earlier rule; use R3".into())
+    );
+    assert_eq!(store.applied_rules(&app()).unwrap().rules().count(), 1);
+
+    file.edit([&r1, &rule(3, Tier::Review, "docs/**")]);
+    assert!(matches!(
+        sync(&mut store, &file, &app()).unwrap(),
+        Synced::Applied(_)
+    ));
+}

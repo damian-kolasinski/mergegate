@@ -450,7 +450,10 @@ fn f12_agents_propose_rules_the_operator_approves() {
         .mg(&["rules", "show", "R2", "app"])
         .assert_code(0)
         .stdout;
-    assert!(text.starts_with("R2 applies"), "{text}");
+    assert!(
+        text.starts_with("R2 was approved by the operator"),
+        "{text}"
+    );
 
     let again = post(&env, "/api/projects/app/rules/proposals/R2/approve");
     assert_eq!(again.status, 409, "{}", again.body);

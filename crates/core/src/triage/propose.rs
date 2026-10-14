@@ -1,6 +1,7 @@
 //! Rules an agent proposes when the operator asks: a `review` rule applies at
 //! once, a `trusted` one waits for the operator's approval in the UI.
 
+use super::edit::applied_text;
 use super::file::{Place, RulesFile, RulesFileError};
 use super::sync::retriage;
 use super::{Kind, Preview, Rule, RuleError, RuleId, Rules, RulesStore, Synced, Tier};
@@ -186,7 +187,7 @@ fn add_rule<S: RulesStore + ItemStore + DiffStore>(
     // back is the applied one with the rule, not the file.
     let applied_text = match &held {
         Some(_) => {
-            let applied = store.applied_text(project)?.unwrap_or_default();
+            let applied = applied_text(store, file, project)?;
             file.insert(&applied, rule, place)?
         }
         None => written.clone(),
@@ -198,8 +199,8 @@ fn add_rule<S: RulesStore + ItemStore + DiffStore>(
     moved.extend(retriage(store, project, &rules)?);
     store.set_applied_rules(project, &rules, Some(&applied_text))?;
     if held.is_some() {
-        // Held again with the rule in, and a preview against the new rules.
-        store.set_held_edit(project, None)?;
+        // Held again with the rule in, and a preview against the new rules:
+        // the file now differs from the held rules, so sync replaces them.
         moved.extend(synced(store, file, project)?);
     }
     moved.sort_by_key(ToString::to_string);

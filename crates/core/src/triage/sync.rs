@@ -42,6 +42,9 @@ pub fn sync<S: RulesStore + ItemStore + DiffStore>(
     };
     let applied = store.applied_rules(project)?;
     let held = store.held_edit(project)?;
+    if let Some(taken) = taken_id(store, project, &rules, &applied, held.as_ref())? {
+        return Ok(Synced::Invalid(taken));
+    }
     if applied == rules {
         // Comments and layout, which rejecting a later edit puts back too.
         if store.applied_text(project)? != text {
@@ -75,6 +78,28 @@ pub fn sync<S: RulesStore + ItemStore + DiffStore>(
     };
     store.set_held_edit(project, Some(&edit))?;
     Ok(Synced::Held)
+}
+
+/// A rule of the file's that takes an ID the hub gave out before, to a
+/// proposal or a rule since removed, as a hand-added one can. A reused ID
+/// would make a waiting proposal clash on approval and stored triage name
+/// the wrong rule.
+fn taken_id<S: RulesStore>(
+    store: &S,
+    project: &ProjectName,
+    rules: &Rules,
+    applied: &Rules,
+    held: Option<&HeldEdit>,
+) -> Result<Option<String>, StoreError> {
+    let next = store.next_rule_id(project)?;
+    let known = |id| {
+        applied.rules().any(|r| r.id == id)
+            || held.is_some_and(|held| held.rules.rules().any(|r| r.id == id))
+    };
+    Ok(rules
+        .rules()
+        .find(|rule| rule.id < next && !known(rule.id))
+        .map(|rule| format!("{} is taken by an earlier rule; use {next}", rule.id)))
 }
 
 /// Every revision of an open item, not just the newest: an older one is

@@ -61,3 +61,22 @@ fn nothing_held_is_an_error() {
     let decided = decide_edit(&mut store, &file, &app(), Decision::Approve);
     assert!(matches!(decided, Err(ChangeError::NoEdit)), "{decided:?}");
 }
+
+#[test]
+fn rejecting_without_a_kept_text_writes_the_applied_rules() {
+    let mut store = FakeStore::with_item(1);
+    let file = FakeRulesFile::default();
+    let applied = Rules::new(vec![
+        rule(1, Tier::Review, "src/**"),
+        rule(2, Tier::Trusted, "*.lock"),
+    ])
+    .unwrap();
+    store.set_applied_rules(&app(), &applied, None).unwrap();
+    file.edit([&rule(3, Tier::Trusted, "**")]);
+    assert_eq!(sync(&mut store, &file, &app()).unwrap(), Synced::Held);
+
+    decide_edit(&mut store, &file, &app(), Decision::Reject).unwrap();
+    assert_eq!(file.text().as_deref(), Some("R1\nR2\n"));
+    assert_eq!(sync(&mut store, &file, &app()).unwrap(), Synced::Unchanged);
+    assert_eq!(store.applied_rules(&app()).unwrap(), applied);
+}
