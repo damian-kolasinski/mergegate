@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 
 use clap::ValueEnum;
 
+use api::feedback::{Event, Source};
+
 use crate::client::Client;
 use crate::feedback_cmd::{closed, deliver, describe, read};
 use crate::output::{CliError, Outcome, exit};
@@ -17,6 +19,15 @@ pub enum Wake {
     Operator,
 }
 
+impl Wake {
+    fn by(self, events: &[Event]) -> bool {
+        match self {
+            Self::Any => !events.is_empty(),
+            Self::Operator => events.iter().any(|e| e.source == Source::Operator),
+        }
+    }
+}
+
 /// The longest one request waits; a longer wait asks again.
 const REQUEST: u64 = 3600;
 
@@ -27,11 +38,14 @@ pub fn run(
     since: Option<u64>,
 ) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
-    let wake = match wake {
+    let query = match wake {
         Wake::Any => "any",
         Wake::Operator => "operator",
     };
-    let deadline = (timeout > 0).then(|| Instant::now() + Duration::from_secs(timeout));
+    // A timeout too long to add is as good as none.
+    let deadline = (timeout > 0)
+        .then(|| Instant::now().checked_add(Duration::from_secs(timeout)))
+        .flatten();
     loop {
         let wait = match deadline {
             None => REQUEST,
@@ -40,8 +54,10 @@ pub fn run(
                 .as_secs_f64()
                 .ceil() as u64,
         };
-        let feedback = read(&client, &item, since, Some((wait.min(REQUEST), wake)))?;
-        if !feedback.events.is_empty() {
+        let feedback = read(&client, &item, since, Some((wait.min(REQUEST), query)))?;
+        // The hub also answers at its deadline, with events that may not be
+        // the ones this waits for.
+        if wake.by(&feedback.events) {
             let text = describe(&feedback);
             return Ok(deliver(client, &feedback, since, text));
         }

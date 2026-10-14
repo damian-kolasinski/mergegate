@@ -36,14 +36,15 @@ impl Events {
         let _ = self.sender.send(event);
     }
 
-    /// Call after a write that appended to the event log commits.
+    /// Call after a write commits that appended to the event log or closed
+    /// an item: waits re-read on it, and a closed item ends them.
     pub(crate) fn logged(&self) {
         self.logged
             .send_modify(|count| *count = count.wrapping_add(1));
     }
 
-    /// Changes after each append to the event log. Mark it seen before
-    /// reading the log, so an append during the read isn't missed.
+    /// Changes after each [`Self::logged`]. Mark it seen before reading the
+    /// log, so an append during the read isn't missed.
     pub(crate) fn log(&self) -> watch::Receiver<u64> {
         self.logged.subscribe()
     }
