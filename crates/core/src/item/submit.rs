@@ -11,7 +11,7 @@ use crate::diff::{DiffGit, DiffStore};
 use crate::git::Upstream;
 use crate::github::Github;
 use crate::project::{Backend, ProjectError, ProjectStore, find};
-use crate::triage::{RulesStore, TriageGit, triage_files};
+use crate::triage::{Guide, RulesStore, TriageGit, triage_files};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submit {
@@ -24,19 +24,24 @@ pub struct Submit {
     /// The command that wakes the item's agent; empty removes it. Kept when
     /// none is sent.
     pub wake: Option<String>,
+    /// The agent's review guide (F11); blank removes it. The last one is
+    /// kept when none is sent.
+    pub guide: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submitted {
     pub item: Item,
     pub new_revision: bool,
+    /// What the agent should fix in the revision's guide.
+    pub warnings: Vec<String>,
 }
 
 /// The branch must already be pushed to staging at `request.head`. The
 /// target is fetched fresh first, so the merge-base is current. Every file's
 /// diff is cached and the file triaged by the applied rules before the
 /// revision is recorded. A submit at the open item's head still records its
-/// worktree and wake.
+/// worktree, wake and guide.
 ///
 /// A `github` item is published before it's recorded: its branch pushed and
 /// its pull request opened or retitled. If GitHub fails, the submit fails
@@ -54,8 +59,10 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>
         title,
         worktree,
         wake,
+        guide,
         ..
     } = request;
+    let guide = guide.map(|text| (!text.trim().is_empty()).then_some(text));
     if !valid_branch(&branch) {
         return Err(ItemError::InvalidBranch(branch));
     }
@@ -74,9 +81,19 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>
         // Pinning again repairs a submit that failed after recording.
         git.pin(&project.name, &item.pin_ref(), &head)?;
         agent::record(store, &item.id, worktree, wake)?;
+        let number = item.revision.number;
+        let guide = match guide {
+            Some(guide) => {
+                store.set_guide(&item.id, number, guide.as_deref())?;
+                guide
+            }
+            None => store.guide(&item.id, number)?,
+        };
+        let files = store.revision_files(&item.id, number)?;
         return Ok(Submitted {
             item: item.clone(),
             new_revision: false,
+            warnings: warnings(guide.as_deref(), &files),
         });
     }
     match git.branch_head(&project.name, &branch)? {
@@ -162,7 +179,18 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>
         }
         _ => ItemBackend::Local,
     };
-    let revision = NewRevision { head, base, files };
+    let guide = match (guide, &existing) {
+        (Some(guide), _) => guide,
+        (None, Some(item)) => store.guide(&item.id, item.revision.number)?,
+        (None, None) => None,
+    };
+    let warnings = warnings(guide.as_deref(), &files);
+    let revision = NewRevision {
+        head,
+        base,
+        files,
+        guide,
+    };
     let item = match existing {
         Some(item) => store.add_revision(&item.id, &title, ItemState::NeedsReview, revision)?,
         None => store.insert_item(NewItem {
@@ -180,7 +208,12 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>
     Ok(Submitted {
         item,
         new_revision: true,
+        warnings,
     })
+}
+
+fn warnings(guide: Option<&str>, files: &[super::FileStat]) -> Vec<String> {
+    guide.map_or_else(Vec::new, |text| Guide::parse(text).warnings(text, files))
 }
 
 #[cfg(test)]

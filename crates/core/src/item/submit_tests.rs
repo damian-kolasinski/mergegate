@@ -57,6 +57,7 @@ fn request(project: &str, branch: &str, head: u8) -> Submit {
         title: None,
         worktree: None,
         wake: None,
+        guide: None,
     }
 }
 
@@ -645,4 +646,65 @@ fn triages_each_file_by_the_applied_rules() {
     );
     let stat = item.revision.stat;
     assert_eq!((stat.review_files, stat.files), (1, 2));
+}
+
+#[test]
+fn keeps_the_guide_and_warns_about_what_it_cannot_place() {
+    let (mut store, git) = setup();
+    let app = ProjectName::parse("app").unwrap();
+    let rules = crate::fake::rules(&[(Tier::Trusted, "README.md")]);
+    store.set_applied_rules(&app, &rules, None).unwrap();
+    git.push("app", "login", &commit(2));
+    let guide = "## Files\n- `src/login.rs` — the form\n- `README.md`\n- `src/gone.rs`\n";
+    let first = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        Submit {
+            guide: Some(guide.into()),
+            ..request("app", "login", 2)
+        },
+    )
+    .unwrap();
+    // c2 doesn't change README.md yet, so it isn't trusted either.
+    assert_eq!(
+        first.warnings,
+        [
+            "`README.md` isn't changed in this revision",
+            "`src/gone.rs` isn't changed in this revision"
+        ]
+    );
+    let id = first.item.id;
+
+    git.push("app", "login", &commit(3));
+    let second = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        request("app", "login", 3),
+    )
+    .unwrap();
+    assert_eq!(store.guide(&id, 2).unwrap().as_deref(), Some(guide));
+    assert_eq!(
+        second.warnings,
+        [
+            "`README.md` is trusted by R1, and the guide only orders the files to review",
+            "`src/gone.rs` isn't changed in this revision"
+        ]
+    );
+
+    // A blank guide at the same head removes it.
+    let again = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        Submit {
+            guide: Some(" \n".into()),
+            ..request("app", "login", 3)
+        },
+    )
+    .unwrap();
+    assert!(!again.new_revision);
+    assert!(again.warnings.is_empty());
+    assert_eq!(store.guide(&id, 2).unwrap(), None);
 }

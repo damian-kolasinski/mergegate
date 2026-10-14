@@ -1,0 +1,23 @@
+.intent {
+  border-bottom: 1px solid var(--border-container);
+}
+
+.summary {
+  padding: var(--space-2) var(--space-4);
+  font: var(--type-h5);
+  letter-spacing: var(--tracking-heading);
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* A long guide scrolls in place rather than push the diff off the screen. */
+.text {
+  max-height: 30vh;
+  overflow-y: auto;
+  padding: 0 var(--space-4) var(--space-3);
+  font: var(--type-p3);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

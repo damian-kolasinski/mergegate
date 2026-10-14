@@ -2,7 +2,8 @@
 //! item, or as a new revision of the branch's open item, with the
 //! screenshots or recordings it shows.
 
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 use api::attachment::Attachment;
 use api::item::{Submit, Submitted};
@@ -28,9 +29,12 @@ pub fn run(
     title: Option<String>,
     wake: Option<String>,
     attach: Vec<PathBuf>,
+    guide: Option<PathBuf>,
 ) -> Result<Outcome, CliError> {
     repo::require()?;
+    // Check and read before pushing, so a wrong file stops the submit.
     let attach = attach_cmd::check(&attach)?;
+    let guide = guide.as_deref().map(read_guide).transpose()?;
     let client = Client::connect(&crate::home()?)?;
     let project = remote_project()?;
     let switch = "git switch -c NAME";
@@ -66,6 +70,7 @@ pub fn run(
         // Where `mg resume` sends a new session, and the wake command runs.
         worktree: repo::read(&["rev-parse", "--show-toplevel"])?,
         wake,
+        guide,
     };
     let submitted = match client.post::<Submitted>("/api/items", &request)? {
         Reply::Done(submitted) => submitted,
@@ -95,6 +100,21 @@ pub fn run(
     Ok(Outcome::done(&output, text))
 }
 
+fn read_guide(path: &Path) -> Result<String, CliError> {
+    let read = if path == Path::new("-") {
+        let mut text = String::new();
+        std::io::stdin().read_to_string(&mut text).map(|_| text)
+    } else {
+        std::fs::read_to_string(path)
+    };
+    read.map_err(|e| {
+        CliError::new(
+            "guide_unreadable",
+            format!("can't read the guide {}: {e}", path.display()),
+        )
+    })
+}
+
 /// The project the clone's `mergegate` remote points at.
 fn remote_project() -> Result<String, CliError> {
     let init = || "mg init";
@@ -116,28 +136,33 @@ fn remote_project() -> Result<String, CliError> {
 fn describe(submitted: &Submitted) -> String {
     let item = &submitted.item;
     let r = &item.revision;
-    if !submitted.new_revision {
-        return format!(
+    let mut text = if submitted.new_revision {
+        let mut text = format!(
+            "submitted {} r{}: {}\n  {} onto {} · {}, +{} -{}",
+            item.id,
+            r.number,
+            item.title,
+            item.branch,
+            item.target,
+            files(r.files),
+            r.additions,
+            r.deletions
+        );
+        if let Some(link) = &item.link {
+            text.push_str(&format!("\n  {} {}", link.label, link.url));
+        }
+        text
+    } else {
+        format!(
             "{} r{} is already at {}: {}",
             item.id,
             r.number,
             r.head.get(..12).unwrap_or(&r.head),
             item.title
-        );
-    }
-    let mut text = format!(
-        "submitted {} r{}: {}\n  {} onto {} · {}, +{} -{}",
-        item.id,
-        r.number,
-        item.title,
-        item.branch,
-        item.target,
-        files(r.files),
-        r.additions,
-        r.deletions
-    );
-    if let Some(link) = &item.link {
-        text.push_str(&format!("\n  {} {}", link.label, link.url));
+        )
+    };
+    for warning in &submitted.warnings {
+        text.push_str(&format!("\nwarning: {warning}"));
     }
     text
 }

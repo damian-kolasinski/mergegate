@@ -5,14 +5,17 @@ use super::{ChangedFile, Item, ItemError, ItemId, ItemState, ItemStore};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::review::{self, Conversation, ReviewStore};
 use crate::store::StoreError;
-use crate::triage::Triage;
+use crate::triage::{Guide, Tier, Triage};
 use crate::viewed::ViewedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemDiff {
     pub item: Item,
-    /// In path order.
+    /// The files to review in the guide's order, the rest of them in path
+    /// order, then the trusted ones in path order.
     pub files: Vec<DiffedFile>,
+    /// The agent's review guide, as it sent it.
+    pub guide: Option<String>,
     pub conversation: Conversation,
 }
 
@@ -30,6 +33,8 @@ pub struct DiffedFile {
     pub viewed: bool,
     pub generated: bool,
     pub triage: Triage,
+    /// Why the guide says to review the file; none for a trusted one.
+    pub reason: Option<String>,
 }
 
 /// `None` when there's no such item. An open item's diffs were all cached at
@@ -69,12 +74,17 @@ pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore>(
         let path = &stats[index].file.path;
         return Err(StoreError::new(format!("{id} has no cached diff for {path}")).into());
     }
-    let files = stats
+    let guide = store.guide(id, item.revision.number)?;
+    let parsed = Guide::parse(guide.as_deref().unwrap_or_default());
+    let mut files: Vec<DiffedFile> = stats
         .into_iter()
         .zip(contents)
         .map(|(stat, content)| DiffedFile {
             viewed: viewed.contains(&stat.file.path),
             generated: stat.generated,
+            reason: (stat.triage.tier == Tier::Review)
+                .then(|| parsed.reason(&stat.file.path).map(str::to_owned))
+                .flatten(),
             triage: stat.triage,
             file: stat.file,
             additions: stat.additions,
@@ -82,10 +92,16 @@ pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore>(
             content,
         })
         .collect();
+    // Stable, so files the guide doesn't place keep their path order.
+    files.sort_by_key(|f| match f.triage.tier {
+        Tier::Review => (0, parsed.position(&f.file.path).unwrap_or(usize::MAX)),
+        Tier::Trusted => (1, 0),
+    });
     let conversation = review::read_conversation(store, id, item.revision.number)?;
     Ok(Some(ItemDiff {
         item,
         files,
+        guide,
         conversation,
     }))
 }

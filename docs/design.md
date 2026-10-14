@@ -190,7 +190,9 @@ mg submit [--title T] [--base main] [--on <item>|none] [--guide FILE|-] [--attac
           [--priority p0|p1|p2|p3] [--note TEXT] [--json]
     Push HEAD to the hub and create the item, or add a revision if this branch already has an open item.
     --on: stack the item on an open item (§5.1); `none` moves a stacked item back onto the target.
-    --guide: the agent's reviewer guide (intent, risk areas, suggested file order, self-review notes).
+    --guide: the agent's reviewer guide, Markdown: the intent, risk areas and self-review notes, then a
+    `## Files` list of "- `path` — reason" bullets in the order to review them (§7.2). A revision
+    submitted without one keeps the last; paths it can't place come back as warnings.
     --attach: demo screenshots / recordings.
     --priority/--note: initial priority, passed down from the operator agent's task brief.
 
@@ -305,7 +307,7 @@ Two groups only. There's no middle "skim" state: importance is expressed by orde
 
 ### 7.2 Resolution order — "only rules can hide"
 
-1. **Built-in guards** (always `review`): changes to mergegate rule files, and any file the operator commented on in an earlier revision that changed again.
+1. **Built-in guards** (always `review`): changes to a `.gitattributes`, which can mark files generated, and any file the operator commented on in an earlier revision that changed again.
 2. **Rules**, first match wins. They are deterministic and explainable ("trusted by rule R7: `**/*.xcstrings`").
 3. **Signals that can rank but never hide.** The authoring agent's guide and the judge can:
    - order files within `review`, most important first,
@@ -314,6 +316,8 @@ Two groups only. There's no middle "skim" state: importance is expressed by orde
 
    They can never move a file to `trusted`.
 4. Unmatched files default to `review`.
+
+The guide's `## Files` list orders the files to review; the ones it leaves out follow in path order, and the trusted ones come last. It can neither hide nor promote a file.
 
 The asymmetry matters: the authoring agent grades its own work, and the judge can be wrong. Hiding a file is therefore always the result of a rule the operator approved.
 
@@ -331,7 +335,11 @@ mg rules propose --tier review  --path '**/*View.swift' --diff-matches 'Navigati
 - **Loosening** (anything toward `trusted`) waits for operator approval: an inbox badge, one-click approve with a preview of which past files it would have hidden.
 - **The rules screen is per project,** titled "app rules", and the review screen's Trusted group links to it, so the applied rules are a click away even with nothing waiting. There are no hub-wide rules.
 
-Matchers (v1): path glob, change kind (added / deleted / renamed / generated), changed-line count, diff-content regex. Rules are ordered and each carries a reason that shows in the UI.
+- **Approval happens only in the UI.** Agents propose a rule when the operator asks, never on their own. A proposed `review` rule goes first and a `trusted` one last; reordering is a hand edit.
+- **A hand edit that loosens waits too** (tech-stack §7): one that only adds `review` rules or removes `trusted` ones applies, anything else waits as one pending change that approve accepts and reject reverts in the file. An invalid file is ignored, and its error shows in the UI and `mg rules list`.
+- **The preview** runs once, when a change arrives, over the project's open items and its last 20 merged ones.
+
+Matchers (v1): path glob (`*` stays within a directory), change kind (added / deleted / renamed / generated / modified), changed-line count (added + removed), diff-content regex over the added and removed lines. A rule matches when all its matchers do. Generated means `linguist-generated` as the item's base tree sets it. A matcher that can't be sure, as with a rename's two paths or a binary diff, gives whichever answer keeps the file in `review`. Rules are ordered, each has an ID (`R<n>`, never reused) and a reason that shows in the UI. When the approved rules change, every open item is triaged again.
 
 ### 7.4 Judge providers
 
@@ -423,6 +431,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **Revision selector** defaults to "since last review": you see the interdiff only. A file that hasn't changed since you marked it viewed stays viewed.
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can agree, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. Sync GitHub refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
+- **Intent panel** under the header, above the demo: the agent's guide as plain text, as written, folding away. Each file to review carries the guide's reason for it, and each trusted one the rule that hid it ("trusted by R3: `glob` — reason").
 - **Demo panel** under the header: thumbnails of the screenshots and recordings attached with `mg submit --attach` or `mg attach`. A click opens one full size, videos with controls; ←/→ step through them and Escape closes the viewer. Attachments belong to a revision: the panel shows the newest revision's, or, while it has none, the newest earlier revision's, labeled "from rN", so a small fix needn't be recorded again; with the revision selector it follows the selected revision. Only PNG, JPEG, GIF, WebP, MP4 and WebM up to 100 MB, typed by their bytes, since the hub serves them from its own origin. GitHub items keep theirs in mergegate: GitHub has no upload API. An attach updates the screen and the inbox's `▶ demo` marker live; it tells the agent nothing.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.
 - **Approve & merge** asks first, showing how many files are still unviewed without blocking on them; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge shows the upstream's reason under the header with Retry and Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.

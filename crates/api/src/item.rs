@@ -31,6 +31,11 @@ pub struct Submit {
     /// hasn't read; empty removes it, none keeps the item's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wake: Option<String>,
+    /// The agent's review guide, Markdown whose `## Files` list of
+    /// `` - `path` — reason `` bullets orders the files to review; blank
+    /// removes it, none keeps the last one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guide: Option<String>,
 }
 
 /// `POST /api/items/{id}/abandon`, answered with the closed [`Item`]. Its
@@ -48,6 +53,10 @@ pub struct Submitted {
     pub item: Item,
     /// False when the branch was already submitted at this head.
     pub new_revision: bool,
+    /// What the agent should fix in the revision's guide, as in
+    /// ``"`src/old.rs` isn't changed in this revision"``.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

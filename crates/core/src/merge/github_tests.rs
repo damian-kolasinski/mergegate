@@ -32,6 +32,7 @@ fn opened() -> (Project, Item, FakeGit, FakeGithub) {
         title: None,
         worktree: None,
         wake: None,
+        guide: None,
     };
     let item = submit(&mut store, &git, &github, request).unwrap().item;
     (project, item, git, github)

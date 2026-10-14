@@ -30,7 +30,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 ## Running steps in parallel
 
-- **A row is a step.** Rows split into a and b (11, 12, 18) where only part of the work waits on another step; each part has its own brief (`docs/roadmap/11a-triage.md`) and its own row to delete.
+- **A row is a step.** Rows split into a and b (11, 12, 18) where only part of the work waits on another step; each part has its own brief (say, `docs/roadmap/12a-interdiffs.md`) and its own row to delete.
 - **A step starts once every row in its After column is gone from the table,** that is, once that step's last PR has merged, and runs in its own worktree. Rows with nothing there can start any time, whatever is running.
 - **Migrations take their number when they merge.** A step renumbers its unmerged migration onto whatever `main` has, and a dev home that ran the old number is reset; a merged migration never changes.
 - **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags (13, 14) and the skill's reference files (`mg events` from 10 and 14). The one that merges second rebases onto the other.
@@ -40,13 +40,12 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked | After |
 |---|---|---|---|---|---|
-| 11a | File triage | `rules.toml`, the rule-file guard, review/trusted tiers, `--guide` ordering, `mg rules propose/list`, approving looser rules in the UI | F11, F12 | — | — |
-| 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with 12a's interdiffs | F7, F12 | — | 10, 11a, 12a |
+| 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with 12a's interdiffs | F7, F12 | — | 10, 12a |
 | 12a | Interdiffs | Interdiffs over a moved base, viewed marks across revisions, the new-revision banner | F7, F13 | — | — |
 | 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions | F7, F13 | — | 10, 12a |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
 | 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
-| 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | 11a |
+| 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | — |
 | 18a | Distribution | Full `mg doctor`, cargo-dist releases, launchd/systemd units, language packs as release assets (`mg lang add <name>`, `--available`, `--detect`, `update`, detection in `mg project add`); drop `## Stage` from AGENTS.md | F1 | — | — |
 | 18b | Hooks | `on_event` hooks | F14 | — | 10 |
 | 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale | 10 |

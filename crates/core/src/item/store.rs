@@ -31,6 +31,16 @@ pub trait ItemStore {
         state: ItemState,
         revision: NewRevision,
     ) -> Result<Item, StoreError>;
+
+    /// The agent's review guide for `revision`, if it sent one.
+    fn guide(&self, id: &ItemId, revision: u32) -> Result<Option<String>, StoreError>;
+
+    fn set_guide(
+        &mut self,
+        id: &ItemId,
+        revision: u32,
+        guide: Option<&str>,
+    ) -> Result<(), StoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,4 +59,5 @@ pub struct NewRevision {
     pub head: String,
     pub base: String,
     pub files: Vec<FileStat>,
+    pub guide: Option<String>,
 }

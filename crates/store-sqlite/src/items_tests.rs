@@ -55,6 +55,7 @@ fn revision(head: char) -> NewRevision {
                 triage: Default::default(),
             },
         ],
+        guide: None,
     }
 }
 
@@ -219,4 +220,26 @@ fn allows_one_open_item_per_branch() {
     assert!(store.open_items(None).unwrap().is_empty());
     let next = store.insert_item(new_item("app", "a")).unwrap();
     assert_eq!(next.id.number(), first.id.number() + 1);
+}
+
+#[test]
+fn keeps_each_revisions_guide() {
+    let (_dir, mut store) = store();
+    let mut item = new_item("app", "a");
+    item.revision.guide = Some("## Files\n- `src/new.rs`\n".into());
+    let id = store.insert_item(item).unwrap().id;
+    store
+        .add_revision(&id, "Work on a", ItemState::NeedsReview, revision('b'))
+        .unwrap();
+
+    assert_eq!(
+        store.guide(&id, 1).unwrap().as_deref(),
+        Some("## Files\n- `src/new.rs`\n")
+    );
+    assert_eq!(store.guide(&id, 2).unwrap(), None);
+    store.set_guide(&id, 2, Some("r2's")).unwrap();
+    store.set_guide(&id, 1, None).unwrap();
+    assert_eq!(store.guide(&id, 1).unwrap(), None);
+    assert_eq!(store.guide(&id, 2).unwrap().as_deref(), Some("r2's"));
+    assert_eq!(store.guide(&id, 3).unwrap(), None);
 }

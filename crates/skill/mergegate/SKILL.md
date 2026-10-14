@@ -19,7 +19,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 ## The loop
 
 1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)).
-2. `mg submit --title "Short summary"`. It prints the item's ID, as in `app#3`. Running it again from the same branch adds a revision.
+2. `mg submit --title "Short summary" --guide guide.md`, the guide saying what the change is for and which files to read first ([references/authoring.md](references/authoring.md)). It prints the item's ID, as in `app#3`. Running it again from the same branch adds a revision.
 3. Wait for the item's events, for example `mg wait app#3`.
 4. Act on them (table below), then go back to 2 or 3.
 

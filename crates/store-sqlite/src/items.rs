@@ -224,6 +224,39 @@ impl ItemStore for Store {
         tx.commit().map_err(StoreError::new)?;
         self.written(id)
     }
+
+    fn guide(&self, id: &ItemId, revision: u32) -> Result<Option<String>, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT r.guide FROM revisions r
+                 JOIN items i ON i.id = r.item_id
+                 JOIN projects p ON p.id = i.project_id
+                 WHERE p.name = ?1 AND i.number = ?2 AND r.number = ?3",
+                params![id.project().as_str(), id.number() as i64, revision],
+                |row| row.get(0),
+            )
+            .optional()
+            .map(Option::flatten)
+            .map_err(StoreError::new)
+    }
+
+    fn set_guide(
+        &mut self,
+        id: &ItemId,
+        revision: u32,
+        guide: Option<&str>,
+    ) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE revisions SET guide = ?4
+                 WHERE number = ?3 AND item_id = (
+                     SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
+                     WHERE p.name = ?1 AND i.number = ?2)",
+                params![id.project().as_str(), id.number() as i64, revision, guide],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
+    }
 }
 
 impl Store {
@@ -244,8 +277,8 @@ fn insert_revision(
     let stat = DiffStat::of(&revision.files);
     tx.execute(
         "INSERT INTO revisions
-             (item_id, number, head, base, files, additions, deletions, submitted_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (item_id, number, head, base, files, additions, deletions, submitted_at, guide)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             item_id,
             number,
@@ -255,6 +288,7 @@ fn insert_revision(
             stat.additions as i64,
             stat.deletions as i64,
             now,
+            revision.guide,
         ],
     )
     .map_err(StoreError::new)?;
