@@ -30,14 +30,17 @@ fn post(env: &Env, path: &str, body: &Value) -> Value {
     serde_json::from_str(&reply.body).unwrap()
 }
 
+fn get(env: &Env, path: &str) -> Reply {
+    let addr = env.hub_addr();
+    http_reply(
+        &addr,
+        &format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"),
+    )
+}
+
 /// `GET /api/items/app%231`: the item with its comments and replies.
 fn item(env: &Env) -> Value {
-    let addr = env.hub_addr();
-    let reply = http_reply(
-        &addr,
-        &format!("GET /api/items/app%231 HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"),
-    );
-    serde_json::from_str(&reply.body).unwrap()
+    serde_json::from_str(&get(env, "/api/items/app%231").body).unwrap()
 }
 
 /// `app#1` with c_1 sent in a review and c_2 still a draft.
@@ -255,4 +258,37 @@ fn only_sent_comments_take_the_operators_replies() {
     let missing = send(&env, "DELETE", "/api/comments/c_1/drafts/7", &json!(null));
     assert_eq!(missing.status, 404, "{}", missing.body);
     assert_eq!(item(&env)["draft_replies"], json!([]));
+}
+
+#[test]
+fn the_conversation_reads_apart_from_the_diff() {
+    let (env, repo) = reviewed();
+    env.mg(&["reply", "c_1", "--status", "addressed"])
+        .assert_code(0);
+    post(
+        &env,
+        "/api/comments/c_1/drafts",
+        &json!({ "body": "Thanks." }),
+    );
+    repo.commit_files("Check", &[("src/login.rs", "fn login(p: &str) {}\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+
+    // r1's draft and threads stay with the item on r2.
+    let found = get(&env, "/api/items/app%231/conversation");
+    assert_eq!(found.status, 200, "{}", found.body);
+    let conversation: Value = serde_json::from_str(&found.body).unwrap();
+    let shown = item(&env);
+    for key in ["comments", "drafts", "replies", "draft_replies"] {
+        assert_eq!(conversation[key], shown[key], "{key}");
+    }
+    assert_eq!(shown["item"]["revision"]["number"], 2);
+    assert_eq!(conversation["drafts"][0]["id"], "c_2");
+    assert_eq!(conversation["drafts"][0]["revision"], 1);
+    assert_eq!(conversation["replies"][0]["addressed_in"], 2);
+    assert_eq!(conversation["draft_replies"][0]["body"], "Thanks.");
+
+    let missing = get(&env, "/api/items/app%239/conversation");
+    assert_eq!(missing.status, 404, "{}", missing.body);
+    let invalid = get(&env, "/api/items/app/conversation");
+    assert_eq!(invalid.status, 400, "{}", invalid.body);
 }

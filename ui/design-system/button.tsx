@@ -6,6 +6,10 @@ export function Button(props: {
   variant?: "solid" | "outline";
   disabled?: boolean;
   onClick: () => void;
+  /** For a button that opens a panel: whether it's open, and the panel's id. */
+  expanded?: boolean;
+  controls?: string;
+  ref?: (element: HTMLButtonElement) => void;
   children: JSX.Element;
 }) {
   return (
@@ -14,6 +18,9 @@ export function Button(props: {
       class={styles.button}
       data-variant={props.variant ?? "outline"}
       disabled={props.disabled}
+      aria-expanded={props.expanded}
+      aria-controls={props.controls}
+      ref={(element) => props.ref?.(element)}
       onClick={() => props.onClick()}
     >
       {props.children}

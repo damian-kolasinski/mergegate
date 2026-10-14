@@ -6,6 +6,8 @@ import styles from "./editor.module.css";
 export type Open = {
   /** Which one it is: each place that holds an editor has its own key. */
   key: string;
+  /** The comment it's on, unless it writes a new one. */
+  comment?: string;
   text: string;
   /** Writes the text to the hub; the editor closes once it has. */
   save: (text: string) => Promise<unknown>;
@@ -33,7 +35,8 @@ export function useEditor() {
   const dirty = () => Boolean(open()?.text.trim());
   const focus = () => {
     if (field?.isConnected) focusOnceShown(field);
-    // Its note was dropped with its file; shown again, it focuses.
+    // CodeView dropped the note with its file, or the list was closed;
+    // shown again, the editor focuses.
     else open()?.show();
   };
   const cancel = () => {
@@ -44,6 +47,8 @@ export function useEditor() {
 
   return {
     open,
+    /** Whether it holds text. */
+    dirty,
     isOpen: (key: string) => open()?.key === key,
     saving,
     failure,

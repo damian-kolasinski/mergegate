@@ -186,15 +186,21 @@ mg submit [--title T] [--base main] [--on <item>|none] [--guide FILE|-] [--attac
 
 mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     Block until there are unacknowledged events for this item.
-    exit 0   events returned (JSON array + next cursor)
+    exit 0   events returned (--json: the item, its state, the events and the next cursor)
     exit 75  timeout with no events — call again
     exit 3   item closed (merged / abandoned)
+    --for operator: only an event from the operator ends the wait, which then returns every
+    unacknowledged event with it, so acknowledging never skips one. --timeout 0 waits until an event.
     External comments are debounced (quiet window, default 60s) so the agent gets a batch, not a trickle.
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
+    The hub keeps a delivered cursor per item: wait and feedback return the events after it, and the
+    CLI acknowledges them once printed, so an event arrives at least once. --since replays from any
+    cursor without acknowledging.
 mg reply <comment> --status addressed|rejected|question [--body TEXT]
-    Respond to a comment (operator's or external). Rejections need a reason. Replies live in mergegate
-    only, where the operator sees them; nothing is posted to GitHub.
+    Respond to a comment (operator's or external). Replies thread on the comment and the latest
+    status counts; a rejection or a question needs a body. Replies live in mergegate only, where the
+    operator sees them; nothing is posted to GitHub.
 mg attach <item> FILE...                         Add demo media to the latest revision.
 mg abandon <item> [--reason TEXT]
 mg resume <item>                                 Print a self-contained prompt (item context + unaddressed
@@ -217,7 +223,7 @@ mg rules list | propose ... | show <id>                See §7.3.
 
 ```json
 {
-  "cursor": "e_0193",
+  "cursor": 193,
   "item": "app#42",
   "revision": 2,
   "type": "review.submitted",
@@ -225,11 +231,17 @@ mg rules list | propose ... | show <id>                See §7.3.
   "verdict": "changes_requested",
   "summary": "Token refresh races with logout; see inline.",
   "comments": [
-    { "id": "c_17", "path": "Sources/Auth/TokenStore.swift", "line": 88, "side": "new",
+    { "id": "c_17", "revision": 2, "path": "Sources/Auth/TokenStore.swift", "side": "new",
+      "start_line": 86, "line": 88, "quote": "    store(t)",
       "body": "This can run after logout() and resurrect the session." }
+  ],
+  "replies": [
+    { "comment": "c_12", "author": "operator", "body": "Keep the retry; drop the sleep." }
   ]
 }
 ```
+
+The cursor is the event's position in the item's log, and comment IDs are hub-wide. A comment anchors to a line range on one side of a file in one revision and quotes the last few of its lines, so the agent needn't open the file to know what it means. Comments are on lines only; a whole-file remark goes in the review's summary. `replies` are the operator's answers to the agent's replies on earlier comments. Only events the agent acts on enter the log; its own submits and replies don't.
 
 Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.conflict`, `item.merged`, `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
 
@@ -358,7 +370,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 ### 9.2 Review screen
 
 ```
-┌ app#42 Token refresh on 401 ── r1 r2● [since last review ▾] ── p0 ───────────────┐
+┌ app#42 Token refresh on 401 ── r1 r2● [since last review ▾] ─ p0 [Conversation 3] ┐
 │ ┌ Intent (authoring agent) ─────────────────┐ ┌ Demo ───────────────────────────┐ │
 │ │ Retries once on 401 using refresh token…  │ │ [▶ recording.mp4] [img] [img]   │ │
 │ │ Risk: logout race. Self-review: …         │ └─────────────────────────────────┘ │
@@ -387,9 +399,11 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open). You can agree, or override a rejection. An override becomes your comment and an event for the agent. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
 - **Demo panel** at the top for screenshots and recordings attached with `mg submit --attach`.
-- **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event.
+- **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.
+- **Replies thread under each comment:** the agent's, with their status (addressed in rN, rejected, question), and yours, drafted like comments and sent with the next review. "Addressed in rN" is the first revision submitted after the reply. Replies show as they arrive: the UI's stream carries `item.changed` pings and the screen rereads the item's conversation, as it does on reconnect.
+- **Conversation list** in the header: every comment as `path:line @rN` with its latest status and replies. A comment shows inline only on the revision it was written on until it is re-mapped, so older ones are answered here.
 - **New revision mid-review:** a banner appears. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
-- Keyboard: `n/p` file, `]/[` hunk, `j/k` line, `v` viewed (and on to the next file), `Escape` back to the inbox, `c` comment on the line, `a` approve, `r` request changes.
+- Keyboard: `n/p` file, `]/[` hunk, `j/k` line, `v` viewed (and on to the next file), `Escape` closes the open editor, then the Conversation list, then goes back to the inbox, `c` comment on the line, `r` the review's summary, `a` approve.
 
 ## 10. Prioritization
 

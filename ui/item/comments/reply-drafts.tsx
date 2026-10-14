@@ -21,7 +21,7 @@ export function useReplyDrafts(
   options: {
     editor: CommentEditor;
     reviewable: () => boolean;
-    /** Puts the sent comment `id` back on the page. */
+    /** Puts the comment `id` back on the page. */
     show: (id: string) => void;
     isSent: (comment: Comment) => boolean;
     isAnswered: (reply: Reply) => boolean;
@@ -64,6 +64,7 @@ export function useReplyDrafts(
     reply(comment: Comment) {
       editor.start({
         key: replyKey(comment.id),
+        comment: comment.id,
         show: () => options.show(comment.id),
         save: (text) => {
           const body: WriteDraftReply = { body: text };
@@ -77,6 +78,7 @@ export function useReplyDrafts(
     edit(reply: Reply) {
       editor.start({
         key: editKey(reply),
+        comment: reply.comment,
         text: reply.body,
         show: () => options.show(reply.comment),
         save: (text) => {

@@ -8,6 +8,7 @@ import { inboxHref } from "../app/router";
 import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
 import { Empty } from "../design-system";
 import { useComments } from "./comments/comments";
+import { Conversation } from "./conversation";
 import { Thread } from "./comments/thread";
 import { FileList } from "./files";
 import { ItemHeader } from "./header";
@@ -57,6 +58,9 @@ function Review(props: { diff: ItemDiff }) {
   // it with the operator.
   const [moved, setMoved] = createSignal<ItemState>();
   const state = () => moved() ?? props.diff.item.state;
+  // Every comment on the item, the older revisions' too, over the diff.
+  const [talking, setTalking] = createSignal(false);
+  let toggle: HTMLButtonElement | undefined;
   let view: DiffViewControl | undefined;
   const viewed = useViewed(() => props.diff);
   const nav = useNavigation({
@@ -70,8 +74,18 @@ function Review(props: { diff: ItemDiff }) {
     {
       reviewable: () => reviewable(state()),
       reveal: (spot) => view?.showLine(spot),
+      showAll: () => setTalking(true),
     },
   );
+  /** Closes the list, unless that would hide what's typed in it. */
+  const hideAll = (): boolean => {
+    if (comments.aside()) {
+      comments.editor.escape();
+      return false;
+    }
+    setTalking(false);
+    return true;
+  };
   const reviewed = (review: SentReview) => {
     if (review.verdict === "changes_requested") setMoved("changes_requested");
     comments.submitted(review);
@@ -106,7 +120,13 @@ function Review(props: { diff: ItemDiff }) {
   };
   useKeys({
     // Never leaves an open comment behind.
-    Escape: () => (comments.editor.open() ? comments.editor.escape() : leave()),
+    Escape: () => {
+      if (comments.editor.open()) comments.editor.escape();
+      // Focus was likely in the list, which takes it along when it closes.
+      else if (talking()) {
+        if (hideAll()) toggle?.focus();
+      } else leave();
+    },
     c: unlessWriting(comment),
     n: unlessWriting(() => nav.stepFile(1)),
     p: unlessWriting(() => nav.stepFile(-1)),
@@ -125,7 +145,17 @@ function Review(props: { diff: ItemDiff }) {
         viewed={viewed.paths().size}
         files={props.diff.files.length}
         failure={viewed.failure()}
-      />
+      >
+        <Conversation
+          comments={comments}
+          open={talking()}
+          onToggle={() => (talking() ? hideAll() : setTalking(true))}
+          onShow={hideAll}
+          ref={(element) => {
+            toggle = element;
+          }}
+        />
+      </ItemHeader>
       <FileList
         files={props.diff.files}
         viewed={viewed.paths()}

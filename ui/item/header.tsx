@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { type JSX, Show } from "solid-js";
 import type { Item } from "../api/Item";
 import type { ItemState } from "../api/ItemState";
 import { Badge, Meta, Mono, type Tone } from "../design-system";
@@ -13,6 +13,8 @@ export function ItemHeader(props: {
   files: number;
   /** A viewed mark the hub refused. */
   failure: string | undefined;
+  /** At the end of the header, which the Conversation list hangs below. */
+  children?: JSX.Element;
 }) {
   return (
     <header class={styles.header}>
@@ -33,6 +35,7 @@ export function ItemHeader(props: {
       <Show when={props.failure}>
         {(message) => <Meta tone="removed">{message()}</Meta>}
       </Show>
+      {props.children}
     </header>
   );
 }

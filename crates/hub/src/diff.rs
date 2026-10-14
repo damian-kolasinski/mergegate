@@ -15,7 +15,7 @@ use mergegate_core::item::{self, DiffedFile, ItemId};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{comments, items, projects, replies};
+use crate::{conversation, items, projects};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -45,23 +45,10 @@ async fn show(
             Some("mg inbox".into()),
         )
     })?;
-    let (drafts, sent): (Vec<_>, Vec<_>) = diff.comments.iter().partition(|c| c.review.is_none());
-    let newest = diff.item.revision.number;
-    let (draft_replies, replies): (Vec<_>, Vec<_>) =
-        diff.replies.iter().partition(|r| r.is_draft());
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
         files: diff.files.into_iter().map(file_to_api).collect(),
-        comments: sent.into_iter().map(comments::to_api).collect(),
-        drafts: drafts.into_iter().map(comments::to_api).collect(),
-        replies: replies
-            .into_iter()
-            .map(|reply| replies::to_api(reply, newest))
-            .collect(),
-        draft_replies: draft_replies
-            .into_iter()
-            .map(|reply| replies::to_api(reply, newest))
-            .collect(),
+        conversation: conversation::to_api(&diff.conversation),
     }))
 }
 

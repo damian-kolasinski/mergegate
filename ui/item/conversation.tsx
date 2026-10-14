@@ -1,0 +1,141 @@
+import { For, Show } from "solid-js";
+import type { Comment } from "../api/Comment";
+import { Badge, Button, Meta, Mono } from "../design-system";
+import type { Comments } from "./comments/comments";
+import { StatusBadge } from "./comments/replies";
+import { CommentCard } from "./comments/thread";
+import styles from "./conversation.module.css";
+
+/** The header's Conversation button, and the list it opens. */
+export function Conversation(props: {
+  comments: Comments;
+  open: boolean;
+  onToggle: () => void;
+  /** Called once a comment of the diff's revision shows under its line. */
+  onShow: () => void;
+  ref: (button: HTMLButtonElement) => void;
+}) {
+  return (
+    <>
+      <span class={styles.talk}>
+        <Button
+          expanded={props.open}
+          controls="conversation"
+          ref={(element) => props.ref(element)}
+          onClick={() => props.onToggle()}
+        >
+          Conversation {props.comments.threads.all().length}
+        </Button>
+      </span>
+      <Show when={props.open}>
+        <ConversationList comments={props.comments} onShow={props.onShow} />
+      </Show>
+    </>
+  );
+}
+
+/**
+ * Every comment on the item as `path:line @rN` with where the agent left it.
+ * The diff shows only its own revision's, so the rest are answered here.
+ */
+function ConversationList(props: {
+  comments: Comments;
+  /** Called once a comment of the diff's revision shows under its line. */
+  onShow: () => void;
+}) {
+  return (
+    <aside id="conversation" class={styles.panel} aria-label="Conversation">
+      <Show
+        when={props.comments.threads.all().length}
+        fallback={<Meta>No comments yet. Press c on a line to write one.</Meta>}
+      >
+        <ol class={styles.list}>
+          <For each={props.comments.threads.all()}>
+            {(comment) => (
+              <Entry
+                comments={props.comments}
+                comment={comment}
+                onShow={() => {
+                  props.comments.show(comment);
+                  props.onShow();
+                }}
+              />
+            )}
+          </For>
+        </ol>
+      </Show>
+    </aside>
+  );
+}
+
+function Entry(props: {
+  comments: Comments;
+  comment: Comment;
+  onShow: () => void;
+}) {
+  const inDiff = () => props.comment.revision === props.comments.revision;
+  const replies = () => props.comments.thread(props.comment).length;
+  return (
+    <li class={styles.entry} aria-label={props.comment.id}>
+      <header class={styles.where}>
+        <Mono>{whereOf(props.comment)}</Mono>
+        {/* Until the agent answers, the comment's own badge says where it
+            is, and the full card below carries one. */}
+        <Show
+          when={props.comments.replies.answer(props.comment)}
+          fallback={
+            <Show when={inDiff()}>
+              <Show
+                when={props.comments.drafts.isDraft(props.comment)}
+                fallback={<Badge tone="success">Sent</Badge>}
+              >
+                <Badge tone="warning">Draft</Badge>
+              </Show>
+            </Show>
+          }
+        >
+          {(answer) => (
+            <StatusBadge
+              status={answer().status}
+              addressedIn={answer().addressed_in}
+            />
+          )}
+        </Show>
+        <Show when={inDiff()}>
+          <span class={styles.show}>
+            <Button onClick={() => props.onShow()}>Show in diff</Button>
+          </span>
+        </Show>
+      </header>
+      {/* The diff holds the thread of its own revision's comments, and an
+          editor open in two places would split what's typed. */}
+      <Show
+        when={!inDiff()}
+        fallback={
+          <p class={styles.excerpt}>
+            {props.comment.body}
+            <Show when={replies()}>
+              {(count) => (
+                <Meta>
+                  {" "}
+                  · {count()} {count() === 1 ? "reply" : "replies"}
+                </Meta>
+              )}
+            </Show>
+          </p>
+        }
+      >
+        <CommentCard comments={props.comments} comment={props.comment} />
+      </Show>
+    </li>
+  );
+}
+
+function whereOf(comment: Comment): string {
+  const lines =
+    comment.start_line === comment.line
+      ? `${comment.line}`
+      : `${comment.start_line}–${comment.line}`;
+  const side = comment.side === "old" ? " (old)" : "";
+  return `${comment.path}:${lines}${side} @r${comment.revision}`;
+}

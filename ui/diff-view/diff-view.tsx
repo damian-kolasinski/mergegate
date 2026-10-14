@@ -201,6 +201,8 @@ export function DiffView(props: {
     const observer = new MutationObserver(sweep);
     observer.observe(root, { childList: true, subtree: true });
     const onScroll = (top: number) => {
+      if (movedTo !== undefined && inView(movedTo, top)) return;
+      movedTo = undefined;
       const path = fileAt(top);
       if (path !== undefined) props.onFile(path);
     };
@@ -213,9 +215,12 @@ export function DiffView(props: {
       mounted.clear();
     });
     props.control({
-      showFile: (path) =>
-        view.scrollTo({ type: "item", id: path, behavior: "instant" }),
+      showFile: (path) => {
+        movedTo = path;
+        view.scrollTo({ type: "item", id: path, behavior: "instant" });
+      },
       showRow: (row) => {
+        movedTo = row.path;
         const range = {
           start: row.line,
           end: row.line,
@@ -229,6 +234,20 @@ export function DiffView(props: {
       clearRow: () => view.clearSelectedLines(),
     });
   });
+
+  // The file the operator last moved to, which stays current while any of it
+  // is in view. CodeView reports the scroll that showed it a frame later,
+  // like one of the operator's, and the file at the top then is often the
+  // one before it.
+  let movedTo: string | undefined;
+  const inView = (path: string, top: number) => {
+    const start = view.getTopForItem(path);
+    if (start === undefined) return false;
+    const next =
+      props.files[props.files.findIndex((file) => file.path === path) + 1];
+    const end = (next && view.getTopForItem(next.path)) ?? Infinity;
+    return start < top + view.getHeight() && end > top;
+  };
 
   const showLine = (spot: Spot) =>
     view.scrollTo({
