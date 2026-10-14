@@ -7,6 +7,7 @@ mod diff;
 mod http;
 mod inspect;
 mod items;
+mod merge;
 mod staging;
 
 use std::path::{Path, PathBuf};

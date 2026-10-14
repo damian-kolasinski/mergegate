@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::item::Item;
+use crate::merge::Blocked;
 use crate::review::Conversation;
 
 /// `GET /api/items/{id}`: the item with its newest revision's files.
@@ -8,6 +9,8 @@ use crate::review::Conversation;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDiff {
     pub item: Item,
+    /// Set while the newest revision's merge is held or conflicts.
+    pub blocked: Option<Blocked>,
     /// In path order.
     pub files: Vec<File>,
     #[serde(flatten)]

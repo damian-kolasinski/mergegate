@@ -1,0 +1,27 @@
+/* A strip under the header; a refusal from the operator's repo can be long
+   and wraps. */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-container);
+}
+
+.notice > :not(:first-child) {
+  white-space: normal;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.paths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

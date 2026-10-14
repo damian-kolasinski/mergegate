@@ -35,6 +35,7 @@ async fn submit(
         verdict: match request.verdict {
             api::review::Verdict::Comment => Verdict::Comment,
             api::review::Verdict::ChangesRequested => Verdict::ChangesRequested,
+            api::review::Verdict::Approved => Verdict::Approved,
         },
         summary: request.summary,
     };
@@ -63,6 +64,7 @@ pub(crate) fn verdict_to_api(verdict: Verdict) -> api::review::Verdict {
     match verdict {
         Verdict::Comment => api::review::Verdict::Comment,
         Verdict::ChangesRequested => api::review::Verdict::ChangesRequested,
+        Verdict::Approved => api::review::Verdict::Approved,
     }
 }
 
@@ -75,6 +77,7 @@ pub(crate) fn failure(e: ReviewError) -> Failure {
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::Empty => (S::BAD_REQUEST, "empty_review", None),
+        E::Approval => (S::BAD_REQUEST, "invalid_verdict", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };
     if status.is_server_error() {

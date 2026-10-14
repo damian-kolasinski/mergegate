@@ -24,6 +24,27 @@ pub(crate) fn git(home: &Path) -> Command {
     cmd
 }
 
+/// The `git` binary as the operator runs it, for acting on their repo on
+/// their behalf: their config, identity and hooks apply. Only the variables
+/// that point git at a repo are dropped, since the hub may have been started
+/// inside one.
+pub(crate) fn operator() -> Command {
+    let mut cmd = Command::new("git");
+    for key in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_NAMESPACE",
+    ] {
+        cmd.env_remove(key);
+    }
+    cmd.env("GIT_TERMINAL_PROMPT", "0").env("LC_ALL", "C");
+    cmd
+}
+
 /// `doing` names the step in errors, as in "fetching main from /src/app
 /// failed: ...".
 pub(crate) fn run<I, S>(home: &Path, doing: &str, args: I) -> Result<String, GitError>
@@ -31,7 +52,15 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let output = output(home, doing, args)?;
+    let mut cmd = git(home);
+    cmd.args(args);
+    run_command(cmd, doing)
+}
+
+/// Like [`run`], for a command [`git`] or [`operator`] made and the caller
+/// set up further.
+pub(crate) fn run_command(cmd: Command, doing: &str) -> Result<String, GitError> {
+    let output = output_of(cmd, doing)?;
     if !output.status.success() {
         return Err(failed(doing, &output));
     }
@@ -64,14 +93,20 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    git(home)
-        .args(args)
-        .stdin(Stdio::null())
+    let mut cmd = git(home);
+    cmd.args(args);
+    output_of(cmd, doing)
+}
+
+/// Runs `cmd` whatever its exit status, for commands whose failures say
+/// something, as `git merge-tree` exiting with 1 on a conflict does.
+pub(crate) fn output_of(mut cmd: Command, doing: &str) -> Result<Output, GitError> {
+    cmd.stdin(Stdio::null())
         .output()
         .map_err(|e| GitError::Failed(format!("{doing} failed: can't run git: {e}")))
 }
 
-fn failed(doing: &str, output: &Output) -> GitError {
+pub(crate) fn failed(doing: &str, output: &Output) -> GitError {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let why = match stderr.trim() {
         "" => output.status.to_string(),

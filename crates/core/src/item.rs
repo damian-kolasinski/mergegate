@@ -15,6 +15,7 @@ mod submit;
 
 pub use abandon::{Abandon, abandon};
 pub use branch::valid_branch;
+pub(crate) use close::close;
 pub use error::ItemError;
 pub use git::{ChangedFile, FileStat, ItemGit, valid_commit};
 pub use id::{IdError, ItemId};

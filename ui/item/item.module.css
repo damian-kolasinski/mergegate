@@ -6,6 +6,12 @@
   height: 100%;
 }
 
+/* The header and what blocks the merge, under it. */
+.top {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .diff {
   min-width: 0;
   min-height: 0;

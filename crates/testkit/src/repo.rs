@@ -33,6 +33,11 @@ impl TestRepo {
             dir.path(),
             ["init", "--quiet", "--initial-branch=main", name],
         );
+        // The operator's identity, which a merge reads through the hub's own
+        // environment rather than the fixed one `git` sets here; repo config
+        // wins over the developer's global one.
+        git(&root, ["config", "user.name", "Operator"]);
+        git(&root, ["config", "user.email", "operator@example.com"]);
         Self { dir, root }
     }
 

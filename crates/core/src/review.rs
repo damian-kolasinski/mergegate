@@ -41,23 +41,26 @@ pub struct Review {
     pub submitted_at: String,
 }
 
-/// Approving comes with merging, in PR 7.
+/// What the operator decided about a revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     /// Feedback that leaves the item waiting for review.
     Comment,
     /// Sends the item back to its agent.
     ChangesRequested,
+    /// Merges the revision; only [`crate::merge::approve`] sends it.
+    Approved,
 }
 
 impl Verdict {
-    pub const ALL: [Self; 2] = [Self::Comment, Self::ChangesRequested];
+    pub const ALL: [Self; 3] = [Self::Comment, Self::ChangesRequested, Self::Approved];
 
     /// The name the store spells the verdict with.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Comment => "comment",
             Self::ChangesRequested => "changes_requested",
+            Self::Approved => "approved",
         }
     }
 }

@@ -11,6 +11,8 @@ pub enum ReviewError {
     Closed(ItemId),
     #[error("{0} is merging")]
     Merging(ItemId),
+    #[error("approving merges the item; approve it instead")]
+    Approval,
     #[error("a review needs a summary, a comment or a reply")]
     Empty,
     #[error(transparent)]

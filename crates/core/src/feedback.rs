@@ -57,6 +57,18 @@ pub struct Notice {
 pub enum NoticeKind {
     /// `reason` is none when whoever abandoned it gave none.
     Abandoned { reason: Option<String> },
+    /// The approved revision didn't land and waits for the operator to retry,
+    /// as when their checkout of the target is dirty; `reason` is git's.
+    MergeHeld { reason: String },
+    /// The operator gave up on a held merge; the item needs review again.
+    MergeCancelled,
+    /// The approved revision conflicts with the target at `target_commit`.
+    MergeConflict {
+        target_commit: String,
+        paths: Vec<String>,
+    },
+    /// The approved revision landed as `commit` on the target.
+    Merged { commit: String },
 }
 
 /// Who an event comes from. External reviewers join in PR 10.

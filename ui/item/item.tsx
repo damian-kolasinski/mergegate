@@ -13,6 +13,7 @@ import { Thread } from "./comments/thread";
 import { FileList } from "./files";
 import { Abandon } from "./abandon";
 import { ItemHeader } from "./header";
+import { MergeBlocked } from "./merge-blocked";
 import styles from "./item.module.css";
 import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
@@ -34,12 +35,14 @@ export function ItemScreen(props: { id: string }) {
   );
   // A closed item's diffs are gone, so its review gives way to what's left.
   // Other changes, a new revision among them, wait for the operator to
-  // reopen the item rather than move the diff under them.
-  const reload = () => {
+  // reopen the item rather than move the diff under them; the operator's own
+  // merge actions `replace` it, since the revision stays and only what's
+  // sent and blocked moves.
+  const reload = (replace = false) => {
     void fetchDiff().then(
       (next) => {
         const shown = diff()?.item.state;
-        if (closed(next.item.state) && !(shown && closed(shown))) {
+        if (replace || (closed(next.item.state) && !(shown && closed(shown)))) {
           setDiff(next);
         }
       },
@@ -57,7 +60,13 @@ export function ItemScreen(props: { id: string }) {
       {/* Keyed: the diff only changes when the item closes, and the review
           starts over on what is left. */}
       <Show when={diff()} keyed fallback={<Leave />}>
-        {(current) => <Review diff={current} onClosed={reload} />}
+        {(current) => (
+          <Review
+            diff={current}
+            onClosed={() => reload()}
+            onMerge={() => reload(true)}
+          />
+        )}
       </Show>
     </section>
   );
@@ -73,7 +82,11 @@ function leave() {
   location.hash = inboxHref;
 }
 
-function Review(props: { diff: ItemDiff; onClosed: () => void }) {
+function Review(props: {
+  diff: ItemDiff;
+  onClosed: () => void;
+  onMerge: () => void;
+}) {
   // As the hub moves it: Request changes hands the item back, Comment keeps
   // it with the operator.
   const [moved, setMoved] = createSignal<ItemState>();
@@ -161,35 +174,47 @@ function Review(props: { diff: ItemDiff; onClosed: () => void }) {
 
   return (
     <>
-      <ItemHeader
-        item={props.diff.item}
-        state={state()}
-        viewed={viewed.paths().size}
-        files={props.diff.files.length}
-        failure={viewed.failure()}
-      >
-        <Conversation
-          comments={comments}
-          open={talking()}
-          onToggle={() => (talking() ? hideAll() : setTalking(true))}
-          onShow={hideAll}
-          ref={(element) => {
-            toggle = element;
-          }}
-        />
-        <Show when={open(state())}>
-          <Abandon
-            item={props.diff.item.id}
-            open={abandoning()}
-            onToggle={() => setAbandoning(!abandoning())}
-            onAbandoned={(item) => {
-              setAbandoning(false);
-              setMoved(item.state);
-              props.onClosed();
+      <div class={styles.top}>
+        <ItemHeader
+          item={props.diff.item}
+          state={state()}
+          viewed={viewed.paths().size}
+          files={props.diff.files.length}
+          failure={viewed.failure()}
+        >
+          <Conversation
+            comments={comments}
+            open={talking()}
+            onToggle={() => (talking() ? hideAll() : setTalking(true))}
+            onShow={hideAll}
+            ref={(element) => {
+              toggle = element;
             }}
           />
+          <Show when={open(state())}>
+            <Abandon
+              item={props.diff.item.id}
+              open={abandoning()}
+              onToggle={() => setAbandoning(!abandoning())}
+              onAbandoned={(item) => {
+                setAbandoning(false);
+                setMoved(item.state);
+                props.onClosed();
+              }}
+            />
+          </Show>
+        </ItemHeader>
+        <Show when={props.diff.blocked}>
+          {(blocked) => (
+            <MergeBlocked
+              item={props.diff.item.id}
+              target={props.diff.item.target}
+              blocked={blocked()}
+              onChanged={props.onMerge}
+            />
+          )}
         </Show>
-      </ItemHeader>
+      </div>
       <FileList
         files={props.diff.files}
         viewed={viewed.paths()}
@@ -224,10 +249,16 @@ function Review(props: { diff: ItemDiff; onClosed: () => void }) {
         <ReviewBar
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
+          target={props.diff.item.target}
+          unviewed={
+            props.diff.files.filter((file) => !viewed.paths().has(file.path))
+              .length
+          }
           drafts={comments.drafts.list().length}
           replies={comments.replyDrafts.list().length}
           holding={comments.editor.holding()}
           onSubmitted={reviewed}
+          onMerged={props.onMerge}
         />
       </Show>
     </>

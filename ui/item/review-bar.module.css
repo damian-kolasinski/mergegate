@@ -28,3 +28,12 @@
 .status > * {
   white-space: normal;
 }
+
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}

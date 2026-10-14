@@ -8,6 +8,7 @@ pub mod event;
 pub mod feedback;
 pub mod hub;
 pub mod item;
+pub mod merge;
 pub mod project;
 pub mod review;
 pub mod viewed;

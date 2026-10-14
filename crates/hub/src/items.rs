@@ -10,10 +10,11 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use mergegate_core::item::{self, Item, ItemError, ItemState, Submit};
+use mergegate_core::store::StoreError;
 
-use crate::projects;
 use crate::reply::Failure;
 use crate::server::AppState;
+use crate::{merge, projects};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -59,15 +60,23 @@ async fn submit(
 
 async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inbox>, Failure> {
     let inbox = state
-        .blocking(|store, _| item::inbox(store))
+        .blocking(|store, _| {
+            let inbox = item::inbox(store)?;
+            let entries = |items: Vec<Item>| -> Result<Vec<_>, StoreError> {
+                items
+                    .iter()
+                    .map(|item| Ok(inbox_entry(item, merge::blocked(store, item)?)))
+                    .collect()
+            };
+            Ok(api::item::Inbox {
+                needs_you: entries(inbox.needs_you)?,
+                with_agents: entries(inbox.with_agents)?,
+                merging: entries(inbox.merging)?,
+            })
+        })
         .await
-        .map_err(|e| failure(e.into()))?;
-    let entries = |items: Vec<Item>| items.iter().map(inbox_entry).collect();
-    Ok(Json(api::item::Inbox {
-        needs_you: entries(inbox.needs_you),
-        with_agents: entries(inbox.with_agents),
-        merging: entries(inbox.merging),
-    }))
+        .map_err(|e: StoreError| failure(e.into()))?;
+    Ok(Json(inbox))
 }
 
 pub(crate) fn to_api(item: &Item) -> api::item::Item {
@@ -92,7 +101,7 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
     }
 }
 
-fn inbox_entry(item: &Item) -> api::item::InboxItem {
+fn inbox_entry(item: &Item, blocked: Option<api::merge::Blocked>) -> api::item::InboxItem {
     let revision = &item.revision;
     api::item::InboxItem {
         id: item.id.to_string(),
@@ -104,6 +113,7 @@ fn inbox_entry(item: &Item) -> api::item::InboxItem {
         deletions: revision.stat.deletions,
         created_at: item.created_at.clone(),
         updated_at: revision.submitted_at.clone(),
+        blocked,
     }
 }
 

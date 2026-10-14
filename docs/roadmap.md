@@ -32,9 +32,8 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
-| 7 | Approve and merge (local) | Approve & merge in the review bar (`a`), test-merge, push into the operator's repo, hold when the checkout is dirty, `merge.conflict`, `mg abandon`, dropping a closed item's revision pins and the cached diffs no open item uses | F8, F9, F14 | — |
-| 8 | Agent skill | Embedded skill, `mg skill install`, `mg resume`, `--wake`; a test that every command the skill names exists | F3, F14 | — |
-| 9 | GitHub backend | Push the branch, open and update the PR, merge through the API, switch a project's backend (listing open items in a `needs_decision`, as a target change does) | F1, F4, F8, F15 | GitHub |
+| 8 | Agent skill | Embedded skill, `mg skill install`, `mg resume`, `--wake`; a test that every command the skill names exists; deleting a merged branch with `git branch -D`, since a squash leaves it unmerged to git | F3, F14 | — |
+| 9 | GitHub backend | Push the branch, open and update the PR, squash-merge through the API as the local backend squashes, switch a project's backend (listing open items in a `needs_decision`, as a target change does) | F1, F4, F8, F15 | GitHub |
 | 10 | External review | Polling PR comments, debounce, `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub |
 | 11 | File triage | `rules.toml`, guards, review/trusted tiers, `--guide` ordering, `mg rules propose/list`, approving looser rules in the UI | F11, F12 | — |
 | 12 | Re-review | Interdiffs over a moved base, viewed marks across revisions, re-mapping drafts and comments onto newer revisions, the new-revision banner | F7, F13 | — |

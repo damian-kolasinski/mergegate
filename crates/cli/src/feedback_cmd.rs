@@ -92,6 +92,7 @@ fn event(event: &Event) -> String {
             let verdict = match verdict {
                 Verdict::Comment => "commented",
                 Verdict::ChangesRequested => "requested changes",
+                Verdict::Approved => "approved",
             };
             let mut out = format!(
                 "[{}] {} r{}: the operator {verdict}",
@@ -131,6 +132,43 @@ fn event(event: &Event) -> String {
             }
             out
         }
+        EventBody::MergeHeld { reason } => {
+            let mut out = format!(
+                "[{}] {} r{}: the merge is held until the operator retries it",
+                event.cursor, event.item, event.revision
+            );
+            for line in reason.lines() {
+                out.push_str(&format!("\n  {line}"));
+            }
+            out
+        }
+        EventBody::MergeCancelled {} => format!(
+            "[{}] {} r{}: the operator cancelled the held merge; it needs review again",
+            event.cursor, event.item, event.revision
+        ),
+        EventBody::MergeConflict {
+            target_commit,
+            paths,
+            commands,
+        } => {
+            let short = &target_commit[..target_commit.len().min(12)];
+            let mut out = format!(
+                "[{}] {} r{}: merging conflicts with the target at {short}",
+                event.cursor, event.item, event.revision
+            );
+            for path in paths {
+                out.push_str(&format!("\n  {path}"));
+            }
+            out.push_str("\n\n  Rebase and submit again:");
+            for command in commands {
+                out.push_str(&format!("\n    {command}"));
+            }
+            out
+        }
+        EventBody::ItemMerged { commit } => format!(
+            "[{}] {} r{}: the operator merged it as {commit}",
+            event.cursor, event.item, event.revision
+        ),
     }
 }
 

@@ -103,12 +103,25 @@ impl FeedbackStore for Store {
             params![item_id, state.as_str()],
         )
         .map_err(StoreError::new)?;
-        let Columns { kind, body } = columns(&notice.kind);
+        let Columns {
+            kind,
+            body,
+            commit_id,
+            paths,
+        } = columns(&notice.kind);
         let cursor: i64 = tx
             .query_row(
-                "INSERT INTO events (item_id, type, revision, source, body)
-                 VALUES (?1, ?2, ?3, ?4, ?5) RETURNING cursor",
-                params![item_id, kind, notice.revision, notice.source.as_str(), body],
+                "INSERT INTO events (item_id, type, revision, source, body, commit_id, paths)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING cursor",
+                params![
+                    item_id,
+                    kind,
+                    notice.revision,
+                    notice.source.as_str(),
+                    body,
+                    commit_id,
+                    paths
+                ],
                 |row| row.get(0),
             )
             .map_err(StoreError::new)?;
@@ -127,6 +140,8 @@ struct EventRow {
     revision: u32,
     source: String,
     body: Option<String>,
+    commit_id: Option<String>,
+    paths: Option<String>,
     review: Option<ReviewRow>,
 }
 
@@ -148,6 +163,8 @@ impl EventRow {
             revision: row.get(2)?,
             source: row.get(3)?,
             body: row.get(4)?,
+            commit_id: row.get(5)?,
+            paths: row.get(6)?,
             review,
         })
     }
@@ -157,20 +174,57 @@ impl EventRow {
 struct Columns {
     kind: &'static str,
     body: Option<String>,
+    commit_id: Option<String>,
+    /// One per line, which git's conflict listing quotes out of any path.
+    paths: Option<String>,
 }
 
 fn columns(kind: &NoticeKind) -> Columns {
+    let spelled = |kind, body: Option<&String>| Columns {
+        kind,
+        body: body.cloned(),
+        commit_id: None,
+        paths: None,
+    };
     match kind {
-        NoticeKind::Abandoned { reason } => Columns {
-            kind: "item.abandoned",
-            body: reason.clone(),
+        NoticeKind::Abandoned { reason } => spelled("item.abandoned", reason.as_ref()),
+        NoticeKind::MergeHeld { reason } => spelled("merge.held", Some(reason)),
+        NoticeKind::MergeCancelled => spelled("merge.cancelled", None),
+        NoticeKind::MergeConflict {
+            target_commit,
+            paths,
+        } => Columns {
+            commit_id: Some(target_commit.clone()),
+            paths: Some(paths.join("\n")),
+            ..spelled("merge.conflict", None)
+        },
+        NoticeKind::Merged { commit } => Columns {
+            commit_id: Some(commit.clone()),
+            ..spelled("item.merged", None)
         },
     }
 }
 
 fn notice_kind(row: EventRow) -> Result<NoticeKind, StoreError> {
-    match row.kind.as_str() {
+    let kind = row.kind.as_str();
+    let missing = |column| StoreError::new(format!("{kind} event without {column}"));
+    match kind {
         "item.abandoned" => Ok(NoticeKind::Abandoned { reason: row.body }),
+        "merge.held" => Ok(NoticeKind::MergeHeld {
+            reason: row.body.ok_or_else(|| missing("body"))?,
+        }),
+        "merge.cancelled" => Ok(NoticeKind::MergeCancelled),
+        "merge.conflict" => Ok(NoticeKind::MergeConflict {
+            target_commit: row.commit_id.ok_or_else(|| missing("commit_id"))?,
+            paths: match row.paths {
+                Some(paths) if paths.is_empty() => Vec::new(),
+                Some(paths) => paths.split('\n').map(Into::into).collect(),
+                None => return Err(missing("paths")),
+            },
+        }),
+        "item.merged" => Ok(NoticeKind::Merged {
+            commit: row.commit_id.ok_or_else(|| missing("commit_id"))?,
+        }),
         other => Err(StoreError::new(format!("unknown event type {other:?}"))),
     }
 }

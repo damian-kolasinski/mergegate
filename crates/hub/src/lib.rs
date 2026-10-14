@@ -13,6 +13,7 @@ mod guard;
 mod home;
 mod items;
 mod lifecycle;
+mod merge;
 mod projects;
 mod replies;
 mod reply;

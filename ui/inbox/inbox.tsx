@@ -1,10 +1,11 @@
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import type { Blocked } from "../api/Blocked";
 import type { Inbox } from "../api/Inbox";
 import type { InboxItem } from "../api/InboxItem";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { itemHref } from "../app/router";
-import { Empty, Meta, Mono, Row, Section } from "../design-system";
+import { Badge, Empty, Meta, Mono, Row, Section } from "../design-system";
 import styles from "./inbox.module.css";
 
 const GROUPS = [
@@ -134,6 +135,15 @@ function Entry(props: {
       <span class={styles.title} title={props.item.branch}>
         {props.item.title}
       </span>
+      <Show when={props.item.blocked}>
+        {(blocked) => (
+          <span class={styles.flag} title={why(blocked())}>
+            <Badge tone="warning">
+              {blocked().kind === "held" ? "Merge held" : "Conflict"}
+            </Badge>
+          </span>
+        )}
+      </Show>
       {/* A zero count leaves its cell empty so the columns stay aligned. */}
       <span class={styles.figure}>
         <Show when={props.item.additions}>
@@ -155,6 +165,11 @@ function Entry(props: {
       </span>
     </Row>
   );
+}
+
+function why(blocked: Blocked): string {
+  if (blocked.kind === "held") return blocked.reason;
+  return `Conflicts in ${blocked.paths.join(", ")}`;
 }
 
 /** How long ago `timestamp` was, as short as a column allows: `5m`, `2h`. */

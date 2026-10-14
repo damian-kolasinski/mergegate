@@ -19,6 +19,9 @@ pub enum Verdict {
     Comment,
     /// Sends the item back to its agent.
     ChangesRequested,
+    /// Merges the item. Only `POST /api/items/{id}/approve` sends it; the
+    /// reviews route refuses it.
+    Approved,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
