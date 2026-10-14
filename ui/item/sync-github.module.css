@@ -1,0 +1,7 @@
+.sync {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: center;
+}

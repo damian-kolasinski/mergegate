@@ -34,4 +34,7 @@ pub struct Project {
     /// The repository the `github` backend publishes to. Always set while
     /// that's the backend, and kept when the project moves off it.
     pub github: Option<GithubRepo>,
+    /// The GitHub logins of the bots that review the project's pull
+    /// requests, which a batch of external comments waits for.
+    pub bots: Vec<String>,
 }

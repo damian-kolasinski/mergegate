@@ -9,6 +9,7 @@ fn project(name: &str, upstream: &str) -> Project {
         target: "main".into(),
         upstream: upstream.into(),
         github: None,
+        bots: Vec::new(),
     }
 }
 
@@ -54,6 +55,7 @@ fn updates_a_projects_settings() {
 
     app.backend = Backend::Github;
     app.github = GithubRepo::parse("acme/app");
+    app.bots = vec!["codex".into(), "claude[bot]".into()];
     store.update_project(&app).unwrap();
     assert_eq!(store.projects().unwrap(), [app.clone()]);
     // Leaving github keeps the repository for the next switch back.

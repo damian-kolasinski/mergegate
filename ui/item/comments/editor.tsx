@@ -11,6 +11,8 @@ export type Open = {
   text: string;
   /** Writes the text to the hub; the editor closes once it has. */
   save: (text: string) => Promise<unknown>;
+  /** Saves with no text too. */
+  optional?: boolean;
   /** Puts the editor back on the page, where CodeView renders only what's near. */
   show: () => void;
 };
@@ -86,7 +88,8 @@ export function useEditor() {
     },
     save() {
       const editing = open();
-      if (!editing?.text.trim() || saving()) return;
+      if (!editing || saving()) return;
+      if (!editing.optional && !editing.text.trim()) return;
       setSaving(true);
       setFailure(undefined);
       editing
@@ -107,10 +110,15 @@ export function Editor(props: {
   label: string;
   /** What's written: a comment unless said otherwise. */
   noun?: string;
+  /** What the text is for, when it's not saved as a draft. */
+  placeholder?: string;
+  /** The save button's label. */
+  action?: string;
 }) {
   let field: HTMLTextAreaElement | undefined;
   onMount(() => field && focusOnceShown(field));
   const empty = () => !props.editor.open()?.text.trim();
+  const blocked = () => empty() && !props.editor.open()?.optional;
   return (
     <div
       class={styles.editor}
@@ -125,7 +133,10 @@ export function Editor(props: {
     >
       <TextArea
         label={props.label}
-        placeholder={`${props.noun ?? "Comment"} for the agent, sent with the review (⌘↩ saves)`}
+        placeholder={
+          props.placeholder ??
+          `${props.noun ?? "Comment"} for the agent, sent with the review (⌘↩ saves)`
+        }
         rows={3}
         value={props.editor.open()?.text ?? ""}
         disabled={props.editor.saving()}
@@ -151,10 +162,10 @@ export function Editor(props: {
         </Button>
         <Button
           variant="solid"
-          disabled={empty() || props.editor.saving()}
+          disabled={blocked() || props.editor.saving()}
           onClick={() => props.editor.save()}
         >
-          Save draft
+          {props.action ?? "Save draft"}
         </Button>
       </div>
     </div>

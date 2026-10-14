@@ -32,6 +32,10 @@ pub struct Project {
     /// `owner/repo` on GitHub, where the github backend publishes items.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github: Option<String>,
+    /// GitHub logins of the bots that review its pull requests: their
+    /// comments wait for each other before going to the agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bots: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

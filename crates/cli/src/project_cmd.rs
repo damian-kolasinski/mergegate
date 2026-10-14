@@ -33,7 +33,8 @@ pub enum ProjectCommand {
     /// Show a project; without one, the project at the current directory, or
     /// every project when there is none
     Show { project: Option<String> },
-    /// Change a project's backend, target, upstream or GitHub repository
+    /// Change a project's backend, target, upstream, GitHub repository, or
+    /// bots: the GitHub logins, comma-separated, whose reviews to wait for
     Set {
         project: String,
         key: String,
@@ -185,6 +186,9 @@ fn describe(p: &Project) -> String {
     );
     if let Some(github) = &p.github {
         text.push_str(&format!("\n  github    {github}"));
+    }
+    if !p.bots.is_empty() {
+        text.push_str(&format!("\n  bots      {}", p.bots.join(", ")));
     }
     text
 }

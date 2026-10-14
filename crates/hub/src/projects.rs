@@ -116,6 +116,7 @@ fn to_api(project: &Project) -> api::project::Project {
         target: project.target.clone(),
         upstream: project.upstream.display().to_string(),
         github: project.github.as_ref().map(ToString::to_string),
+        bots: project.bots.clone(),
     }
 }
 

@@ -14,6 +14,7 @@ mod repo;
 mod resume_cmd;
 mod skill_cmd;
 mod submit_cmd;
+mod sync_cmd;
 mod wait_cmd;
 
 use std::ffi::OsString;
@@ -97,7 +98,7 @@ enum Command {
         #[arg(long)]
         since: Option<u64>,
     },
-    /// Answer a comment from the operator's review
+    /// Answer a comment from the operator's review or from GitHub
     Reply {
         /// The comment, as in c_17
         comment: String,
@@ -106,6 +107,13 @@ enum Command {
         /// Why, for the operator; required unless the status is addressed
         #[arg(long)]
         body: Option<String>,
+    },
+    /// Read the item's pull request comments on GitHub now and get those the
+    /// hub holds at once; the hub polls on its own, so only when it missed
+    /// some
+    Sync {
+        /// The item, as in app#42
+        item: String,
     },
     /// Close an item without merging it; its pinned revisions and diffs go
     Abandon {
@@ -159,6 +167,7 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             status,
             body,
         } => reply_cmd::run(comment, status, body),
+        Command::Sync { item } => sync_cmd::run(item),
         Command::Abandon { item, reason } => abandon_cmd::run(item, reason),
         Command::Resume { item } => resume_cmd::run(item),
         Command::Inbox => inbox_cmd::run(),

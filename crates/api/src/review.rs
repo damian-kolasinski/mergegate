@@ -38,7 +38,9 @@ pub struct Review {
     pub submitted_at: String,
 }
 
-/// A comment on lines `start_line..=line` of one side of a file.
+/// A comment on lines `start_line..=line` of one side of a file, or, only
+/// for one from GitHub, on the item as a whole: then `path`, `side`, the
+/// lines and `quote` are all null.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Comment {
@@ -46,13 +48,49 @@ pub struct Comment {
     pub id: String,
     /// The revision it was written on.
     pub revision: u32,
-    pub path: String,
-    pub side: Side,
-    pub start_line: u32,
-    pub line: u32,
+    pub path: Option<String>,
+    pub side: Option<Side>,
+    pub start_line: Option<u32>,
+    pub line: Option<u32>,
     pub body: String,
     /// The last few of the commented lines.
-    pub quote: String,
+    pub quote: Option<String>,
+    /// Where a comment someone left on the item's pull request came from;
+    /// absent for the operator's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub external: Option<ExternalComment>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalComment {
+    /// The GitHub login, as in `codex[bot]`.
+    pub author: String,
+    pub bot: bool,
+    pub kind: ExternalKind,
+    /// Its page on GitHub.
+    pub url: String,
+    /// The file an inline comment is on, also when its lines couldn't be
+    /// placed on a revision.
+    pub path: Option<String>,
+    /// Not handed to the agent yet: the hub waits for the reviewers to go
+    /// quiet.
+    pub pending: bool,
+    /// The agent's rejection the operator agreed with.
+    pub agreed_reply: Option<u64>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalKind {
+    /// On lines of the pull request's diff.
+    ReviewComment,
+    /// On the pull request's conversation.
+    IssueComment,
+    /// A review's body.
+    Review,
 }
 
 /// The file before the change, or after it.
@@ -123,6 +161,10 @@ pub struct Reply {
     /// The revision that addressed an `addressed` reply: the first one
     /// submitted after it.
     pub addressed_in: Option<u32>,
+    /// The operator's override of the agent's rejection, sent at once.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub overrides: bool,
     pub created_at: String,
 }
 
@@ -144,6 +186,30 @@ pub enum ReplyStatus {
     Rejected,
     /// The agent needs the operator to answer first.
     Question,
+}
+
+/// `POST /api/comments/{comment}/override`: the operator wants the change
+/// the agent rejected on a comment from GitHub. Answered with the [`Reply`],
+/// which goes to the agent at once.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverrideRejection {
+    /// Why, if the operator says.
+    #[serde(default)]
+    pub note: String,
+}
+
+/// `POST /api/items/{id}/sync`: reads the pull request's comments again,
+/// whatever GitHub cached, and hands what's held to the agent now.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Synced {
+    /// Comments the hub hadn't seen.
+    pub new: u32,
+    /// Comments edited since the hub last saw them.
+    pub edited: u32,
+    /// How many comments went to the agent, in an `external.comments` event.
+    pub released: u32,
 }
 
 /// `POST /api/comments/{comment}/replies`: the agent answers a sent comment.

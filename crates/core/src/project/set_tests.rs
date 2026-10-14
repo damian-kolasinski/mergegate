@@ -71,8 +71,41 @@ fn parses_settings() {
     let err = Setting::parse("colour", "red").unwrap_err();
     assert_eq!(
         err.to_string(),
-        "unknown setting colour; settings are backend, target, upstream, github"
+        "unknown setting colour; settings are backend, target, upstream, github, bots"
     );
+}
+
+#[test]
+fn parses_bots_as_logins() {
+    assert_eq!(
+        Setting::parse("bots", " codex, claude[bot],Codex[bot] ,").unwrap(),
+        Setting::Bots(vec!["codex".into(), "claude[bot]".into()])
+    );
+    assert_eq!(
+        Setting::parse("bots", "").unwrap(),
+        Setting::Bots(Vec::new())
+    );
+    for bad in ["co dex", "-codex", "[bot]", "codex/x"] {
+        assert!(
+            matches!(
+                Setting::parse("bots", bad),
+                Err(ProjectError::InvalidValue { key: "bots", .. })
+            ),
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn sets_bots_without_touching_staging() {
+    let git = git();
+    let mut store = setup(&git);
+    let synced = git.synced().len();
+    let bots = Setting::Bots(vec!["codex".into()]);
+    let project = change(&mut store, &git, "app", bots).unwrap();
+    assert_eq!(project.bots, ["codex"]);
+    assert_eq!(store.projects().unwrap(), [project]);
+    assert_eq!(git.synced().len(), synced);
 }
 
 #[test]

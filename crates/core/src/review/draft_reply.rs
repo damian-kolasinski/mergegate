@@ -31,7 +31,7 @@ pub fn write_draft_reply<S: ItemStore + ReviewStore>(
 ) -> Result<Reply, DraftReplyError> {
     let found = store
         .comment(comment)?
-        .filter(|c| c.review.is_some())
+        .filter(|c| !c.is_draft())
         .ok_or(DraftReplyError::NoComment(comment))?;
     let item = store
         .item(&found.item)?

@@ -16,6 +16,7 @@ fn two_items() -> (FakeStore, FakeGit) {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     let git = FakeGit::default()
@@ -240,6 +241,7 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: Some(acme.clone()),
+            bots: Vec::new(),
         })
         .unwrap();
     let git = FakeGit::default()

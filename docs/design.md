@@ -198,7 +198,10 @@ mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     exit 3   item closed (merged / abandoned)
     --for operator: only an event from the operator ends the wait, which then returns every
     unacknowledged event with it, so acknowledging never skips one. --timeout 0 waits until an event.
-    External comments are debounced (quiet window, default 60s) so the agent gets a batch, not a trickle.
+    External comments come in batches, not a trickle: the hub holds an item's GitHub comments until
+    they have been quiet for 60s and every bot in the project's `bots` has posted since the newest
+    push (or 20 minutes have passed since it), and sends them 20 minutes after the first regardless.
+    A read that returns other events takes the held comments with it.
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
     The hub keeps a delivered cursor per item: wait and feedback return the events after it, and the
@@ -208,6 +211,9 @@ mg reply <comment> --status addressed|rejected|question [--body TEXT]
     Respond to a comment (operator's or external). Replies thread on the comment and the latest
     status counts; a rejection or a question needs a body. Replies live in mergegate only, where the
     operator sees them; nothing is posted to GitHub.
+mg sync <item>                                   Refetch the item's pull request comments from GitHub
+                                                 and send the held ones now: the fix when polling missed
+                                                 something. The UI's Sync GitHub button does the same.
 mg attach <item> FILE...                         Add demo media to the latest revision.
 mg abandon <item> [--reason TEXT]
 mg resume <item>                                 Print a self-contained prompt (item context + unaddressed
@@ -252,7 +258,9 @@ mg rules list | propose ... | show <id>                See §7.3.
 
 The cursor is the event's position in the item's log, and comment IDs are hub-wide. A comment anchors to a line range on one side of a file in one revision and quotes the last few of its lines, so the agent needn't open the file to know what it means. Comments are on lines only; a whole-file remark goes in the review's summary. `replies` are the operator's answers to the agent's replies on earlier comments. Only events the agent acts on enter the log; its own submits and replies don't.
 
-Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit and the branch, which git sees as unmerged), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
+Event types: `review.submitted`, `external.comments` (each comment carries `external`: its author, whether a bot, its kind (`review_comment`, `issue_comment` or `review`) and its GitHub URL; one that can't be placed on a line has no anchor, and `edited` lists those an earlier batch carried with another body), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit and the branch, which git sees as unmerged), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (the operator overrode the agent's rejection of an external comment: the comment and the operator's reply, sent at once rather than with a review).
+
+External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. Deleted comments are ignored, as are the operator's own (the account `gh` signs in as).
 
 ### 6.4 Push extension point
 
@@ -269,7 +277,7 @@ run = "my-harness resume --item {item}"
 No model is involved in polling:
 
 - **The hub polls GitHub.** It's plain code in the daemon and costs no tokens.
-- **`mg wait` is one blocking command.** While it blocks, the agent isn't generating anything. Tokens are spent only when it returns, either with events (work the agent has to do anyway, batched by the debounce) or on a timeout (one short line).
+- **`mg wait` is one blocking command.** While it blocks, the agent isn't generating anything. Tokens are spent only when it returns, either with events (work the agent has to do anyway, with GitHub comments batched by the hub) or on a timeout (one short line).
 
 The agent picks the cheapest way to wait that its environment supports. The skill describes these by capability, not by agent name:
 
@@ -279,7 +287,7 @@ The agent picks the cheapest way to wait that its environment supports. The skil
 | be resumed by a shell command | `mg submit --wake "<resume cmd>"`, then ends its turn | none |
 | neither | loops `mg wait --timeout N`, N just under its tool-call limit | one small turn per timeout |
 
-A wake runs as `sh -c CMD` in the worktree of the item's latest submit, with `{item}` replaced and `MG_ITEM`, `MG_CURSOR` and `MERGEGATE_HOME` set, in its own process group. It runs when the item has events from the operator its agent hasn't acknowledged (its own, like an `mg abandon`, never wake it), but not while a read of the item is in flight, not for events a read already returned, and only one at a time per item, looking again when the command exits. Each event wakes at most once, across hub restarts. The command's stderr goes to `wakes/<item>.log` in the hub's home, not a pipe, since the session it starts may outlive the hub; the hub logs a failed command and doesn't retry. `mg resume` shows the wake an earlier session left, so a new one replaces it. The external-comment debounce (PR 10) will apply to wakes too, and once workers connect from other machines (PR 19) they can't set one or move where one runs (§4).
+A wake runs as `sh -c CMD` in the worktree of the item's latest submit, with `{item}` replaced and `MG_ITEM`, `MG_CURSOR` and `MERGEGATE_HOME` set, in its own process group. It runs when the item has events from the operator or GitHub its agent hasn't acknowledged (its own, like an `mg abandon`, never wake it), but not while a read of the item is in flight, not for events a read already returned, and only one at a time per item, looking again when the command exits. Each event wakes at most once, across hub restarts. The command's stderr goes to `wakes/<item>.log` in the hub's home, not a pipe, since the session it starts may outlive the hub; the hub logs a failed command and doesn't retry. `mg resume` shows the wake an earlier session left, so a new one replaces it. GitHub comments wake only once their batch is sent, and once workers connect from other machines (PR 19) they can't set one or move where one runs (§4).
 
 ## 7. File triage
 
@@ -351,7 +359,7 @@ A PR merged, closed or pushed to on GitHub directly isn't picked up yet: the ite
 
 The only things mergegate writes to GitHub are branches, PRs and merges. Agent replies stay in mergegate, which keeps the GitHub thread clean for human reviewers there.
 
-GitHub sync polls (ETag-conditional requests) at a short interval for open items. Webhooks would need a public endpoint, which conflicts with local-only.
+The hub polls each open github item's pull request comments every 30s, with ETag-conditional requests, and `mg sync` refetches on demand. Webhooks would need a public endpoint, which conflicts with local-only.
 
 ## 9. UX
 
@@ -409,7 +417,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 
 - **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A viewed file collapses to its header and counts toward the viewed total.
 - **Revision selector** defaults to "since last review": you see the interdiff only. A file that hasn't changed since you marked it viewed stays viewed.
-- **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open). You can agree, or override a rejection. An override becomes your comment and an event for the agent. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
+- **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can agree, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. Sync GitHub refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
 - **Demo panel** at the top for screenshots and recordings attached with `mg submit --attach`.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.

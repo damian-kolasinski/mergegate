@@ -5,6 +5,7 @@ import type { Spot } from "../../diff-view/diff-view";
 import { spotOf } from "./anchor";
 import { useDrafts } from "./drafts";
 import { useEditor } from "./editor";
+import { useExternal } from "./external";
 import { useReplies } from "./replies";
 import { useReplyDrafts } from "./reply-drafts";
 import { useSent } from "./sent";
@@ -12,8 +13,9 @@ import { useSync } from "./sync";
 import { useThreads } from "./thread";
 
 /**
- * The operator's line comments on an item, the one being written, and the
- * replies on them, the agent's and the operator's.
+ * The operator's line comments on an item, the one being written, those
+ * from its pull request on GitHub, and the replies on them, the agent's and
+ * the operator's.
  */
 export type Comments = ReturnType<typeof useComments>;
 
@@ -34,7 +36,8 @@ export function useComments(
   const show = (id: string) => {
     const comment = threads.all().find((comment) => comment.id === id);
     if (!comment) return;
-    if (comment.revision === revision) options.reveal(spotOf(comment));
+    const spot = threads.inDiff(comment) && spotOf(comment);
+    if (spot) options.reveal(spot);
     else options.showAll();
   };
   const drafts = useDrafts(diff, {
@@ -52,6 +55,13 @@ export function useComments(
     isAnswered: replies.has,
   });
   const refresh = useSync(diff.item.id, { sent, drafts, replies, replyDrafts });
+  const external = useExternal({
+    editor,
+    reviewable: options.reviewable,
+    show,
+    sent,
+    replies,
+  });
   const threads = useThreads(revision, {
     sent: sent.list,
     drafts: drafts.list,
@@ -65,6 +75,7 @@ export function useComments(
     drafts,
     replies,
     replyDrafts,
+    external,
     threads,
     /** The Conversation list mustn't close over text typed in it. */
     aside: () => {
@@ -76,7 +87,8 @@ export function useComments(
     },
     /** Scrolls to a comment the diff shows. */
     show(comment: Comment) {
-      options.reveal(spotOf(comment));
+      const spot = spotOf(comment);
+      if (spot) options.reveal(spot);
     },
     /** The comment's thread, oldest first, the operator's drafts included. */
     thread: (comment: Comment) =>

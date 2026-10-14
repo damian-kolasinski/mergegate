@@ -22,6 +22,7 @@ fn store() -> (tempfile::TempDir, Store) {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     store
@@ -95,11 +96,13 @@ fn drafts_change_until_a_review_sends_them() {
     let app = id("app#1");
     let first = store.insert_draft(draft(1, "First")).unwrap();
     assert_eq!(first.id, CommentId(1));
+    let anchor = first.anchor.as_ref().unwrap();
     assert_eq!(
-        (first.side, first.start_line, first.line),
+        (anchor.side, anchor.start_line, anchor.line),
         (Side::Old, 2, 3)
     );
-    assert_eq!(first.quote, "fn login() {\n}");
+    assert_eq!(anchor.quote, "fn login() {\n}");
+    assert_eq!(first.external, None);
     assert_eq!(first.review, None);
     let second = store.insert_draft(draft(2, "Second")).unwrap();
     store.set_draft_body(first.id, "First, again").unwrap();

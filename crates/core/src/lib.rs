@@ -5,6 +5,7 @@ pub mod agent;
 pub mod decision;
 pub mod diff;
 pub mod doctor;
+pub mod external;
 #[cfg(test)]
 mod fake;
 pub mod feedback;

@@ -14,6 +14,7 @@ fn store() -> (tempfile::TempDir, Store) {
             target: "main".into(),
             upstream: format!("/src/{name}").into(),
             github: None,
+            bots: Vec::new(),
         };
         store.insert_project(&project).unwrap();
     }

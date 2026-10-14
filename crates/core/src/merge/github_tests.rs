@@ -16,6 +16,7 @@ fn opened() -> (Project, Item, FakeGit, FakeGithub) {
         target: "main".into(),
         upstream: "/src/app".into(),
         github: Some(GithubRepo::parse("acme/app").unwrap()),
+        bots: Vec::new(),
     };
     store.insert_project(&project).unwrap();
     let git = FakeGit::default()

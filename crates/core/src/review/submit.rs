@@ -1,6 +1,6 @@
 //! Submitting a review: the end of F6, and F7's first step.
 
-use super::{NewReview, Reply, Review, ReviewError, ReviewStore, Verdict, reviewable};
+use super::{Comment, NewReview, Reply, Review, ReviewError, ReviewStore, Verdict, reviewable};
 use crate::item::{ItemId, ItemState, ItemStore};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,7 +38,7 @@ pub fn submit<S: ItemStore + ReviewStore>(
     }
     let summary = summary.trim().to_owned();
     if summary.is_empty()
-        && !store.comments(&id)?.iter().any(|c| c.review.is_none())
+        && !store.comments(&id)?.iter().any(Comment::is_draft)
         && !store.replies(&id)?.iter().any(Reply::is_draft)
     {
         return Err(ReviewError::Empty);

@@ -117,6 +117,7 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     let item = |branch: &str, files| NewItem {

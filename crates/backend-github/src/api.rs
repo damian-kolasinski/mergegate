@@ -21,6 +21,10 @@ pub(crate) struct Api {
 pub(crate) struct Reply {
     pub status: u16,
     pub body: Value,
+    /// What to send back to learn whether this changed.
+    pub etag: Option<String>,
+    /// The URL of the list's next page.
+    pub next: Option<String>,
 }
 
 impl Reply {
@@ -73,25 +77,38 @@ impl Api {
     }
 
     pub fn get(&self, path: &str) -> Result<Reply, GithubError> {
-        self.call(Method::GET, path, None)
+        self.call(Method::GET, path, None, None)
+    }
+
+    /// A 304 with no body when `etag` still matches, which GitHub doesn't
+    /// count against the rate limit. `path` may be a whole URL, as a list's
+    /// next page is.
+    pub fn get_if(&self, path: &str, etag: Option<&str>) -> Result<Reply, GithubError> {
+        self.call(Method::GET, path, None, etag)
     }
 
     pub fn send(&self, method: Method, path: &str, body: Value) -> Result<Reply, GithubError> {
-        self.call(method, path, Some(body))
+        self.call(method, path, Some(body), None)
     }
 
     pub fn delete(&self, path: &str) -> Result<Reply, GithubError> {
-        self.call(Method::DELETE, path, None)
+        self.call(Method::DELETE, path, None, None)
     }
 
     /// A token GitHub turns down is read from `gh` again and tried once
     /// more, so a `gh auth login` takes effect without restarting the hub.
-    fn call(&self, method: Method, path: &str, body: Option<Value>) -> Result<Reply, GithubError> {
+    fn call(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<Value>,
+        etag: Option<&str>,
+    ) -> Result<Reply, GithubError> {
         for retry in [false, true] {
             if retry {
                 self.token.forget();
             }
-            let reply = self.once(method.clone(), path, body.as_ref())?;
+            let reply = self.once(method.clone(), path, body.as_ref(), etag)?;
             if reply.status != 401 {
                 return Ok(reply);
             }
@@ -101,14 +118,28 @@ impl Api {
         ))
     }
 
-    fn once(&self, method: Method, path: &str, body: Option<&Value>) -> Result<Reply, GithubError> {
+    fn once(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+        etag: Option<&str>,
+    ) -> Result<Reply, GithubError> {
         let token = self.token.get()?;
-        let request = Request::builder()
+        let uri = if path.starts_with('/') {
+            format!("{}{path}", self.base)
+        } else {
+            path.to_owned()
+        };
+        let mut request = Request::builder()
             .method(method)
-            .uri(format!("{}{path}", self.base))
+            .uri(uri)
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("Authorization", format!("Bearer {}", token.expose()));
+        if let Some(etag) = etag {
+            request = request.header("If-None-Match", etag);
+        }
         let failed =
             |e: &dyn std::fmt::Display| GithubError::Failed(format!("reaching GitHub failed: {e}"));
         let response = match body {
@@ -123,14 +154,45 @@ impl Api {
         };
         let mut response = response.map_err(|e| failed(&e))?;
         let status = response.status().as_u16();
+        let header = |name| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned)
+        };
+        let etag = header("etag");
+        let next = header("link").and_then(|link| next_page(&link));
         let text = response
             .body_mut()
             .read_to_string()
             .map_err(|e| failed(&e))?;
         // A 204 has no body; anything else not JSON says nothing more.
         let body = serde_json::from_str(&text).unwrap_or(Value::Null);
-        Ok(Reply { status, body })
+        Ok(Reply {
+            status,
+            body,
+            etag,
+            next,
+        })
     }
+}
+
+/// The `rel="next"` URL of a `Link` header, as in
+/// `<https://api.github.com/…&page=2>; rel="next", <…>; rel="last"`.
+fn next_page(link: &str) -> Option<String> {
+    link.split(',').find_map(|part| {
+        let (url, params) = part.split_once(';')?;
+        params
+            .split(';')
+            .any(|param| param.trim() == r#"rel="next""#)
+            .then(|| {
+                url.trim()
+                    .trim_start_matches('<')
+                    .trim_end_matches('>')
+                    .to_owned()
+            })
+    })
 }
 
 /// `value` for a URL path segment or query value. Keeps `/`, which GitHub
@@ -147,3 +209,7 @@ pub(crate) fn encode(value: &str) -> String {
     }
     encoded
 }
+
+#[cfg(test)]
+#[path = "api_tests.rs"]
+mod tests;

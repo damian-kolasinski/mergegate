@@ -22,6 +22,7 @@ fn store() -> (tempfile::TempDir, Store) {
                 target: "main".into(),
                 upstream: format!("/src/{name}").into(),
                 github: None,
+                bots: Vec::new(),
             })
             .unwrap();
         store

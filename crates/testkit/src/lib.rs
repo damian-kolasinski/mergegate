@@ -13,6 +13,9 @@ mod http;
 mod repo;
 
 pub use env::{Env, Run};
-pub use github::{FakeGithub, Pull as GithubPull, PullState as GithubPullState};
+pub use github::{
+    Comment as GithubComment, CommentKind as GithubCommentKind, FakeGithub, Inline as GithubInline,
+    NewComment as GithubNewComment, Pull as GithubPull, PullState as GithubPullState,
+};
 pub use http::{Reply, http, http_reply};
 pub use repo::{TestRepo, commit_files, git};

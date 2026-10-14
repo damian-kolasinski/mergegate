@@ -65,6 +65,36 @@ impl ItemStore for Store {
             .transpose()
     }
 
+    fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at
+                 FROM revisions r
+                 JOIN items i ON i.id = r.item_id
+                 JOIN projects p ON p.id = i.project_id
+                 WHERE p.name = ?1 AND i.number = ?2
+                 ORDER BY r.number",
+            )
+            .map_err(StoreError::new)?;
+        let rows = stmt
+            .query_map(params![id.project().as_str(), id.number() as i64], |row| {
+                Ok(Revision {
+                    number: row.get(0)?,
+                    head: row.get(1)?,
+                    base: row.get(2)?,
+                    stat: DiffStat {
+                        files: row.get(3)?,
+                        additions: row.get::<_, i64>(4)? as u64,
+                        deletions: row.get::<_, i64>(5)? as u64,
+                    },
+                    submitted_at: row.get(6)?,
+                })
+            })
+            .map_err(StoreError::new)?;
+        rows.collect::<Result<_, _>>().map_err(StoreError::new)
+    }
+
     fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<FileStat>, StoreError> {
         let mut stmt = self
             .conn

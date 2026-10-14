@@ -28,12 +28,15 @@ fn a_draft_quotes_the_lines_it_is_on() {
     let range = write_draft(&mut store, &git, on("README.md", Side::New, 1, 2)).unwrap();
     assert_eq!(range.id, CommentId(1));
     assert_eq!(range.body, "Why this?");
-    assert_eq!(range.quote, format!("{}\n{}", commit(1), commit(2)));
+    assert_eq!(
+        range.anchor.as_ref().unwrap().quote,
+        format!("{}\n{}", commit(1), commit(2))
+    );
     assert_eq!(range.review, None);
 
     let old = write_draft(&mut store, &git, on("README.md", Side::Old, 1, 1)).unwrap();
     assert_eq!(old.id, CommentId(2));
-    assert_eq!(old.quote, commit(1));
+    assert_eq!(old.anchor.as_ref().unwrap().quote, commit(1));
     assert_eq!(store.comments(&id("app#1")).unwrap(), [range, old]);
 }
 

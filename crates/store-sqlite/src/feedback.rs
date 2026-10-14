@@ -1,11 +1,13 @@
 //! The `events` log and each item's delivered cursor.
 
+use mergegate_core::external::Batch;
 use mergegate_core::feedback::{Event, EventKind, FeedbackStore, Notice, NoticeKind, Source};
 use mergegate_core::item::{ItemId, ItemState};
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, Row, params};
 
 use crate::Store;
+use crate::external::{batch, overridden};
 use crate::reviews::{ReviewRow, review};
 
 /// `?1` and `?2` name the item.
@@ -18,7 +20,7 @@ impl FeedbackStore for Store {
             .conn
             .prepare_cached(&format!(
                 "SELECT e.cursor, e.type, e.revision, e.source, e.body, e.commit_id, e.paths,
-                        r.id, r.revision, r.verdict, r.summary, r.submitted_at
+                        r.id, r.revision, r.verdict, r.summary, r.submitted_at, e.reply_id
                  FROM events e LEFT JOIN reviews r ON r.id = e.review_id
                  WHERE e.item_id = ({ITEM}) AND e.cursor > ?3
                  ORDER BY e.cursor"
@@ -31,11 +33,20 @@ impl FeedbackStore for Store {
             )
             .map_err(StoreError::new)?;
         rows.map(|row| {
-            let row = row.map_err(StoreError::new)?;
+            let mut row = row.map_err(StoreError::new)?;
             let cursor = row.cursor as u64;
-            let kind = match row.review {
-                Some(found) => EventKind::ReviewSubmitted(review(&self.conn, id, found)?),
-                None => EventKind::Notice(Notice {
+            let kind = match (row.review.take(), row.reply) {
+                (Some(found), _) => EventKind::ReviewSubmitted(review(&self.conn, id, found)?),
+                (None, Some(reply)) => {
+                    EventKind::Override(Box::new(overridden(&self.conn, reply as u64)?))
+                }
+                (None, None) if row.kind == "external.comments" => {
+                    EventKind::ExternalComments(Batch {
+                        revision: row.revision,
+                        comments: batch(&self.conn, id, cursor)?,
+                    })
+                }
+                (None, None) => EventKind::Notice(Notice {
                     revision: row.revision,
                     source: source_named(&row.source)?,
                     kind: notice_kind(row)?,
@@ -133,7 +144,8 @@ impl FeedbackStore for Store {
     }
 }
 
-/// An `events` row as read; `review` is set for a review's event.
+/// An `events` row as read; `review` is set for a review's event and `reply`
+/// for an override's.
 struct EventRow {
     cursor: i64,
     kind: String,
@@ -143,6 +155,7 @@ struct EventRow {
     commit_id: Option<String>,
     paths: Option<String>,
     review: Option<ReviewRow>,
+    reply: Option<i64>,
 }
 
 impl EventRow {
@@ -166,6 +179,7 @@ impl EventRow {
             commit_id: row.get(5)?,
             paths: row.get(6)?,
             review,
+            reply: row.get(12)?,
         })
     }
 }

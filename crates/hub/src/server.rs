@@ -14,8 +14,8 @@ use store_sqlite::Store;
 
 use crate::{
     Home, HubError, HubInfo, abandon, comments, conversation, diff, doctor, draft_replies, events,
-    feedback, git_http, guard, io, items, lifecycle, merge, projects, replies, reply, resume,
-    reviews, ui, viewed, wake,
+    external, feedback, git_http, guard, io, items, lifecycle, merge, projects, replies, reply,
+    resume, reviews, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -25,6 +25,10 @@ pub(crate) struct AppState {
     pub events: events::Events,
     pub wakes: wake::Wakes,
     pub wake_logs: PathBuf,
+    /// Held across a pull of pull request comments, from asking GitHub to
+    /// storing what it said, so a slower poll can't store older bodies over
+    /// what a `mg sync` just brought in.
+    pub pulling: tokio::sync::Mutex<()>,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -57,6 +61,17 @@ impl AppState {
         .await
         .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
+
+    /// Calls GitHub off the async workers, with the store unlocked.
+    pub(crate) async fn github<T: Send + 'static>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&GithubClient) -> T + Send + 'static,
+    ) -> T {
+        let state = Arc::clone(self);
+        tokio::task::spawn_blocking(move || f(&state.github))
+            .await
+            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
 }
 
 pub(crate) async fn serve(
@@ -88,6 +103,7 @@ pub(crate) async fn serve(
         events: events::Events::new(),
         wakes: wake::Wakes::default(),
         wake_logs: home.wake_logs(),
+        pulling: tokio::sync::Mutex::new(()),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
         github: GithubClient::from_env(),
@@ -106,6 +122,7 @@ pub(crate) async fn serve(
         .merge(replies::routes())
         .merge(draft_replies::routes())
         .merge(feedback::routes())
+        .merge(external::routes())
         .merge(resume::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
@@ -125,6 +142,7 @@ pub(crate) async fn serve(
     );
 
     tokio::spawn(wake::run(state.clone()));
+    tokio::spawn(external::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

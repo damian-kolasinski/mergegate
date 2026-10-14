@@ -102,13 +102,7 @@ fn event(event: &Event) -> String {
                 out.push_str(&format!("\n  {line}"));
             }
             for c in comments {
-                out.push_str(&format!("\n\n  {} {}", c.id, place(c, event.revision)));
-                for line in c.quote.lines() {
-                    out.push_str(format!("\n    > {line}").trim_end());
-                }
-                for line in c.body.lines() {
-                    out.push_str(&format!("\n    {line}"));
-                }
+                out.push_str(&comment(c, event.revision, false));
             }
             for r in replies {
                 out.push_str(&format!("\n\n  reply to {}", r.comment));
@@ -122,6 +116,7 @@ fn event(event: &Event) -> String {
             let who = match event.source {
                 Source::Operator => "the operator",
                 Source::Agent => "its agent",
+                Source::External => "GitHub",
             };
             let mut out = format!(
                 "[{}] {} r{}: {who} abandoned it",
@@ -165,6 +160,27 @@ fn event(event: &Event) -> String {
             }
             out
         }
+        EventBody::ExternalComments { comments, edited } => {
+            let mut out = format!(
+                "[{}] {} r{}: reviewers commented on its pull request",
+                event.cursor, event.item, event.revision
+            );
+            for c in comments {
+                out.push_str(&comment(c, event.revision, edited.contains(&c.id)));
+            }
+            out
+        }
+        EventBody::CommentOverride { comment: c, reply } => {
+            let mut out = format!(
+                "[{}] {} r{}: the operator overrides your rejection of {}; make the change",
+                event.cursor, event.item, event.revision, c.id
+            );
+            for line in reply.body.lines() {
+                out.push_str(&format!("\n  {line}"));
+            }
+            out.push_str(&comment(c, event.revision, false));
+            out
+        }
         // A squash leaves the branch unmerged to git, so `git branch -d`
         // refuses it.
         EventBody::ItemMerged { commit, branch } => format!(
@@ -176,17 +192,58 @@ fn event(event: &Event) -> String {
     }
 }
 
+/// A comment under an event: where it is, who left it if not the operator,
+/// the lines it quotes and its body.
+fn comment(c: &Comment, revision: u32, edited: bool) -> String {
+    let mut out = format!("\n\n  {}", heading(c, revision));
+    if edited {
+        out.push_str(" (edited)");
+    }
+    for line in c.quote.iter().flat_map(|q| q.lines()) {
+        out.push_str(format!("\n    > {line}").trim_end());
+    }
+    for line in c.body.lines() {
+        out.push_str(&format!("\n    {line}"));
+    }
+    out
+}
+
+/// `c_7 path:line`, and who left a comment from GitHub.
+pub(crate) fn heading(c: &Comment, revision: u32) -> String {
+    let mut out = format!("{} {}", c.id, place(c, revision));
+    if let Some(external) = &c.external {
+        let bot = if external.bot { " (bot)" } else { "" };
+        out.push_str(&format!(", from {}{bot} on GitHub", external.author));
+    }
+    out
+}
+
 /// `path:line`, or `path:start-line`, naming the old side and a revision
-/// other than the event's.
-pub(crate) fn place(comment: &Comment, revision: u32) -> String {
-    let mut out = format!("{}:", comment.path);
-    if comment.start_line != comment.line {
-        out.push_str(&format!("{}-", comment.start_line));
-    }
-    out.push_str(&comment.line.to_string());
-    if comment.side == Side::Old {
-        out.push_str(" (old)");
-    }
+/// other than the event's. A comment from GitHub on lines no revision's diff
+/// shows names only its file, and one on no file the pull request.
+fn place(comment: &Comment, revision: u32) -> String {
+    let mut out = match (
+        &comment.path,
+        comment.side,
+        comment.start_line,
+        comment.line,
+    ) {
+        (Some(path), Some(side), Some(start_line), Some(line)) => {
+            let mut out = format!("{path}:");
+            if start_line != line {
+                out.push_str(&format!("{start_line}-"));
+            }
+            out.push_str(&line.to_string());
+            if side == Side::Old {
+                out.push_str(" (old)");
+            }
+            out
+        }
+        _ => match comment.external.as_ref().and_then(|e| e.path.as_deref()) {
+            Some(path) => format!("{path} (on lines the diff doesn't show)"),
+            None => "the pull request".to_owned(),
+        },
+    };
     if comment.revision != revision {
         out.push_str(&format!(" @r{}", comment.revision));
     }

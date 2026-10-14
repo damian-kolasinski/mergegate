@@ -3,6 +3,7 @@
 //! newest event its agent acknowledged, so a wait that dropped before the
 //! agent saw its events returns them again.
 
+use crate::external::{Batch, Override};
 use crate::item::{Item, ItemId, ItemState, ItemStore};
 use crate::review::Review;
 use crate::store::StoreError;
@@ -41,6 +42,10 @@ pub struct Event {
 pub enum EventKind {
     ReviewSubmitted(Review),
     Notice(Notice),
+    /// Comments from the pull request on GitHub.
+    ExternalComments(Batch),
+    /// The operator wants the change the agent rejected.
+    Override(Box<Override>),
 }
 
 /// Something that happened to the item itself, which the event is the only
@@ -71,22 +76,25 @@ pub enum NoticeKind {
     Merged { commit: String },
 }
 
-/// Who an event comes from. External reviewers join in PR 10.
+/// Who an event comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Operator,
     /// The item's own agent, through `mg`.
     Agent,
+    /// Reviewers on the item's pull request, bots and people.
+    External,
 }
 
 impl Source {
-    pub const ALL: [Self; 2] = [Self::Operator, Self::Agent];
+    pub const ALL: [Self; 3] = [Self::Operator, Self::Agent, Self::External];
 
     /// The name the store spells the source with.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Operator => "operator",
             Self::Agent => "agent",
+            Self::External => "external",
         }
     }
 }
@@ -94,8 +102,9 @@ impl Source {
 impl Event {
     pub fn source(&self) -> Source {
         match &self.kind {
-            EventKind::ReviewSubmitted(_) => Source::Operator,
+            EventKind::ReviewSubmitted(_) | EventKind::Override(_) => Source::Operator,
             EventKind::Notice(notice) => notice.source,
+            EventKind::ExternalComments(_) => Source::External,
         }
     }
 
@@ -104,6 +113,8 @@ impl Event {
         match &self.kind {
             EventKind::ReviewSubmitted(review) => review.revision,
             EventKind::Notice(notice) => notice.revision,
+            EventKind::ExternalComments(batch) => batch.revision,
+            EventKind::Override(o) => o.reply.revision,
         }
     }
 }

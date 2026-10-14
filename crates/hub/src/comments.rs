@@ -12,8 +12,8 @@ use mergegate_core::item::ItemId;
 use mergegate_core::review::{self, Comment, CommentId, DraftError, Side, WriteDraft};
 
 use crate::reply::Failure;
-use crate::reviews;
 use crate::server::AppState;
+use crate::{external, reviews};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -114,17 +114,19 @@ fn failure(e: DraftError) -> Failure {
 }
 
 pub(crate) fn to_api(comment: &Comment) -> api::review::Comment {
+    let anchor = comment.anchor.as_ref();
     api::review::Comment {
         id: comment.id.to_string(),
         revision: comment.revision,
-        path: comment.path.clone(),
-        side: match comment.side {
+        path: anchor.map(|a| a.path.clone()),
+        side: anchor.map(|a| match a.side {
             Side::Old => api::review::Side::Old,
             Side::New => api::review::Side::New,
-        },
-        start_line: comment.start_line,
-        line: comment.line,
+        }),
+        start_line: anchor.map(|a| a.start_line),
+        line: anchor.map(|a| a.line),
         body: comment.body.clone(),
-        quote: comment.quote.clone(),
+        quote: anchor.map(|a| a.quote.clone()),
+        external: external::to_api(comment),
     }
 }

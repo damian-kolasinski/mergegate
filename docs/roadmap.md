@@ -40,7 +40,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked | After |
 |---|---|---|---|---|---|
-| 10 | External review | Polling PR comments, debounce (of wakes too), `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub | — |
 | 11a | File triage | `rules.toml`, the rule-file guard, review/trusted tiers, `--guide` ordering, `mg rules propose/list`, approving looser rules in the UI | F11, F12 | — | — |
 | 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with 12a's interdiffs | F7, F12 | — | 10, 11a, 12a |
 | 12a | Interdiffs | Interdiffs over a moved base, viewed marks across revisions, the new-revision banner | F7, F13 | — | — |

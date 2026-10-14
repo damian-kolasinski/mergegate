@@ -1,0 +1,92 @@
+// F5 from the UI: comments on an item's pull request show on the review
+// screen as they arrive, held until the reviewers go quiet or the operator
+// syncs; the operator agrees with or overrides the agent's rejection of one.
+
+import { expect, test } from "./hub";
+
+test("f5 shows comments from GitHub and syncs them to the agent", async ({
+  page,
+  github,
+}) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+
+  await github.github.comment(1, {
+    login: "codex[bot]",
+    body: "Hash the password.",
+    path: "src/login.rs",
+    line: 1,
+  });
+  await github.github.comment(1, { login: "alice", body: "Needs a test." });
+
+  // The inline one sits under its line, held for the agent.
+  const inline = screen.getByRole("article", { name: "Comment c_1" });
+  await expect(inline).toContainText("Hash the password.");
+  await expect(inline.getByText("codex[bot]")).toBeVisible();
+  await expect(inline.getByText("Bot", { exact: true })).toBeVisible();
+  await expect(inline.getByText("Held", { exact: true })).toBeVisible();
+  await expect(inline.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+    "href",
+    /\/acme\/app\/pull\/1#/,
+  );
+
+  // The other is on no line, so only the Conversation list has it.
+  await screen.getByRole("button", { name: "Conversation 2" }).click();
+  const entry = page.getByRole("listitem", { name: "c_2" });
+  await expect(entry.getByText("Pull request @r1")).toBeVisible();
+  await expect(entry).toContainText("Needs a test.");
+  await expect(entry.getByText("alice")).toBeVisible();
+
+  await screen.getByRole("button", { name: "Sync GitHub" }).click();
+  await expect(
+    screen.getByText("Up to date, 2 sent to the agent"),
+  ).toBeVisible();
+  await expect(inline.getByText("Sent", { exact: true })).toBeVisible();
+  await expect(entry.getByText("Held", { exact: true })).toHaveCount(0);
+});
+
+test("the operator agrees with a rejection or overrides it", async ({
+  page,
+  github,
+}) => {
+  const { hub } = github;
+  const app = hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await github.github.comment(1, { login: "alice", body: "Rename it." });
+  await github.github.comment(1, { login: "alice", body: "Split it." });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await screen.getByRole("button", { name: "Sync GitHub" }).click();
+  await expect(screen.getByText(/sent to the agent$/)).toBeVisible();
+  hub.mg(["feedback", "app#1"]);
+  for (const comment of ["c_1", "c_2"]) {
+    hub.mg(["reply", comment, "--status", "rejected", "--body", "No."]);
+  }
+
+  await screen.getByRole("button", { name: /^Conversation/ }).click();
+  const rename = page.getByRole("article", { name: "Comment c_1" });
+  const split = page.getByRole("article", { name: "Comment c_2" });
+  await expect(rename.getByText("Rejected", { exact: true })).toBeVisible();
+
+  await split.getByRole("button", { name: "Agree" }).click();
+  await expect(split.getByText("Agreed", { exact: true })).toBeVisible();
+  await expect(split.getByRole("button", { name: "Override" })).toHaveCount(0);
+
+  await rename.getByRole("button", { name: "Override" }).click();
+  await page
+    .getByRole("textbox", { name: "Override the rejection of c_1" })
+    .fill("The old name misleads.");
+  await rename.getByRole("button", { name: "Send override" }).click();
+  await expect(rename.getByText("Override", { exact: true })).toBeVisible();
+  await expect(rename).toContainText("The old name misleads.");
+  await expect(rename.getByRole("button", { name: "Agree" })).toHaveCount(0);
+
+  // The agent has it at once, with no review.
+  const feedback = hub.mg(["feedback", "app#1"]) as {
+    events: { type: string; reply: { body: string } }[];
+  };
+  expect(feedback.events.map((e) => e.type)).toEqual(["comment.override"]);
+  expect(feedback.events[0]?.reply.body).toBe("The old name misleads.");
+});

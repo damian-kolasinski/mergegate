@@ -37,6 +37,8 @@ pub enum Source {
     Operator,
     /// The item's own agent, through `mg`.
     Agent,
+    /// Reviewers on the item's pull request: bots and teammates.
+    External,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +74,20 @@ pub enum EventBody {
         paths: Vec<String>,
         commands: Vec<String>,
     },
+    /// Comments reviewers left on the item's pull request, held until they
+    /// went quiet. Inline ones are on lines like the operator's; the rest
+    /// are on the item as a whole. Answer each with `mg reply`.
+    #[serde(rename = "external.comments")]
+    ExternalComments {
+        /// Oldest first.
+        comments: Vec<Comment>,
+        /// Those an earlier `external.comments` carried with another body.
+        edited: Vec<String>,
+    },
+    /// The operator wants the change the agent rejected on `comment`;
+    /// `reply.body` says why, when they wrote it.
+    #[serde(rename = "comment.override")]
+    CommentOverride { comment: Box<Comment>, reply: Reply },
     /// The approved revision landed on the target as `commit`. A squash
     /// leaves `branch` unmerged to git, so deleting it takes `git branch -D`.
     #[serde(rename = "item.merged")]

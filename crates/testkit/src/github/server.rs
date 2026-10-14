@@ -6,7 +6,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use super::{Shared, git_http, page, rest};
+use super::{Shared, comments, git_http, page, rest};
 
 pub(super) struct Request {
     pub method: String,
@@ -83,6 +83,7 @@ fn handle(stream: TcpStream, shared: &Shared) -> std::io::Result<()> {
         .push(format!("{} {}", request.method, request.path));
     let response = match request.path.strip_prefix("/api") {
         Some(path) => rest::handle(shared, &request, path),
+        None if request.path.starts_with("/_fake/") => comments::control(shared, &request),
         None if request.path.contains("/pull/") => page::handle(shared, &request),
         None => git_http::handle(shared, &request),
     };

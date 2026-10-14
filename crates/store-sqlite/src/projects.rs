@@ -9,7 +9,7 @@ use rusqlite::{OptionalExtension, Row, params};
 
 use crate::Store;
 
-const COLUMNS: &str = "name, backend, target, upstream, github";
+const COLUMNS: &str = "name, backend, target, upstream, github, bots";
 
 impl ProjectStore for Store {
     fn projects(&self) -> Result<Vec<Project>, StoreError> {
@@ -32,13 +32,14 @@ impl ProjectStore for Store {
     fn insert_project(&mut self, project: &Project) -> Result<(), StoreError> {
         self.conn
             .execute(
-                &format!("INSERT INTO projects ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5)"),
+                &format!("INSERT INTO projects ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"),
                 params![
                     project.name.as_str(),
                     project.backend.as_str(),
                     project.target,
                     utf8(&project.upstream)?,
                     project.github.as_ref().map(ToString::to_string),
+                    project.bots.join(","),
                 ],
             )
             .map_err(StoreError::new)?;
@@ -49,7 +50,8 @@ impl ProjectStore for Store {
         let changed = self
             .conn
             .execute(
-                "UPDATE projects SET backend = ?2, target = ?3, upstream = ?4, github = ?5
+                "UPDATE projects SET backend = ?2, target = ?3, upstream = ?4, github = ?5,
+                     bots = ?6
                  WHERE name = ?1",
                 params![
                     project.name.as_str(),
@@ -57,6 +59,7 @@ impl ProjectStore for Store {
                     project.target,
                     utf8(&project.upstream)?,
                     project.github.as_ref().map(ToString::to_string),
+                    project.bots.join(","),
                 ],
             )
             .map_err(StoreError::new)?;
@@ -94,6 +97,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Project, StoreError>> {
     let target: String = row.get(2)?;
     let upstream: String = row.get(3)?;
     let github: Option<String> = row.get(4)?;
+    let bots: String = row.get(5)?;
     Ok((|| {
         Ok(Project {
             name: ProjectName::parse(&name).map_err(StoreError::new)?,
@@ -106,6 +110,11 @@ fn read(row: &Row) -> rusqlite::Result<Result<Project, StoreError>> {
                         .ok_or_else(|| StoreError::new(format!("invalid GitHub repo {repo:?}")))
                 })
                 .transpose()?,
+            bots: bots
+                .split(',')
+                .filter(|bot| !bot.is_empty())
+                .map(Into::into)
+                .collect(),
         })
     })())
 }

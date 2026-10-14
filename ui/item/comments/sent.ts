@@ -5,7 +5,10 @@ import { kept, merged } from "./merge";
 
 export type Sent = ReturnType<typeof useSent>;
 
-/** The comments reviews have sent to the agent, on every revision. */
+/**
+ * The comments reviews have sent to the agent, and those from GitHub, on
+ * every revision.
+ */
 export function useSent(diff: ItemDiff) {
   const [list, setList] = createSignal(diff.comments);
   return {
@@ -14,6 +17,12 @@ export function useSent(diff: ItemDiff) {
     /** Sent by a review from this tab. */
     add(comments: Comment[]) {
       setList((all) => merged(all, comments));
+    },
+    /** One the hub changed, as agreeing with a rejection does. */
+    update(comment: Comment) {
+      setList((all) =>
+        all.map((other) => (other.id === comment.id ? comment : other)),
+      );
     },
     /** The hub's list, which another tab's reviews may have added to. */
     keep(latest: Comment[]) {

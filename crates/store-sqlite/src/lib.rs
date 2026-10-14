@@ -4,6 +4,7 @@
 mod agents;
 mod comments;
 mod diffs;
+mod external;
 mod feedback;
 mod items;
 mod migrate;

@@ -18,6 +18,7 @@ fn store() -> (tempfile::TempDir, Store) {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     for branch in ["work", "other"] {
