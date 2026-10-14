@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Where a project's approved work lands.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Backend {

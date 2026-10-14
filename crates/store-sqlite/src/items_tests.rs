@@ -101,6 +101,21 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
 }
 
 #[test]
+fn reads_any_item_by_id() {
+    let (_dir, mut store) = store();
+    let a = store.insert_item(new_item("app", "a")).unwrap();
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged'", [])
+        .unwrap();
+    let merged = store.item(&a.id).unwrap().unwrap();
+    assert_eq!(merged.state, ItemState::Merged);
+    assert_eq!(merged.revision, a.revision);
+    assert_eq!(store.item(&ItemId::new(name("app"), 2)).unwrap(), None);
+    assert_eq!(store.item(&ItemId::new(name("web"), 1)).unwrap(), None);
+}
+
+#[test]
 fn adds_revisions_with_their_files() {
     let (_dir, mut store) = store();
     let first = store.insert_item(new_item("app", "a")).unwrap();
@@ -112,7 +127,7 @@ fn adds_revisions_with_their_files() {
     assert_eq!(item.revision.number, 2);
     assert_eq!(item.revision.head, "b".repeat(40));
     assert_eq!(item.created_at, first.created_at);
-    assert_eq!(store.open_items(None).unwrap(), [item]);
+    assert_eq!(store.open_items(None).unwrap(), std::slice::from_ref(&item));
 
     let files: Vec<(i64, String, Option<String>, Option<i64>)> = store
         .conn
@@ -128,6 +143,18 @@ fn adds_revisions_with_their_files() {
         (2, "src/new.rs".into(), Some("src/old.rs".into()), Some(5))
     );
     assert_eq!(files[3], (2, "logo.png".into(), None, None));
+
+    let changed = |revision| store.revision_files(&item.id, revision).unwrap();
+    let files_of = |head| {
+        revision(head)
+            .files
+            .into_iter()
+            .map(|f| f.file)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(changed(1), files_of('a'));
+    assert_eq!(changed(2), files_of('b'));
+    assert!(changed(3).is_empty());
 }
 
 #[test]

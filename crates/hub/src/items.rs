@@ -67,7 +67,7 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
     }))
 }
 
-fn to_api(item: &Item) -> api::item::Item {
+pub(crate) fn to_api(item: &Item) -> api::item::Item {
     let revision = &item.revision;
     api::item::Item {
         id: item.id.to_string(),
@@ -114,7 +114,7 @@ fn state_to_api(state: ItemState) -> api::item::ItemState {
     }
 }
 
-fn failure(e: ItemError) -> Failure {
+pub(crate) fn failure(e: ItemError) -> Failure {
     use ItemError as E;
     use StatusCode as S;
     let e = match e {
