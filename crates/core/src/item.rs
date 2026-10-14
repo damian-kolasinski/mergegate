@@ -9,6 +9,7 @@ mod git;
 mod id;
 mod inbox;
 mod item_diff;
+mod publish;
 mod state;
 mod store;
 mod submit;
@@ -17,7 +18,7 @@ pub use abandon::{Abandon, abandon};
 pub use branch::valid_branch;
 pub(crate) use close::close;
 pub use error::ItemError;
-pub use git::{ChangedFile, FileStat, ItemGit, valid_commit};
+pub use git::{ChangedFile, FileStat, ItemGit, Pushed, valid_commit};
 pub use id::{IdError, ItemId};
 pub use inbox::{Inbox, inbox};
 pub use item_diff::{DiffedFile, ItemDiff, item_diff};
@@ -25,6 +26,7 @@ pub use state::ItemState;
 pub use store::{ItemStore, NewItem, NewRevision};
 pub use submit::{Submit, Submitted, submit};
 
+use crate::github::Pull;
 use crate::project::Backend;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +39,8 @@ pub struct Item {
     /// keeps them until it closes, even if the project's settings change.
     pub backend: Backend,
     pub target: String,
+    /// The pull request of a `github` item.
+    pub pull: Option<Pull>,
     /// The newest revision.
     pub revision: Revision,
     pub created_at: String,

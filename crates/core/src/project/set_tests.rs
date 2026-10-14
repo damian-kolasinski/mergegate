@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use super::*;
-use crate::fake::{FakeGit, FakeStore, commit};
+use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
+use crate::github::{GithubError, GithubRepo, Pull};
 use crate::item::{ItemId, ItemState, NewItem, NewRevision};
 use crate::project::{AddProject, ProjectName, add};
 
@@ -12,7 +13,7 @@ fn change(
     name: &str,
     setting: Setting,
 ) -> Result<Project, ProjectError> {
-    match set(store, git, name, setting, false)? {
+    match set(store, git, &FakeGithub::default(), name, setting, false)? {
         Changed::Project(project) => Ok(project),
         Changed::Decide(decision) => panic!("asked: {decision:?}"),
     }
@@ -26,6 +27,7 @@ fn open_item(store: &mut FakeStore, branch: &str, target: &str) -> ItemId {
         state: ItemState::NeedsReview,
         backend: Backend::Local,
         target: target.into(),
+        pull: None,
         revision: NewRevision {
             head: commit(2),
             base: commit(1),
@@ -39,9 +41,10 @@ fn setup(git: &FakeGit) -> FakeStore {
     let mut store = FakeStore::default();
     let request = AddProject {
         path: "/src/app".into(),
+        backend: Some(Backend::Local),
         ..AddProject::default()
     };
-    add(&mut store, git, request).unwrap();
+    add(&mut store, git, &FakeGithub::default(), request).unwrap();
     store
 }
 
@@ -69,7 +72,7 @@ fn parses_settings() {
     let err = Setting::parse("colour", "red").unwrap_err();
     assert_eq!(
         err.to_string(),
-        "unknown setting colour; settings are backend, target, upstream"
+        "unknown setting colour; settings are backend, target, upstream, github"
     );
 }
 
@@ -130,7 +133,7 @@ fn refuses_another_projects_repo_and_unavailable_backends() {
         path: "/src/fork".into(),
         ..AddProject::default()
     };
-    add(&mut store, &git, request).unwrap();
+    add(&mut store, &git, &FakeGithub::default(), request).unwrap();
     let err = change(
         &mut store,
         &git,
@@ -143,10 +146,7 @@ fn refuses_another_projects_repo_and_unavailable_backends() {
     );
 
     let err = change(&mut store, &git, "app", Setting::Backend(Backend::Github)).unwrap_err();
-    assert!(matches!(
-        err,
-        ProjectError::BackendUnavailable(Backend::Github)
-    ));
+    assert!(matches!(err, ProjectError::NoGithubSet(_)));
     assert!(change(&mut store, &git, "app", Setting::Backend(Backend::Local)).is_ok());
     assert!(matches!(
         change(&mut store, &git, "nope", Setting::Backend(Backend::Local)),
@@ -165,7 +165,15 @@ fn asks_before_moving_the_target_away_from_open_items() {
     let synced = git.synced().len();
 
     let release = || Setting::Target("release".into());
-    let Changed::Decide(decision) = set(&mut store, &git, "app", release(), false).unwrap() else {
+    let Changed::Decide(decision) = set(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        "app",
+        release(),
+        false,
+    )
+    .unwrap() else {
         panic!("applied without asking");
     };
     assert_eq!(decision.flag, "--confirm");
@@ -178,7 +186,15 @@ fn asks_before_moving_the_target_away_from_open_items() {
     assert_eq!(store.projects().unwrap()[0].target, "main");
     assert_eq!(git.synced().len(), synced);
 
-    let Changed::Project(project) = set(&mut store, &git, "app", release(), true).unwrap() else {
+    let Changed::Project(project) = set(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        "app",
+        release(),
+        true,
+    )
+    .unwrap() else {
         panic!("asked again");
     };
     assert_eq!(project.target, "release");
@@ -187,7 +203,15 @@ fn asks_before_moving_the_target_away_from_open_items() {
     let docs = open_item(&mut store, "docs", "release");
     store.set_state(&docs, ItemState::ChangesRequested);
     let main = || Setting::Target("main".into());
-    let Changed::Decide(decision) = set(&mut store, &git, "app", main(), false).unwrap() else {
+    let Changed::Decide(decision) = set(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        "app",
+        main(),
+        false,
+    )
+    .unwrap() else {
         panic!("applied without asking");
     };
     assert_eq!(
@@ -209,7 +233,15 @@ fn refuses_an_open_items_branch_as_the_target() {
     open_item(&mut store, "release", "main");
     let release = || Setting::Target("release".into());
     for confirm in [false, true] {
-        let err = set(&mut store, &git, "app", release(), confirm).unwrap_err();
+        let err = set(
+            &mut store,
+            &git,
+            &FakeGithub::default(),
+            "app",
+            release(),
+            confirm,
+        )
+        .unwrap_err();
         assert!(
             matches!(&err, ProjectError::BranchUnderReview { branch, item }
                 if branch == "release" && item == "app#1"),
@@ -217,4 +249,148 @@ fn refuses_an_open_items_branch_as_the_target() {
         );
     }
     assert_eq!(store.projects().unwrap()[0].target, "main");
+}
+
+fn on_github() -> FakeGit {
+    git().remote("/src/app", "origin", "git@github.com:acme/app.git")
+}
+
+/// An open item with pull request 7.
+fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
+    let item = NewItem {
+        project: ProjectName::parse("app").unwrap(),
+        branch: branch.into(),
+        title: branch.into(),
+        state: ItemState::NeedsReview,
+        backend: Backend::Github,
+        target: "main".into(),
+        pull: Some(Pull {
+            number: 7,
+            url: "https://github.com/acme/app/pull/7".into(),
+        }),
+        revision: NewRevision {
+            head: commit(2),
+            base: commit(1),
+            files: Vec::new(),
+        },
+    };
+    store.insert_item(item).unwrap().id
+}
+
+#[test]
+fn switches_to_github_through_the_origin_remote() {
+    let git = on_github();
+    let mut store = setup(&git);
+    let project = change(&mut store, &git, "app", Setting::Backend(Backend::Github)).unwrap();
+    assert_eq!(
+        (project.backend, project.github.clone()),
+        (Backend::Github, GithubRepo::parse("acme/app"))
+    );
+    assert_eq!(store.projects().unwrap(), [project]);
+    let synced = git.synced().last().unwrap().1.clone();
+    assert_eq!(synced, PathBuf::from("https://github.com/acme/app.git"));
+
+    // Back to local keeps the repository for the next switch.
+    let project = change(&mut store, &git, "app", Setting::Backend(Backend::Local)).unwrap();
+    assert_eq!(project.github, GithubRepo::parse("acme/app"));
+    assert_eq!(git.synced().last().unwrap().1, PathBuf::from("/src/app"));
+}
+
+#[test]
+fn asks_before_switching_backends_under_open_items() {
+    let git = on_github();
+    let mut store = setup(&git);
+    open_item(&mut store, "login", "main");
+    let github = || Setting::Backend(Backend::Github);
+    let Changed::Decide(decision) = set(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        "app",
+        github(),
+        false,
+    )
+    .unwrap() else {
+        panic!("applied without asking");
+    };
+    assert_eq!(
+        decision.question,
+        "1 open item keeps the local backend until it closes: app#1 (login). \
+         New items will land through pull requests on acme/app. Switch?"
+    );
+    assert_eq!(store.projects().unwrap()[0].backend, Backend::Local);
+    let Changed::Project(project) = set(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        "app",
+        github(),
+        true,
+    )
+    .unwrap() else {
+        panic!("asked again");
+    };
+    assert_eq!(project.backend, Backend::Github);
+
+    github_item(&mut store, "search");
+    let local = || Setting::Backend(Backend::Local);
+    let Changed::Decide(decision) = set(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        "app",
+        local(),
+        false,
+    )
+    .unwrap() else {
+        panic!("applied without asking");
+    };
+    assert_eq!(
+        decision.question,
+        "1 open item keeps the github backend until it closes: app#2 (search, #7). \
+         New items will land on main in /src/app. Switch?"
+    );
+}
+
+#[test]
+fn switches_to_github_only_where_the_operator_can_push() {
+    let git = on_github();
+    let mut store = setup(&git);
+    let github = || Setting::Backend(Backend::Github);
+    let denying = FakeGithub::default().denying("acme/app");
+    let err = set(&mut store, &git, &denying, "app", github(), true).unwrap_err();
+    assert!(
+        matches!(err, ProjectError::Github(GithubError::NoAccess(_))),
+        "{err:?}"
+    );
+    let project = &store.projects().unwrap()[0];
+    assert_eq!(
+        (project.backend, project.github.clone()),
+        (Backend::Local, None)
+    );
+}
+
+#[test]
+fn sets_the_github_repo_until_items_publish_to_it() {
+    let git = git();
+    let mut store = setup(&git);
+    let acme = || Setting::Github(GithubRepo::parse("acme/app").unwrap());
+    let synced = git.synced().len();
+    let project = change(&mut store, &git, "app", acme()).unwrap();
+    assert_eq!(
+        (project.backend, project.github),
+        (Backend::Local, GithubRepo::parse("acme/app"))
+    );
+    // A local project's staging doesn't fetch from GitHub.
+    assert_eq!(git.synced().len(), synced);
+    change(&mut store, &git, "app", Setting::Backend(Backend::Github)).unwrap();
+
+    github_item(&mut store, "login");
+    let mine = Setting::Github(GithubRepo::parse("me/app").unwrap());
+    let err = change(&mut store, &git, "app", mine).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "open items publish to acme/app: app#1; it can change once they close"
+    );
+    assert!(change(&mut store, &git, "app", acme()).is_ok());
 }

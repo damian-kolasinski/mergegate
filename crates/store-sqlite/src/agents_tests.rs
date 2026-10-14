@@ -16,6 +16,7 @@ fn store() -> (tempfile::TempDir, Store) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     for branch in ["one", "two"] {
@@ -27,6 +28,7 @@ fn store() -> (tempfile::TempDir, Store) {
                 state: ItemState::NeedsReview,
                 backend: Backend::Local,
                 target: "main".into(),
+                pull: None,
                 revision: NewRevision {
                     head: "a".repeat(40),
                     base: "0".repeat(40),

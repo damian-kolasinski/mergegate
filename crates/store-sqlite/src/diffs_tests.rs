@@ -114,6 +114,7 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     let item = |branch: &str, files| NewItem {
@@ -123,6 +124,7 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
         state: ItemState::NeedsReview,
         backend: Backend::Local,
         target: "main".into(),
+        pull: None,
         revision: revision(files),
     };
     // app#1 has `a`, then `b` and `c`; app#2 (open) has `b`; app#3 (merged) `c`.

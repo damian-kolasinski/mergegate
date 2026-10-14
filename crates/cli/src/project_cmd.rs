@@ -18,17 +18,22 @@ pub enum ProjectCommand {
         /// Name used in item IDs [default: the repo's folder name]
         #[arg(long)]
         name: Option<String>,
-        /// Where approved work lands
-        #[arg(long, value_enum, default_value_t = BackendArg::Local)]
-        backend: BackendArg,
+        /// Where approved work lands [default: local, unless the repo has
+        /// a GitHub remote, when the operator is asked]
+        #[arg(long, value_enum)]
+        backend: Option<BackendArg>,
         /// Branch items merge into [default: main, master or trunk]
         #[arg(long)]
         target: Option<String>,
+        /// The GitHub repository items publish to, as OWNER/REPO
+        /// [default: the one the remotes point at]; implies --backend github
+        #[arg(long, value_name = "OWNER/REPO")]
+        github: Option<String>,
     },
     /// Show a project; without one, the project at the current directory, or
     /// every project when there is none
     Show { project: Option<String> },
-    /// Change a project's backend, target or upstream
+    /// Change a project's backend, target, upstream or GitHub repository
     Set {
         project: String,
         key: String,
@@ -62,7 +67,17 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
             name,
             backend,
             target,
-        } => add(&client, &path, name, backend.into(), target),
+            github,
+        } => {
+            let request = AddProject {
+                path: absolute(&path)?,
+                name,
+                backend: backend.map(Into::into),
+                target,
+                github,
+            };
+            add(&client, &request)
+        }
         ProjectCommand::Show {
             project: Some(name),
         } => {
@@ -103,20 +118,8 @@ pub(crate) fn route(name: &str) -> Result<String, CliError> {
     Ok(format!("/api/projects/{}", segment(name)))
 }
 
-fn add(
-    client: &Client,
-    path: &Path,
-    name: Option<String>,
-    backend: Backend,
-    target: Option<String>,
-) -> Result<Outcome, CliError> {
-    let request = AddProject {
-        path: absolute(path)?,
-        name,
-        backend: Some(backend),
-        target,
-    };
-    match client.post::<Project>("/api/projects", &request)? {
+fn add(client: &Client, request: &AddProject) -> Result<Outcome, CliError> {
+    match client.post::<Project>("/api/projects", request)? {
         Reply::Done(project) => Ok(Outcome::done(
             &project,
             format!("registered {}\n{}", project.name, describe(&project)),
@@ -157,7 +160,7 @@ fn all(client: &Client) -> Result<Outcome, CliError> {
                 format!(
                     "{:width$}  {}  {}  {}",
                     p.name,
-                    p.backend.as_str(),
+                    landing(p),
                     p.target,
                     p.upstream
                 )
@@ -173,12 +176,24 @@ fn one(p: &Project) -> Outcome {
 }
 
 fn describe(p: &Project) -> String {
-    format!(
+    let mut text = format!(
         "  backend   {}\n  target    {}\n  upstream  {}",
         p.backend.as_str(),
         p.target,
         p.upstream
-    )
+    );
+    if let Some(github) = &p.github {
+        text.push_str(&format!("\n  github    {github}"));
+    }
+    text
+}
+
+/// The backend, with the repository a `github` one publishes to.
+fn landing(p: &Project) -> String {
+    match (p.backend, &p.github) {
+        (Backend::Github, Some(github)) => format!("github {github}"),
+        (backend, _) => backend.as_str().to_owned(),
+    }
 }
 
 /// The hub may run with another working directory, so paths go to it

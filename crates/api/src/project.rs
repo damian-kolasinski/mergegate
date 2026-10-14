@@ -29,6 +29,9 @@ pub struct Project {
     pub target: String,
     /// The operator's repo the project's work lands in.
     pub upstream: String,
+    /// `owner/repo` on GitHub, where the github backend publishes items.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,6 +51,9 @@ pub struct AddProject {
     pub backend: Option<Backend>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
+    /// `owner/repo` on GitHub; implies the github backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github: Option<String>,
 }
 
 /// `PATCH /api/projects/{name}`: changes one setting. Answers with the

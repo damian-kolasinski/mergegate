@@ -18,7 +18,7 @@ fn approved(landing: Result<Landing, GitError>) -> FakeStore {
         revision: 1,
         summary: String::new(),
     };
-    approve(&mut store, &FakeGit::default(), &backend, request).unwrap();
+    approve(&mut store, &FakeGit::default(), &[&backend], request).unwrap();
     store
 }
 
@@ -77,7 +77,7 @@ fn a_conflict_blocks_through_later_comments_but_not_a_later_approval() {
         revision: 1,
         summary: String::new(),
     };
-    approve(&mut store, &FakeGit::default(), &backend, request).unwrap();
+    approve(&mut store, &FakeGit::default(), &[&backend], request).unwrap();
     assert_eq!(blocked_now(&store), None);
 }
 

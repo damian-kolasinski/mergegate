@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::{FakeGit, FakeStore, commit};
+use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::item::{Submit, item_diff, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
@@ -12,6 +12,7 @@ fn revised() -> FakeStore {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     let git = FakeGit::default()
@@ -39,7 +40,7 @@ fn revised() -> FakeStore {
             worktree: None,
             wake: None,
         };
-        submit(&mut store, &git, request).unwrap();
+        submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }
     store
 }

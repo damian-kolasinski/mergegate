@@ -63,7 +63,16 @@ pub struct Item {
     pub target: String,
     /// The newest one.
     pub revision: Revision,
+    /// The github backend's pull request for the item.
+    pub pull: Option<Pull>,
     pub created_at: String,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pull {
+    pub number: u64,
+    pub url: String,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -104,4 +113,5 @@ pub struct InboxItem {
     pub updated_at: String,
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,
+    pub pull: Option<Pull>,
 }

@@ -1,6 +1,7 @@
 use super::*;
-use crate::fake::{FakeGit, FakeStore, commit};
+use crate::fake::{FakeGit, FakeGithub, FakeStore, PullState, commit};
 use crate::feedback::{Event, EventKind};
+use crate::github::GithubRepo;
 use crate::item::{Submit, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
@@ -14,6 +15,7 @@ fn two_items() -> (FakeStore, FakeGit) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     let git = FakeGit::default()
@@ -36,7 +38,7 @@ fn two_items() -> (FakeStore, FakeGit) {
             worktree: None,
             wake: None,
         };
-        submit(&mut store, &git, request).unwrap();
+        submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }
     (store, git)
 }
@@ -64,6 +66,7 @@ fn closes_the_item_and_tells_its_agent_who_and_why() {
     let item = abandon(
         &mut store,
         &git,
+        &FakeGithub::default(),
         abandoning("app#1", Source::Operator, reason),
     )
     .unwrap();
@@ -91,6 +94,7 @@ fn a_blank_reason_is_none() {
     abandon(
         &mut store,
         &git,
+        &FakeGithub::default(),
         abandoning("app#1", Source::Agent, Some(" \n")),
     )
     .unwrap();
@@ -118,7 +122,7 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
         worktree: None,
         wake: None,
     };
-    submit(&mut store, &git, request).unwrap();
+    submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     assert_eq!(store.diffs().len(), 3);
     assert_eq!(
         git.pins().keys().collect::<Vec<_>>(),
@@ -129,7 +133,13 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
         ]
     );
 
-    abandon(&mut store, &git, abandoning("app#1", Source::Agent, None)).unwrap();
+    abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#1", Source::Agent, None),
+    )
+    .unwrap();
     // app#2 still has README.md and src/login.rs; only r2's src/more.rs goes.
     assert_eq!(store.diffs().len(), 2, "{:?}", store.diffs().keys());
     let more = (None, Some(format!("{}\n", commit(3))));
@@ -139,7 +149,13 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
         ["refs/mergegate/items/2/r1"]
     );
 
-    abandon(&mut store, &git, abandoning("app#2", Source::Agent, None)).unwrap();
+    abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#2", Source::Agent, None),
+    )
+    .unwrap();
     assert!(store.diffs().is_empty());
     assert!(git.pins().is_empty());
 }
@@ -148,7 +164,13 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
 fn closes_even_when_dropping_its_pins_fails() {
     let (mut store, git) = two_items();
     let git = git.failing_unpin();
-    let item = abandon(&mut store, &git, abandoning("app#1", Source::Agent, None)).unwrap();
+    let item = abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#1", Source::Agent, None),
+    )
+    .unwrap();
     assert_eq!(item.state, ItemState::Abandoned);
     assert_eq!(git.pins().len(), 2);
 }
@@ -160,6 +182,7 @@ fn abandons_a_held_merge() {
     let item = abandon(
         &mut store,
         &git,
+        &FakeGithub::default(),
         abandoning("app#1", Source::Operator, None),
     )
     .unwrap();
@@ -169,15 +192,90 @@ fn abandons_a_held_merge() {
 #[test]
 fn refuses_a_closed_item_and_an_unknown_one() {
     let (mut store, git) = two_items();
-    abandon(&mut store, &git, abandoning("app#1", Source::Agent, None)).unwrap();
-    let err = abandon(&mut store, &git, abandoning("app#1", Source::Agent, None)).unwrap_err();
+    abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#1", Source::Agent, None),
+    )
+    .unwrap();
+    let err = abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#1", Source::Agent, None),
+    )
+    .unwrap_err();
     assert!(matches!(err, ItemError::Closed(_)), "{err:?}");
     assert_eq!(events(&store, "app#1").len(), 1);
 
     store.set_state(&id("app#2"), ItemState::Merged);
-    let err = abandon(&mut store, &git, abandoning("app#2", Source::Agent, None)).unwrap_err();
+    let err = abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#2", Source::Agent, None),
+    )
+    .unwrap_err();
     assert_eq!(err.to_string(), "app#2 is closed");
 
-    let err = abandon(&mut store, &git, abandoning("app#9", Source::Agent, None)).unwrap_err();
+    let err = abandon(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        abandoning("app#9", Source::Agent, None),
+    )
+    .unwrap_err();
     assert_eq!(err.to_string(), "no item app#9");
+}
+
+#[test]
+fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
+    let mut store = FakeStore::default();
+    let acme = GithubRepo::parse("acme/app").unwrap();
+    store
+        .insert_project(&Project {
+            name: ProjectName::parse("app").unwrap(),
+            backend: Backend::Github,
+            target: "main".into(),
+            upstream: "/src/app".into(),
+            github: Some(acme.clone()),
+        })
+        .unwrap();
+    let git = FakeGit::default()
+        .commit(&commit(1), None, "Initial", &["README.md"])
+        .commit(&commit(2), Some(&commit(1)), "Add login", &["src/login.rs"])
+        .upstream("https://github.com/acme/app.git", "main", &commit(1));
+    git.push("app", "login", &commit(2));
+    let github = FakeGithub::default();
+    let request = Submit {
+        project: "app".into(),
+        branch: "login".into(),
+        head: commit(2),
+        title: None,
+        worktree: None,
+        wake: None,
+    };
+    submit(&mut store, &git, &github, request).unwrap();
+
+    let logged_out = FakeGithub::default().logged_out();
+    let err = abandon(
+        &mut store,
+        &git,
+        &logged_out,
+        abandoning("app#1", Source::Agent, None),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ItemError::Github(_)), "{err:?}");
+    assert!(store.item(&id("app#1")).unwrap().unwrap().state.is_open());
+
+    abandon(
+        &mut store,
+        &git,
+        &github,
+        abandoning("app#1", Source::Agent, None),
+    )
+    .unwrap();
+    assert_eq!(github.pulls()[0].state, PullState::Closed);
+    assert_eq!(github.deleted(), [(acme, "login".to_owned())]);
 }

@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
-use super::{Backend, NameError, ProjectName};
+use super::{NameError, ProjectName};
 use crate::git::GitError;
+use crate::github::GithubError;
 use crate::store::StoreError;
 
 #[derive(Debug, thiserror::Error)]
@@ -25,8 +26,12 @@ pub enum ProjectError {
     UnknownBranch { branch: String, upstream: PathBuf },
     #[error("{branch} is the branch of open item {item}, so it can't be the target")]
     BranchUnderReview { branch: String, item: String },
-    #[error("the {} backend is not available yet", .0.as_str())]
-    BackendUnavailable(Backend),
+    #[error("found no GitHub repository among the remotes of {}", .0.display())]
+    NoGithubRepo(PathBuf),
+    #[error("project {0} has no GitHub repository set")]
+    NoGithubSet(ProjectName),
+    #[error("open items publish to {repo}: {}; it can change once they close", items.join(", "))]
+    GithubInUse { repo: String, items: Vec<String> },
     #[error("no project named {0}")]
     NotFound(String),
     #[error("no project is registered for the repo at {}", .0.display())]
@@ -41,6 +46,8 @@ pub enum ProjectError {
     },
     #[error(transparent)]
     Git(GitError),
+    #[error(transparent)]
+    Github(#[from] GithubError),
     #[error(transparent)]
     Store(#[from] StoreError),
 }

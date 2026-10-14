@@ -4,12 +4,13 @@
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
-use mergegate_core::git::GitError;
+use mergegate_core::git::{GitError, Upstream};
 use mergegate_core::item::Item;
 use mergegate_core::merge::{Landing, MergeBackend};
 use mergegate_core::project::{Backend, Project};
 
-use crate::command::{self, failed, output_of, run, run_command};
+use crate::command::{self, failed, output_of, run_command};
+use crate::trial::Merged;
 use crate::{HubGit, staging};
 
 impl MergeBackend for HubGit {
@@ -48,49 +49,21 @@ impl HubGit {
         let dir = self.staging(&project.name);
         let git_dir = self.git_dir(&project.name);
         let target = &item.target;
-        staging::fetch(&self.home, &dir, &project.upstream, target)?;
+        let upstream = Upstream::Repo(project.upstream.clone());
+        staging::fetch(&self.home, &dir, &upstream, target)?;
         let branch = format!("refs/heads/{target}");
-        let rev_parse = |rev: String| {
-            let found = run(
-                &self.home,
-                &format!("reading {rev}"),
-                [
-                    git_dir.as_os_str(),
-                    arg("rev-parse"),
-                    arg("--verify"),
-                    arg(&rev),
-                ],
-            )?;
-            Ok::<_, GitError>(found.trim().to_owned())
+        let target_commit = self.rev_parse(&project.name, &format!("{branch}^{{commit}}"))?;
+        let tree = match self.merge_tree(&project.name, &target_commit, &item.revision.head)? {
+            Merged::Tree(tree) => tree,
+            Merged::Conflict(paths) => {
+                return Ok(Some(Landing::Conflict {
+                    target_commit,
+                    paths,
+                }));
+            }
         };
-        let target_commit = rev_parse(format!("{branch}^{{commit}}"))?;
-
-        let doing = "merging in the staging repo";
-        let mut merge_tree = command::git(&self.home);
-        merge_tree.args([
-            git_dir.as_os_str(),
-            arg("merge-tree"),
-            arg("--write-tree"),
-            arg("--name-only"),
-            arg("--no-messages"),
-            arg("-z"),
-            arg(&target_commit),
-            arg(&item.revision.head),
-        ]);
-        let output = output_of(merge_tree, doing)?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut fields = stdout.split('\0').filter(|f| !f.is_empty());
-        let tree = match output.status.code() {
-            Some(0 | 1) => fields.next().map(str::trim).unwrap_or_default().to_owned(),
-            _ => return Err(failed(doing, &output)),
-        };
-        if output.status.code() == Some(1) {
-            return Ok(Some(Landing::Conflict {
-                target_commit,
-                paths: fields.map(Into::into).collect(),
-            }));
-        }
-        if tree == rev_parse(format!("{target_commit}^{{tree}}"))? {
+        let target_tree = self.rev_parse(&project.name, &format!("{target_commit}^{{tree}}"))?;
+        if tree == target_tree {
             // Nothing left to land: the item's changes are on the target
             // already, as after a merge whose push the hub never recorded.
             return Ok(Some(Landing::Merged {
@@ -126,7 +99,7 @@ impl HubGit {
         // So staging's target is the merge, for the next item's diff. The
         // commit has landed, so a failing fetch mustn't report a hold; every
         // submit and merge fetches the target again before reading it.
-        let _ = staging::fetch(&self.home, &dir, &project.upstream, target);
+        let _ = staging::fetch(&self.home, &dir, &upstream, target);
         Ok(Some(Landing::Merged { commit }))
     }
 }

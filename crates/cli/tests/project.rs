@@ -156,7 +156,8 @@ fn f1_local_refuses_what_it_cannot_register() {
 
     let web = TestRepo::new("web");
     let github = add(&[path(web.root()), "--backend", "github"]);
-    assert_eq!(error_code(&github), "backend_unavailable");
+    assert_eq!(error_code(&github), "no_github_repo");
+    assert_eq!(github["error"]["hint"], "--github OWNER/REPO");
     let branch = add(&[path(web.root()), "--target", "nope"]);
     assert_eq!(error_code(&branch), "unknown_branch");
     let name = add(&[path(web.root()), "--name", "Web App"]);
@@ -226,9 +227,11 @@ fn f15_changes_a_projects_settings() {
         error_code(&set(&["app", "backend", "svn"])),
         "invalid_setting"
     );
+    let github = set(&["app", "backend", "github"]);
+    assert_eq!(error_code(&github), "no_github_repo");
     assert_eq!(
-        error_code(&set(&["app", "backend", "github"])),
-        "backend_unavailable"
+        github["error"]["hint"],
+        "mg project set app github OWNER/REPO"
     );
     assert_eq!(
         error_code(&set(&["app", "target", "nope"])),

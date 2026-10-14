@@ -1,4 +1,5 @@
 use super::{FileStat, Item, ItemId, ItemState};
+use crate::github::Pull;
 use crate::project::{Backend, ProjectName};
 use crate::store::StoreError;
 
@@ -35,6 +36,7 @@ pub struct NewItem {
     pub state: ItemState,
     pub backend: Backend,
     pub target: String,
+    pub pull: Option<Pull>,
     pub revision: NewRevision,
 }
 

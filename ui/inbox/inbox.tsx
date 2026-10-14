@@ -5,7 +5,15 @@ import type { InboxItem } from "../api/InboxItem";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { itemHref } from "../app/router";
-import { Badge, Empty, Meta, Mono, Row, Section } from "../design-system";
+import {
+  Badge,
+  Empty,
+  ExternalLink,
+  Meta,
+  Mono,
+  Row,
+  Section,
+} from "../design-system";
 import styles from "./inbox.module.css";
 
 const GROUPS = [
@@ -135,6 +143,15 @@ function Entry(props: {
       <span class={styles.title} title={props.item.branch}>
         {props.item.title}
       </span>
+      <Show when={props.item.pull}>
+        {(pull) => (
+          <span class={styles.flag}>
+            <ExternalLink href={pull().url} title="Pull request on GitHub">
+              #{pull().number}
+            </ExternalLink>
+          </span>
+        )}
+      </Show>
       <Show when={props.item.blocked}>
         {(blocked) => (
           <span class={styles.flag} title={why(blocked())}>

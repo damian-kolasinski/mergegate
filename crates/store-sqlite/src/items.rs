@@ -1,5 +1,6 @@
 //! The `items`, `revisions` and `revision_files` tables.
 
+use mergegate_core::github::Pull;
 use mergegate_core::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemId, ItemState, ItemStore, NewItem, NewRevision,
     Revision,
@@ -14,7 +15,8 @@ use crate::projects::backend_named;
 /// An item with its newest revision. Callers add a `WHERE` and `ORDER BY`.
 const SELECT: &str = "
     SELECT p.name, i.number, i.branch, i.title, i.state, i.backend, i.target, i.created_at,
-           r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at
+           r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
+           i.pull_number, i.pull_url
     FROM items i
     JOIN projects p ON p.id = i.project_id
     JOIN revisions r ON r.item_id = i.id
@@ -109,8 +111,9 @@ impl ItemStore for Store {
             .query_row(&format!("SELECT {NOW}"), [], |row| row.get(0))
             .map_err(StoreError::new)?;
         tx.execute(
-            "INSERT INTO items (project_id, number, branch, title, state, backend, target, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO items (project_id, number, branch, title, state, backend, target, created_at,
+                                pull_number, pull_url)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 project_id,
                 number,
@@ -120,6 +123,8 @@ impl ItemStore for Store {
                 item.backend.as_str(),
                 item.target,
                 now,
+                item.pull.as_ref().map(|pull| pull.number as i64),
+                item.pull.as_ref().map(|pull| pull.url.as_str()),
             ],
         )
         .map_err(StoreError::new)?;
@@ -235,6 +240,12 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
         submitted_at: row.get(14)?,
     };
     let (branch, title, target, created_at) = (row.get(2)?, row.get(3)?, row.get(6)?, row.get(7)?);
+    let pull_number: Option<i64> = row.get(15)?;
+    let pull_url: Option<String> = row.get(16)?;
+    let pull = pull_number.zip(pull_url).map(|(number, url)| Pull {
+        number: number as u64,
+        url,
+    });
     Ok((|| {
         let state = ItemState::ALL
             .into_iter()
@@ -249,6 +260,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             state,
             backend,
             target,
+            pull,
             revision,
             created_at,
         })

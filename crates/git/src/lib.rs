@@ -8,11 +8,14 @@ mod http;
 mod inspect;
 mod items;
 mod merge;
+mod publish;
+mod remote;
 mod staging;
+mod trial;
 
 use std::path::{Path, PathBuf};
 
-use mergegate_core::git::{Git, GitError, Repo};
+use mergegate_core::git::{Git, GitError, Repo, Upstream};
 use mergegate_core::project::ProjectName;
 
 pub use http::HttpRequest;
@@ -43,7 +46,7 @@ impl Git for HubGit {
     fn sync_staging(
         &self,
         project: &ProjectName,
-        upstream: &Path,
+        upstream: &Upstream,
         target: &str,
     ) -> Result<(), GitError> {
         staging::sync(&self.home, &self.staging(project), upstream, target)

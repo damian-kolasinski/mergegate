@@ -8,6 +8,7 @@ use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
 
+use backend_github::GithubClient;
 use git::HubGit;
 use store_sqlite::Store;
 
@@ -28,6 +29,7 @@ pub(crate) struct AppState {
     /// the same staging repo at once.
     store: Mutex<Store>,
     git: HubGit,
+    github: GithubClient,
 }
 
 impl AppState {
@@ -36,12 +38,21 @@ impl AppState {
         self: &Arc<Self>,
         f: impl FnOnce(&mut Store, &HubGit) -> T + Send + 'static,
     ) -> T {
+        self.blocking_github(|store, git, _| f(store, git)).await
+    }
+
+    /// [`Self::blocking`], with GitHub too. Its calls go over the network
+    /// while the store is held, so other requests wait on GitHub.
+    pub(crate) async fn blocking_github<T: Send + 'static>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&mut Store, &HubGit, &GithubClient) -> T + Send + 'static,
+    ) -> T {
         let state = Arc::clone(self);
         tokio::task::spawn_blocking(move || {
             // A panic mid-request leaves nothing half-applied: every write is
             // a single statement.
             let mut store = state.store.lock().unwrap_or_else(|e| e.into_inner());
-            f(&mut store, &state.git)
+            f(&mut store, &state.git, &state.github)
         })
         .await
         .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
@@ -79,6 +90,7 @@ pub(crate) async fn serve(
         wake_logs: home.wake_logs(),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
+        github: GithubClient::from_env(),
     });
     let app = Router::new()
         .merge(lifecycle::routes())

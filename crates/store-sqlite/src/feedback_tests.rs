@@ -21,6 +21,7 @@ fn store() -> (tempfile::TempDir, Store) {
                 backend: Backend::Local,
                 target: "main".into(),
                 upstream: format!("/src/{name}").into(),
+                github: None,
             })
             .unwrap();
         store
@@ -31,6 +32,7 @@ fn store() -> (tempfile::TempDir, Store) {
                 state: ItemState::NeedsReview,
                 backend: Backend::Local,
                 target: "main".into(),
+                pull: None,
                 revision: revision(),
             })
             .unwrap();

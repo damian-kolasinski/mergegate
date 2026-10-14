@@ -1,4 +1,4 @@
-use mergegate_core::git::{Git, parse_version};
+use mergegate_core::git::{Git, Upstream, parse_version};
 use mergegate_core::project::ProjectName;
 use mergegate_git::HubGit;
 use tempfile::TempDir;
@@ -37,7 +37,9 @@ fn creates_staging_and_mirrors_the_target() {
     let repo = TestRepo::new("app");
     assert!(!hub.git.staging_has(&app(), "main").unwrap());
 
-    hub.git.sync_staging(&app(), repo.root(), "main").unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+        .unwrap();
     assert!(hub.git.staging_has(&app(), "main").unwrap());
     assert!(!hub.git.staging_has(&app(), "release").unwrap());
     assert_eq!(hub.staging_rev("app", "HEAD"), repo.rev("main"));
@@ -47,15 +49,21 @@ fn creates_staging_and_mirrors_the_target() {
 fn resyncing_follows_the_target_even_when_history_was_rewritten() {
     let hub = Hub::new();
     let repo = TestRepo::new("app");
-    hub.git.sync_staging(&app(), repo.root(), "main").unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+        .unwrap();
 
     repo.commit("second");
-    hub.git.sync_staging(&app(), repo.root(), "main").unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+        .unwrap();
     assert_eq!(hub.staging_rev("app", "main"), repo.rev("main"));
 
     repo.git(["reset", "--quiet", "--hard", "HEAD~1"]);
     repo.commit("rewritten");
-    hub.git.sync_staging(&app(), repo.root(), "main").unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+        .unwrap();
     assert_eq!(hub.staging_rev("app", "main"), repo.rev("main"));
 }
 
@@ -66,9 +74,11 @@ fn switching_the_target_moves_head() {
     repo.checkout("main");
     repo.git(["checkout", "--quiet", "-b", "release"]);
     repo.commit("release only");
-    hub.git.sync_staging(&app(), repo.root(), "main").unwrap();
     hub.git
-        .sync_staging(&app(), repo.root(), "release")
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+        .unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "release")
         .unwrap();
     assert_eq!(hub.staging_rev("app", "HEAD"), repo.rev("release"));
     // The old target would only go stale.
@@ -81,13 +91,13 @@ fn a_new_target_may_reuse_the_old_ones_path() {
     let repo = TestRepo::new("app");
     repo.git(["branch", "-m", "main", "release/1.0"]);
     hub.git
-        .sync_staging(&app(), repo.root(), "release/1.0")
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "release/1.0")
         .unwrap();
 
     // `release` can't sit next to `release/1.0`, so the old target must go first.
     repo.git(["branch", "-m", "release/1.0", "release"]);
     hub.git
-        .sync_staging(&app(), repo.root(), "release")
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "release")
         .unwrap();
     assert_eq!(hub.staging_rev("app", "HEAD"), repo.rev("release"));
 }
@@ -111,7 +121,9 @@ fn mirrors_a_shallow_upstream() {
         ],
     );
 
-    hub.git.sync_staging(&app(), &shallow, "main").unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(shallow.clone()), "main")
+        .unwrap();
     assert_eq!(hub.staging_rev("app", "main"), repo.rev("main"));
 }
 
@@ -121,7 +133,7 @@ fn a_failed_fetch_says_what_it_was_doing() {
     let repo = TestRepo::new("app");
     let err = hub
         .git
-        .sync_staging(&app(), repo.root(), "nope")
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "nope")
         .unwrap_err()
         .to_string();
     assert!(err.starts_with("fetching nope from "), "{err}");
@@ -137,7 +149,9 @@ fn a_broken_staging_dir_is_an_error_and_a_resync_repairs_it() {
     std::fs::create_dir_all(&staging).unwrap();
 
     assert!(hub.git.staging_has(&app(), "main").is_err());
-    hub.git.sync_staging(&app(), repo.root(), "main").unwrap();
+    hub.git
+        .sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+        .unwrap();
     assert!(hub.git.staging_has(&app(), "main").unwrap());
 }
 

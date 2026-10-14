@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::{FakeGit, FakeStore};
+use crate::fake::{FakeGit, FakeGithub, FakeStore};
 use crate::project::{AddProject, add};
 
 fn statuses(checks: &[Check]) -> Vec<(&str, CheckStatus, Option<&str>)> {
@@ -17,8 +17,8 @@ fn healthy_setup_passes() {
         path: "/src/app".into(),
         ..AddProject::default()
     };
-    add(&mut store, &git, request).unwrap();
-    let checks = checks(&store, &git).unwrap();
+    add(&mut store, &git, &FakeGithub::default(), request).unwrap();
+    let checks = checks(&store, &git, &FakeGithub::default()).unwrap();
     assert_eq!(
         statuses(&checks),
         [
@@ -32,7 +32,12 @@ fn healthy_setup_passes() {
 
 #[test]
 fn no_projects_is_a_warning() {
-    let checks = checks(&FakeStore::default(), &FakeGit::default()).unwrap();
+    let checks = checks(
+        &FakeStore::default(),
+        &FakeGit::default(),
+        &FakeGithub::default(),
+    )
+    .unwrap();
     assert_eq!(
         statuses(&checks)[1],
         ("projects", CheckStatus::Warn, Some("mg project add PATH"))
@@ -49,7 +54,7 @@ fn old_or_missing_git_fails() {
     ];
     for (version, expected) in cases {
         let git = FakeGit::default().version(version);
-        let checks = checks(&FakeStore::default(), &git).unwrap();
+        let checks = checks(&FakeStore::default(), &git, &FakeGithub::default()).unwrap();
         assert_eq!(checks[0].status, expected, "{version:?}");
     }
 }
@@ -66,7 +71,7 @@ fn broken_projects_name_their_fix() {
             path: path.into(),
             ..AddProject::default()
         };
-        add(&mut store, &git, request).unwrap();
+        add(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }
     let git = git
         .without_repo("/src/gone")
@@ -74,7 +79,7 @@ fn broken_projects_name_their_fix() {
         .repo("/src/moved", &["trunk"], None)
         .without_staging("unsynced");
 
-    let checks = checks(&store, &git).unwrap();
+    let checks = checks(&store, &git, &FakeGithub::default()).unwrap();
     assert_eq!(
         statuses(&checks)[1..],
         [
@@ -96,4 +101,34 @@ fn broken_projects_name_their_fix() {
         ]
     );
     assert_eq!(checks[2].message, "/src/moved has no branch main");
+}
+
+#[test]
+fn github_projects_check_the_operator_can_push() {
+    let git = FakeGit::default().repo("/src/app", &["main"], None);
+    let mut store = FakeStore::default();
+    let request = AddProject {
+        path: "/src/app".into(),
+        github: Some("acme/app".into()),
+        ..AddProject::default()
+    };
+    add(&mut store, &git, &FakeGithub::default(), request).unwrap();
+    let healthy = checks(&store, &git, &FakeGithub::default()).unwrap();
+    assert_eq!(healthy[1].status, CheckStatus::Ok);
+    assert_eq!(healthy[1].message, "github acme/app · main · /src/app");
+
+    let cases = [
+        (FakeGithub::default().logged_out(), "gh auth login"),
+        (
+            FakeGithub::default().denying("acme/app"),
+            "mg project set app github OWNER/REPO",
+        ),
+    ];
+    for (github, fix) in cases {
+        let failing = checks(&store, &git, &github).unwrap();
+        assert_eq!(
+            statuses(&failing)[1],
+            ("project app", CheckStatus::Fail, Some(fix))
+        );
+    }
 }

@@ -1,3 +1,5 @@
+use mergegate_core::github::GithubRepo;
+
 use super::*;
 
 fn project(name: &str, upstream: &str) -> Project {
@@ -6,6 +8,7 @@ fn project(name: &str, upstream: &str) -> Project {
         backend: Backend::Local,
         target: "main".into(),
         upstream: upstream.into(),
+        github: None,
     }
 }
 
@@ -47,9 +50,28 @@ fn updates_a_projects_settings() {
     app.target = "release".into();
     app.upstream = "/src/fork".into();
     store.update_project(&app).unwrap();
+    assert_eq!(store.projects().unwrap(), [app.clone()]);
+
+    app.backend = Backend::Github;
+    app.github = GithubRepo::parse("acme/app");
+    store.update_project(&app).unwrap();
+    assert_eq!(store.projects().unwrap(), [app.clone()]);
+    // Leaving github keeps the repository for the next switch back.
+    app.backend = Backend::Local;
+    store.update_project(&app).unwrap();
     assert_eq!(store.projects().unwrap(), [app]);
 
     assert!(store.update_project(&project("nope", "/x")).is_err());
+}
+
+#[test]
+fn a_github_project_needs_its_repository() {
+    let (_dir, mut store) = store();
+    let app = Project {
+        backend: Backend::Github,
+        ..project("app", "/src/app")
+    };
+    assert!(store.insert_project(&app).is_err());
 }
 
 #[test]

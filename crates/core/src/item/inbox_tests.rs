@@ -11,6 +11,7 @@ fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
         state: ItemState::NeedsReview,
         backend: Backend::Local,
         target: "main".into(),
+        pull: None,
         revision: NewRevision {
             head: "1".repeat(40),
             base: "0".repeat(40),

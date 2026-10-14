@@ -1,6 +1,6 @@
 use super::*;
 use crate::diff::{Content, LineKind};
-use crate::fake::{FakeGit, FakeStore, commit};
+use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::item::{Submit, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
@@ -17,6 +17,7 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     let git = FakeGit::default()
@@ -37,7 +38,7 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
         worktree: None,
         wake: None,
     };
-    submit(&mut store, &git, request).unwrap();
+    submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     (store, git)
 }
 

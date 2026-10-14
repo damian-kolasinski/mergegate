@@ -9,6 +9,7 @@ fn repo(branches: &[&str], head: Option<&str>) -> Repo {
         root: PathBuf::from("/repo"),
         branches,
         head: head.map(Into::into),
+        remotes: Vec::new(),
     }
 }
 

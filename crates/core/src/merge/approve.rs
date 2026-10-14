@@ -23,7 +23,7 @@ pub struct Approve {
 pub fn approve<S: ProjectStore + ItemStore + ReviewStore + DiffStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
-    backend: &impl MergeBackend,
+    backends: &[&dyn MergeBackend],
     request: Approve,
 ) -> Result<Merge, MergeError> {
     let Approve {
@@ -46,7 +46,7 @@ pub fn approve<S: ProjectStore + ItemStore + ReviewStore + DiffStore + FeedbackS
             newest: item.revision.number,
         });
     }
-    through(&item, backend)?;
+    let backend = through(&item, backends)?;
     let review = NewReview {
         item: id.clone(),
         revision,

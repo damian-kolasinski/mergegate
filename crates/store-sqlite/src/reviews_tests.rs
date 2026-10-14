@@ -21,6 +21,7 @@ fn store() -> (tempfile::TempDir, Store) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     store
@@ -31,6 +32,7 @@ fn store() -> (tempfile::TempDir, Store) {
             state: ItemState::NeedsReview,
             backend: Backend::Local,
             target: "main".into(),
+            pull: None,
             revision: revision(),
         })
         .unwrap();
@@ -147,6 +149,7 @@ fn a_review_sends_only_its_items_drafts() {
             state: ItemState::NeedsReview,
             backend: Backend::Local,
             target: "main".into(),
+            pull: None,
             revision: NewRevision {
                 head: "b".repeat(40),
                 base: "0".repeat(40),

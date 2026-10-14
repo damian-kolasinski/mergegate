@@ -34,8 +34,12 @@ fn describe(inbox: &Inbox) -> String {
 }
 
 fn line(i: &InboxItem) -> String {
+    let pull = match &i.pull {
+        Some(pull) => format!(" · #{}", pull.number),
+        None => String::new(),
+    };
     format!(
-        "  {} r{}  {}  ({} · {}, +{} -{})",
+        "  {} r{}  {}  ({}{pull} · {}, +{} -{})",
         i.id,
         i.revision,
         i.title,

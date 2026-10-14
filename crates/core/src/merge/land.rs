@@ -12,7 +12,7 @@ use crate::store::StoreError;
 pub(super) fn land<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
-    backend: &impl MergeBackend,
+    backend: &dyn MergeBackend,
     item: &Item,
 ) -> Result<Merge, MergeError> {
     let project = find(store, item.id.project().as_str())?;
@@ -64,14 +64,18 @@ fn reread(store: &impl ItemStore, item: &Item) -> Result<Item, StoreError> {
         .ok_or_else(|| StoreError::new(format!("{} vanished as it merged", item.id)))
 }
 
-/// The item's backend must be the one given: merging through another would
-/// land the work somewhere the item was never meant to go.
-pub(super) fn through(item: &Item, backend: &impl MergeBackend) -> Result<(), MergeError> {
-    if item.backend != backend.kind() {
-        return Err(MergeError::NoBackend {
+/// The backend the item was opened with: merging through another would land
+/// the work somewhere the item was never meant to go.
+pub(super) fn through<'a>(
+    item: &Item,
+    backends: &[&'a dyn MergeBackend],
+) -> Result<&'a dyn MergeBackend, MergeError> {
+    backends
+        .iter()
+        .find(|backend| backend.kind() == item.backend)
+        .copied()
+        .ok_or_else(|| MergeError::NoBackend {
             id: item.id.clone(),
             backend: item.backend,
-        });
-    }
-    Ok(())
+        })
 }

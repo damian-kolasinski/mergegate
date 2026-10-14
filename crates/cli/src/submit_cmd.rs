@@ -85,7 +85,7 @@ fn describe(submitted: &Submitted) -> String {
             item.title
         );
     }
-    format!(
+    let mut text = format!(
         "submitted {} r{}: {}\n  {} onto {} · {}, +{} -{}",
         item.id,
         r.number,
@@ -95,7 +95,11 @@ fn describe(submitted: &Submitted) -> String {
         files(r.files),
         r.additions,
         r.deletions
-    )
+    );
+    if let Some(pull) = &item.pull {
+        text.push_str(&format!("\n  pull request {}", pull.url));
+    }
+    text
 }
 
 pub(crate) fn files(n: u32) -> String {

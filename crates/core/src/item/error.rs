@@ -1,5 +1,6 @@
 use super::ItemId;
 use crate::git::GitError;
+use crate::github::GithubError;
 use crate::project::ProjectError;
 use crate::store::StoreError;
 
@@ -29,8 +30,15 @@ pub enum ItemError {
     Unrelated { branch: String, target: String },
     #[error("{branch} has no commits that aren't on {target}")]
     NothingToSubmit { branch: String, target: String },
+    /// `found` is where GitHub has the branch.
+    #[error("GitHub has {branch} at {found}, which mergegate didn't push")]
+    BranchMoved { branch: String, found: String },
+    #[error("GitHub no longer has {branch}, which mergegate pushed for an open pull request")]
+    BranchGone { branch: String },
     #[error(transparent)]
     Git(#[from] GitError),
+    #[error(transparent)]
+    Github(#[from] GithubError),
     #[error(transparent)]
     Store(#[from] StoreError),
 }

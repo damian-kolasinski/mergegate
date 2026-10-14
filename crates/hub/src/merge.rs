@@ -11,7 +11,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use mergegate_core::feedback::FeedbackStore;
 use mergegate_core::item::{Item, ItemId};
-use mergegate_core::merge::{self, Approve, Blocked, Landing, Merge, MergeError};
+use mergegate_core::merge::{self, Approve, Blocked, GithubBackend, Landing, Merge, MergeError};
 use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
@@ -37,9 +37,12 @@ async fn approve(
         revision: request.revision,
         summary: request.summary,
     };
-    // The hub's git is the local backend too.
     let merge = state
-        .blocking(move |store, git| merge::approve(store, git, git, request))
+        .blocking_github(move |store, git, github| {
+            let github = GithubBackend::new(git, github);
+            // The hub's git is the local backend.
+            merge::approve(store, git, &[git, &github], request)
+        })
         .await;
     changed(&state, &id);
     Ok(Json(to_api(merge.map_err(failure)?)))
@@ -53,7 +56,10 @@ async fn retry(
     let id = parse(&id)?;
     let merging = id.clone();
     let merge = state
-        .blocking(move |store, git| merge::retry(store, git, git, &merging))
+        .blocking_github(move |store, git, github| {
+            let github = GithubBackend::new(git, github);
+            merge::retry(store, git, &[git, &github], &merging)
+        })
         .await;
     changed(&state, &id);
     Ok(Json(to_api(merge.map_err(failure)?)))

@@ -8,18 +8,7 @@ use crate::StoreError;
 
 /// Migration `n` (1-based) moves the schema from version `n - 1` to `n`. A
 /// merged migration is never edited, only followed by a new one.
-pub(crate) const MIGRATIONS: &[&str] = &[
-    include_str!("../migrations/0001_init.sql"),
-    include_str!("../migrations/0002_projects.sql"),
-    include_str!("../migrations/0003_items.sql"),
-    include_str!("../migrations/0004_diffs.sql"),
-    include_str!("../migrations/0005_viewed.sql"),
-    include_str!("../migrations/0006_reviews.sql"),
-    include_str!("../migrations/0007_comments.sql"),
-    include_str!("../migrations/0008_replies.sql"),
-    include_str!("../migrations/0009_close_events.sql"),
-    include_str!("../migrations/0010_agents.sql"),
-];
+pub(crate) const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql")];
 
 /// The schema version this build migrates databases to.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

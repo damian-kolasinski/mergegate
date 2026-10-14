@@ -1,3 +1,4 @@
+use mergegate_core::github::{GithubRepo, Pull};
 use mergegate_core::item::{ChangedFile, FileStat};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 
@@ -12,6 +13,7 @@ fn store() -> (tempfile::TempDir, Store) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: format!("/src/{name}").into(),
+            github: None,
         };
         store.insert_project(&project).unwrap();
     }
@@ -59,6 +61,7 @@ fn new_item(project: &str, branch: &str) -> NewItem {
         state: ItemState::NeedsReview,
         backend: Backend::Local,
         target: "main".into(),
+        pull: None,
         revision: revision('a'),
     }
 }
@@ -98,6 +101,35 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
     );
     assert_eq!(store.open_item(&name("app"), "a").unwrap(), Some(a));
     assert_eq!(store.open_item(&name("web"), "a").unwrap(), None);
+}
+
+#[test]
+fn keeps_a_github_items_pull_request() {
+    let (_dir, mut store) = store();
+    let mut web = store.project(&name("web")).unwrap().unwrap();
+    web.backend = Backend::Github;
+    web.github = GithubRepo::parse("acme/web");
+    store.update_project(&web).unwrap();
+    let pull = Pull {
+        number: 12,
+        url: "https://github.com/acme/web/pull/12".into(),
+    };
+    let item = store
+        .insert_item(NewItem {
+            backend: Backend::Github,
+            pull: Some(pull.clone()),
+            ..new_item("web", "a")
+        })
+        .unwrap();
+    assert_eq!(item.pull, Some(pull));
+    assert_eq!(store.item(&item.id).unwrap(), Some(item));
+
+    // A github item always has its pull request, and a local one never.
+    let without = NewItem {
+        backend: Backend::Github,
+        ..new_item("web", "b")
+    };
+    assert!(store.insert_item(without).is_err());
 }
 
 #[test]

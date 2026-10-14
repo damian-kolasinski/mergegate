@@ -1,13 +1,16 @@
 //! Registering pushed work as an item or a new revision (F4).
 
 use super::diff_files::diff_files;
+use super::publish::{Revision, publish};
 use super::{
     Item, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, valid_branch,
     valid_commit,
 };
 use crate::agent::{self, AgentStore};
 use crate::diff::{DiffGit, DiffStore};
-use crate::project::{ProjectStore, find};
+use crate::git::Upstream;
+use crate::github::Github;
+use crate::project::{ProjectStore, fetch_from, find};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submit {
@@ -32,9 +35,14 @@ pub struct Submitted {
 /// target is fetched fresh first, so the merge-base is current. Every file's
 /// diff is cached before the revision is recorded. A submit at the open
 /// item's head still records its worktree and wake.
+///
+/// A `github` item is published before it's recorded: its branch pushed and
+/// its pull request opened or retitled. If GitHub fails, the submit fails
+/// and nothing is recorded.
 pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
     store: &mut S,
     git: &(impl ItemGit + DiffGit),
+    github: &impl Github,
     request: Submit,
 ) -> Result<Submitted, ItemError> {
     let project = find(store, &request.project)?;
@@ -80,7 +88,11 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
         }
         Some(_) => {}
     }
-    git.fetch_target(&project.name, &project.upstream, &target)?;
+    let backend = existing
+        .as_ref()
+        .map_or(project.backend, |item| item.backend);
+    let upstream = fetch_from(&project, backend, github)?;
+    git.fetch_target(&project.name, &upstream, &target)?;
     let Some(base) = git.merge_base(&project.name, &head, &target)? else {
         return Err(ItemError::Unrelated { branch, target });
     };
@@ -97,6 +109,22 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
             .filter(|subject| !subject.trim().is_empty())
             .unwrap_or_else(|| branch.clone()),
     };
+    let pull = match (&upstream, &project.github) {
+        (Upstream::Remote(remote), Some(repo)) => Some(publish(
+            git,
+            github,
+            &project.name,
+            (repo, remote),
+            existing.as_ref(),
+            Revision {
+                branch: &branch,
+                head: &head,
+                target: &target,
+                title: &title,
+            },
+        )?),
+        _ => None,
+    };
     let revision = NewRevision { head, base, files };
     let item = match existing {
         Some(item) => store.add_revision(&item.id, &title, ItemState::NeedsReview, revision)?,
@@ -105,8 +133,9 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
             branch,
             title,
             state: ItemState::NeedsReview,
-            backend: project.backend,
+            backend,
             target,
+            pull,
             revision,
         })?,
     };

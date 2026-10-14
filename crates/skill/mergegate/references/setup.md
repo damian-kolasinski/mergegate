@@ -12,7 +12,9 @@ The hub keeps its data in `~/.mergegate`, or in `MERGEGATE_HOME` when that is se
 
 Each repo under review is a project. In the repo, `mg project add` registers it. Its name, used in item IDs, defaults to the repo's folder name (`--name NAME` picks another), and its target branch defaults to `main`, `master` or `trunk` (`--target BRANCH` picks another). Ask the operator which target to use when the repo has none of those.
 
-`mg project show` prints the project at the current directory, or every project. `mg project set <project> <key> <value>` changes `backend`, `target` or `upstream` later; when open items would keep the old setting it returns `needs_decision`, and `--confirm` applies it anyway.
+A project's backend decides where approved work lands. `local` squash-merges into the target branch of the registered repo. `github` pushes each item's branch to GitHub, opens its pull request and squash-merges it there; the hub signs in as whoever the operator's `gh` CLI is logged in as, so if a command says it can't sign in, ask the operator to run `gh auth login`. A repo with a GitHub remote asks which backend to use; `--backend local|github` answers up front, and `--github OWNER/REPO` names the repository when its remotes don't settle it.
+
+`mg project show` prints the project at the current directory, or every project. `mg project set <project> <key> <value>` changes `backend`, `target`, `upstream` or `github` (as `OWNER/REPO`) later; when open items would keep the old setting it returns `needs_decision`, and `--confirm` applies it anyway.
 
 ## Clones
 

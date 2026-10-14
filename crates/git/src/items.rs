@@ -1,23 +1,34 @@
 //! What the item slice reads and writes in a project's staging repo.
 
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
 
-use mergegate_core::git::GitError;
-use mergegate_core::item::{ChangedFile, ItemGit, valid_commit};
+use mergegate_core::git::{GitError, Remote, Upstream};
+use mergegate_core::item::{ChangedFile, ItemGit, Pushed, valid_commit};
 use mergegate_core::project::ProjectName;
 
 use crate::command::{run, run_optional};
-use crate::{HubGit, staging};
+use crate::{HubGit, publish, staging};
 
 impl ItemGit for HubGit {
     fn fetch_target(
         &self,
         project: &ProjectName,
-        upstream: &Path,
+        upstream: &Upstream,
         target: &str,
     ) -> Result<(), GitError> {
         staging::fetch(&self.home, &self.staging(project), upstream, target)
+    }
+
+    fn push_branch(
+        &self,
+        project: &ProjectName,
+        remote: &Remote,
+        branch: &str,
+        head: &str,
+        pushed: Option<&str>,
+    ) -> Result<Pushed, GitError> {
+        let staging = self.staging(project);
+        publish::push_branch(&self.home, &staging, remote, branch, head, pushed)
     }
 
     fn branch_head(&self, project: &ProjectName, branch: &str) -> Result<Option<String>, GitError> {

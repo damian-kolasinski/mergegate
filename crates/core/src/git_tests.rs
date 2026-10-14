@@ -14,3 +14,14 @@ fn parses_git_versions() {
         assert_eq!(parse_version(output), expected, "{output:?}");
     }
 }
+
+#[test]
+fn secrets_stay_out_of_debug_output() {
+    let remote = Remote {
+        url: "https://github.com/o/r.git".into(),
+        auth: Secret::new("Authorization: Basic c2VjcmV0".into()),
+    };
+    let shown = format!("{remote:?}");
+    assert!(!shown.contains("c2VjcmV0"), "{shown}");
+    assert!(shown.contains("Secret(..)"), "{shown}");
+}

@@ -12,11 +12,11 @@ use crate::project::ProjectStore;
 pub fn retry<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
-    backend: &impl MergeBackend,
+    backends: &[&dyn MergeBackend],
     id: &ItemId,
 ) -> Result<Merge, MergeError> {
     let item = merging(store, id)?;
-    through(&item, backend)?;
+    let backend = through(&item, backends)?;
     land(store, git, backend, &item)
 }
 
