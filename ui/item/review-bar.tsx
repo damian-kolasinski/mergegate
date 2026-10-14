@@ -1,4 +1,5 @@
 import { createSignal, Show } from "solid-js";
+import type { Review } from "../api/Review";
 import type { SubmitReview } from "../api/SubmitReview";
 import type { Verdict } from "../api/Verdict";
 import { postJson } from "../app/hub";
@@ -7,13 +8,17 @@ import { Button, Meta, TextArea } from "../design-system";
 import styles from "./review-bar.module.css";
 
 /**
- * Sends the operator's review of one revision to its agent. Comment leaves
- * the item with the operator; Request changes hands it back.
+ * Sends the operator's review of one revision to its agent, with every draft
+ * comment on the item. Comment leaves the item with the operator; Request
+ * changes hands it back.
  */
 export function ReviewBar(props: {
   item: string;
   revision: number;
-  onSubmitted: (verdict: Verdict) => void;
+  drafts: number;
+  /** A comment being written, which the review would go out without. */
+  holding: boolean;
+  onSubmitted: (review: Review) => void;
 }) {
   const [summary, setSummary] = createSignal("");
   const [sending, setSending] = createSignal(false);
@@ -28,15 +33,21 @@ export function ReviewBar(props: {
     };
     setSending(true);
     setStatus(undefined);
-    postJson(`/api/items/${encodeURIComponent(props.item)}/reviews`, body)
+    postJson<Review>(
+      `/api/items/${encodeURIComponent(props.item)}/reviews`,
+      body,
+    )
       .then(
-        () => {
+        (review) => {
           setSummary("");
+          const count = review.comments.length;
           setStatus({
-            text: `Sent to the agent on r${body.revision}`,
+            text:
+              `Sent to the agent on r${body.revision}` +
+              (count ? ` with ${plural(count, "comment")}` : ""),
             failed: false,
           });
-          props.onSubmitted(verdict);
+          props.onSubmitted(review);
         },
         (error: unknown) =>
           setStatus({
@@ -46,7 +57,7 @@ export function ReviewBar(props: {
       )
       .finally(() => setSending(false));
   };
-  const empty = () => !summary().trim();
+  const empty = () => !summary().trim() && !props.drafts;
 
   useKeys({ r: () => field?.focus() });
 
@@ -75,15 +86,21 @@ export function ReviewBar(props: {
             )}
           </Show>
         </p>
+        <Show when={props.drafts}>
+          <Meta>{plural(props.drafts, "draft comment")}</Meta>
+        </Show>
+        <Show when={props.holding}>
+          <Meta>Save or cancel the open comment first</Meta>
+        </Show>
         <Button
-          disabled={sending() || empty()}
+          disabled={sending() || empty() || props.holding}
           onClick={() => submit("comment")}
         >
           Comment
         </Button>
         <Button
           variant="solid"
-          disabled={sending() || empty()}
+          disabled={sending() || empty() || props.holding}
           onClick={() => submit("changes_requested")}
         >
           Request changes
@@ -91,4 +108,8 @@ export function ReviewBar(props: {
       </div>
     </form>
   );
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
