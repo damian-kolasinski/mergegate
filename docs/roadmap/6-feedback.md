@@ -39,7 +39,7 @@ Each PR is a vertical slice, from the store to the UI and the CLI.
 
 - `feedback-1-review`: a review with a summary reaches the agent: the reviews route, the event log, `mg feedback`, this brief. *In review.*
 - `feedback-2-review-bar`: the review bar on the item screen, with Comment and Request changes. *In review.*
-- `feedback-3-wait`: `mg wait`, long-polling the log. *Planned.*
+- `feedback-3-wait`: `mg wait`, long-polling the log. *In review.*
 - `feedback-4-comments`: draft line comments in the diff, sent with the review and quoted in its event. *Planned.*
 - `feedback-5-replies`: `mg reply`, threads in the diff, the operator's draft replies, `item.changed`. *Planned.*
 - `feedback-6-conversation`: the Conversation list, F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*

@@ -1,19 +1,25 @@
 //! `GET /api/items/{id}/feedback` and `POST .../feedback/ack`: an item's
-//! events for its agent, read by `mg feedback`.
+//! events for its agent, read by `mg wait` (long-polling) and `mg feedback`.
+
+use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use mergegate_core::feedback::{self, Event, EventKind, Feedback, FeedbackError, Source};
+use mergegate_core::feedback::{self, Event, EventKind, Feedback, FeedbackError, Source, Wake};
 use mergegate_core::item::ItemId;
 use serde::Deserialize;
-use std::sync::Arc;
+use tokio::time::Instant;
 
 use crate::reply::Failure;
 use crate::server::AppState;
 use crate::{items, reviews};
+
+/// The longest one request waits; `mg wait` asks again to wait longer.
+const MAX_WAIT: Duration = Duration::from_secs(3600);
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -24,6 +30,11 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 #[derive(Deserialize)]
 struct ReadQuery {
     since: Option<u64>,
+    /// Seconds.
+    #[serde(default)]
+    wait: u64,
+    #[serde(default, rename = "for")]
+    wake: api::feedback::Wake,
 }
 
 async fn read(
@@ -34,14 +45,33 @@ async fn read(
     let Path(id) = id?;
     let Query(query) = query?;
     let id = parse(&id)?;
-    let read = {
-        let id = id.clone();
-        state
-            .blocking(move |store, _| feedback::feedback(store, &id, query.since))
-            .await
-            .map_err(failure)?
+    let wake = match query.wake {
+        api::feedback::Wake::Any => Wake::Any,
+        api::feedback::Wake::Operator => Wake::Operator,
     };
-    Ok(Json(to_api(&id, read)))
+    let deadline = Instant::now() + Duration::from_secs(query.wait).min(MAX_WAIT);
+    let mut log = state.events.log();
+    let mut stopping = state.events.stopping();
+    let mut last = query.wait == 0;
+    loop {
+        log.mark_unchanged();
+        let read = {
+            let id = id.clone();
+            state
+                .blocking(move |store, _| feedback::feedback(store, &id, query.since))
+                .await
+                .map_err(failure)?
+        };
+        if last || wake.by(&read.events) || !read.item.state.is_open() {
+            return Ok(Json(to_api(&id, read)));
+        }
+        // The store stays unlocked while this waits.
+        tokio::select! {
+            changed = log.changed() => last = changed.is_err(),
+            () = tokio::time::sleep_until(deadline) => last = true,
+            _ = stopping.wait_for(|stopping| *stopping) => last = true,
+        }
+    }
 }
 
 async fn acknowledge(
