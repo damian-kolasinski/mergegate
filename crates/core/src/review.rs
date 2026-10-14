@@ -1,15 +1,20 @@
-//! Reviews: the operator's verdict on a revision, sent to its agent as one
-//! `review.submitted` event (design §9.2, F6, F7).
+//! Reviews: the operator's verdict on a revision and the line comments drafted
+//! for it, sent to its agent as one `review.submitted` event (design §9.2,
+//! F6, F7).
 
+mod comment;
+mod draft;
 mod error;
 mod store;
 mod submit;
 
+pub use comment::{Comment, CommentId, QUOTE_LINES, Side};
+pub use draft::{DraftError, QUOTE_LINE_CHARS, WriteDraft, delete_draft, edit_draft, write_draft};
 pub use error::ReviewError;
-pub use store::{NewReview, ReviewStore};
+pub use store::{NewComment, NewReview, ReviewStore};
 pub use submit::{SubmitReview, submit};
 
-use crate::item::ItemId;
+use crate::item::{Item, ItemId, ItemState};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Review {
@@ -21,6 +26,8 @@ pub struct Review {
     pub verdict: Verdict,
     /// Empty when the operator wrote none.
     pub summary: String,
+    /// The drafts the review sent, oldest first.
+    pub comments: Vec<Comment>,
     pub submitted_at: String,
 }
 
@@ -42,5 +49,15 @@ impl Verdict {
             Self::Comment => "comment",
             Self::ChangesRequested => "changes_requested",
         }
+    }
+}
+
+/// Reviews and drafts are taken while the item is with the operator or its
+/// agent.
+fn reviewable(item: &Item) -> Result<(), ReviewError> {
+    match item.state {
+        ItemState::NeedsReview | ItemState::ChangesRequested => Ok(()),
+        ItemState::Merging => Err(ReviewError::Merging(item.id.clone())),
+        ItemState::Merged | ItemState::Abandoned => Err(ReviewError::Closed(item.id.clone())),
     }
 }

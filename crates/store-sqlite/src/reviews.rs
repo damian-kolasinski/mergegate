@@ -1,12 +1,14 @@
 //! The `reviews` table, and the events that carry reviews to agents.
 
 use mergegate_core::item::{ItemId, ItemState};
-use mergegate_core::review::{NewReview, Review, ReviewStore, Verdict};
+use mergegate_core::review::{
+    Comment, CommentId, NewComment, NewReview, Review, ReviewStore, Verdict,
+};
 use mergegate_core::store::StoreError;
-use rusqlite::params;
+use rusqlite::{Connection, params};
 
-use crate::Store;
 use crate::items::NOW;
+use crate::{Store, comments};
 
 impl ReviewStore for Store {
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError> {
@@ -44,6 +46,8 @@ impl ReviewStore for Store {
             params![item_id, id],
         )
         .map_err(StoreError::new)?;
+        comments::attach(&tx, item_id, id)?;
+        let sent = comments::of_item(&tx, &review.item, Some(id as u64))?;
         tx.commit().map_err(StoreError::new)?;
         Ok(Review {
             id: id as u64,
@@ -51,8 +55,25 @@ impl ReviewStore for Store {
             revision: review.revision,
             verdict: review.verdict,
             summary: review.summary,
+            comments: sent,
             submitted_at,
         })
+    }
+
+    fn insert_draft(&mut self, comment: NewComment) -> Result<Comment, StoreError> {
+        comments::insert(&self.conn, comment)
+    }
+
+    fn comments(&self, id: &ItemId) -> Result<Vec<Comment>, StoreError> {
+        comments::of_item(&self.conn, id, None)
+    }
+
+    fn set_draft_body(&mut self, id: CommentId, body: &str) -> Result<(), StoreError> {
+        comments::set_body(&self.conn, id, body)
+    }
+
+    fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError> {
+        comments::delete(&self.conn, id)
     }
 }
 
@@ -64,13 +85,18 @@ pub(crate) fn verdict_named(name: &str) -> Result<Verdict, StoreError> {
 }
 
 /// For reads that already know the item.
-pub(crate) fn review(item: &ItemId, row: ReviewRow) -> Result<Review, StoreError> {
+pub(crate) fn review(
+    conn: &Connection,
+    item: &ItemId,
+    row: ReviewRow,
+) -> Result<Review, StoreError> {
     Ok(Review {
         id: row.id as u64,
         item: item.clone(),
         revision: row.revision,
         verdict: verdict_named(&row.verdict)?,
         summary: row.summary,
+        comments: comments::of_item(conn, item, Some(row.id as u64))?,
         submitted_at: row.submitted_at,
     })
 }

@@ -1,6 +1,7 @@
 use super::*;
-use crate::fake::FakeStore;
+use crate::fake::{FakeGit, FakeStore};
 use crate::feedback::{EventKind, FeedbackStore};
+use crate::review::{Side, WriteDraft, write_draft};
 
 fn id(id: &str) -> ItemId {
     ItemId::parse(id).unwrap()
@@ -38,6 +39,44 @@ fn requesting_changes_sends_the_item_back_with_an_event() {
     let events = store.events(&id("app#1"), 0).unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, EventKind::ReviewSubmitted(review));
+}
+
+#[test]
+fn a_review_sends_every_draft_on_the_item() {
+    let mut store = FakeStore::with_item(2);
+    let git = FakeGit::default();
+    for revision in [1, 2] {
+        let draft = WriteDraft {
+            id: id("app#1"),
+            revision,
+            path: "README.md".into(),
+            side: Side::New,
+            start_line: 1,
+            line: 1,
+            body: format!("On r{revision}."),
+        };
+        write_draft(&mut store, &git, draft).unwrap();
+    }
+
+    let review = submit(&mut store, request(2, Verdict::ChangesRequested, "")).unwrap();
+    let sent: Vec<_> = review
+        .comments
+        .iter()
+        .map(|c| (c.revision, c.body.as_str(), c.review))
+        .collect();
+    assert_eq!(sent, [(1, "On r1.", Some(1)), (2, "On r2.", Some(1))]);
+    let events = store.events(&id("app#1"), 0).unwrap();
+    assert_eq!(events[0].kind, EventKind::ReviewSubmitted(review));
+
+    // They went out with the first review.
+    let next = submit(&mut store, request(2, Verdict::Comment, "And?")).unwrap();
+    assert_eq!(next.comments, []);
+    assert_eq!(
+        submit(&mut store, request(2, Verdict::Comment, ""))
+            .unwrap_err()
+            .to_string(),
+        "a review needs a summary or a comment"
+    );
 }
 
 #[test]

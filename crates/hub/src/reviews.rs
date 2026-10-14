@@ -12,6 +12,7 @@ use axum::{Json, Router};
 use mergegate_core::item::ItemId;
 use mergegate_core::review::{self, Review, ReviewError, SubmitReview, Verdict};
 
+use crate::comments;
 use crate::reply::Failure;
 use crate::server::AppState;
 
@@ -52,6 +53,7 @@ fn to_api(review: &Review) -> api::review::Review {
         revision: review.revision,
         verdict: verdict_to_api(review.verdict),
         summary: review.summary.clone(),
+        comments: review.comments.iter().map(comments::to_api).collect(),
         submitted_at: review.submitted_at.clone(),
     }
 }
@@ -63,7 +65,7 @@ pub(crate) fn verdict_to_api(verdict: Verdict) -> api::review::Verdict {
     }
 }
 
-fn failure(e: ReviewError) -> Failure {
+pub(crate) fn failure(e: ReviewError) -> Failure {
     use ReviewError as E;
     use StatusCode as S;
     let (status, code, hint) = match &e {

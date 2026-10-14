@@ -15,7 +15,7 @@ use mergegate_core::item::{self, DiffedFile, ItemId};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{items, projects};
+use crate::{comments, items, projects};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -45,9 +45,12 @@ async fn show(
             Some("mg inbox".into()),
         )
     })?;
+    let (drafts, sent): (Vec<_>, Vec<_>) = diff.comments.iter().partition(|c| c.review.is_none());
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
         files: diff.files.into_iter().map(file_to_api).collect(),
+        comments: sent.into_iter().map(comments::to_api).collect(),
+        drafts: drafts.into_iter().map(comments::to_api).collect(),
     }))
 }
 

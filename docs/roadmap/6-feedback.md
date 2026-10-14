@@ -28,21 +28,22 @@ The operator's review reaches the authoring agent, and the agent's answers come 
 ## Where it lives
 
 - `core::review`: reviews, drafts, comments and their replies, and the `ReviewStore` port. `core::feedback`: the event log, the delivered cursor, and the `FeedbackStore` port.
-- `store-sqlite`: `0006_reviews.sql` (reviews, events, the cursor), `0007_comments.sql`, `0008_replies.sql`.
+- `store-sqlite`: `0006_reviews.sql` (reviews, events, the cursor), `0007_comments.sql` (drafts and sent comments), `0008_replies.sql`.
 - `api::review`, `api::feedback`; `hub::reviews`, `hub::feedback` (long-poll), `hub::comments`.
 - `cli`: `wait_cmd`, `feedback_cmd`, `reply_cmd`.
 - UI: the review bar and comment threads in `ui/item/`, annotations in `ui/diff-view/`, `Button` and `TextArea` in the design system.
 
 ## Stack
 
-Each PR is a vertical slice, from the store to the UI and the CLI.
+Each PR is a vertical slice through to the CLI or the UI; a slice too big for one PR goes out as its CLI half, then its UI half.
 
 - `feedback-1-review`: a review with a summary reaches the agent: the reviews route, the event log, `mg feedback`, this brief. *In review.*
 - `feedback-2-review-bar`: the review bar on the item screen, with Comment and Request changes. *In review.*
 - `feedback-3-wait`: `mg wait`, long-polling the log. *In review.*
-- `feedback-4-comments`: draft line comments in the diff, sent with the review and quoted in its event. *Planned.*
-- `feedback-5-replies`: `mg reply`, threads in the diff, the operator's draft replies, `item.changed`. *Planned.*
-- `feedback-6-conversation`: the Conversation list, F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*
+- `feedback-4-comments`: draft line comments on the hub, sent with the review and quoted in its event and `mg wait`. *In review.*
+- `feedback-5-comment-ui`: commenting from the diff with `c` or the gutter, editing drafts, and sent comments inline. *Planned.*
+- `feedback-6-replies`: `mg reply`, threads in the diff, the operator's draft replies, `item.changed`. *Planned.*
+- `feedback-7-conversation`: the Conversation list, F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*
 
 ## Open
 

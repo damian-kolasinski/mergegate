@@ -1,6 +1,6 @@
 //! Submitting a review: the end of F6, and F7's first step.
 
-use super::{NewReview, Review, ReviewError, ReviewStore, Verdict};
+use super::{NewReview, Review, ReviewError, ReviewStore, Verdict, reviewable};
 use crate::item::{ItemId, ItemState, ItemStore};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,7 +12,8 @@ pub struct SubmitReview {
 }
 
 /// Request changes sends the item back to its agent; Comment leaves it where
-/// it is. Either way the agent gets the review as an event.
+/// it is. Either way the agent gets the review, with every draft on the item,
+/// as an event. Drafts keep the revision they were written on.
 pub fn submit<S: ItemStore + ReviewStore>(
     store: &mut S,
     request: SubmitReview,
@@ -26,16 +27,12 @@ pub fn submit<S: ItemStore + ReviewStore>(
     let item = store
         .item(&id)?
         .ok_or_else(|| ReviewError::NoItem(id.clone()))?;
-    match item.state {
-        ItemState::NeedsReview | ItemState::ChangesRequested => {}
-        ItemState::Merging => return Err(ReviewError::Merging(id)),
-        ItemState::Merged | ItemState::Abandoned => return Err(ReviewError::Closed(id)),
-    }
+    reviewable(&item)?;
     if revision == 0 || revision > item.revision.number {
         return Err(ReviewError::NoRevision { id, revision });
     }
     let summary = summary.trim().to_owned();
-    if summary.is_empty() {
+    if summary.is_empty() && !store.comments(&id)?.iter().any(|c| c.review.is_none()) {
         return Err(ReviewError::Empty);
     }
     let state = match verdict {
