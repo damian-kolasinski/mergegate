@@ -1,6 +1,7 @@
 //! `mg`: the mergegate CLI, and the hub it starts. Composition root of the CLI.
 
 mod abandon_cmd;
+mod attach_cmd;
 mod client;
 mod doctor_cmd;
 mod feedback_cmd;
@@ -19,6 +20,7 @@ mod sync_cmd;
 mod wait_cmd;
 
 use std::ffi::OsString;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::error::ErrorKind;
@@ -75,6 +77,18 @@ enum Command {
         /// ID, "" removes it
         #[arg(long, value_name = "CMD")]
         wake: Option<String>,
+        /// Screenshot or recording of the change for the operator: PNG,
+        /// JPEG, GIF, WebP, MP4 or WebM, up to 100 MB; repeat for more
+        #[arg(long, value_name = "FILE")]
+        attach: Vec<PathBuf>,
+    },
+    /// Add screenshots or recordings to the item's newest revision
+    Attach {
+        /// The item, as in app#42
+        item: String,
+        /// PNG, JPEG, GIF, WebP, MP4 or WebM, up to 100 MB each
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
     },
     /// Wait until the item has feedback for its agent, print it and mark it
     /// delivered
@@ -159,7 +173,12 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
         Command::Project(command) => project_cmd::run(command),
         Command::Lang(command) => lang_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
-        Command::Submit { title, wake } => submit_cmd::run(title, wake),
+        Command::Submit {
+            title,
+            wake,
+            attach,
+        } => submit_cmd::run(title, wake, attach),
+        Command::Attach { item, files } => attach_cmd::run(item, files),
         Command::Wait {
             item,
             wake,

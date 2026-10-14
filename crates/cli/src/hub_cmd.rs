@@ -1,7 +1,8 @@
-//! `mg hub start | stop | status`.
+//! `mg hub start | stop | status | set`.
 
 pub(crate) mod probe;
 mod report;
+mod set;
 mod spawn;
 mod start;
 mod status;
@@ -31,6 +32,13 @@ pub enum HubCommand {
     Stop,
     /// Show whether the hub is running, and where
     Status,
+    /// Change a hub setting: attachment-ttl, how long a merged or abandoned
+    /// item keeps its attachments (2d by default; 0s drops them on close)
+    Set {
+        key: String,
+        /// As in 2d, 12h, 30m or 0s
+        value: String,
+    },
 }
 
 pub fn run(command: HubCommand) -> Result<Outcome, CliError> {
@@ -39,6 +47,7 @@ pub fn run(command: HubCommand) -> Result<Outcome, CliError> {
         HubCommand::Start { foreground, port } => start::run(home, foreground, port),
         HubCommand::Stop => stop::run(&home),
         HubCommand::Status => status::run(&home),
+        HubCommand::Set { key, value } => set::run(&home, key, value),
     }
 }
 

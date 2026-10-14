@@ -6,6 +6,8 @@ The operator asks you to set mergegate up; you run every command. Anything that 
 
 `mg hub start` starts the hub in the background, or does nothing if it is running. It listens on 127.0.0.1 port 7800 unless given `--port N` (0 picks a free port); `--foreground` keeps it in the terminal. `mg hub status` says whether it is running and where, and `mg hub stop` stops it.
 
+`mg hub set attachment-ttl <duration>` sets how long a merged or abandoned item keeps its screenshots and recordings, as in `2d` (the default), `12h`, `30m`, or `0s` to drop them when it closes.
+
 The hub keeps its data in `~/.mergegate`, or in `MERGEGATE_HOME` when that is set to an absolute path. `mg` finds the hub through the same directory, so a command run with another `MERGEGATE_HOME` talks to another hub.
 
 ## Projects

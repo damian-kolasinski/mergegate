@@ -10,6 +10,12 @@
 
 The operator reviews the newest revision. Each revision is the whole branch against the target, so amend, rebase or add commits as you like before submitting again.
 
+## Showing the change
+
+When the change has something to see, such as a screen, a flow or output, record it and attach the files, so the operator watches it before reading the diff. `mg submit --attach FILE` attaches a file to the revision it submits; repeat `--attach` for more. `mg attach <item> FILE...` adds files to the item's newest revision later. Each file must be a PNG, JPEG, GIF or WebP image, or an MP4 or WebM video, of at most 100 MB; `mg submit` checks them before it pushes, so a wrong file stops it with nothing submitted. If a submit pushed but an upload failed, it says so: rerun the upload with `mg attach`.
+
+The review screen shows the newest revision's attachments, or the newest earlier revision's while it has none, so a small fix needn't be recorded again. They stay in mergegate, even for GitHub projects.
+
 ## Reading a review
 
 A `review.submitted` event carries the verdict (`approved`, `changes_requested` or `comment`), the operator's summary, and the comments. Each comment has an ID (`c_17`), the file and lines it is on, the lines it quotes, and its body. `replies` holds the operator's answers to your replies on earlier comments.
