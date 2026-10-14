@@ -17,14 +17,17 @@ export async function getJson<T>(path: string): Promise<T> {
   return (await send(path, { headers: { accept: "application/json" } })) as T;
 }
 
-/** `PUT`s `body` to a hub endpoint that answers with no content. */
-export async function putJson(path: string, body: unknown): Promise<void> {
-  await send(path, {
+/** `PUT`s `body` to a hub endpoint and returns what it answered, if anything. */
+export async function putJson<T = void>(
+  path: string,
+  body: unknown,
+): Promise<T> {
+  return (await send(path, {
     method: "PUT",
     // The hub refuses a change without it, which a cross-site page can't add.
     headers: { "content-type": "application/json", [clientHeader]: "ui" },
     body: JSON.stringify(body),
-  });
+  })) as T;
 }
 
 /** `POST`s `body` to a hub endpoint and returns what it answered. */
@@ -34,6 +37,11 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json", [clientHeader]: "ui" },
     body: JSON.stringify(body),
   })) as T;
+}
+
+/** `DELETE`s a hub resource. */
+export async function deleteJson(path: string): Promise<void> {
+  await send(path, { method: "DELETE", headers: { [clientHeader]: "ui" } });
 }
 
 /** `api::CLIENT_HEADER`. */

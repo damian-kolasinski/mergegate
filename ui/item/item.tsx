@@ -1,15 +1,23 @@
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  untrack,
+} from "solid-js";
 import type { File } from "../api/File";
 import type { ItemState } from "../api/ItemState";
-import type { Verdict } from "../api/Verdict";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { MarkViewed } from "../api/MarkViewed";
+import type { Review as SentReview } from "../api/Review";
 import { getJson, putJson } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { inboxHref } from "../app/router";
 import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
 import { type Row as Line, rowsOf } from "../diff-view/patch";
 import { Badge, Empty, Meta, Mono, Row, type Tone } from "../design-system";
+import { Thread, useComments } from "./comments";
 import styles from "./item.module.css";
 import { ReviewBar } from "./review-bar";
 
@@ -48,8 +56,11 @@ function Review(props: { diff: ItemDiff }) {
   // it with the operator.
   const [moved, setMoved] = createSignal<ItemState>();
   const state = () => moved() ?? props.diff.item.state;
-  const reviewed = (verdict: Verdict) => {
-    if (verdict === "changes_requested") setMoved("changes_requested");
+  // The screen fetches its diff once; comments then change here.
+  const comments = useComments(untrack(() => props.diff));
+  const reviewed = (review: SentReview) => {
+    if (review.verdict === "changes_requested") setMoved("changes_requested");
+    comments.submitted(review);
   };
 
   // Ids are `<project>#<number>`, and blobs are read per project.
@@ -163,7 +174,16 @@ function Review(props: { diff: ItemDiff }) {
     else showFile(file.path);
   };
 
+  /** `c` comments on the cursor's line. */
+  const comment = () => {
+    const line = cursor();
+    if (line && reviewable(state())) {
+      comments.start({ ...line, start: line.line });
+    }
+  };
+
   useKeys({
+    c: comment,
     n: () => stepFile(1),
     p: () => stepFile(-1),
     j: () => stepLine(1),
@@ -225,6 +245,11 @@ function Review(props: { diff: ItemDiff }) {
             blobUrl={blobUrl}
             onFile={setCurrent}
             onRow={onRow}
+            notes={comments.spots()}
+            note={(spot) => <Thread comments={comments} spot={spot} />}
+            onComment={(span) => {
+              if (reviewable(state())) comments.start(span);
+            }}
             control={(control) => {
               view = control;
             }}
@@ -235,6 +260,7 @@ function Review(props: { diff: ItemDiff }) {
         <ReviewBar
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
+          drafts={comments.drafts().length}
           onSubmitted={reviewed}
         />
       </Show>
