@@ -1,5 +1,5 @@
 use mergegate_core::feedback::{EventKind, FeedbackStore};
-use mergegate_core::item::{ItemState, ItemStore, NewItem, NewRevision};
+use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 use mergegate_core::review::{CommentId, NewComment, NewReview, Side, Verdict};
 
@@ -30,9 +30,8 @@ fn store() -> (tempfile::TempDir, Store) {
             branch: "work".into(),
             title: "Work".into(),
             state: ItemState::NeedsReview,
-            backend: Backend::Local,
+            backend: ItemBackend::Local,
             target: "main".into(),
-            pull: None,
             revision: revision(),
         })
         .unwrap();
@@ -147,9 +146,8 @@ fn a_review_sends_only_its_items_drafts() {
             branch: "other".into(),
             title: "Other".into(),
             state: ItemState::NeedsReview,
-            backend: Backend::Local,
+            backend: ItemBackend::Local,
             target: "main".into(),
-            pull: None,
             revision: NewRevision {
                 head: "b".repeat(40),
                 base: "0".repeat(40),

@@ -210,7 +210,10 @@ fn f4_submitting_opens_a_pull_request_and_keeps_it_up_to_date() {
         }
     );
     assert_eq!(github.rev(ACME, "login"), Some(repo.rev("HEAD")));
-    assert_eq!(item(&env)["pull"], json!({ "number": 1, "url": url }));
+    assert_eq!(
+        item(&env)["link"],
+        json!({ "label": "#1", "title": "Pull request on GitHub", "url": url })
+    );
     let inbox = env.mg(&["inbox"]).assert_code(0).stdout;
     assert!(inbox.contains("login · #1"), "{inbox}");
 
@@ -220,7 +223,7 @@ fn f4_submitting_opens_a_pull_request_and_keeps_it_up_to_date() {
         .mg_at(repo.root(), &["submit", "--title", "Add login and logout"])
         .assert_code(0)
         .stdout;
-    assert!(text.contains(&format!("  pull request {url}")), "{text}");
+    assert!(text.contains(&format!("  #1 {url}")), "{text}");
     assert_eq!(github.rev(ACME, "login"), Some(repo.rev("HEAD")));
     let renamed = pull(&github);
     assert_eq!(
@@ -449,5 +452,5 @@ fn f15_switching_to_github_keeps_open_items_local() {
     repo.commit_files("Add search", &[("src/search.rs", "\n")]);
     let submitted = env.mg_at(root, &["--json", "submit"]).assert_code(0).json();
     assert_eq!(submitted["item"]["id"], "app#2");
-    assert_eq!(submitted["item"]["pull"]["number"], 1);
+    assert_eq!(submitted["item"]["link"]["label"], "#1");
 }

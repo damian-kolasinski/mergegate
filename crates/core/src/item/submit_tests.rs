@@ -1,7 +1,7 @@
 use super::*;
 use crate::diff::Content;
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
-use crate::github::{GithubError, GithubRepo};
+use crate::github::{GithubError, GithubRepo, Pull};
 use crate::item::{DiffStat, ItemId};
 use crate::project::{Backend, Project, ProjectError, ProjectName};
 
@@ -75,8 +75,8 @@ fn opens_an_item_against_the_merge_base() {
     assert_eq!(item.title, "Add login");
     assert_eq!(item.state, ItemState::NeedsReview);
     assert_eq!(
-        (item.backend, item.target.as_str()),
-        (Backend::Local, "main")
+        (&item.backend, item.target.as_str()),
+        (&ItemBackend::Local, "main")
     );
     assert_eq!(item.revision.number, 1);
     assert_eq!(item.revision.base, commit(1));
@@ -386,6 +386,13 @@ fn on_github() -> (FakeStore, FakeGit) {
 
 const GITHUB_APP: &str = "https://github.com/acme/app.git";
 
+fn pull_number(item: &Item) -> u64 {
+    match &item.backend {
+        ItemBackend::Github { pull } => pull.number,
+        ItemBackend::Local => panic!("{} lands locally", item.id),
+    }
+}
+
 #[test]
 fn a_github_item_pushes_its_branch_and_opens_a_pull_request() {
     let (mut store, git) = on_github();
@@ -394,11 +401,14 @@ fn a_github_item_pushes_its_branch_and_opens_a_pull_request() {
     let item = submit(&mut store, &git, &github, request("app", "login", 2))
         .unwrap()
         .item;
-    assert_eq!(item.backend, Backend::Github);
-    let pull = item.pull.clone().unwrap();
     assert_eq!(
-        (pull.number, pull.url.as_str()),
-        (1, "https://github.com/acme/app/pull/1")
+        item.backend,
+        ItemBackend::Github {
+            pull: Pull {
+                number: 1,
+                url: "https://github.com/acme/app/pull/1".into(),
+            },
+        }
     );
     assert_eq!(git.upstream_branch(GITHUB_APP, "login"), Some(commit(2)));
     let [opened] = &github.pulls()[..] else {
@@ -425,7 +435,7 @@ fn a_new_revision_pushes_again_and_retitles_the_pull_request() {
     };
     let item = submit(&mut store, &git, &github, retitled).unwrap().item;
     assert_eq!(item.revision.number, 2);
-    assert_eq!(item.pull.unwrap().number, 1);
+    assert_eq!(pull_number(&item), 1);
     assert_eq!(git.upstream_branch(GITHUB_APP, "login"), Some(commit(3)));
     let pulls = github.pulls();
     assert_eq!(pulls.len(), 1);
@@ -441,7 +451,7 @@ fn takes_over_a_pull_request_already_open_for_the_branch() {
     let item = submit(&mut store, &git, &github, request("app", "login", 2))
         .unwrap()
         .item;
-    assert_eq!(item.pull.unwrap().number, 1);
+    assert_eq!(pull_number(&item), 1);
     assert_eq!(github.pulls().len(), 1);
     assert_eq!(github.pulls()[0].title, "Add login");
 }
@@ -525,7 +535,7 @@ fn records_nothing_when_github_fails() {
     )
     .unwrap()
     .item;
-    assert_eq!(item.pull.unwrap().number, 1);
+    assert_eq!(pull_number(&item), 1);
     assert_eq!(git.upstream_branch(GITHUB_APP, "login"), Some(commit(3)));
 }
 
@@ -568,7 +578,7 @@ fn open_items_keep_their_backend_when_the_project_switches() {
     let item = submit(&mut store, &git, &github, request("app", "login", 3))
         .unwrap()
         .item;
-    assert_eq!((item.backend, item.pull), (Backend::Local, None));
+    assert_eq!(item.backend, ItemBackend::Local);
     assert!(github.pulls().is_empty());
     assert_eq!(git.upstream_branch(GITHUB_APP, "login"), None);
 }

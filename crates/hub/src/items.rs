@@ -9,8 +9,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use mergegate_core::github::Pull;
-use mergegate_core::item::{self, Item, ItemError, ItemState, Submit};
+use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, Submit};
 use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
@@ -91,7 +90,7 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
         title: item.title.clone(),
         branch: item.branch.clone(),
         state: state_to_api(item.state),
-        backend: projects::backend_to_api(item.backend),
+        backend: projects::backend_to_api(item.backend.kind()),
         target: item.target.clone(),
         revision: api::item::Revision {
             number: revision.number,
@@ -102,15 +101,19 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
             deletions: revision.stat.deletions,
             submitted_at: revision.submitted_at.clone(),
         },
-        pull: item.pull.as_ref().map(pull_to_api),
+        link: link(&item.backend),
         created_at: item.created_at.clone(),
     }
 }
 
-fn pull_to_api(pull: &Pull) -> api::item::Pull {
-    api::item::Pull {
-        number: pull.number,
-        url: pull.url.clone(),
+fn link(backend: &ItemBackend) -> Option<api::item::Link> {
+    match backend {
+        ItemBackend::Github { pull } => Some(api::item::Link {
+            label: pull.to_string(),
+            title: "Pull request on GitHub".into(),
+            url: pull.url.clone(),
+        }),
+        ItemBackend::Local => None,
     }
 }
 
@@ -127,7 +130,7 @@ fn inbox_entry(item: &Item, blocked: Option<api::merge::Blocked>) -> api::item::
         created_at: item.created_at.clone(),
         updated_at: revision.submitted_at.clone(),
         blocked,
-        pull: item.pull.as_ref().map(pull_to_api),
+        link: link(&item.backend),
     }
 }
 

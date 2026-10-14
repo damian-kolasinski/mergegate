@@ -96,8 +96,8 @@ fn describe(submitted: &Submitted) -> String {
         r.additions,
         r.deletions
     );
-    if let Some(pull) = &item.pull {
-        text.push_str(&format!("\n  pull request {}", pull.url));
+    if let Some(link) = &item.link {
+        text.push_str(&format!("\n  {} {}", link.label, link.url));
     }
     text
 }

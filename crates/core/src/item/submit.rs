@@ -3,8 +3,8 @@
 use super::diff_files::diff_files;
 use super::publish::{Revision, publish};
 use super::{
-    Item, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, valid_branch,
-    valid_commit,
+    Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision,
+    valid_branch, valid_commit,
 };
 use crate::agent::{self, AgentStore};
 use crate::diff::{DiffGit, DiffStore};
@@ -90,7 +90,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
     }
     let backend = existing
         .as_ref()
-        .map_or(project.backend, |item| item.backend);
+        .map_or(project.backend, |item| item.backend.kind());
     let upstream = fetch_from(&project, backend, github)?;
     git.fetch_target(&project.name, &upstream, &target)?;
     let Some(base) = git.merge_base(&project.name, &head, &target)? else {
@@ -109,21 +109,23 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
             .filter(|subject| !subject.trim().is_empty())
             .unwrap_or_else(|| branch.clone()),
     };
-    let pull = match (&upstream, &project.github) {
-        (Upstream::Remote(remote), Some(repo)) => Some(publish(
-            git,
-            github,
-            &project.name,
-            (repo, remote),
-            existing.as_ref(),
-            Revision {
-                branch: &branch,
-                head: &head,
-                target: &target,
-                title: &title,
-            },
-        )?),
-        _ => None,
+    let backend = match (&upstream, &project.github) {
+        (Upstream::Remote(remote), Some(repo)) => ItemBackend::Github {
+            pull: publish(
+                git,
+                github,
+                &project.name,
+                (repo, remote),
+                existing.as_ref(),
+                Revision {
+                    branch: &branch,
+                    head: &head,
+                    target: &target,
+                    title: &title,
+                },
+            )?,
+        },
+        _ => ItemBackend::Local,
     };
     let revision = NewRevision { head, base, files };
     let item = match existing {
@@ -135,7 +137,6 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
             state: ItemState::NeedsReview,
             backend,
             target,
-            pull,
             revision,
         })?,
     };

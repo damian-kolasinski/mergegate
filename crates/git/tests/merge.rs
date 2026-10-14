@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use mergegate_core::git::{Git, Upstream};
-use mergegate_core::item::{DiffStat, Item, ItemId, ItemState, Revision};
+use mergegate_core::item::{DiffStat, Item, ItemBackend, ItemId, ItemState, Revision};
 use mergegate_core::merge::{Landing, MergeBackend};
 use mergegate_core::project::{Backend, Project, ProjectName};
 use mergegate_git::HubGit;
@@ -61,9 +61,8 @@ impl Hub {
             branch: "login".into(),
             title: "Add login".into(),
             state: ItemState::Merging,
-            backend: Backend::Local,
+            backend: ItemBackend::Local,
             target: "main".into(),
-            pull: None,
             revision: Revision {
                 number: 1,
                 head: self.repo.rev("login"),

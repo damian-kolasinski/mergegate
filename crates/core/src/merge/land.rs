@@ -72,10 +72,10 @@ pub(super) fn through<'a>(
 ) -> Result<&'a dyn MergeBackend, MergeError> {
     backends
         .iter()
-        .find(|backend| backend.kind() == item.backend)
+        .find(|backend| backend.kind() == item.backend.kind())
         .copied()
         .ok_or_else(|| MergeError::NoBackend {
             id: item.id.clone(),
-            backend: item.backend,
+            backend: item.backend.kind(),
         })
 }

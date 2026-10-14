@@ -1,5 +1,7 @@
 use mergegate_core::diff::compute;
-use mergegate_core::item::{ChangedFile, FileStat, ItemState, ItemStore, NewItem, NewRevision};
+use mergegate_core::item::{
+    ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
+};
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 
 use super::*;
@@ -122,9 +124,8 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
         branch: branch.into(),
         title: branch.into(),
         state: ItemState::NeedsReview,
-        backend: Backend::Local,
+        backend: ItemBackend::Local,
         target: "main".into(),
-        pull: None,
         revision: revision(files),
     };
     // app#1 has `a`, then `b` and `c`; app#2 (open) has `b`; app#3 (merged) `c`.

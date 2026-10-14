@@ -2,10 +2,10 @@
 
 use mergegate_core::github::Pull;
 use mergegate_core::item::{
-    ChangedFile, DiffStat, FileStat, Item, ItemId, ItemState, ItemStore, NewItem, NewRevision,
-    Revision,
+    ChangedFile, DiffStat, FileStat, Item, ItemBackend, ItemId, ItemState, ItemStore, NewItem,
+    NewRevision, Revision,
 };
-use mergegate_core::project::ProjectName;
+use mergegate_core::project::{Backend, ProjectName};
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 
@@ -110,6 +110,10 @@ impl ItemStore for Store {
         let now: String = tx
             .query_row(&format!("SELECT {NOW}"), [], |row| row.get(0))
             .map_err(StoreError::new)?;
+        let pull = match &item.backend {
+            ItemBackend::Github { pull } => Some(pull),
+            ItemBackend::Local => None,
+        };
         tx.execute(
             "INSERT INTO items (project_id, number, branch, title, state, backend, target, created_at,
                                 pull_number, pull_url)
@@ -120,11 +124,11 @@ impl ItemStore for Store {
                 item.branch,
                 item.title,
                 item.state.as_str(),
-                item.backend.as_str(),
+                item.backend.kind().as_str(),
                 item.target,
                 now,
-                item.pull.as_ref().map(|pull| pull.number as i64),
-                item.pull.as_ref().map(|pull| pull.url.as_str()),
+                pull.map(|pull| pull.number as i64),
+                pull.map(|pull| pull.url.as_str()),
             ],
         )
         .map_err(StoreError::new)?;
@@ -251,7 +255,16 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             .into_iter()
             .find(|s| s.as_str() == state)
             .ok_or_else(|| StoreError::new(format!("unknown item state {state:?}")))?;
-        let backend = backend_named(&backend)?;
+        let backend = match (backend_named(&backend)?, pull) {
+            (Backend::Github, Some(pull)) => ItemBackend::Github { pull },
+            (Backend::Local, None) => ItemBackend::Local,
+            (backend, _) => {
+                let backend = backend.as_str();
+                return Err(StoreError::new(format!(
+                    "a {backend} item whose pull request doesn't match its backend"
+                )));
+            }
+        };
         let project = ProjectName::parse(&project).map_err(StoreError::new)?;
         Ok(Item {
             id: ItemId::new(project, number as u64),
@@ -260,7 +273,6 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             state,
             backend,
             target,
-            pull,
             revision,
             created_at,
         })

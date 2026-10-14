@@ -63,15 +63,19 @@ pub struct Item {
     pub target: String,
     /// The newest one.
     pub revision: Revision,
-    /// The github backend's pull request for the item.
-    pub pull: Option<Pull>,
+    /// The item on its backend, if it has a page there.
+    pub link: Option<Link>,
     pub created_at: String,
 }
 
+/// A page outside mergegate, as a pull request on GitHub.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Pull {
-    pub number: u64,
+pub struct Link {
+    /// Short, as in `#42`.
+    pub label: String,
+    /// What the page is, as in `Pull request on GitHub`.
+    pub title: String,
     pub url: String,
 }
 
@@ -113,5 +117,5 @@ pub struct InboxItem {
     pub updated_at: String,
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,
-    pub pull: Option<Pull>,
+    pub link: Option<Link>,
 }

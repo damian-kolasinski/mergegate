@@ -143,11 +143,11 @@ function Entry(props: {
       <span class={styles.title} title={props.item.branch}>
         {props.item.title}
       </span>
-      <Show when={props.item.pull}>
-        {(pull) => (
+      <Show when={props.item.link}>
+        {(link) => (
           <span class={styles.flag}>
-            <ExternalLink href={pull().url} title="Pull request on GitHub">
-              #{pull().number}
+            <ExternalLink href={link().url} title={link().title}>
+              {link().label}
             </ExternalLink>
           </span>
         )}

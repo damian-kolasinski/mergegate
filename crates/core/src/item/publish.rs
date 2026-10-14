@@ -1,6 +1,6 @@
 //! Publishing a `github` item's revision: its branch and pull request.
 
-use super::{Item, ItemError, ItemGit, Pushed};
+use super::{Item, ItemBackend, ItemError, ItemGit, Pushed};
 use crate::git::Remote;
 use crate::github::{Github, GithubRepo, Pull};
 use crate::project::ProjectName;
@@ -31,9 +31,11 @@ pub(super) fn publish(
         target,
         title,
     } = revision;
-    let pushed = existing
-        .filter(|item| item.pull.is_some())
-        .map(|item| item.revision.head.as_str());
+    let open = existing.and_then(|item| match &item.backend {
+        ItemBackend::Github { pull } => Some((item, pull)),
+        ItemBackend::Local => None,
+    });
+    let pushed = open.map(|(item, _)| item.revision.head.as_str());
     match git.push_branch(project, remote, branch, head, pushed)? {
         Pushed::Done => {}
         Pushed::Moved(found) => {
@@ -48,9 +50,7 @@ pub(super) fn publish(
             });
         }
     }
-    if let Some(item) = existing
-        && let Some(pull) = &item.pull
-    {
+    if let Some((item, pull)) = open {
         if item.title != title {
             github.retitle_pull(repo, pull.number, title)?;
         }

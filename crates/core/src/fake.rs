@@ -632,7 +632,6 @@ impl ItemStore for FakeStore {
             state: item.state,
             backend: item.backend,
             target: item.target,
-            pull: item.pull,
             created_at: revision.submitted_at.clone(),
             revision,
         };

@@ -1,7 +1,7 @@
 //! Abandoning an item: its agent or the operator gives up on it (F14).
 
 use super::close::close;
-use super::{Item, ItemError, ItemGit, ItemId, ItemState, ItemStore};
+use super::{Item, ItemBackend, ItemError, ItemGit, ItemId, ItemState, ItemStore};
 use crate::diff::DiffStore;
 use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::github::Github;
@@ -31,7 +31,7 @@ pub fn abandon<S: ProjectStore + ItemStore + DiffStore + FeedbackStore>(
     if !item.state.is_open() {
         return Err(ItemError::Closed(id));
     }
-    if let Some(pull) = &item.pull {
+    if let ItemBackend::Github { pull } = &item.backend {
         let project = find(store, item.id.project().as_str())?;
         let repo = project
             .github

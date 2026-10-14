@@ -25,10 +25,10 @@ export function ItemHeader(props: {
       <Meta>
         <Mono>{props.item.branch}</Mono> → <Mono>{props.item.target}</Mono>
       </Meta>
-      <Show when={props.item.pull}>
-        {(pull) => (
-          <ExternalLink href={pull().url} title="Pull request on GitHub">
-            #{pull().number}
+      <Show when={props.item.link}>
+        {(link) => (
+          <ExternalLink href={link().url} title={link().title}>
+            {link().label}
           </ExternalLink>
         )}
       </Show>

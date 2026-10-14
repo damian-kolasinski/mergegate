@@ -7,7 +7,7 @@ use super::{Backend, Project, ProjectError, ProjectStore, fetch_from, find};
 use crate::decision::Decision;
 use crate::git::Git;
 use crate::github::{Detected, Github, GithubRepo, detect};
-use crate::item::{Item, ItemStore};
+use crate::item::{Item, ItemBackend, ItemStore};
 
 /// The keys `mg project set` accepts.
 pub const KEYS: &[&str] = &["backend", "target", "upstream", "github"];
@@ -94,7 +94,7 @@ pub fn set<S: ProjectStore + ItemStore>(
             let publishing: Vec<String> = store
                 .open_items(Some(&project.name))?
                 .into_iter()
-                .filter(|item| item.backend == Backend::Github)
+                .filter(|item| item.backend.kind() == Backend::Github)
                 .map(|item| item.id.to_string())
                 .collect();
             if let Some(current) = &project.github
@@ -165,13 +165,13 @@ fn keeping_backend(
     let staying: Vec<Item> = store
         .open_items(Some(&project.name))?
         .into_iter()
-        .filter(|item| item.backend != backend)
+        .filter(|item| item.backend.kind() != backend)
         .collect();
     let listed: Vec<String> = staying
         .iter()
-        .map(|item| match &item.pull {
-            Some(pull) => format!("{} ({}, {pull})", item.id, item.branch),
-            None => format!("{} ({})", item.id, item.branch),
+        .map(|item| match &item.backend {
+            ItemBackend::Github { pull } => format!("{} ({}, {pull})", item.id, item.branch),
+            ItemBackend::Local => format!("{} ({})", item.id, item.branch),
         })
         .collect();
     let keep = match staying.len() {

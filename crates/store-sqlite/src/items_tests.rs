@@ -59,9 +59,8 @@ fn new_item(project: &str, branch: &str) -> NewItem {
         branch: branch.into(),
         title: format!("Work on {branch}"),
         state: ItemState::NeedsReview,
-        backend: Backend::Local,
+        backend: ItemBackend::Local,
         target: "main".into(),
-        pull: None,
         revision: revision('a'),
     }
 }
@@ -78,8 +77,8 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
     assert_eq!(c.id.to_string(), "app#2");
     assert_eq!(a.title, "Work on a");
     assert_eq!(
-        (a.state, a.backend, a.target.as_str()),
-        (ItemState::NeedsReview, Backend::Local, "main")
+        (a.state, &a.backend, a.target.as_str()),
+        (ItemState::NeedsReview, &ItemBackend::Local, "main")
     );
     assert_eq!(a.revision.number, 1);
     assert_eq!(a.revision.head, "a".repeat(40));
@@ -110,26 +109,20 @@ fn keeps_a_github_items_pull_request() {
     web.backend = Backend::Github;
     web.github = GithubRepo::parse("acme/web");
     store.update_project(&web).unwrap();
-    let pull = Pull {
-        number: 12,
-        url: "https://github.com/acme/web/pull/12".into(),
+    let backend = ItemBackend::Github {
+        pull: Pull {
+            number: 12,
+            url: "https://github.com/acme/web/pull/12".into(),
+        },
     };
     let item = store
         .insert_item(NewItem {
-            backend: Backend::Github,
-            pull: Some(pull.clone()),
+            backend: backend.clone(),
             ..new_item("web", "a")
         })
         .unwrap();
-    assert_eq!(item.pull, Some(pull));
+    assert_eq!(item.backend, backend);
     assert_eq!(store.item(&item.id).unwrap(), Some(item));
-
-    // A github item always has its pull request, and a local one never.
-    let without = NewItem {
-        backend: Backend::Github,
-        ..new_item("web", "b")
-    };
-    assert!(store.insert_item(without).is_err());
 }
 
 #[test]

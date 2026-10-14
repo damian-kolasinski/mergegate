@@ -3,7 +3,7 @@
 use super::{Landing, MergeBackend, MergeGit, Trial};
 use crate::git::{GitError, Upstream};
 use crate::github::Github;
-use crate::item::{Item, ItemGit};
+use crate::item::{Item, ItemBackend, ItemGit};
 use crate::project::{Backend, Project};
 
 pub struct GithubBackend<'a, G, H> {
@@ -28,7 +28,7 @@ impl<G: ItemGit + MergeGit, H: Github> MergeBackend for GithubBackend<'_, G, H> 
     /// anything it refuses holds the merge with its reason.
     fn land(&self, project: &Project, item: &Item, message: &str) -> Result<Landing, GitError> {
         let held = |reason: String| Ok(Landing::Held { reason });
-        let (Some(repo), Some(pull)) = (&project.github, &item.pull) else {
+        let (Some(repo), ItemBackend::Github { pull }) = (&project.github, &item.backend) else {
             return held(format!("{} has no pull request on GitHub", item.id));
         };
         let upstream = match self.github.remote(repo) {

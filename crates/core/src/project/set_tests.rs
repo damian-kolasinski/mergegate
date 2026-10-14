@@ -3,7 +3,7 @@ use std::path::Path;
 use super::*;
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::github::{GithubError, GithubRepo, Pull};
-use crate::item::{ItemId, ItemState, NewItem, NewRevision};
+use crate::item::{ItemBackend, ItemId, ItemState, NewItem, NewRevision};
 use crate::project::{AddProject, ProjectName, add};
 
 /// `set` without `--confirm`, expecting the change to apply.
@@ -25,9 +25,8 @@ fn open_item(store: &mut FakeStore, branch: &str, target: &str) -> ItemId {
         branch: branch.into(),
         title: branch.into(),
         state: ItemState::NeedsReview,
-        backend: Backend::Local,
+        backend: ItemBackend::Local,
         target: target.into(),
-        pull: None,
         revision: NewRevision {
             head: commit(2),
             base: commit(1),
@@ -262,12 +261,13 @@ fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
         branch: branch.into(),
         title: branch.into(),
         state: ItemState::NeedsReview,
-        backend: Backend::Github,
+        backend: ItemBackend::Github {
+            pull: Pull {
+                number: 7,
+                url: "https://github.com/acme/app/pull/7".into(),
+            },
+        },
         target: "main".into(),
-        pull: Some(Pull {
-            number: 7,
-            url: "https://github.com/acme/app/pull/7".into(),
-        }),
         revision: NewRevision {
             head: commit(2),
             base: commit(1),
