@@ -1,6 +1,7 @@
 //! The hub daemon: composition root of everything that runs inside it.
 
 mod comments;
+mod conversation;
 mod diff;
 mod doctor;
 mod draft_replies;

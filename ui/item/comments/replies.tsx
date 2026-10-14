@@ -22,6 +22,14 @@ export function useReplies(diff: ItemDiff) {
     /** The comment's sent replies, oldest first. */
     to: (comment: Comment) =>
       list().filter((reply) => reply.comment === comment.id),
+    /** The agent's latest answer, whose status is the one that counts. */
+    answer: (comment: Comment) =>
+      list()
+        .filter(
+          (reply): reply is Reply & { status: ReplyStatus } =>
+            reply.comment === comment.id && reply.status !== null,
+        )
+        .at(-1),
     has: (reply: Reply) => list().some((other) => other.id === reply.id),
     /** Sent by a review from this tab. */
     add(replies: Reply[]) {
@@ -100,7 +108,7 @@ function ReplyEntry(props: { comments: Comments; reply: Reply }) {
 }
 
 /** Where the agent left a comment: addressed, rejected or a question. */
-function StatusBadge(props: {
+export function StatusBadge(props: {
   status: ReplyStatus;
   addressedIn: number | null;
 }) {

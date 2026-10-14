@@ -11,8 +11,8 @@ import { ReplyButton } from "./reply-drafts";
 import styles from "./thread.module.css";
 
 /**
- * The comments the diff shows: the shown revision's, sent and draft, under
- * their last line, and the new one being written.
+ * Every comment, sent and draft, on every revision. The diff shows the shown
+ * revision's under their last line, and the new one being written.
  */
 export function useThreads(
   revision: number,
@@ -22,10 +22,13 @@ export function useThreads(
     composing: () => Spot | undefined;
   },
 ) {
-  const shown = createMemo(() =>
-    [...lists.sent(), ...lists.drafts()].filter(
-      (comment) => comment.revision === revision,
+  const all = createMemo(() =>
+    [...lists.sent(), ...lists.drafts()].sort(
+      (a, b) => numberOf(a) - numberOf(b),
     ),
+  );
+  const shown = createMemo(() =>
+    all().filter((comment) => comment.revision === revision),
   );
   /** The lines that hold a thread, for the diff to make room under. */
   const spots = createMemo(() => {
@@ -35,6 +38,8 @@ export function useThreads(
     return spots;
   });
   return {
+    /** Oldest first. */
+    all,
     spots,
     at: (spot: Spot) =>
       shown().filter((comment) => sameSpot(spotOf(comment), spot)),
@@ -67,7 +72,7 @@ export function Thread(props: { comments: Comments; spot: Spot }) {
 }
 
 /** A comment with its thread, or its editor while it's being edited. */
-function CommentCard(props: { comments: Comments; comment: Comment }) {
+export function CommentCard(props: { comments: Comments; comment: Comment }) {
   return (
     <Show
       when={!props.comments.drafts.editing(props.comment)}
@@ -105,4 +110,9 @@ function CommentCard(props: { comments: Comments; comment: Comment }) {
       </article>
     </Show>
   );
+}
+
+/** Comment ids count up hub-wide: `c_17`. */
+function numberOf(comment: Comment): number {
+  return Number(comment.id.slice(2));
 }

@@ -1,4 +1,4 @@
-import type { ItemDiff } from "../../api/ItemDiff";
+import type { Conversation } from "../../api/Conversation";
 import { getJson, onHubEvent } from "../../app/hub";
 import type { Drafts } from "./drafts";
 import type { Replies } from "./replies";
@@ -21,7 +21,9 @@ export function useSync(
   let asked = 0;
   const refresh = () => {
     const ask = ++asked;
-    getJson<ItemDiff>(`/api/items/${encodeURIComponent(item)}`).then(
+    getJson<Conversation>(
+      `/api/items/${encodeURIComponent(item)}/conversation`,
+    ).then(
       (latest) => {
         // An older answer mustn't replace a newer one.
         if (ask !== asked) return;

@@ -7,7 +7,7 @@ import type { WriteDraft } from "../../api/WriteDraft";
 import { deleteJson, postJson, putJson } from "../../app/hub";
 import type { Span, Spot } from "../../diff-view/diff-view";
 import { Button } from "../../design-system";
-import { sideOf, spotOf } from "./anchor";
+import { sideOf } from "./anchor";
 import type { Comments } from "./comments";
 import type { CommentEditor } from "./editor";
 import styles from "./drafts.module.css";
@@ -24,6 +24,8 @@ export function useDrafts(
     editor: CommentEditor;
     reviewable: () => boolean;
     reveal: (spot: Spot) => void;
+    /** Puts the comment `id` back on the page. */
+    show: (id: string) => void;
     isSent: (comment: Comment) => boolean;
   },
 ) {
@@ -87,8 +89,9 @@ export function useDrafts(
     edit(comment: Comment) {
       editor.start({
         key: editKey(comment),
+        comment: comment.id,
         text: comment.body,
-        show: () => options.reveal(spotOf(comment)),
+        show: () => options.show(comment.id),
         save: (text) => {
           const body: EditDraft = { body: text };
           return putJson<Comment>(`${url}/${comment.id}`, body).then((edited) =>

@@ -1,0 +1,55 @@
+/* Over the diff, below the header, so opening it moves nothing. */
+.panel {
+  position: absolute;
+  top: 100%;
+  right: var(--space-4);
+  z-index: 10;
+  width: min(560px, calc(100vw - 2 * var(--space-4)));
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+  font: var(--type-p3);
+  color: var(--text-primary);
+}
+
+.talk {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.where {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.show {
+  margin-left: auto;
+}
+
+.excerpt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -89,6 +89,22 @@ pub struct WriteDraftReply {
     pub body: String,
 }
 
+/// `GET /api/items/{id}/conversation`: the item's comments and replies on
+/// every revision, which `GET /api/items/{id}` also carries.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Conversation {
+    /// Sent with a review, oldest first.
+    pub comments: Vec<Comment>,
+    /// The operator's, not sent yet, oldest first.
+    pub drafts: Vec<Comment>,
+    /// The agent's and the sent ones of the operator, on every comment,
+    /// oldest first.
+    pub replies: Vec<Reply>,
+    /// The operator's, not sent yet, oldest first.
+    pub draft_replies: Vec<Reply>,
+}
+
 /// One entry of a sent comment's thread.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

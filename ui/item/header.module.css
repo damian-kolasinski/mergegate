@@ -1,4 +1,6 @@
+/* The anchor of the Conversation list, which hangs below it. */
 .header {
+  position: relative;
   grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
