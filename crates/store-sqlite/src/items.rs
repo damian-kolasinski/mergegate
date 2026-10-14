@@ -22,7 +22,7 @@ const SELECT: &str = "
 /// Matches the `items_open_branch` index.
 const OPEN: &str = "i.state IN ('needs_review', 'changes_requested', 'merging')";
 
-const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+pub(crate) const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 impl ItemStore for Store {
     fn open_items(&self, project: Option<&ProjectName>) -> Result<Vec<Item>, StoreError> {

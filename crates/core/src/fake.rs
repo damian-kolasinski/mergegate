@@ -6,12 +6,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::diff::{DiffGit, DiffStore, FileDiff};
+use crate::feedback::{Event, EventKind, FeedbackStore};
 use crate::git::{Git, GitError, Repo};
 use crate::item::{
     ChangedFile, DiffStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem, NewRevision,
-    Revision,
+    Revision, Submit, submit,
 };
-use crate::project::{Project, ProjectName, ProjectStore};
+use crate::project::{Backend, Project, ProjectName, ProjectStore};
+use crate::review::{NewReview, Review, ReviewStore};
 use crate::store::StoreError;
 use crate::viewed::ViewedStore;
 
@@ -326,10 +328,56 @@ pub(crate) struct FakeStore {
     files: BTreeMap<(ItemId, u32), Vec<ChangedFile>>,
     diffs: BTreeMap<BlobPair, FileDiff>,
     viewed: BTreeSet<(ItemId, u32, String)>,
+    reviews: Vec<Review>,
+    /// Every item's, oldest first.
+    events: Vec<(ItemId, Event)>,
+    delivered: BTreeMap<ItemId, u64>,
     clock: u32,
 }
 
 impl FakeStore {
+    /// `app#1` with `revisions` revisions: r1 changes `README.md` and
+    /// `src/login.rs`, each later one adds `src/r<n>.rs`.
+    pub fn with_item(revisions: u8) -> Self {
+        let mut store = Self::default();
+        store
+            .insert_project(&Project {
+                name: ProjectName::parse("app").unwrap(),
+                backend: Backend::Local,
+                target: "main".into(),
+                upstream: "/src/app".into(),
+            })
+            .unwrap();
+        let mut git = FakeGit::default()
+            .commit(&commit(1), None, "Initial", &["README.md"])
+            .commit(
+                &commit(2),
+                Some(&commit(1)),
+                "Add login",
+                &["src/login.rs", "README.md"],
+            )
+            .upstream("/src/app", "main", &commit(1));
+        for n in 2..=revisions {
+            let file = format!("src/r{n}.rs");
+            git = git.commit(&commit(n + 1), Some(&commit(n)), "More", &[&file]);
+        }
+        for n in 1..=revisions {
+            git.push("app", "login", &commit(n + 1));
+            let request = Submit {
+                project: "app".into(),
+                branch: "login".into(),
+                head: commit(n + 1),
+                title: None,
+            };
+            submit(&mut store, &git, request).unwrap();
+        }
+        store
+    }
+
+    pub fn reviews(&self) -> &[Review] {
+        &self.reviews
+    }
+
     pub fn items(&self) -> &[Item] {
         &self.items
     }
@@ -509,6 +557,52 @@ impl ViewedStore for FakeStore {
         } else {
             self.viewed.remove(&key);
         }
+        Ok(())
+    }
+}
+
+impl ReviewStore for FakeStore {
+    fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError> {
+        let review = Review {
+            id: self.reviews.len() as u64 + 1,
+            item: review.item,
+            revision: review.revision,
+            verdict: review.verdict,
+            summary: review.summary,
+            submitted_at: self.now(),
+        };
+        self.set_state(&review.item, state);
+        self.reviews.push(review.clone());
+        // Cursors are hub-wide, as the store's are.
+        let event = Event {
+            cursor: self.events.len() as u64 + 1,
+            kind: EventKind::ReviewSubmitted(review.clone()),
+        };
+        self.events.push((review.item.clone(), event));
+        Ok(review)
+    }
+}
+
+impl FeedbackStore for FakeStore {
+    fn events(&self, id: &ItemId, after: u64) -> Result<Vec<Event>, StoreError> {
+        Ok(self
+            .events
+            .iter()
+            .filter(|(item, event)| item == id && event.cursor > after)
+            .map(|(_, event)| event.clone())
+            .collect())
+    }
+
+    fn last_cursor(&self, id: &ItemId) -> Result<u64, StoreError> {
+        Ok(self.events(id, 0)?.last().map_or(0, |e| e.cursor))
+    }
+
+    fn delivered(&self, id: &ItemId) -> Result<u64, StoreError> {
+        Ok(self.delivered.get(id).copied().unwrap_or(0))
+    }
+
+    fn set_delivered(&mut self, id: &ItemId, cursor: u64) -> Result<(), StoreError> {
+        self.delivered.insert(id.clone(), cursor);
         Ok(())
     }
 }

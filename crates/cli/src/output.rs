@@ -38,6 +38,8 @@ pub enum Outcome {
         json: Value,
         text: String,
         exit: u8,
+        /// Runs once the result is printed.
+        then: Option<Box<dyn FnOnce()>>,
     },
     NeedsDecision(NeedsDecision),
 }
@@ -48,18 +50,24 @@ impl Outcome {
             json: serde_json::to_value(value).expect("output types serialize"),
             text: text.into(),
             exit: exit::OK,
+            then: None,
         }
     }
 
-    pub fn exit(self, code: u8) -> Self {
-        match self {
-            Self::Done { json, text, .. } => Self::Done {
-                json,
-                text,
-                exit: code,
-            },
-            decision => decision,
+    pub fn exit(mut self, code: u8) -> Self {
+        if let Self::Done { exit, .. } = &mut self {
+            *exit = code;
         }
+        self
+    }
+
+    /// Runs `f` after the result is printed, as acknowledging events is: an
+    /// `mg` killed before it printed them leaves them to be read again.
+    pub fn then(mut self, f: impl FnOnce() + 'static) -> Self {
+        if let Self::Done { then, .. } = &mut self {
+            *then = Some(Box::new(f));
+        }
+        self
     }
 }
 
@@ -93,13 +101,20 @@ impl CliError {
 }
 
 /// Prints an outcome and returns the process exit code.
-pub fn emit(json: bool, result: Result<Outcome, CliError>) -> ExitCode {
+pub fn emit(json: bool, mut result: Result<Outcome, CliError>) -> ExitCode {
+    let then = match &mut result {
+        Ok(Outcome::Done { then, .. }) => then.take(),
+        _ => None,
+    };
     let (stdout, stderr, code) = render(json, result);
     if !stdout.is_empty() {
         println!("{stdout}");
     }
     if !stderr.is_empty() {
         eprintln!("{stderr}");
+    }
+    if let Some(then) = then {
+        then();
     }
     ExitCode::from(code)
 }
@@ -110,6 +125,7 @@ fn render(json: bool, result: Result<Outcome, CliError>) -> (String, String, u8)
             json: value,
             text,
             exit,
+            ..
         }) => {
             let out = if json { value.to_string() } else { text };
             (out, String::new(), exit)

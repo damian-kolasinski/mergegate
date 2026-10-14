@@ -104,7 +104,7 @@ fn inbox_entry(item: &Item) -> api::item::InboxItem {
     }
 }
 
-fn state_to_api(state: ItemState) -> api::item::ItemState {
+pub(crate) fn state_to_api(state: ItemState) -> api::item::ItemState {
     match state {
         ItemState::NeedsReview => api::item::ItemState::NeedsReview,
         ItemState::ChangesRequested => api::item::ItemState::ChangesRequested,

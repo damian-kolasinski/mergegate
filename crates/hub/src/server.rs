@@ -11,8 +11,8 @@ use git::HubGit;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, diff, doctor, events, git_http, guard, io, items, lifecycle, projects,
-    reply, ui, viewed,
+    Home, HubError, HubInfo, diff, doctor, events, feedback, git_http, guard, io, items, lifecycle,
+    projects, reply, reviews, ui, viewed,
 };
 
 pub(crate) struct AppState {
@@ -80,6 +80,8 @@ pub(crate) async fn serve(
         .merge(items::routes())
         .merge(diff::routes())
         .merge(viewed::routes())
+        .merge(reviews::routes())
+        .merge(feedback::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
         .merge(events::routes())
