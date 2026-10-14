@@ -2,7 +2,7 @@
 
 use super::{ChangedFile, Item, ItemId, ItemStore};
 use crate::diff::{DiffStore, FileDiff};
-use crate::review::{Comment, ReviewStore};
+use crate::review::{Comment, Reply, ReviewStore};
 use crate::store::StoreError;
 use crate::viewed::ViewedStore;
 
@@ -13,6 +13,8 @@ pub struct ItemDiff {
     pub files: Vec<DiffedFile>,
     /// On every revision, drafts and sent ones, oldest first.
     pub comments: Vec<Comment>,
+    /// On every comment, oldest first.
+    pub replies: Vec<Reply>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,10 +49,12 @@ pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore>(
         })
         .collect::<Result<_, StoreError>>()?;
     let comments = store.comments(id)?;
+    let replies = store.replies(id)?;
     Ok(Some(ItemDiff {
         item,
         files,
         comments,
+        replies,
     }))
 }
 

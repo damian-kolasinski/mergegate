@@ -80,7 +80,7 @@ fn item_id(id: &str) -> Result<ItemId, Failure> {
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
 }
 
-fn comment_id(id: &str) -> Result<CommentId, Failure> {
+pub(crate) fn comment_id(id: &str) -> Result<CommentId, Failure> {
     CommentId::parse(id).ok_or_else(|| {
         Failure::new(
             StatusCode::BAD_REQUEST,

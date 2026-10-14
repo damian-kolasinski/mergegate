@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::item::Item;
-use crate::review::Comment;
+use crate::review::{Comment, Reply};
 
 /// `GET /api/items/{id}`: the item with its newest revision's files.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -14,6 +14,8 @@ pub struct ItemDiff {
     pub comments: Vec<Comment>,
     /// The operator's, not sent yet, on every revision, oldest first.
     pub drafts: Vec<Comment>,
+    /// On every comment, oldest first.
+    pub replies: Vec<Reply>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

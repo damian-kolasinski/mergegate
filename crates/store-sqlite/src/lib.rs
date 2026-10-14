@@ -7,6 +7,7 @@ mod feedback;
 mod items;
 mod migrate;
 mod projects;
+mod replies;
 mod reviews;
 mod viewed;
 
