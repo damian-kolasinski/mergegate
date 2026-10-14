@@ -52,6 +52,31 @@ jobs:
           MG_ENFORCE_BUDGETS: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
         run: cargo test --release --locked -p mg --test contract -- --ignored --nocapture
 
+  langs:
+    # Builds every language pack in langs/packs.json, checks that mg loads
+    # and highlights with each, and keeps them for `mg lang add --from`.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # The tree-sitter CLI's wasi-sdk.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/tree-sitter
+          key: tree-sitter-${{ hashFiles('langs/packs.json') }}
+      - run: node langs/build.mjs --out langs/dist
+      - env:
+          MG_LANG_PACKS: ${{ github.workspace }}/langs/dist
+        run: cargo test --locked -p mergegate-highlight --test languages -- --ignored
+      - uses: actions/upload-artifact@v4
+        with:
+          name: language-packs
+          path: langs/dist/*.tar.gz
+
   ui:
     runs-on: ubuntu-latest
     defaults:
