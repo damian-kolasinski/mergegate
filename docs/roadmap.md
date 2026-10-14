@@ -33,7 +33,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **A row is a step.** Rows split into a and b (11, 12, 18) where only part of the work waits on another step; each part has its own brief (`docs/roadmap/11a-triage.md`) and its own row to delete.
 - **A step starts once every row in its After column is gone from the table,** that is, once that step's last PR has merged, and runs in its own worktree. Rows with nothing there can start any time, whatever is running.
 - **Migrations take their number when they merge.** A step renumbers its unmerged migration onto whatever `main` has, and a dev home that ran the old number is reset; a merged migration never changes.
-- **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags (13, 14, 16) and the skill's reference files (`mg events` from 10 and 14). The one that merges second rebases onto the other.
+- **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags (13, 14) and the skill's reference files (`mg events` from 10 and 14). The one that merges second rebases onto the other.
 - **Where two steps' features meet, the one that lands second adds the meeting:** stacked children in 14's early conflict detection and its inbox ordering ("items stacked on it") come from whichever of 13 and 14 merges last.
 
 ## PRs
@@ -46,7 +46,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions | F7, F13 | — | 10, 12a |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
 | 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
-| 16 | Demo attachments | `--attach`, `mg attach`, demo panel | F4, F6 | — | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | 11a |
 | 18a | Distribution | Full `mg doctor`, cargo-dist releases, launchd/systemd units, language packs as release assets (`mg lang add <name>`, `--available`, `--detect`, `update`, detection in `mg project add`); drop `## Stage` from AGENTS.md | F1 | — | — |
 | 18b | Hooks | `on_event` hooks | F14 | — | 10 |
@@ -58,7 +57,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **The whole loop runs on the `local` backend before GitHub** (PRs 1–8), so it is proven against real git with nothing faked.
 - **GitHub comes right after the skill**, so mergegate's own work keeps landing as GitHub PRs, cloud bots keep reviewing, and the switch happens early.
 - **Then the design's pain points:** triage for the flat file list, re-review for cheap revision cycles, stacks for oversized work, prioritization for many open items.
-- **Polish and reach come last in the list,** but 16 and 18a depend on nothing, so they can run alongside the rest; multi-machine waits until agents run on more than one machine.
+- **Polish and reach come last in the list,** but 18a depends on nothing, so it can run alongside the rest; multi-machine waits until agents run on more than one machine.
 - **Stacked items need re-review** (12a and 12b): keeping viewed marks and approvals across a child's rebases relies on its interdiffs and comment re-mapping. Until PR 13 lands, agents submit the parts of a split one after another.
 
 ## Switching mergegate's own reviews to mergegate

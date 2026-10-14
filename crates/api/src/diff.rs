@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::attachment::Demo;
 use crate::highlight::Span;
 use crate::item::Item;
 use crate::merge::Blocked;
@@ -12,6 +13,8 @@ pub struct ItemDiff {
     pub item: Item,
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,
+    /// Null when no revision has attachments.
+    pub demo: Option<Demo>,
     /// In path order.
     pub files: Vec<File>,
     #[serde(flatten)]

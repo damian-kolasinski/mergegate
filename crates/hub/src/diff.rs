@@ -11,13 +11,14 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, X_CONTENT_TYPE_OPTIONS};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
+use mergegate_core::attachment;
 use mergegate_core::diff::{self, Content, LineKind};
 use mergegate_core::highlight::{self, FileHighlights, Highlighter, Span};
 use mergegate_core::item::{self, DiffedFile, ItemId};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{conversation, highlights, items, merge, projects};
+use crate::{attachments, conversation, highlights, items, merge, projects};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -54,12 +55,13 @@ async fn show(
                         highlight::file_highlights(store, &installed, known, &f.file, hunks)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                Ok(Some((diff, blocked, spans)))
+                let demo = attachment::demo(store, &id)?;
+                Ok(Some((diff, blocked, spans, demo)))
             })
             .await
             .map_err(items::failure)?
     };
-    let (diff, blocked, spans) = found.ok_or_else(|| {
+    let (diff, blocked, spans, demo) = found.ok_or_else(|| {
         Failure::new(
             StatusCode::NOT_FOUND,
             "item_not_found",
@@ -70,6 +72,7 @@ async fn show(
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
         blocked,
+        demo: demo.map(attachments::demo_to_api),
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         conversation: conversation::to_api(&diff.conversation),
     }))

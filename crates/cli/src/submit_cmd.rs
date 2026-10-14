@@ -1,16 +1,36 @@
 //! `mg submit`: pushes the current branch to the hub and registers it as an
-//! item, or as a new revision of the branch's open item.
+//! item, or as a new revision of the branch's open item, with the
+//! screenshots or recordings it shows.
 
+use std::path::PathBuf;
+
+use api::attachment::Attachment;
 use api::item::{Submit, Submitted};
 use api::project::Project;
+use serde::Serialize;
 
+use crate::attach_cmd;
 use crate::client::{Client, Reply};
 use crate::output::{CliError, Outcome};
 use crate::project_cmd::route;
 use crate::repo::{self, REMOTE};
 
-pub fn run(title: Option<String>, wake: Option<String>) -> Result<Outcome, CliError> {
+/// [`Submitted`], and what `--attach` added.
+#[derive(Serialize)]
+struct Output<'a> {
+    #[serde(flatten)]
+    submitted: &'a Submitted,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    attachments: &'a [Attachment],
+}
+
+pub fn run(
+    title: Option<String>,
+    wake: Option<String>,
+    attach: Vec<PathBuf>,
+) -> Result<Outcome, CliError> {
     repo::require()?;
+    let attach = attach_cmd::check(&attach)?;
     let client = Client::connect(&crate::home()?)?;
     let project = remote_project()?;
     let switch = "git switch -c NAME";
@@ -51,8 +71,28 @@ pub fn run(title: Option<String>, wake: Option<String>) -> Result<Outcome, CliEr
         Reply::Done(submitted) => submitted,
         Reply::Decide(decision) => return Ok(Outcome::NeedsDecision(decision)),
     };
-    let text = describe(&submitted);
-    Ok(Outcome::done(&submitted, text))
+    let item = &submitted.item;
+    let attachments = attach_cmd::upload(&client, &item.id, Some(item.revision.number), &attach)
+        .map_err(|e| {
+            let message = format!(
+                "submitted {} r{}, but attaching failed: {}",
+                item.id, item.revision.number, e.body.message
+            );
+            CliError {
+                body: api::error::ErrorBody { message, ..e.body },
+                ..e
+            }
+        })?;
+    let mut text = describe(&submitted);
+    if !attachments.is_empty() {
+        text.push('\n');
+        text.push_str(&attach_cmd::describe(&item.id, &attachments));
+    }
+    let output = Output {
+        submitted: &submitted,
+        attachments: &attachments,
+    };
+    Ok(Outcome::done(&output, text))
 }
 
 /// The project the clone's `mergegate` remote points at.

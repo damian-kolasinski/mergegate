@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::agent::{Agent, AgentStore, DueWake};
+use crate::attachment::{Attachment, AttachmentStore, Media, NewAttachment};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
@@ -23,6 +24,7 @@ use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
     Anchor, Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
 };
+use crate::settings::SettingsStore;
 use crate::store::StoreError;
 use crate::viewed::ViewedStore;
 
@@ -480,6 +482,9 @@ pub(crate) struct FakeStore {
     /// The external comments a batch carried.
     batched: BTreeSet<CommentId>,
     clock: u32,
+    /// Every item's, oldest first.
+    attachments: Vec<(ItemId, Attachment)>,
+    settings: BTreeMap<String, String>,
 }
 
 impl FakeStore {
@@ -929,6 +934,79 @@ impl ViewedStore for FakeStore {
         } else {
             self.viewed.remove(&key);
         }
+        Ok(())
+    }
+}
+
+impl AttachmentStore for FakeStore {
+    fn attachments(&self, id: &ItemId) -> Result<Vec<Attachment>, StoreError> {
+        let mut attachments: Vec<Attachment> = self
+            .attachments
+            .iter()
+            .filter(|(i, _)| i == id)
+            .map(|(_, a)| a.clone())
+            .collect();
+        attachments.sort_by_key(|a| a.revision);
+        Ok(attachments)
+    }
+
+    fn add_attachment(
+        &mut self,
+        id: &ItemId,
+        attachment: NewAttachment<'_>,
+    ) -> Result<Attachment, StoreError> {
+        let attachment = Attachment {
+            revision: attachment.revision,
+            name: attachment.name.into(),
+            media: attachment.media,
+            size: attachment.bytes.len() as u64,
+            // Not a real hash: the fake only needs one per content.
+            sha256: attachment
+                .bytes
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect(),
+        };
+        self.attachments.push((id.clone(), attachment.clone()));
+        Ok(attachment)
+    }
+
+    fn attachment_media(&self, sha256: &str) -> Result<Option<Media>, StoreError> {
+        Ok(self
+            .attachments
+            .iter()
+            .find(|(_, a)| a.sha256 == sha256)
+            .map(|(_, a)| a.media))
+    }
+
+    /// The fake keeps no close times: a closed item's attachments go only
+    /// with a zero TTL.
+    fn prune_attachments(&mut self, ttl: std::time::Duration) -> Result<Vec<ItemId>, StoreError> {
+        if !ttl.is_zero() {
+            return Ok(Vec::new());
+        }
+        let items = &self.items;
+        let mut pruned = Vec::new();
+        self.attachments.retain(|(id, _)| {
+            let open = items
+                .iter()
+                .any(|item| &item.id == id && item.state.is_open());
+            if !open && !pruned.contains(id) {
+                pruned.push(id.clone());
+            }
+            open
+        });
+        Ok(pruned)
+    }
+}
+
+impl SettingsStore for FakeStore {
+    fn setting(&self, key: &str) -> Result<Option<String>, StoreError> {
+        Ok(self.settings.get(key).cloned())
+    }
+
+    fn set_setting(&mut self, key: &str, value: &str) -> Result<(), StoreError> {
+        self.settings.insert(key.into(), value.into());
         Ok(())
     }
 }

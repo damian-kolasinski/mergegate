@@ -156,6 +156,7 @@ Command design rules:
 ```
 mg hub start [--foreground] [--port N] | stop | status
 mg hub set listen local|tailnet
+mg hub set attachment-ttl <duration>                     How long a closed item keeps its demos (default 2d)
 mg hub devices | allow <device> | deny <device>         Tailscale devices allowed to connect
 mg hub token create                                      Fallback auth for non-Tailscale networks
 
@@ -177,6 +178,8 @@ mg skill install [--dir PATH]                            Write the agent skill a
 `MERGEGATE_HOME` selects the data directory (default `~/.mergegate`) for both the hub and the CLI, which finds the hub's address there. A development build can run next to the installed one without sharing state.
 
 A repo with a GitHub remote is asked which backend to use (a `needs_decision`, defaulting to `github`); one without lands on `local`. The GitHub repository is origin's if origin is on github.com, else the only github.com remote, else a `needs_decision`; `--github` names it and implies `--backend github`. The hub checks that the operator can push to it before registering. A local project keeps its GitHub repository, so switching backends back and forth needs no flags.
+
+`attachment-ttl` takes `30s`, `15m`, `12h` or `2d`; `0s` drops a closed item's attachments as it closes. The hub prunes on start, hourly, after an item closes and when the TTL changes, removing the rows and the files no other row uses.
 
 Changing a project's backend, GitHub repository or target applies to new items. Open items keep their settings until they close, and the command lists them in its `needs_decision` so the operator knows.
 
@@ -419,7 +422,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **Revision selector** defaults to "since last review": you see the interdiff only. A file that hasn't changed since you marked it viewed stays viewed.
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can agree, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. Sync GitHub refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
-- **Demo panel** at the top for screenshots and recordings attached with `mg submit --attach`.
+- **Demo panel** under the header: thumbnails of the screenshots and recordings attached with `mg submit --attach` or `mg attach`. A click opens one full size, videos with controls; ←/→ step through them and Escape closes the viewer. Attachments belong to a revision: the panel shows the newest revision's, or, while it has none, the newest earlier revision's, labeled "from rN", so a small fix needn't be recorded again; with the revision selector it follows the selected revision. Only PNG, JPEG, GIF, WebP, MP4 and WebM up to 100 MB, typed by their bytes, since the hub serves them from its own origin. GitHub items keep theirs in mergegate: GitHub has no upload API. An attach updates the screen and the inbox's `▶ demo` marker live; it tells the agent nothing.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.
 - **Approve & merge** asks first, showing how many files are still unviewed without blocking on them; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge shows the upstream's reason under the header with Retry and Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.
 - **Replies thread under each comment:** the agent's, with their status (addressed in rN, rejected, question), and yours, drafted like comments and sent with the next review. "Addressed in rN" is the first revision submitted after the reply. Replies show as they arrive: the UI's stream carries `item.changed` pings and the screen rereads the item's conversation, as it does on reconnect.

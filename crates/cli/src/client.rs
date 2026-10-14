@@ -105,6 +105,34 @@ impl Client {
         done(self.read(request.call()))
     }
 
+    pub fn put<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &impl Serialize,
+    ) -> Result<T, CliError> {
+        let request = self
+            .agent
+            .put(self.url(path))
+            .header(api::CLIENT_HEADER, "mg");
+        done(self.read(request.send_json(body)))
+    }
+
+    /// Sends `body` as it is, as a file upload.
+    pub fn post_bytes<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+        body: Vec<u8>,
+    ) -> Result<T, CliError> {
+        let request = self
+            .agent
+            .post(self.url(path))
+            .query_pairs(query.iter().copied())
+            .header(api::CLIENT_HEADER, "mg")
+            .header("content-type", "application/octet-stream");
+        done(self.read(request.send(&body[..])))
+    }
+
     pub fn remote(&self, project: &str) -> String {
         format!("{}/git/{}", self.url, segment(project))
     }

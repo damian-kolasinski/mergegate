@@ -9,6 +9,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, Submit};
 use mergegate_core::store::StoreError;
 
@@ -70,7 +71,11 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
             let entries = |items: Vec<Item>| -> Result<Vec<_>, StoreError> {
                 items
                     .iter()
-                    .map(|item| Ok(inbox_entry(item, merge::blocked(store, item)?)))
+                    .map(|item| {
+                        let blocked = merge::blocked(store, item)?;
+                        let demo = !store.attachments(&item.id)?.is_empty();
+                        Ok(inbox_entry(item, blocked, demo))
+                    })
                     .collect()
             };
             Ok(api::item::Inbox {
@@ -118,7 +123,11 @@ fn link(backend: &ItemBackend) -> Option<api::item::Link> {
     }
 }
 
-fn inbox_entry(item: &Item, blocked: Option<api::merge::Blocked>) -> api::item::InboxItem {
+fn inbox_entry(
+    item: &Item,
+    blocked: Option<api::merge::Blocked>,
+    demo: bool,
+) -> api::item::InboxItem {
     let revision = &item.revision;
     api::item::InboxItem {
         id: item.id.to_string(),
@@ -132,6 +141,7 @@ fn inbox_entry(item: &Item, blocked: Option<api::merge::Blocked>) -> api::item::
         updated_at: revision.submitted_at.clone(),
         blocked,
         link: link(&item.backend),
+        demo,
     }
 }
 

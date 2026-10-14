@@ -38,6 +38,8 @@ async fn abandon(
         .await
         .map_err(items::failure)?;
     state.events.logged();
+    // Starts its attachments' time to live.
+    state.prune.notify_one();
     state.events.send(UiEvent::InboxChanged);
     state.events.send(UiEvent::ItemChanged {
         item: item.id.to_string(),

@@ -2,6 +2,7 @@
 //! open.
 
 mod agents;
+mod attachments;
 mod comments;
 mod diffs;
 mod external;
@@ -12,6 +13,7 @@ mod migrate;
 mod projects;
 mod replies;
 mod reviews;
+mod settings;
 mod viewed;
 
 use std::path::{Path, PathBuf};
@@ -41,6 +43,9 @@ pub enum StoreError {
 
 pub struct Store {
     conn: Connection,
+    /// Attachment files, named by their SHA-256: `attachments/` next to the
+    /// database, made on the first attachment.
+    attachments: PathBuf,
 }
 
 impl Store {
@@ -57,7 +62,10 @@ impl Store {
         conn.pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0))?;
         conn.pragma_update(None, "foreign_keys", true)?;
         migrate::migrate(&mut conn, path, migrations)?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            attachments: path.with_file_name("attachments"),
+        })
     }
 
     pub fn schema_version(&self) -> Result<u32, StoreError> {

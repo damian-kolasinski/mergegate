@@ -1,4 +1,5 @@
 import { createSignal, Show, untrack } from "solid-js";
+import type { Demo as DemoData } from "../api/Demo";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { ItemState } from "../api/ItemState";
 import type { Review as SentReview } from "../api/Review";
@@ -12,6 +13,7 @@ import { Conversation } from "./conversation";
 import { Thread } from "./comments/thread";
 import { FileList } from "./files";
 import { Abandon } from "./abandon";
+import { Demo } from "./demo/demo";
 import { ItemHeader } from "./header";
 import { MergeBlocked } from "./merge-blocked";
 import styles from "./item.module.css";
@@ -26,12 +28,19 @@ import { useViewed } from "./viewed";
  */
 export function ItemScreen(props: { id: string }) {
   const [diff, setDiff] = createSignal<ItemDiff>();
+  // Follows the hub for the revision shown: an agent attaches after it
+  // submits, and a strip that waited for a reopen would miss it.
+  const [demo, setDemo] = createSignal<DemoData | null>(null);
   const [failure, setFailure] = createSignal<string>();
   // main.tsx keys the route, so the id is fixed for the screen's life.
   const id = untrack(() => props.id);
   const fetchDiff = () =>
     getJson<ItemDiff>(`/api/items/${encodeURIComponent(id)}`);
-  void fetchDiff().then(setDiff, (error: unknown) =>
+  const show = (next: ItemDiff) => {
+    setDiff(next);
+    setDemo(next.demo);
+  };
+  void fetchDiff().then(show, (error: unknown) =>
     setFailure(error instanceof Error ? error.message : String(error)),
   );
   // A closed item's diffs are gone, so its review gives way to what's left.
@@ -44,7 +53,9 @@ export function ItemScreen(props: { id: string }) {
       (next) => {
         const shown = diff()?.item.state;
         if (replace || (closed(next.item.state) && !(shown && closed(shown)))) {
-          setDiff(next);
+          show(next);
+        } else if (next.item.revision.number === diff()?.item.revision.number) {
+          setDemo(next.demo);
         }
       },
       (error: unknown) =>
@@ -64,6 +75,7 @@ export function ItemScreen(props: { id: string }) {
         {(current) => (
           <Review
             diff={current}
+            demo={demo()}
             onClosed={() => reload()}
             onMerge={() => reload(true)}
           />
@@ -85,6 +97,7 @@ function leave() {
 
 function Review(props: {
   diff: ItemDiff;
+  demo: DemoData | null;
   onClosed: () => void;
   onMerge: () => void;
 }) {
@@ -224,6 +237,11 @@ function Review(props: {
             />
           </Show>
         </ItemHeader>
+        <Show when={props.demo}>
+          {(demo) => (
+            <Demo demo={demo()} revision={props.diff.item.revision.number} />
+          )}
+        </Show>
         <Show when={props.diff.blocked}>
           {(blocked) => (
             <MergeBlocked

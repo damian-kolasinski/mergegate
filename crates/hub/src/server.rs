@@ -15,9 +15,9 @@ use mergegate_core::highlight::Pack;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, abandon, comments, conversation, diff, doctor, draft_replies, events,
-    external, feedback, git_http, guard, highlights, io, items, languages, lifecycle, merge,
-    projects, replies, reply, resume, reviews, ui, viewed, wake,
+    Home, HubError, HubInfo, abandon, attachments, comments, conversation, diff, doctor,
+    draft_replies, events, external, feedback, git_http, guard, highlights, io, items, languages,
+    lifecycle, merge, projects, replies, reply, resume, reviews, settings, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -37,6 +37,8 @@ pub(crate) struct AppState {
     /// Wakes the background highlight pass; a wake while it runs makes it
     /// run once more.
     pub highlight: Notify,
+    /// Asks the attachment pruner to look now.
+    pub prune: Notify,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -132,6 +134,7 @@ pub(crate) async fn serve(
         languages: Arc::new(languages),
         known_packs: highlight::known(),
         highlight: Notify::new(),
+        prune: Notify::new(),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
         github: GithubClient::from_env(),
@@ -147,6 +150,8 @@ pub(crate) async fn serve(
         .merge(languages::routes())
         .merge(conversation::routes())
         .merge(viewed::routes())
+        .merge(attachments::routes())
+        .merge(settings::routes())
         .merge(reviews::routes())
         .merge(comments::routes())
         .merge(replies::routes())
@@ -174,6 +179,7 @@ pub(crate) async fn serve(
     tokio::spawn(wake::run(state.clone()));
     tokio::spawn(external::run(state.clone()));
     tokio::spawn(highlights::run(state.clone()));
+    tokio::spawn(attachments::prune(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

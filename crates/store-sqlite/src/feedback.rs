@@ -8,6 +8,7 @@ use rusqlite::{OptionalExtension, Row, params};
 
 use crate::Store;
 use crate::external::{batch, overridden};
+use crate::items::NOW;
 use crate::reviews::{ReviewRow, review};
 
 /// `?1` and `?2` name the item.
@@ -109,9 +110,15 @@ impl FeedbackStore for Store {
             .optional()
             .map_err(StoreError::new)?
             .ok_or_else(|| StoreError::new(format!("no item {id}")))?;
+        // `closed_at` starts the attachments' time to live; a second close
+        // keeps the first one's.
         tx.execute(
-            "UPDATE items SET state = ?2 WHERE id = ?1",
-            params![item_id, state.as_str()],
+            &format!(
+                "UPDATE items SET state = ?2,
+                     closed_at = CASE WHEN ?3 THEN NULL ELSE coalesce(closed_at, {NOW}) END
+                 WHERE id = ?1"
+            ),
+            params![item_id, state.as_str(), state.is_open()],
         )
         .map_err(StoreError::new)?;
         let Columns {
