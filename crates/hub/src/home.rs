@@ -72,6 +72,11 @@ impl Home {
         self.root.join("projects")
     }
 
+    /// Installed language packs, one folder per pack.
+    pub fn languages(&self) -> PathBuf {
+        self.root.join("languages")
+    }
+
     /// The stderr of each item's newest wake command, one file per item.
     pub fn wake_logs(&self) -> PathBuf {
         self.root.join("wakes")

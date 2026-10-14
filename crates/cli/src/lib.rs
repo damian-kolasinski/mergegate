@@ -7,6 +7,7 @@ mod feedback_cmd;
 mod hub_cmd;
 mod inbox_cmd;
 mod init_cmd;
+mod lang_cmd;
 pub mod output;
 mod project_cmd;
 mod reply_cmd;
@@ -54,6 +55,9 @@ enum Command {
     /// Register repos as projects and change their settings
     #[command(subcommand)]
     Project(project_cmd::ProjectCommand),
+    /// Install and remove the language packs that highlight diffs
+    #[command(subcommand)]
+    Lang(lang_cmd::LangCommand),
     /// In a clone: add the `mergegate` remote, pointing at its project
     Init {
         /// Project to push to [default: the one registered for this repo]
@@ -153,6 +157,7 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
     match command {
         Command::Hub(command) => hub_cmd::run(command),
         Command::Project(command) => project_cmd::run(command),
+        Command::Lang(command) => lang_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
         Command::Submit { title, wake } => submit_cmd::run(title, wake),
         Command::Wait {

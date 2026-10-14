@@ -97,6 +97,14 @@ impl Client {
         self.read(request.send_json(body))
     }
 
+    pub fn delete<T: DeserializeOwned>(&self, path: &str) -> Result<T, CliError> {
+        let request = self
+            .agent
+            .delete(self.url(path))
+            .header(api::CLIENT_HEADER, "mg");
+        done(self.read(request.call()))
+    }
+
     pub fn remote(&self, project: &str) -> String {
         format!("{}/git/{}", self.url, segment(project))
     }

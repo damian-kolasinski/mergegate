@@ -203,7 +203,7 @@ fn landing(p: &Project) -> String {
 
 /// The hub may run with another working directory, so paths go to it
 /// absolute and with symlinks resolved.
-fn absolute(path: &Path) -> Result<String, CliError> {
+pub(crate) fn absolute(path: &Path) -> Result<String, CliError> {
     let resolved = std::fs::canonicalize(path)
         .map_err(|e| CliError::new("invalid_path", format!("{}: {e}", path.display())))?;
     resolved.into_os_string().into_string().map_err(|path| {
