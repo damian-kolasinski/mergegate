@@ -165,8 +165,12 @@ fn event(event: &Event) -> String {
             }
             out
         }
-        EventBody::ItemMerged { commit } => format!(
-            "[{}] {} r{}: the operator merged it as {commit}",
+        // A squash leaves the branch unmerged to git, so `git branch -d`
+        // refuses it.
+        EventBody::ItemMerged { commit, branch } => format!(
+            "[{}] {} r{}: the operator merged it as {commit}\n\n  \
+             Clean up {branch} as agreed with the operator; by default:\n    \
+             git switch --detach\n    git branch -D {branch}",
             event.cursor, event.item, event.revision
         ),
     }
@@ -174,7 +178,7 @@ fn event(event: &Event) -> String {
 
 /// `path:line`, or `path:start-line`, naming the old side and a revision
 /// other than the event's.
-fn place(comment: &Comment, revision: u32) -> String {
+pub(crate) fn place(comment: &Comment, revision: u32) -> String {
     let mut out = format!("{}:", comment.path);
     if comment.start_line != comment.line {
         out.push_str(&format!("{}-", comment.start_line));

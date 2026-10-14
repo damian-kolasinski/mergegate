@@ -1,4 +1,5 @@
 use std::net::Ipv4Addr;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
@@ -12,8 +13,8 @@ use store_sqlite::Store;
 
 use crate::{
     Home, HubError, HubInfo, abandon, comments, conversation, diff, doctor, draft_replies, events,
-    feedback, git_http, guard, io, items, lifecycle, merge, projects, replies, reply, reviews, ui,
-    viewed,
+    feedback, git_http, guard, io, items, lifecycle, merge, projects, replies, reply, resume,
+    reviews, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -21,6 +22,8 @@ pub(crate) struct AppState {
     pub port: u16,
     pub shutdown: Notify,
     pub events: events::Events,
+    pub wakes: wake::Wakes,
+    pub wake_logs: PathBuf,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -72,6 +75,8 @@ pub(crate) async fn serve(
         port: addr.port(),
         shutdown: Notify::new(),
         events: events::Events::new(),
+        wakes: wake::Wakes::default(),
+        wake_logs: home.wake_logs(),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
     });
@@ -89,6 +94,7 @@ pub(crate) async fn serve(
         .merge(replies::routes())
         .merge(draft_replies::routes())
         .merge(feedback::routes())
+        .merge(resume::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
         .merge(events::routes())
@@ -106,6 +112,7 @@ pub(crate) async fn serve(
         home.root().display()
     );
 
+    tokio::spawn(wake::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

@@ -1580,11 +1580,16 @@ dependencies = [
  "mergegate-store-sqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "mergegate-skill"
+version = "0.1.0"
 
 [[package]]
 name = "mergegate-store-sqlite"
@@ -1613,6 +1618,7 @@ dependencies = [
  "libc",
  "mergegate-api",
  "mergegate-hub",
+ "mergegate-skill",
  "mergegate-testkit",
  "serde",
  "serde_json",

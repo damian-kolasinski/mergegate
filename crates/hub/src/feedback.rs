@@ -12,7 +12,7 @@ use axum::{Json, Router};
 use mergegate_core::feedback::{
     self, Event, EventKind, Feedback, FeedbackError, NoticeKind, Source, Wake,
 };
-use mergegate_core::item::ItemId;
+use mergegate_core::item::{Item, ItemId};
 use serde::Deserialize;
 use tokio::time::Instant;
 
@@ -55,6 +55,8 @@ async fn read(
     let mut log = state.events.log();
     let mut stopping = state.events.stopping();
     let mut last = query.wait == 0;
+    // Its agent is awake while this reads, and needs no wake command run.
+    let _reading = state.wakes.reading(&id);
     loop {
         log.mark_unchanged();
         let read = {
@@ -64,7 +66,13 @@ async fn read(
                 .await
                 .map_err(failure)?
         };
-        if last || wake.by(&read.events) || !read.item.state.is_open() {
+        let woke = wake.by(&read.events) || !read.item.state.is_open();
+        if last || woke {
+            // A wait's answer at its deadline can hold events its `mg wait`
+            // isn't waiting for, and skips.
+            if (query.wait == 0 || woke) && !read.events.is_empty() {
+                state.wakes.handed(&id, read.cursor);
+            }
             return Ok(Json(to_api(&id, read)));
         }
         // The store stays unlocked while this waits.
@@ -103,13 +111,14 @@ fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
         events: read
             .events
             .into_iter()
-            .map(|e| event_to_api(id, &read.item.target, e))
+            .map(|e| event_to_api(id, &read.item, e))
             .collect(),
         cursor: read.cursor,
     }
 }
 
-fn event_to_api(id: &ItemId, target: &str, event: Event) -> api::feedback::Event {
+fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedback::Event {
+    let target = &item.target;
     let revision = event.revision();
     let source = source_to_api(event.source());
     let body = match event.kind {
@@ -136,7 +145,10 @@ fn event_to_api(id: &ItemId, target: &str, event: Event) -> api::feedback::Event
                     format!("git rebase mergegate/{target}"),
                 ],
             },
-            NoticeKind::Merged { commit } => api::feedback::EventBody::ItemMerged { commit },
+            NoticeKind::Merged { commit } => api::feedback::EventBody::ItemMerged {
+                commit,
+                branch: item.branch.clone(),
+            },
         },
     };
     api::feedback::Event {

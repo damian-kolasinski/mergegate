@@ -32,9 +32,8 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
-| 8 | Agent skill | Embedded skill, `mg skill install`, `mg resume`, `--wake`; a test that every command the skill names exists; deleting a merged branch with `git branch -D`, since a squash leaves it unmerged to git | F3, F14 | — |
 | 9 | GitHub backend | Push the branch, open and update the PR, squash-merge through the API as the local backend squashes, switch a project's backend (listing open items in a `needs_decision`, as a target change does) | F1, F4, F8, F15 | GitHub |
-| 10 | External review | Polling PR comments, debounce, `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub |
+| 10 | External review | Polling PR comments, debounce (of wakes too), `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub |
 | 11 | File triage | `rules.toml`, guards, review/trusted tiers, `--guide` ordering, `mg rules propose/list`, approving looser rules in the UI | F11, F12 | — |
 | 12 | Re-review | Interdiffs over a moved base, viewed marks across revisions, re-mapping drafts and comments onto newer revisions, the new-revision banner | F7, F13 | — |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub |
@@ -43,7 +42,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 16 | Demo attachments | `--attach`, `mg attach`, demo panel | F4, F6 | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs |
 | 18 | Hooks and distribution | `on_event` hooks, full `mg doctor`, cargo-dist releases, launchd/systemd units; drop `## Stage` from AGENTS.md | F1 | — |
-| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow` | F2 | Tailscale |
+| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale |
 
 ## Why this order
 

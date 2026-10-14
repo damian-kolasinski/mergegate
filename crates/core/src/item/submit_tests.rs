@@ -51,6 +51,8 @@ fn request(project: &str, branch: &str, head: u8) -> Submit {
         branch: branch.into(),
         head: commit(head),
         title: None,
+        worktree: None,
+        wake: None,
     }
 }
 
@@ -147,6 +149,33 @@ fn the_same_head_again_returns_the_current_revision() {
     assert!(!again.new_revision);
     assert_eq!(again.item, first.item);
     assert_eq!(git.fetched().len(), 1);
+}
+
+#[test]
+fn records_the_agents_worktree_and_wake_even_at_the_same_head() {
+    use crate::agent::{Agent, AgentStore};
+    let (mut store, git) = setup();
+    git.push("app", "login", &commit(3));
+    let first = Submit {
+        worktree: Some("/work/login".into()),
+        ..request("app", "login", 3)
+    };
+    let id = submit(&mut store, &git, first).unwrap().item.id;
+    let agent = |worktree: &str, wake: Option<&str>| Agent {
+        worktree: Some(worktree.into()),
+        wake: wake.map(Into::into),
+    };
+    assert_eq!(store.agent(&id).unwrap(), agent("/work/login", None));
+    // Waking needs no new commits: the agent submits again with --wake.
+    let again = Submit {
+        wake: Some("resume {item}".into()),
+        ..request("app", "login", 3)
+    };
+    assert!(!submit(&mut store, &git, again).unwrap().new_revision);
+    assert_eq!(
+        store.agent(&id).unwrap(),
+        agent("/work/login", Some("resume {item}"))
+    );
 }
 
 #[test]

@@ -17,10 +17,12 @@ mod merge;
 mod projects;
 mod replies;
 mod reply;
+mod resume;
 mod reviews;
 mod server;
 mod ui;
 mod viewed;
+mod wake;
 
 use std::io::IsTerminal;
 

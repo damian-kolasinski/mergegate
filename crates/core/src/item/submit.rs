@@ -5,6 +5,7 @@ use super::{
     Item, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, valid_branch,
     valid_commit,
 };
+use crate::agent::{self, AgentStore};
 use crate::diff::{DiffGit, DiffStore};
 use crate::project::{ProjectStore, find};
 
@@ -14,6 +15,11 @@ pub struct Submit {
     pub branch: String,
     pub head: String,
     pub title: Option<String>,
+    /// The submitting worktree's path, which `mg resume` names.
+    pub worktree: Option<String>,
+    /// The command that wakes the item's agent; empty removes it. Kept when
+    /// none is sent.
+    pub wake: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,8 +30,9 @@ pub struct Submitted {
 
 /// The branch must already be pushed to staging at `request.head`. The
 /// target is fetched fresh first, so the merge-base is current. Every file's
-/// diff is cached before the revision is recorded.
-pub fn submit<S: ProjectStore + ItemStore + DiffStore>(
+/// diff is cached before the revision is recorded. A submit at the open
+/// item's head still records its worktree and wake.
+pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
     store: &mut S,
     git: &(impl ItemGit + DiffGit),
     request: Submit,
@@ -35,6 +42,8 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore>(
         branch,
         head,
         title,
+        worktree,
+        wake,
         ..
     } = request;
     if !valid_branch(&branch) {
@@ -54,6 +63,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore>(
     if let Some(item) = existing.as_ref().filter(|i| i.revision.head == head) {
         // Pinning again repairs a submit that failed after recording.
         git.pin(&project.name, &item.pin_ref(), &head)?;
+        agent::record(store, &item.id, worktree, wake)?;
         return Ok(Submitted {
             item: item.clone(),
             new_revision: false,
@@ -101,6 +111,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore>(
         })?,
     };
     git.pin(&project.name, &item.pin_ref(), &item.revision.head)?;
+    agent::record(store, &item.id, worktree, wake)?;
     Ok(Submitted {
         item,
         new_revision: true,

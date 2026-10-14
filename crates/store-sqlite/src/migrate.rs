@@ -18,6 +18,7 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0007_comments.sql"),
     include_str!("../migrations/0008_replies.sql"),
     include_str!("../migrations/0009_close_events.sql"),
+    include_str!("../migrations/0010_agents.sql"),
 ];
 
 /// The schema version this build migrates databases to.

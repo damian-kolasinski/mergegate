@@ -32,11 +32,15 @@ async fn submit(
         branch: request.branch,
         head: request.head,
         title: request.title,
+        worktree: request.worktree,
+        wake: request.wake,
     };
     let submitted = state
         .blocking(move |store, git| item::submit(store, git, request))
         .await
         .map_err(failure)?;
+    // A new wake command may be due for events already logged.
+    state.wakes.recheck();
     if submitted.new_revision {
         state.events.send(UiEvent::InboxChanged);
         state.events.send(UiEvent::ItemChanged {

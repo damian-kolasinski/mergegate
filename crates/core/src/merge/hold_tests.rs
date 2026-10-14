@@ -97,6 +97,8 @@ fn a_new_revision_takes_a_held_item_back_to_needs_review() {
         branch: "login".into(),
         head: commit(3),
         title: None,
+        worktree: None,
+        wake: None,
     };
     let item = submit(&mut store, &git, request).unwrap().item;
     assert_eq!(item.state, ItemState::NeedsReview);
