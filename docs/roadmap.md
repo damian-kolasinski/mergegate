@@ -28,20 +28,31 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **Implementation starts from the brief,** one session per PR of the stack. Each session updates the Stack and Open lines as it ships.
 - **The step's last PR deletes the brief** along with its row below. Decisions that still matter move into design.md or tech-stack.md first.
 
+## Running steps in parallel
+
+- **A row is a step.** Rows split into a and b (11, 12, 18) where only part of the work waits on another step; each part has its own brief (`docs/roadmap/11a-triage.md`) and its own row to delete.
+- **A step starts once every row in its After column is gone from the table,** that is, once that step's last PR has merged, and runs in its own worktree. Rows with nothing there can start any time, whatever is running.
+- **Migrations take their number when they merge.** A step renumbers its unmerged migration onto whatever `main` has, and a dev home that ran the old number is reset; a merged migration never changes.
+- **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags (13, 14, 16) and the skill's reference files (`mg events` from 10 and 14). The one that merges second rebases onto the other.
+- **Where two steps' features meet, the one that lands second adds the meeting:** stacked children in 14's early conflict detection and its inbox ordering ("items stacked on it") come from whichever of 13 and 14 merges last.
+
 ## PRs
 
-| # | PR | Delivers | Flows | Faked |
-|---|---|---|---|---|
-| 10 | External review | Polling PR comments, debounce (of wakes too), `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub |
-| 11 | File triage | `rules.toml`, guards, review/trusted tiers, `--guide` ordering, `mg rules propose/list`, approving looser rules in the UI | F11, F12 | — |
-| 12 | Re-review | Interdiffs over a moved base, viewed marks across revisions, re-mapping drafts and comments onto newer revisions, the new-revision banner | F7, F13 | — |
-| 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub |
-| 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — |
-| 15 | Highlighting | tree-sitter in WASM, language packs, `mg lang`, highlighted diffs | — | — (packs built in CI, installed with `--from`) |
-| 16 | Demo attachments | `--attach`, `mg attach`, demo panel | F4, F6 | — |
-| 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs |
-| 18 | Hooks and distribution | `on_event` hooks, full `mg doctor`, cargo-dist releases, launchd/systemd units; drop `## Stage` from AGENTS.md | F1 | — |
-| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale |
+| # | PR | Delivers | Flows | Faked | After |
+|---|---|---|---|---|---|
+| 10 | External review | Polling PR comments, debounce (of wakes too), `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub | — |
+| 11a | File triage | `rules.toml`, the rule-file guard, review/trusted tiers, `--guide` ordering, `mg rules propose/list`, approving looser rules in the UI | F11, F12 | — | — |
+| 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with 12a's interdiffs | F7, F12 | — | 10, 11a, 12a |
+| 12a | Interdiffs | Interdiffs over a moved base, viewed marks across revisions, the new-revision banner | F7, F13 | — | — |
+| 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions | F7, F13 | — | 10, 12a |
+| 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
+| 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
+| 15 | Highlighting | tree-sitter in WASM, language packs, `mg lang`, highlighted diffs | — | — (packs built in CI, installed with `--from`) | — |
+| 16 | Demo attachments | `--attach`, `mg attach`, demo panel | F4, F6 | — | — |
+| 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | 11a |
+| 18a | Distribution | Full `mg doctor`, cargo-dist releases, launchd/systemd units; drop `## Stage` from AGENTS.md | F1 | — | — |
+| 18b | Hooks | `on_event` hooks | F14 | — | 10 |
+| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale | 10 |
 
 ## Why this order
 
@@ -49,8 +60,8 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **The whole loop runs on the `local` backend before GitHub** (PRs 1–8), so it is proven against real git with nothing faked.
 - **GitHub comes right after the skill**, so mergegate's own work keeps landing as GitHub PRs, cloud bots keep reviewing, and the switch happens early.
 - **Then the design's pain points:** triage for the flat file list, re-review for cheap revision cycles, stacks for oversized work, prioritization for many open items.
-- **Polish and reach last.** PRs 15–19 stand alone and can be reordered; multi-machine waits until agents run on more than one machine.
-- **Stacked items need re-review** (PR 12): keeping viewed marks and approvals across a child's rebases relies on its interdiffs and comment re-mapping. Until PR 13 lands, agents submit the parts of a split one after another.
+- **Polish and reach come last in the list,** but 15, 16 and 18a depend on nothing, so they can run alongside the rest; multi-machine waits until agents run on more than one machine.
+- **Stacked items need re-review** (12a and 12b): keeping viewed marks and approvals across a child's rebases relies on its interdiffs and comment re-mapping. Until PR 13 lands, agents submit the parts of a split one after another.
 
 ## Switching mergegate's own reviews to mergegate
 
