@@ -122,6 +122,7 @@ Principles
 - **Approve means merge.** There's no CI to wait for, so an approval merges right away (a stacked item right after its parent, §5.1). If the merge can't happen (conflict), the item goes back to the agent with a `merge.conflict` event. If the upstream checkout is dirty (local backend), it stays in *merging* until the operator retries.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
 - Conflicts are detected early: the hub test-merges every open item whenever the target moves, and sends conflicts to the authoring agent before the operator gets to the item.
+- **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins and deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
 
 ### 5.1 Stacked items
 

@@ -33,7 +33,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | # | PR | Delivers | Flows | Faked |
 |---|---|---|---|---|
 | 6 | Feedback loop | Draft comments, submitting a review, event log (also on the UI's SSE stream), `mg wait` (cursor, exit codes 0/75/3), `mg feedback`, `mg reply`, replies in the UI | F3, F6, F7 | — |
-| 7 | Approve and merge (local) | Test-merge, push into the operator's repo, hold when the checkout is dirty, `merge.conflict`, `mg abandon`, dropping a closed item's revision pins | F8, F9, F14 | — |
+| 7 | Approve and merge (local) | Test-merge, push into the operator's repo, hold when the checkout is dirty, `merge.conflict`, `mg abandon`, dropping a closed item's revision pins and the cached diffs no open item uses | F8, F9, F14 | — |
 | 8 | Agent skill | Embedded skill, `mg skill install`, `mg resume`, `--wake`; a test that every command the skill names exists | F3, F14 | — |
 | 9 | GitHub backend | Push the branch, open and update the PR, merge through the API, switch a project's backend (listing open items in a `needs_decision`, as a target change does) | F1, F4, F8, F15 | GitHub |
 | 10 | External review | Polling PR comments, debounce, `external.comments`, agent verdicts and the operator's override in the UI | F5 | GitHub |
