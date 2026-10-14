@@ -42,6 +42,8 @@ export function useDrafts(
   const sent = (comments: Comment[]) => {
     const ids = new Set(comments.map((comment) => comment.id));
     setList((all) => all.filter((comment) => !ids.has(comment.id)));
+    const failed = failure();
+    if (failed && ids.has(failed.id)) setFailure(undefined);
   };
 
   return {

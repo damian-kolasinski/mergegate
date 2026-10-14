@@ -97,7 +97,12 @@ export function useEditor() {
 }
 
 /** The open editor, where `label` says it is. */
-export function Editor(props: { editor: CommentEditor; label: string }) {
+export function Editor(props: {
+  editor: CommentEditor;
+  label: string;
+  /** What's written: a comment unless said otherwise. */
+  noun?: string;
+}) {
   let field: HTMLTextAreaElement | undefined;
   onMount(() => field && focusOnceShown(field));
   const empty = () => !props.editor.open()?.text.trim();
@@ -115,7 +120,7 @@ export function Editor(props: { editor: CommentEditor; label: string }) {
     >
       <TextArea
         label={props.label}
-        placeholder="Comment for the agent, sent with the review (⌘↩ saves)"
+        placeholder={`${props.noun ?? "Comment"} for the agent, sent with the review (⌘↩ saves)`}
         rows={3}
         value={props.editor.open()?.text ?? ""}
         disabled={props.editor.saving()}

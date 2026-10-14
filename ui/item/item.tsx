@@ -161,6 +161,7 @@ function Review(props: { diff: ItemDiff }) {
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
           drafts={comments.drafts.list().length}
+          replies={comments.replyDrafts.list().length}
           holding={comments.editor.holding()}
           onSubmitted={reviewed}
         />

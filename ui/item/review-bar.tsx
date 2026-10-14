@@ -9,13 +9,15 @@ import styles from "./review-bar.module.css";
 
 /**
  * Sends the operator's review of one revision to its agent, with every draft
- * comment on the item. Comment leaves the item with the operator; Request
- * changes hands it back.
+ * comment and reply on the item. Comment leaves the item with the operator;
+ * Request changes hands it back.
  */
 export function ReviewBar(props: {
   item: string;
   revision: number;
   drafts: number;
+  /** Draft replies on sent comments. */
+  replies: number;
   /** A comment being written, which the review would go out without. */
   holding: boolean;
   onSubmitted: (review: Review) => void;
@@ -40,11 +42,14 @@ export function ReviewBar(props: {
       .then(
         (review) => {
           setSummary("");
-          const count = review.comments.length;
+          const parts = [
+            review.comments.length && plural(review.comments.length, "comment"),
+            review.replies.length && plural(review.replies.length, "reply"),
+          ].filter(Boolean);
           setStatus({
             text:
               `Sent to the agent on r${body.revision}` +
-              (count ? ` with ${plural(count, "comment")}` : ""),
+              (parts.length ? ` with ${parts.join(" and ")}` : ""),
             failed: false,
           });
           props.onSubmitted(review);
@@ -57,7 +62,7 @@ export function ReviewBar(props: {
       )
       .finally(() => setSending(false));
   };
-  const empty = () => !summary().trim() && !props.drafts;
+  const empty = () => !summary().trim() && !props.drafts && !props.replies;
 
   useKeys({ r: () => field?.focus() });
 
@@ -89,6 +94,9 @@ export function ReviewBar(props: {
         <Show when={props.drafts}>
           <Meta>{plural(props.drafts, "draft comment")}</Meta>
         </Show>
+        <Show when={props.replies}>
+          <Meta>{plural(props.replies, "draft reply")}</Meta>
+        </Show>
         <Show when={props.holding}>
           <Meta>Save or cancel the open comment first</Meta>
         </Show>
@@ -111,5 +119,6 @@ export function ReviewBar(props: {
 }
 
 function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+  if (count === 1) return `${count} ${noun}`;
+  return `${count} ${noun.endsWith("y") ? `${noun.slice(0, -1)}ies` : `${noun}s`}`;
 }

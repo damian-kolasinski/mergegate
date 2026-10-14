@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Commit scoped changes, review and fix them, and create or update a ready-for-review pull request (or a stack of them when the work exceeds the PR size limit) when the user asks to ship or open a PR.
+description: Commit scoped changes, review and fix them, and create or update a ready-for-review pull request (or a stack of them when the work holds parts better reviewed apart) when the user asks to ship or open a PR.
 ---
 
 # Ship
@@ -15,21 +15,19 @@ Stage only task-owned changes. Preserve user work and keep credentials and unrel
 
 Run the relevant checks (`.claude/scripts/check.sh`) if they have not already passed for these changes. Do not rebuild solely because shipping began.
 
-## Size limit
+## Size
 
-A PR changes at most 30 files against its base. Lockfiles and files generated from committed sources (such as TypeScript types generated from `api`) do not count. After staging, check with `git diff --cached --name-only $(git merge-base origin/<base> HEAD)`, so committed, staged and new files are all counted.
+Ship one PR per change, however many files it touches. The repository favors many small files, so file and line counts say little about how hard a PR is to review, and are no reason to split.
 
-If the work is over the limit, ship it as a stack of PRs instead of one:
+Ship a stack instead only when the work holds parts the operator would rather review and merge apart: each part makes sense alone and could land without the ones above it (say, a schema change several features build on), or the operator asked for a stack. When a stack is warranted:
 
 - Split along the work's own seams (layer, crate, slice), bottom-up, so each PR builds only on the PRs below it.
-- Each PR stands on its own: it builds, its checks pass, and it carries the tests for the code it adds. Do not split one change across PRs just to meet the count.
+- Each PR stands on its own: it builds, its checks pass, and it carries the tests for the code it adds. Do not split one change across PRs.
 - The bottom PR targets the base branch; each PR above targets the branch of the PR below. Name the branches `<branch>-1-<slug>`, `<branch>-2-<slug>`, and so on. If the working branch already has a PR, keep it as the top of the stack: merge the branch directly below into it and retarget its PR to that branch.
 - Before creating anything, look up existing PRs for every stack branch (`gh pr list --head <branch>`) and reuse them.
 - Review, push and publish each PR against its own base, bottom first. Then edit every body so it starts with the stack: its position, links to the other PRs, and that PRs merge bottom first with a merge commit (not squash or rebase).
 - To change a lower PR, commit to its branch, then merge each branch into the one directly above it, bottom up. Do not rebase published stack branches.
 - After a lower PR merges, delete its branch (GitHub then retargets the PR above it to the base branch) or retarget the PR above by hand. A PR whose base is still a merged stack branch lands in that branch, not the base branch, so never merge one. If shipping ends before the retargets, list them in the report.
-
-If the work has no seam that keeps every piece coherent under the limit, ship one PR and explain why in its body.
 
 ## Review
 

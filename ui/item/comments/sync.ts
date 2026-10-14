@@ -2,6 +2,7 @@ import type { ItemDiff } from "../../api/ItemDiff";
 import { getJson, onHubEvent } from "../../app/hub";
 import type { Drafts } from "./drafts";
 import type { Replies } from "./replies";
+import type { ReplyDrafts } from "./reply-drafts";
 import type { Sent } from "./sent";
 
 /**
@@ -10,7 +11,12 @@ import type { Sent } from "./sent";
  */
 export function useSync(
   item: string,
-  slices: { sent: Sent; drafts: Drafts; replies: Replies },
+  slices: {
+    sent: Sent;
+    drafts: Drafts;
+    replies: Replies;
+    replyDrafts: ReplyDrafts;
+  },
 ) {
   let asked = 0;
   const refresh = () => {
@@ -20,6 +26,7 @@ export function useSync(
         // An older answer mustn't replace a newer one.
         if (ask !== asked) return;
         slices.replies.keep(latest.replies);
+        slices.replyDrafts.sent(latest.replies);
         // Another tab may have sent drafts this one still shows. Drafts
         // themselves stay as this tab has them, saves in flight included.
         slices.sent.keep(latest.comments);

@@ -7,6 +7,7 @@ import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
 import { Editor } from "./editor";
 import { ReplyList } from "./replies";
+import { ReplyButton } from "./reply-drafts";
 import styles from "./thread.module.css";
 
 /**
@@ -90,6 +91,7 @@ function CommentCard(props: { comments: Comments; comment: Comment }) {
           </Show>
           <Meta>{linesOf(props.comment.start_line, props.comment.line)}</Meta>
           <DraftActions comments={props.comments} comment={props.comment} />
+          <ReplyButton comments={props.comments} comment={props.comment} />
         </header>
         <p class={styles.body}>{props.comment.body}</p>
         <ReplyList comments={props.comments} comment={props.comment} />
