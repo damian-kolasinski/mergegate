@@ -46,7 +46,12 @@ async fn show(
                     .files
                     .iter()
                     .map(|f| {
-                        highlight::file_highlights(store, &installed, &known.known_packs, &f.file)
+                        let hunks = match &f.content {
+                            Some(Content::Text(hunks)) => hunks.as_slice(),
+                            _ => &[],
+                        };
+                        let known = &known.known_packs;
+                        highlight::file_highlights(store, &installed, known, &f.file, hunks)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Some((diff, blocked, spans)))

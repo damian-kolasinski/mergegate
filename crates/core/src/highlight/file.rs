@@ -17,12 +17,14 @@ pub struct FileHighlights {
     pub new: Option<Highlights>,
 }
 
-/// `known` are the packs mg can name when none installed covers the file.
+/// The spans of the lines `hunks` show, as `hunk_spans` reads them. `known`
+/// are the packs mg can name when none installed covers the file.
 pub fn file_highlights(
     store: &impl HighlightStore,
     installed: &Installed,
     known: &[Pack],
     file: &ChangedFile,
+    hunks: &[Hunk],
 ) -> Result<FileHighlights, StoreError> {
     let Some((_, grammar)) = grammar_for(&file.path, &installed.packs) else {
         return Ok(FileHighlights {
@@ -30,16 +32,46 @@ pub fn file_highlights(
             ..FileHighlights::default()
         });
     };
-    let side = |blob: &Option<String>| match blob {
-        Some(blob) => store.highlights(blob, &grammar.name, &installed.version),
-        None => Ok(None),
+    let (old, new) = shown(hunks);
+    let side = |blob: &Option<String>, lines: &[u32]| match blob {
+        Some(blob) if !lines.is_empty() => {
+            store.highlight_lines(blob, &grammar.name, &installed.version, lines)
+        }
+        _ => Ok(None),
     };
     Ok(FileHighlights {
-        old: side(&file.old_blob)?,
-        new: side(&file.new_blob)?,
+        old: side(&file.old_blob, &old)?,
+        new: side(&file.new_blob, &new)?,
         grammar: Some(grammar.name.clone()),
         missing: None,
     })
+}
+
+/// The line numbers `hunks` show of each side, ascending: removed lines of
+/// the old, the others of the new.
+fn shown(hunks: &[Hunk]) -> (Vec<u32>, Vec<u32>) {
+    let (mut old, mut new) = (Vec::new(), Vec::new());
+    for hunk in hunks {
+        let (mut o, mut n) = (hunk.old_start, hunk.new_start);
+        for line in &hunk.lines {
+            match line.kind {
+                LineKind::Removed => {
+                    old.push(o);
+                    o += 1;
+                }
+                LineKind::Added => {
+                    new.push(n);
+                    n += 1;
+                }
+                LineKind::Context => {
+                    new.push(n);
+                    o += 1;
+                    n += 1;
+                }
+            }
+        }
+    }
+    (old, new)
 }
 
 /// The spans of each of `hunk`'s lines, in order: a removed line's from the

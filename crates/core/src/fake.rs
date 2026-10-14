@@ -771,6 +771,32 @@ impl HighlightStore for FakeStore {
             .cloned())
     }
 
+    fn highlight_lines(
+        &self,
+        blob: &str,
+        grammar: &str,
+        version: &str,
+        lines: &[u32],
+    ) -> Result<Option<Highlights>, StoreError> {
+        let Some(all) = self.highlights(blob, grammar, version)? else {
+            return Ok(None);
+        };
+        // As the sqlite store: none after the last wanted line.
+        let last = lines.last().copied().unwrap_or(0);
+        let numbered = (1..=last).zip(all.lines);
+        Ok(Some(Highlights {
+            lines: numbered
+                .map(|(n, spans)| {
+                    if lines.contains(&n) {
+                        spans
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .collect(),
+        }))
+    }
+
     fn has_highlights(&self, blob: &str, grammar: &str, version: &str) -> Result<bool, StoreError> {
         Ok(self.highlights(blob, grammar, version)?.is_some())
     }

@@ -42,6 +42,26 @@ fn round_trips_spans_by_blob_grammar_and_version() {
 }
 
 #[test]
+fn reads_only_the_wanted_lines() {
+    let (_dir, mut store) = store();
+    store.insert_highlights("a", "rust", "1", &spans()).unwrap();
+    let some = store.highlight_lines("a", "rust", "1", &[1, 3]).unwrap();
+    assert_eq!(
+        some,
+        Some(spans()).map(|mut h| {
+            h.lines.truncate(3);
+            h
+        })
+    );
+    let third = store
+        .highlight_lines("a", "rust", "1", &[3])
+        .unwrap()
+        .unwrap();
+    assert_eq!(third.lines, [vec![], vec![], spans().lines[2].clone()]);
+    assert_eq!(store.highlight_lines("a", "rust", "2", &[1]).unwrap(), None);
+}
+
+#[test]
 fn every_tag_round_trips() {
     let (_dir, mut store) = store();
     let all = Highlights {

@@ -12,6 +12,17 @@ pub trait HighlightStore {
         version: &str,
     ) -> Result<Option<Highlights>, StoreError>;
 
+    /// As `highlights`, with only `lines` (from 1, ascending) read: every
+    /// other line has no spans. A diff shows a few of a large blob's lines,
+    /// and reading all of them would make opening an item slow.
+    fn highlight_lines(
+        &self,
+        blob: &str,
+        grammar: &str,
+        version: &str,
+        lines: &[u32],
+    ) -> Result<Option<Highlights>, StoreError>;
+
     fn has_highlights(&self, blob: &str, grammar: &str, version: &str) -> Result<bool, StoreError>;
 
     /// Replaces an existing entry, which holds the same spans.

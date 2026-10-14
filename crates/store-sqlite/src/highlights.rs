@@ -28,6 +28,26 @@ impl HighlightStore for Store {
             .transpose()
     }
 
+    fn highlight_lines(
+        &self,
+        blob: &str,
+        grammar: &str,
+        version: &str,
+        lines: &[u32],
+    ) -> Result<Option<Highlights>, StoreError> {
+        let text: Option<String> = self
+            .conn
+            .prepare_cached(
+                "SELECT lines FROM highlights WHERE blob = ?1 AND grammar = ?2 AND version = ?3",
+            )
+            .map_err(StoreError::new)?
+            .query_row([blob, grammar, version], |row| row.get(0))
+            .optional()
+            .map_err(StoreError::new)?;
+        text.map(|text| decode_lines(&text, lines).map_err(StoreError::new))
+            .transpose()
+    }
+
     fn has_highlights(&self, blob: &str, grammar: &str, version: &str) -> Result<bool, StoreError> {
         self.conn
             .prepare_cached(
@@ -115,6 +135,31 @@ fn encode(highlights: &Highlights) -> String {
 }
 
 fn decode(text: &str) -> Result<Highlights, String> {
+    let lines = text
+        .split_terminator('\n')
+        .map(decode_line)
+        .collect::<Result<_, _>>()?;
+    Ok(Highlights { lines })
+}
+
+/// Only `wanted` (from 1, ascending) parsed, the lines before them left
+/// empty and those after left out.
+fn decode_lines(text: &str, wanted: &[u32]) -> Result<Highlights, String> {
+    let mut lines = Vec::new();
+    let mut wanted = wanted.iter().copied().peekable();
+    for (number, line) in (1..).zip(text.split_terminator('\n')) {
+        let Some(&next) = wanted.peek() else { break };
+        if next == number {
+            lines.push(decode_line(line)?);
+            while wanted.next_if_eq(&number).is_some() {}
+        } else {
+            lines.push(Vec::new());
+        }
+    }
+    Ok(Highlights { lines })
+}
+
+fn decode_line(line: &str) -> Result<Vec<Span>, String> {
     let span = |field: &str| -> Option<Span> {
         let mut parts = field.split(',');
         let span = Span {
@@ -124,15 +169,9 @@ fn decode(text: &str) -> Result<Highlights, String> {
         };
         parts.next().is_none().then_some(span)
     };
-    let lines = text
-        .split_terminator('\n')
-        .map(|line| {
-            line.split_terminator(' ')
-                .map(|field| span(field).ok_or_else(|| format!("bad span {field:?}")))
-                .collect()
-        })
-        .collect::<Result<_, _>>()?;
-    Ok(Highlights { lines })
+    line.split_terminator(' ')
+        .map(|field| span(field).ok_or_else(|| format!("bad span {field:?}")))
+        .collect()
 }
 
 #[cfg(test)]
