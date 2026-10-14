@@ -1,12 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use super::{Highlights, Pack};
+use super::{Highlights, Installed, Pack};
 
 /// The installed language packs and the engine that runs their grammars.
 /// Shared by requests and the background pass, so it takes `&self`.
 pub trait Highlighter {
-    /// By name.
-    fn packs(&self) -> Vec<Pack>;
+    /// One snapshot: spans cached under its version were computed with
+    /// exactly these packs.
+    fn installed(&self) -> Installed;
 
     /// Installs the pack at `from`, or every pack in the directory `from`,
     /// replacing other versions of each. Nothing is installed unless every

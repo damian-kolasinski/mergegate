@@ -2,8 +2,8 @@ use super::Highlights;
 use crate::item::ItemId;
 use crate::store::StoreError;
 
-/// The spans cache, keyed by blob, grammar and the version of the pack that
-/// has the grammar: a blob's spans under one grammar version never change.
+/// The spans cache, keyed by blob, grammar and the installed packs'
+/// version: a blob's spans under one grammar and version never change.
 pub trait HighlightStore {
     fn highlights(
         &self,
@@ -23,8 +23,8 @@ pub trait HighlightStore {
         highlights: &Highlights,
     ) -> Result<(), StoreError>;
 
-    /// Drops every entry whose grammar and version aren't in `installed`.
-    fn retain_highlights(&mut self, installed: &[(&str, &str)]) -> Result<(), StoreError>;
+    /// Drops every entry under another version than `version`.
+    fn retain_highlights(&mut self, version: &str) -> Result<(), StoreError>;
 
     /// Drops the entries of `id`'s blobs, in any revision, that no revision of
     /// an open item has.

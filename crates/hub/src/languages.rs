@@ -23,7 +23,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 }
 
 async fn list(State(state): State<Arc<AppState>>) -> Reply<api::lang::Packs> {
-    Ok(Json(to_api(&state.languages.packs())))
+    Ok(Json(to_api(&state.languages.installed().packs)))
 }
 
 async fn add(
@@ -65,8 +65,8 @@ async fn remove(
     Ok(Json(pack_to_api(&removed)))
 }
 
-/// Which grammar a file gets changed: open diffs refetch, and the pass
-/// highlights blobs for the new grammars and drops the removed ones' spans.
+/// The packs changed: open diffs refetch, and the pass highlights open items
+/// again and drops the spans computed with the old packs.
 fn changed(state: &AppState) {
     state.highlight.notify_one();
     state.events.send(UiEvent::HighlightsChanged);

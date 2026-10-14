@@ -40,7 +40,7 @@
         {
           "name": "elixir",
           "path": ".",
-          "extensions": ["ex", "exs", "heex"],
+          "extensions": ["ex", "exs"],
           "filenames": ["mix.lock"],
           "aliases": ["ex"],
           "highlights": ["queries/highlights.scm"],

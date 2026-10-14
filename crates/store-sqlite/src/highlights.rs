@@ -1,4 +1,4 @@
-//! The `highlights` table: each blob's spans under a grammar version.
+//! The `highlights` table: each blob's spans under a grammar and packs version.
 
 use mergegate_core::highlight::{HighlightStore, Highlights, Span, Tag};
 use mergegate_core::item::ItemId;
@@ -57,25 +57,12 @@ impl HighlightStore for Store {
         Ok(())
     }
 
-    fn retain_highlights(&mut self, installed: &[(&str, &str)]) -> Result<(), StoreError> {
-        let cached: Vec<(String, String)> = self
-            .conn
-            .prepare_cached("SELECT DISTINCT grammar, version FROM highlights")
+    fn retain_highlights(&mut self, version: &str) -> Result<(), StoreError> {
+        self.conn
+            .prepare_cached("DELETE FROM highlights WHERE version <> ?1")
             .map_err(StoreError::new)?
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .map_err(StoreError::new)?
-            .collect::<Result<_, _>>()
+            .execute([version])
             .map_err(StoreError::new)?;
-        for (grammar, version) in cached {
-            if installed.contains(&(grammar.as_str(), version.as_str())) {
-                continue;
-            }
-            self.conn
-                .prepare_cached("DELETE FROM highlights WHERE grammar = ?1 AND version = ?2")
-                .map_err(StoreError::new)?
-                .execute([&grammar, &version])
-                .map_err(StoreError::new)?;
-        }
         Ok(())
     }
 

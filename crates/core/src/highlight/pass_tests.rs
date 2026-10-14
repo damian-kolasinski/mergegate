@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::{FakeGit, FakeHighlighter, FakeStore, commit};
+use crate::fake::{FakeGit, FakeHighlighter, FakeStore, commit, installed};
 use crate::highlight::{Span, Tag};
 use crate::item::{ItemId, ItemState};
 use crate::project::ProjectName;
@@ -15,13 +15,12 @@ fn blobs(pending: &[Pending]) -> Vec<(&str, &str, &str)> {
 fn lists_both_sides_of_each_file_an_installed_grammar_covers() {
     // r1 adds src/login.rs and changes README.md; r2 adds src/r2.rs.
     let mut store = FakeStore::with_item(2);
-    let highlighter = FakeHighlighter::with(&[("rs", "1")]);
-    let pending = pending(&mut store, &highlighter.packs()).unwrap();
+    let pending = pending(&mut store, &installed(&[("rs", "1")])).unwrap();
     let r2 = format!("{}\n", commit(3));
     let login = format!("{}\n", commit(2));
     assert_eq!(
         blobs(&pending),
-        [(login.as_str(), "rs", "1"), (r2.as_str(), "rs", "1")]
+        [(login.as_str(), "rs", "rs@1"), (r2.as_str(), "rs", "rs@1")]
     );
     assert!(pending.iter().all(|p| p.project.to_string() == "app"));
 }
@@ -29,7 +28,7 @@ fn lists_both_sides_of_each_file_an_installed_grammar_covers() {
 #[test]
 fn skips_blobs_already_highlighted_and_closed_items() {
     let mut store = FakeStore::with_item(1);
-    let packs = FakeHighlighter::with(&[("rs", "1"), ("md", "1")]).packs();
+    let packs = installed(&[("rs", "1"), ("md", "1")]);
     let first = pending(&mut store, &packs).unwrap();
     assert_eq!(first.len(), 3, "README's two sides and login.rs: {first:?}");
     let done = &first[0];
@@ -44,17 +43,41 @@ fn skips_blobs_already_highlighted_and_closed_items() {
 }
 
 #[test]
-fn drops_spans_of_grammars_no_longer_installed() {
+fn drops_spans_computed_with_other_packs_installed() {
     let mut store = FakeStore::with_item(1);
     let spans = Highlights::default();
-    for (grammar, version) in [("rs", "1"), ("rs", "2"), ("md", "1")] {
+    for (grammar, version) in [("rs", "rs@1"), ("rs", "rs@2"), ("md", "rs@2,md@1")] {
         store
             .insert_highlights("b", grammar, version, &spans)
             .unwrap();
     }
-    let packs = FakeHighlighter::with(&[("rs", "2")]).packs();
-    pending(&mut store, &packs).unwrap();
-    assert_eq!(store.highlighted(), [("b".into(), "rs".into(), "2".into())]);
+    pending(&mut store, &installed(&[("rs", "2")])).unwrap();
+    assert_eq!(
+        store.highlighted(),
+        [("b".into(), "rs".into(), "rs@2".into())]
+    );
+}
+
+#[test]
+fn highlights_again_once_another_pack_is_installed() {
+    // A Markdown file's fences may now inject the new grammar.
+    let mut store = FakeStore::with_item(1);
+    let before = installed(&[("md", "1")]);
+    for done in pending(&mut store, &before).unwrap() {
+        store
+            .insert_highlights(
+                &done.blob,
+                &done.grammar,
+                &done.version,
+                &Highlights::default(),
+            )
+            .unwrap();
+    }
+    assert_eq!(pending(&mut store, &before).unwrap(), []);
+    let after = installed(&[("md", "1"), ("rs", "1")]);
+    let again = pending(&mut store, &after).unwrap();
+    assert_eq!(again.len(), 3, "README's two sides and login.rs: {again:?}");
+    assert_eq!(store.highlighted(), []);
 }
 
 #[test]

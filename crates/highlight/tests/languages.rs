@@ -24,7 +24,7 @@ fn span(start: u32, len: u32, tag: Tag) -> Span {
 }
 
 fn names(languages: &Languages) -> Vec<(String, String)> {
-    let packs = languages.packs();
+    let packs = languages.installed().packs;
     packs.into_iter().map(|p| (p.name, p.version)).collect()
 }
 
@@ -115,7 +115,7 @@ fn installs_nothing_unless_every_pack_loads() {
         "{err}"
     );
     assert!(err.to_string().contains("jsonc.wasm"), "{err}");
-    assert!(languages.packs().is_empty());
+    assert!(languages.installed().packs.is_empty());
     assert_eq!(
         fs::read_dir(dir.path()).unwrap().count(),
         0,
@@ -169,9 +169,33 @@ fn removes_a_pack() {
     assert!(languages.highlight("json", "1").is_some());
 
     assert_eq!(languages.remove("json").unwrap().name, "json");
-    assert!(languages.packs().is_empty());
+    assert!(languages.installed().packs.is_empty());
     assert_eq!(languages.highlight("json", "1"), None);
     assert!(!dir.path().join("json").exists());
+}
+
+#[test]
+fn versions_the_spans_cache_by_every_installed_archive() {
+    let dir = tempfile::tempdir().unwrap();
+    let packs = tempfile::tempdir().unwrap();
+    let languages = open(dir.path());
+    let none = languages.installed().version;
+    languages.install(Path::new(JSON)).unwrap();
+    let json = languages.installed().version;
+    assert_ne!(json, none);
+    assert_eq!(
+        open(dir.path()).installed().version,
+        json,
+        "kept across starts"
+    );
+
+    let same_version = repack(packs.path(), "json.tar.gz", |m| m);
+    languages.install(&same_version).unwrap();
+    let repacked = languages.installed().version;
+    assert_ne!(repacked, json);
+
+    languages.remove("json").unwrap();
+    assert_eq!(languages.installed().version, none);
 }
 
 #[test]
@@ -180,7 +204,7 @@ fn opening_clears_an_interrupted_install_and_skips_a_broken_pack() {
     fs::create_dir_all(dir.path().join(".incoming-1-0")).unwrap();
     fs::create_dir_all(dir.path().join("broken/1")).unwrap();
     let (languages, warnings) = Languages::open(dir.path()).unwrap();
-    assert!(languages.packs().is_empty());
+    assert!(languages.installed().packs.is_empty());
     assert!(!dir.path().join(".incoming-1-0").exists());
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].contains("broken"), "{warnings:?}");

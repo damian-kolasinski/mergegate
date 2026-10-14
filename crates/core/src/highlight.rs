@@ -14,6 +14,17 @@ pub use highlighter::{Highlighter, LangError};
 pub use pass::{MAX_BYTES, Pending, compute, pending};
 pub use store::HighlightStore;
 
+/// The installed packs, read together with the version the spans cache keys
+/// them by. Injections reach across packs, so a blob's spans under one
+/// grammar depend on every installed pack: the version changes whenever a
+/// pack is added, removed or reinstalled, or mg cuts spans differently.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Installed {
+    /// By name.
+    pub packs: Vec<Pack>,
+    pub version: String,
+}
+
 /// An installed language pack, or one mg knows how to install.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pack {

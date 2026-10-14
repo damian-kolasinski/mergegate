@@ -70,20 +70,18 @@ fn rejects_a_malformed_span() {
 }
 
 #[test]
-fn keeps_only_the_installed_grammar_versions() {
+fn keeps_only_the_spans_of_one_version() {
     let (_dir, mut store) = store();
     let none = Highlights::default();
-    for (blob, grammar, version) in [("a", "rust", "1"), ("a", "rust", "2"), ("b", "toml", "1")] {
+    for (blob, grammar, version) in [("a", "rust", "1"), ("a", "rust", "2"), ("b", "toml", "2")] {
         store
             .insert_highlights(blob, grammar, version, &none)
             .unwrap();
     }
-    store
-        .retain_highlights(&[("rust", "2"), ("json", "1")])
-        .unwrap();
+    store.retain_highlights("2").unwrap();
     assert!(!store.has_highlights("a", "rust", "1").unwrap());
     assert!(store.has_highlights("a", "rust", "2").unwrap());
-    assert!(!store.has_highlights("b", "toml", "1").unwrap());
+    assert!(store.has_highlights("b", "toml", "2").unwrap());
 }
 
 fn changed(old: Option<&str>, new: &str) -> FileStat {

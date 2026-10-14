@@ -12,7 +12,7 @@ use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
 use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
 use crate::highlight::{
-    Grammar, HighlightStore, Highlighter, Highlights, LangError, Pack, Span, Tag,
+    Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, Span, Tag,
 };
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
@@ -789,9 +789,8 @@ impl HighlightStore for FakeStore {
         Ok(())
     }
 
-    fn retain_highlights(&mut self, installed: &[(&str, &str)]) -> Result<(), StoreError> {
-        self.highlights
-            .retain(|(_, g, v), _| installed.contains(&(g.as_str(), v.as_str())));
+    fn retain_highlights(&mut self, version: &str) -> Result<(), StoreError> {
+        self.highlights.retain(|(_, _, v), _| v == version);
         Ok(())
     }
 
@@ -825,6 +824,11 @@ impl FakeHighlighter {
     }
 }
 
+/// What a `FakeHighlighter::with(names)` has installed.
+pub(crate) fn installed(names: &[(&str, &str)]) -> Installed {
+    FakeHighlighter::with(names).installed()
+}
+
 pub(crate) fn pack(name: &str, version: &str) -> Pack {
     Pack {
         name: name.into(),
@@ -839,8 +843,16 @@ pub(crate) fn pack(name: &str, version: &str) -> Pack {
 }
 
 impl Highlighter for FakeHighlighter {
-    fn packs(&self) -> Vec<Pack> {
-        self.packs.clone()
+    /// Versioned by each pack's name and version, as `rs@1,md@2`.
+    fn installed(&self) -> Installed {
+        let version = self
+            .packs
+            .iter()
+            .map(|p| format!("{}@{}", p.name, p.version));
+        Installed {
+            packs: self.packs.clone(),
+            version: version.collect::<Vec<_>>().join(","),
+        }
     }
 
     fn install(&self, from: &Path) -> Result<Vec<Pack>, LangError> {

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{HighlightStore, Highlighter, Highlights, Pack, grammar_for};
+use super::{HighlightStore, Highlighter, Highlights, Installed, grammar_for};
 use crate::diff::DiffGit;
 use crate::git::GitError;
 use crate::item::ItemStore;
@@ -24,23 +24,16 @@ pub struct Pending {
     pub version: String,
 }
 
-/// Drops the spans of grammars no longer installed, then lists the blobs of
+/// Drops the spans computed with other packs installed, then lists the blobs of
 /// every open item's newest revision that lack spans. Both sides of a file
 /// take the grammar of its new path. Files whose change isn't text are
 /// skipped: they're never shown as lines.
 pub fn pending<S: ItemStore + HighlightStore>(
     store: &mut S,
-    packs: &[Pack],
+    installed: &Installed,
 ) -> Result<Vec<Pending>, StoreError> {
-    let installed: Vec<(&str, &str)> = packs
-        .iter()
-        .flat_map(|p| {
-            p.grammars
-                .iter()
-                .map(|g| (g.name.as_str(), p.version.as_str()))
-        })
-        .collect();
-    store.retain_highlights(&installed)?;
+    let version = &installed.version;
+    store.retain_highlights(version)?;
 
     let mut seen = BTreeSet::new();
     let mut pending = Vec::new();
@@ -49,7 +42,7 @@ pub fn pending<S: ItemStore + HighlightStore>(
             if stat.additions.is_none() {
                 continue;
             }
-            let Some((pack, grammar)) = grammar_for(&stat.file.path, packs) else {
+            let Some((_, grammar)) = grammar_for(&stat.file.path, &installed.packs) else {
                 continue;
             };
             for blob in [&stat.file.old_blob, &stat.file.new_blob]
@@ -57,7 +50,7 @@ pub fn pending<S: ItemStore + HighlightStore>(
                 .flatten()
             {
                 if !seen.insert((blob.clone(), grammar.name.clone()))
-                    || store.has_highlights(blob, &grammar.name, &pack.version)?
+                    || store.has_highlights(blob, &grammar.name, version)?
                 {
                     continue;
                 }
@@ -65,7 +58,7 @@ pub fn pending<S: ItemStore + HighlightStore>(
                     project: item.id.project().clone(),
                     blob: blob.clone(),
                     grammar: grammar.name.clone(),
-                    version: pack.version.clone(),
+                    version: version.clone(),
                 });
             }
         }

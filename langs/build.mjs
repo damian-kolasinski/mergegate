@@ -11,7 +11,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -80,6 +80,12 @@ async function build(pack) {
   const manifest = { name: pack.name, version: pack.version, grammars };
   writeFileSync(join(stage, "pack.json"), JSON.stringify(manifest, null, 2) + "\n");
 
+  // `mg lang add --from DIR` refuses two archives of one pack, so the
+  // pack's older builds go.
+  const older = new RegExp(`^${pack.name}-\\d.*\\.tar\\.gz$`);
+  for (const name of readdirSync(out)) {
+    if (older.test(name)) rmSync(join(out, name));
+  }
   const file = join(out, `${pack.name}-${pack.version}.tar.gz`);
   // macOS tar otherwise adds `._*` files for extended attributes, which mg
   // refuses as unexpected entries.

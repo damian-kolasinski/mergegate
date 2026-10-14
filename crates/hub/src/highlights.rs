@@ -29,9 +29,11 @@ pub(crate) async fn run(state: Arc<AppState>) {
 }
 
 async fn pass(state: &Arc<AppState>) {
-    let packs = state.languages.packs();
+    // Spans computed after the packs change land under this, older version,
+    // and the pass that change wakes drops them.
+    let installed = state.languages.installed();
     let pending = match state
-        .blocking(move |store, _| highlight::pending(store, &packs))
+        .blocking(move |store, _| highlight::pending(store, &installed))
         .await
     {
         Ok(pending) => pending,
@@ -73,7 +75,7 @@ async fn show(
     path: Result<Path<(String, String)>, PathRejection>,
 ) -> Result<Json<api::highlight::BlobHighlights>, Failure> {
     let Path((grammar, blob)) = path?;
-    let installed = state.languages.packs();
+    let installed = state.languages.installed();
     let found = {
         let (grammar, blob) = (grammar.clone(), blob.clone());
         state

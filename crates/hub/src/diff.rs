@@ -34,7 +34,7 @@ async fn show(
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))?;
     let found = {
         let id = id.clone();
-        let installed = state.languages.packs();
+        let installed = state.languages.installed();
         let known = Arc::clone(&state);
         state
             .blocking(move |store, git| {

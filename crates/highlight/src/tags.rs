@@ -5,6 +5,8 @@
 //! `@conditional`), so both are here. A name mapped to `None` is plain text:
 //! it's here so it wins over an enclosing capture, as an `@embedded` or
 //! `@variable` inside a string does.
+//!
+//! Changing a mapping changes cached spans: bump `languages::SPANS`.
 
 use mergegate_core::highlight::Tag;
 

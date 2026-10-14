@@ -1,6 +1,6 @@
 //! Reading an item's spans with its diff: only cached spans, never computed.
 
-use super::{HighlightStore, Highlights, Pack, Span, grammar_for};
+use super::{HighlightStore, Highlights, Installed, Pack, Span, grammar_for};
 use crate::diff::{Hunk, LineKind};
 use crate::item::ChangedFile;
 use crate::store::StoreError;
@@ -20,18 +20,18 @@ pub struct FileHighlights {
 /// `known` are the packs mg can name when none installed covers the file.
 pub fn file_highlights(
     store: &impl HighlightStore,
-    installed: &[Pack],
+    installed: &Installed,
     known: &[Pack],
     file: &ChangedFile,
 ) -> Result<FileHighlights, StoreError> {
-    let Some((pack, grammar)) = grammar_for(&file.path, installed) else {
+    let Some((_, grammar)) = grammar_for(&file.path, &installed.packs) else {
         return Ok(FileHighlights {
             missing: grammar_for(&file.path, known).map(|(p, _)| p.name.clone()),
             ..FileHighlights::default()
         });
     };
     let side = |blob: &Option<String>| match blob {
-        Some(blob) => store.highlights(blob, &grammar.name, &pack.version),
+        Some(blob) => store.highlights(blob, &grammar.name, &installed.version),
         None => Ok(None),
     };
     Ok(FileHighlights {
@@ -70,17 +70,18 @@ pub fn hunk_spans<'a>(hunk: &Hunk, highlights: &'a FileHighlights) -> Vec<&'a [S
 /// The cached spans of `blob` under `grammar`, as installed now.
 pub fn blob_highlights(
     store: &impl HighlightStore,
-    installed: &[Pack],
+    installed: &Installed,
     grammar: &str,
     blob: &str,
 ) -> Result<Option<Highlights>, StoreError> {
-    let Some(pack) = installed
+    let packs = &installed.packs;
+    if !packs
         .iter()
-        .find(|p| p.grammars.iter().any(|g| g.name == grammar))
-    else {
+        .any(|p| p.grammars.iter().any(|g| g.name == grammar))
+    {
         return Ok(None);
-    };
-    store.highlights(blob, grammar, &pack.version)
+    }
+    store.highlights(blob, grammar, &installed.version)
 }
 
 #[cfg(test)]

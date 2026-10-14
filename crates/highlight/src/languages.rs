@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError, RwLock};
 
-use mergegate_core::highlight::{Highlighter, Highlights, LangError, Pack};
+use mergegate_core::highlight::{Highlighter, Highlights, Installed, LangError, Pack};
+use sha2::{Digest, Sha256};
 use tree_sitter::WasmStore;
 use tree_sitter::wasmtime::Engine as Wasm;
 
@@ -17,15 +18,26 @@ use crate::{archive, manifest, spans};
 pub struct Languages {
     dir: PathBuf,
     /// By name. Read by requests, so never held while a grammar runs.
-    installed: RwLock<Vec<Installed>>,
+    installed: RwLock<Vec<Entry>>,
     /// Taken before `installed` by whatever takes both.
     engine: Mutex<Engine>,
 }
 
-struct Installed {
+struct Entry {
     pack: Pack,
     dir: PathBuf,
+    /// The archive's SHA-256, so a pack repacked under the same version
+    /// still changes the spans cache's version.
+    digest: [u8; 32],
 }
+
+/// The archive digest kept in a pack's directory. Archives can't hold
+/// dotfiles, so it never collides with the pack's own files.
+const DIGEST: &str = ".digest";
+
+/// Bump when mg cuts spans differently (`tags.rs`, `spans.rs`), so cached
+/// spans are computed again.
+const SPANS: u32 = 1;
 
 struct Engine {
     /// Compiles grammars; any parser on the same wasm engine runs them.
@@ -42,6 +54,7 @@ struct Staged {
     incoming: Incoming,
     pack: Pack,
     loaded: Vec<Loaded>,
+    digest: [u8; 32],
 }
 
 /// A directory an install unpacks into, removed unless the install moves it
@@ -114,7 +127,7 @@ impl Languages {
         self.engine.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn installed(&self) -> std::sync::RwLockReadGuard<'_, Vec<Installed>> {
+    fn entries(&self) -> std::sync::RwLockReadGuard<'_, Vec<Entry>> {
         self.installed
             .read()
             .unwrap_or_else(PoisonError::into_inner)
@@ -126,7 +139,9 @@ impl Languages {
             path: archive.to_owned(),
             reason,
         };
+        let digest: [u8; 32] = Sha256::digest(fs::read(archive).map_err(failed)?).into();
         archive::unpack(archive, &incoming.0).map_err(invalid)?;
+        fs::write(incoming.0.join(DIGEST), digest).map_err(failed)?;
         let pack =
             manifest::parse(&archive::manifest(&incoming.0).map_err(invalid)?).map_err(invalid)?;
         let loaded = pack
@@ -140,12 +155,13 @@ impl Languages {
             incoming,
             pack,
             loaded,
+            digest,
         })
     }
 
     /// Fails unless every grammar name stays with one pack.
     fn check(&self, staged: &[Staged]) -> Result<(), LangError> {
-        let installed = self.installed();
+        let installed = self.entries();
         for (i, s) in staged.iter().enumerate() {
             if staged[..i]
                 .iter()
@@ -192,8 +208,22 @@ impl Languages {
 }
 
 impl Highlighter for Languages {
-    fn packs(&self) -> Vec<Pack> {
-        self.installed().iter().map(|i| i.pack.clone()).collect()
+    /// Versioned by every pack's archive digest and the span format.
+    fn installed(&self) -> Installed {
+        let entries = self.entries();
+        let mut hash = Sha256::new();
+        hash.update(SPANS.to_le_bytes());
+        for e in entries.iter() {
+            hash.update(e.digest);
+        }
+        let version = hash.finalize()[..16]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        Installed {
+            packs: entries.iter().map(|e| e.pack.clone()).collect(),
+            version,
+        }
     }
 
     fn install(&self, from: &Path) -> Result<Vec<Pack>, LangError> {
@@ -212,9 +242,10 @@ impl Highlighter for Languages {
         for s in staged {
             let dir = self.commit(&s).map_err(failed)?;
             installed.retain(|i| i.pack.name != s.pack.name);
-            installed.push(Installed {
+            installed.push(Entry {
                 pack: s.pack.clone(),
                 dir,
+                digest: s.digest,
             });
             if let Some(loaded) = &mut engine.loaded {
                 loaded.retain(|l| l.pack != s.pack.name);
@@ -263,7 +294,7 @@ impl Languages {
     /// A grammar that loaded when it was installed but no longer does, its
     /// files changed since, is left out: its files show as plain text.
     fn load_all(&self, loader: &mut WasmStore) -> Vec<Loaded> {
-        let installed = self.installed();
+        let installed = self.entries();
         let grammars = installed
             .iter()
             .flat_map(|i| i.pack.grammars.iter().map(move |g| (i, g)));
@@ -274,7 +305,7 @@ impl Languages {
 }
 
 /// `<dir>/<version>/`, holding the only version install leaves.
-fn open_pack(dir: &Path) -> Result<Installed, String> {
+fn open_pack(dir: &Path) -> Result<Entry, String> {
     let versions: Vec<PathBuf> = fs::read_dir(dir)
         .and_then(|entries| entries.map(|e| e.map(|e| e.path())).collect())
         .map_err(|e| e.to_string())?;
@@ -287,9 +318,14 @@ fn open_pack(dir: &Path) -> Result<Installed, String> {
     {
         return Err(format!("its pack.json is {} {}", pack.name, pack.version));
     }
-    Ok(Installed {
+    let digest = fs::read(version.join(DIGEST))
+        .ok()
+        .and_then(|d| d.try_into().ok())
+        .ok_or("no .digest; add the pack again")?;
+    Ok(Entry {
         pack,
         dir: version.clone(),
+        digest,
     })
 }
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::diff::Line;
-use crate::fake::{FakeStore, pack};
+use crate::fake::{FakeStore, installed, pack};
 use crate::highlight::Tag;
 
 fn file(path: &str) -> ChangedFile {
@@ -22,14 +22,14 @@ fn numbered(lines: u32, tag: Tag) -> Highlights {
 }
 
 #[test]
-fn reads_both_sides_under_the_installed_grammar_version() {
+fn reads_both_sides_under_the_installed_packs_version() {
     let mut store = FakeStore::default();
     let old = numbered(2, Tag::String);
-    store.insert_highlights("old", "rs", "2", &old).unwrap();
+    store.insert_highlights("old", "rs", "rs@2", &old).unwrap();
     store
-        .insert_highlights("new", "rs", "1", &numbered(2, Tag::Comment))
+        .insert_highlights("new", "rs", "rs@1", &numbered(2, Tag::Comment))
         .unwrap();
-    let found = file_highlights(&store, &[pack("rs", "2")], &[], &file("a.rs")).unwrap();
+    let found = file_highlights(&store, &installed(&[("rs", "2")]), &[], &file("a.rs")).unwrap();
     assert_eq!(found.grammar.as_deref(), Some("rs"));
     assert_eq!(found.old, Some(old));
     assert_eq!(found.new, None, "spans of another version don't count");
@@ -39,7 +39,7 @@ fn reads_both_sides_under_the_installed_grammar_version() {
 fn names_the_known_pack_for_a_file_no_installed_one_covers() {
     let store = FakeStore::default();
     let known = [pack("md", "9"), pack("rs", "9")];
-    let found = file_highlights(&store, &[pack("rs", "1")], &known, &file("a.md")).unwrap();
+    let found = file_highlights(&store, &installed(&[("rs", "1")]), &known, &file("a.md")).unwrap();
     assert_eq!(
         found,
         FileHighlights {
@@ -47,7 +47,7 @@ fn names_the_known_pack_for_a_file_no_installed_one_covers() {
             ..FileHighlights::default()
         }
     );
-    let found = file_highlights(&store, &[], &known, &file("a.txt")).unwrap();
+    let found = file_highlights(&store, &installed(&[]), &known, &file("a.txt")).unwrap();
     assert_eq!(found, FileHighlights::default());
 }
 
@@ -109,21 +109,18 @@ fn gives_lines_without_spans_none() {
 }
 
 #[test]
-fn reads_a_blobs_spans_under_the_installed_version_of_its_grammar() {
+fn reads_a_blobs_spans_under_the_installed_packs_version() {
     let mut store = FakeStore::default();
     let spans = numbered(1, Tag::Type);
-    store.insert_highlights("b", "rs", "2", &spans).unwrap();
-    let installed = [pack("rs", "2")];
+    store.insert_highlights("b", "rs", "rs@2", &spans).unwrap();
+    let now = installed(&[("rs", "2")]);
     assert_eq!(
-        blob_highlights(&store, &installed, "rs", "b").unwrap(),
+        blob_highlights(&store, &now, "rs", "b").unwrap(),
         Some(spans)
     );
+    assert_eq!(blob_highlights(&store, &now, "md", "b").unwrap(), None);
     assert_eq!(
-        blob_highlights(&store, &installed, "md", "b").unwrap(),
-        None
-    );
-    assert_eq!(
-        blob_highlights(&store, &[pack("rs", "1")], "rs", "b").unwrap(),
+        blob_highlights(&store, &installed(&[("rs", "1")]), "rs", "b").unwrap(),
         None
     );
 }

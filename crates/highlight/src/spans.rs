@@ -1,4 +1,5 @@
 //! Running a grammar over a text and cutting its highlights into lines.
+//! Cutting them differently changes cached spans: bump `languages::SPANS`.
 
 use mergegate_core::highlight::{Highlights, Span};
 use tree_sitter_highlight::{Error, HighlightConfiguration, HighlightEvent, Highlighter};
