@@ -38,6 +38,9 @@ async fn submit(
         .map_err(failure)?;
     if submitted.new_revision {
         state.events.send(UiEvent::InboxChanged);
+        state.events.send(UiEvent::ItemChanged {
+            item: submitted.item.id.to_string(),
+        });
     }
     let opened = submitted.new_revision && submitted.item.revision.number == 1;
     let status = if opened {

@@ -1,4 +1,4 @@
-use super::{Comment, CommentId, Review, Side, Verdict};
+use super::{Author, Comment, CommentId, Reply, ReplyStatus, Review, Side, Verdict};
 use crate::item::{ItemId, ItemState};
 use crate::store::StoreError;
 
@@ -20,6 +20,14 @@ pub trait ReviewStore {
 
     /// Deletes nothing once the comment was sent.
     fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError>;
+
+    /// The comment, on whichever item, draft or sent.
+    fn comment(&self, id: CommentId) -> Result<Option<Comment>, StoreError>;
+
+    fn insert_reply(&mut self, reply: NewReply) -> Result<Reply, StoreError>;
+
+    /// Every reply on `id`'s comments, oldest first.
+    fn replies(&self, id: &ItemId) -> Result<Vec<Reply>, StoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,4 +48,14 @@ pub struct NewComment {
     pub line: u32,
     pub body: String,
     pub quote: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewReply {
+    pub comment: CommentId,
+    pub item: ItemId,
+    pub author: Author,
+    pub status: Option<ReplyStatus>,
+    pub body: String,
+    pub revision: u32,
 }

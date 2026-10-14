@@ -11,6 +11,7 @@ mod home;
 mod items;
 mod lifecycle;
 mod projects;
+mod replies;
 mod reply;
 mod reviews;
 mod server;

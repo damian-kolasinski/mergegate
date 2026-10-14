@@ -8,6 +8,7 @@ mod inbox_cmd;
 mod init_cmd;
 pub mod output;
 mod project_cmd;
+mod reply_cmd;
 mod repo;
 mod submit_cmd;
 mod wait_cmd;
@@ -88,6 +89,16 @@ enum Command {
         #[arg(long)]
         since: Option<u64>,
     },
+    /// Answer a comment from the operator's review
+    Reply {
+        /// The comment, as in c_17
+        comment: String,
+        #[arg(long, value_enum)]
+        status: reply_cmd::Status,
+        /// Why, for the operator; required unless the status is addressed
+        #[arg(long)]
+        body: Option<String>,
+    },
     /// Open items: those waiting for review, with their agents, merging
     Inbox,
     /// Check that the hub, git and every project are set up to work
@@ -118,6 +129,11 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             since,
         } => wait_cmd::run(item, wake, timeout, since),
         Command::Feedback { item, since } => feedback_cmd::run(item, since),
+        Command::Reply {
+            comment,
+            status,
+            body,
+        } => reply_cmd::run(comment, status, body),
         Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),
     }

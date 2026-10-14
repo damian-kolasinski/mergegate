@@ -13,7 +13,7 @@ The operator's review reaches the authoring agent, and the agent's answers come 
 3. **Comments from older revisions** show inline only on their own revision. A Conversation list in the review header lists every comment as `path:line @rN` with its status and replies. PR 12 moves them inline onto newer revisions.
 4. **Drafts outlive a new revision** and are submitted against the revision they were written on; the event carries that revision. Re-mapping them is PR 12.
 5. **The hub keeps a delivered cursor per item.** `mg wait` and `mg feedback` return the events after it; the CLI prints them, then acknowledges them, so an event is delivered at least once. `--since CURSOR` replays from any point without acknowledging, so a replay never skips an event.
-6. **Replies are threads.** `mg reply` appends to the comment's thread and the latest status counts (`addressed`, `rejected`, `question`; a rejection needs a body). The operator answers in the UI with a draft reply that goes out with the next review, in its `review.submitted`.
+6. **Replies are threads.** `mg reply` appends to the comment's thread and the latest status counts (`addressed`, `rejected`, `question`; a rejection or a question needs a body, since an empty one gives the operator nothing to answer). The operator answers in the UI with a draft reply that goes out with the next review, in its `review.submitted`.
 7. **Events quote the commented lines**, capped at a few lines, so the agent needn't open the file to know what the comment means.
 8. **The UI's SSE stream stays a list of "changed" pings.** `item.changed {item}` joins `inbox.changed` so replies show live; the stream isn't resumable, and the UI refetches on reconnect.
 9. *(agent)* **Drafts live on the hub**, so a reload or a second tab keeps them.
@@ -29,7 +29,7 @@ The operator's review reaches the authoring agent, and the agent's answers come 
 
 - `core::review`: reviews, drafts, comments and their replies, and the `ReviewStore` port. `core::feedback`: the event log, the delivered cursor, and the `FeedbackStore` port.
 - `store-sqlite`: `0006_reviews.sql` (reviews, events, the cursor), `0007_comments.sql` (drafts and sent comments), `0008_replies.sql`.
-- `api::review`, `api::feedback`; `hub::reviews`, `hub::feedback` (long-poll), `hub::comments`.
+- `api::review`, `api::feedback`; `hub::reviews`, `hub::feedback` (long-poll), `hub::comments`, `hub::replies`.
 - `cli`: `wait_cmd`, `feedback_cmd`, `reply_cmd`.
 - UI: the review bar and comment threads in `ui/item/`, annotations in `ui/diff-view/`, `Button` and `TextArea` in the design system.
 
@@ -42,9 +42,11 @@ Each PR is a vertical slice through to the CLI or the UI; a slice too big for on
 - `feedback-3-wait`: `mg wait`, long-polling the log. *In review.*
 - `feedback-4-comments`: draft line comments on the hub, sent with the review and quoted in its event and `mg wait`. *In review.*
 - `feedback-5-comment-ui`: commenting from the diff with `c` or the gutter, editing drafts, and sent comments inline. *In review.*
-- `feedback-6-replies`: `mg reply`, the agent's replies in the diff's threads, `item.changed`. *Planned.*
-- `feedback-7-operator-replies`: the operator's draft replies, sent with the next review and printed by `mg wait`. *Planned.*
-- `feedback-8-conversation`: the Conversation list, F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*
+- `feedback-6-replies`: `mg reply`, the replies in the item's diff, `item.changed`. *In review.*
+- `feedback-6-replies-ui`: the agent's replies in the diff's threads, as they come. *Planned.*
+- `feedback-7-operator-replies`: the operator's draft replies on the hub, sent with the next review and printed by `mg wait`. *Planned.*
+- `feedback-7-operator-replies-ui`: replying from the diff's threads, and editing or deleting a draft reply. *Planned.*
+- `feedback-8-conversation`: the Conversation list and the item's comments and replies on their own route, which the item screen then refetches instead of its whole diff; F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*
 
 ## Open
 

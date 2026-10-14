@@ -2,9 +2,10 @@
 //! review sends the drafts, and its tests cover them.
 
 use mergegate_core::item::ItemId;
+use mergegate_core::project::ProjectName;
 use mergegate_core::review::{Comment, CommentId, NewComment, Side};
 use mergegate_core::store::StoreError;
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::items::NOW;
 
@@ -66,6 +67,35 @@ pub(crate) fn of_item(
         .map_err(StoreError::new)?;
     rows.map(|row| row.map_err(StoreError::new)?.into_comment(id))
         .collect()
+}
+
+/// The comment, on whichever item.
+pub(crate) fn one(conn: &Connection, id: CommentId) -> Result<Option<Comment>, StoreError> {
+    let item: Option<(String, i64)> = conn
+        .query_row(
+            "SELECT p.name, i.number FROM comments c
+             JOIN items i ON i.id = c.item_id JOIN projects p ON p.id = i.project_id
+             WHERE c.id = ?1",
+            params![id.0 as i64],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(StoreError::new)?;
+    let Some((project, number)) = item else {
+        return Ok(None);
+    };
+    let item = ItemId::new(
+        ProjectName::parse(&project).map_err(StoreError::new)?,
+        number as u64,
+    );
+    let row = conn
+        .query_row(
+            &format!("SELECT {COLUMNS} FROM comments WHERE id = ?1"),
+            params![id.0 as i64],
+            CommentRow::read,
+        )
+        .map_err(StoreError::new)?;
+    row.into_comment(&item).map(Some)
 }
 
 /// Sends `item_id`'s drafts with the review.

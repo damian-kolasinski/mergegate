@@ -13,7 +13,9 @@ use crate::item::{
     Revision, Submit, submit,
 };
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
-use crate::review::{Comment, CommentId, NewComment, NewReview, Review, ReviewStore};
+use crate::review::{
+    Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
+};
 use crate::store::StoreError;
 use crate::viewed::ViewedStore;
 
@@ -334,6 +336,8 @@ pub(crate) struct FakeStore {
     /// Comment IDs aren't reused, as the store's aren't.
     last_comment: u64,
     /// Every item's, oldest first.
+    replies: Vec<Reply>,
+    /// Every item's, oldest first.
     events: Vec<(ItemId, Event)>,
     delivered: BTreeMap<ItemId, u64>,
     clock: u32,
@@ -637,6 +641,35 @@ impl ReviewStore for FakeStore {
     fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError> {
         self.comments.retain(|c| c.id != id || c.review.is_some());
         Ok(())
+    }
+
+    fn comment(&self, id: CommentId) -> Result<Option<Comment>, StoreError> {
+        Ok(self.comments.iter().find(|c| c.id == id).cloned())
+    }
+
+    fn insert_reply(&mut self, reply: NewReply) -> Result<Reply, StoreError> {
+        let reply = Reply {
+            id: self.replies.len() as u64 + 1,
+            comment: reply.comment,
+            item: reply.item,
+            author: reply.author,
+            status: reply.status,
+            body: reply.body,
+            revision: reply.revision,
+            review: None,
+            created_at: self.now(),
+        };
+        self.replies.push(reply.clone());
+        Ok(reply)
+    }
+
+    fn replies(&self, id: &ItemId) -> Result<Vec<Reply>, StoreError> {
+        Ok(self
+            .replies
+            .iter()
+            .filter(|r| r.item == *id)
+            .cloned()
+            .collect())
     }
 }
 

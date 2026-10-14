@@ -2,13 +2,13 @@
 
 use mergegate_core::item::{ItemId, ItemState};
 use mergegate_core::review::{
-    Comment, CommentId, NewComment, NewReview, Review, ReviewStore, Verdict,
+    Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore, Verdict,
 };
 use mergegate_core::store::StoreError;
 use rusqlite::{Connection, params};
 
 use crate::items::NOW;
-use crate::{Store, comments};
+use crate::{Store, comments, replies};
 
 impl ReviewStore for Store {
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError> {
@@ -74,6 +74,18 @@ impl ReviewStore for Store {
 
     fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError> {
         comments::delete(&self.conn, id)
+    }
+
+    fn comment(&self, id: CommentId) -> Result<Option<Comment>, StoreError> {
+        comments::one(&self.conn, id)
+    }
+
+    fn insert_reply(&mut self, reply: NewReply) -> Result<Reply, StoreError> {
+        replies::insert(&self.conn, reply)
+    }
+
+    fn replies(&self, id: &ItemId) -> Result<Vec<Reply>, StoreError> {
+        replies::of_item(&self.conn, id)
     }
 }
 
