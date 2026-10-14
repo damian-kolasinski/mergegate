@@ -248,7 +248,9 @@ fn every_built_pack_loads_and_highlights() {
         }
     }
 
-    // Injections: a fenced block, inline markdown, and script in HTML.
+    // Injections: a fenced block, inline markdown, and script in HTML, each
+    // in a hub that has compiled no grammar yet.
+    let languages = open(dir.path());
     let md = languages
         .highlight("markdown", "# T\n\n```rust\nfn x() {}\n```\n")
         .unwrap();

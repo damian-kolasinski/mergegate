@@ -1,13 +1,14 @@
 //! The installed packs, one directory each under the hub's, as
 //! `<name>/<version>/`, and the engine that runs their grammars.
 
+use std::cell::RefCell;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError, RwLock};
 
-use mergegate_core::highlight::{Highlighter, Highlights, Installed, LangError, Pack};
+use mergegate_core::highlight::{Grammar, Highlighter, Highlights, Installed, LangError, Pack};
 use sha2::{Digest, Sha256};
 use tree_sitter::WasmStore;
 use tree_sitter::wasmtime::Engine as Wasm;
@@ -17,6 +18,9 @@ use crate::{archive, manifest, spans};
 
 pub struct Languages {
     dir: PathBuf,
+    /// Compiles grammars. A grammar compiled in any store on it runs in any
+    /// other, and outlives the store that compiled it.
+    wasm: Wasm,
     /// By name. Read by requests, so never held while a grammar runs.
     installed: RwLock<Vec<Entry>>,
     /// Taken before `installed` by whatever takes both.
@@ -40,20 +44,28 @@ const DIGEST: &str = ".digest";
 const SPANS: u32 = 1;
 
 struct Engine {
-    /// Compiles grammars; any parser on the same wasm engine runs them.
-    loader: WasmStore,
     highlighter: tree_sitter_highlight::Highlighter,
-    /// Every installed grammar, compiled on the first highlight rather than
-    /// when the hub starts: all of them take about half a second.
-    loaded: Option<Vec<Loaded>>,
+    /// The grammars highlighted with so far, each compiled when first
+    /// needed: all of them take half a second and over 100 MB, and a
+    /// project uses a few.
+    loaded: Vec<Loaded>,
+    /// Grammars that loaded when installed but no longer do, their files
+    /// changed since: their files show as plain text.
+    broken: Vec<String>,
 }
 
-/// A pack unpacked and compiled, not yet moved into place.
+/// An installed grammar, compiled or not.
+struct Available {
+    pack: String,
+    dir: PathBuf,
+    grammar: Grammar,
+}
+
+/// A pack unpacked and checked to compile, not yet moved into place.
 struct Staged {
     archive: PathBuf,
     incoming: Incoming,
     pack: Pack,
-    loaded: Vec<Loaded>,
     digest: [u8; 32],
 }
 
@@ -104,19 +116,20 @@ impl Languages {
         }
         installed.sort_by(|a, b| a.pack.name.cmp(&b.pack.name));
         let wasm = Wasm::default();
-        let store = || WasmStore::new(&wasm).map_err(|e| io::Error::other(e.to_string()));
+        let store = WasmStore::new(&wasm).map_err(|e| io::Error::other(e.to_string()))?;
         let mut highlighter = tree_sitter_highlight::Highlighter::new();
         highlighter
             .parser()
-            .set_wasm_store(store()?)
+            .set_wasm_store(store)
             .map_err(io::Error::other)?;
         let engine = Engine {
-            loader: store()?,
             highlighter,
-            loaded: None,
+            loaded: Vec::new(),
+            broken: Vec::new(),
         };
         let languages = Languages {
             dir: dir.to_owned(),
+            wasm,
             installed: RwLock::new(installed),
             engine: Mutex::new(engine),
         };
@@ -144,17 +157,13 @@ impl Languages {
         fs::write(incoming.0.join(DIGEST), digest).map_err(failed)?;
         let pack =
             manifest::parse(&archive::manifest(&incoming.0).map_err(invalid)?).map_err(invalid)?;
-        let loaded = pack
-            .grammars
-            .iter()
-            .map(|g| load::load(loader, &pack.name, &incoming.0, g))
-            .collect::<Result<_, _>>()
-            .map_err(invalid)?;
+        for g in &pack.grammars {
+            load::load(loader, &pack.name, &incoming.0, g).map_err(invalid)?;
+        }
         Ok(Staged {
             archive: archive.to_owned(),
             incoming,
             pack,
-            loaded,
             digest,
         })
     }
@@ -229,9 +238,12 @@ impl Highlighter for Languages {
     fn install(&self, from: &Path) -> Result<Vec<Pack>, LangError> {
         let archives = archives(from)?;
         let mut engine = self.engine();
+        // Dropped once staged, with what compiling left in it: the grammars
+        // compile again when first highlighted with.
+        let mut loader = self.store().map_err(failed)?;
         let staged = archives
             .iter()
-            .map(|a| self.stage(&mut engine.loader, a))
+            .map(|a| self.stage(&mut loader, a))
             .collect::<Result<Vec<_>, _>>()?;
         self.check(&staged)?;
         let mut installed = self
@@ -247,12 +259,10 @@ impl Highlighter for Languages {
                 dir,
                 digest: s.digest,
             });
-            if let Some(loaded) = &mut engine.loaded {
-                loaded.retain(|l| l.pack != s.pack.name);
-                loaded.extend(s.loaded);
-            }
+            engine.loaded.retain(|l| l.pack != s.pack.name);
             packs.push(s.pack);
         }
+        engine.broken.clear();
         installed.sort_by(|a, b| a.pack.name.cmp(&b.pack.name));
         Ok(packs)
     }
@@ -268,39 +278,92 @@ impl Highlighter for Languages {
             .position(|i| i.pack.name == name)
             .ok_or_else(|| LangError::NotInstalled(name.into()))?;
         fs::remove_dir_all(self.dir.join(name)).map_err(failed)?;
-        if let Some(loaded) = &mut engine.loaded {
-            loaded.retain(|l| l.pack != name);
-        }
+        engine.loaded.retain(|l| l.pack != name);
+        engine.broken.clear();
         Ok(installed.remove(index).pack)
     }
 
+    /// Run again while it names injected grammars not yet compiled: each
+    /// run compiles or finds broken those the last named, or, when it
+    /// can't (no wasm store), names them again and stops.
     fn highlight(&self, grammar: &str, text: &str) -> Option<Highlights> {
         let mut engine = self.engine();
         let Engine {
-            loader,
             highlighter,
             loaded,
+            broken,
         } = &mut *engine;
-        let loaded: &[Loaded] = loaded.get_or_insert_with(|| self.load_all(loader));
-        let config = &loaded.iter().find(|l| l.grammar.name == grammar)?.config;
-        spans::highlight(highlighter, config, text, |name| {
-            load::injected(loaded, name)
-        })
-        .ok()
+        let available = self.available();
+        let mut missing = vec![grammar.to_owned()];
+        loop {
+            self.load(&available, loaded, broken, &missing);
+            let config = &loaded.iter().find(|l| l.grammar.name == grammar)?.config;
+            let found = RefCell::new(Vec::new());
+            // Named among every installed grammar, not only those compiled,
+            // so an injection's grammar doesn't hang on which ran first.
+            let inject = |name: &str| {
+                let g = load::named(available.iter().map(|a| &a.grammar), name)?;
+                let l = loaded.iter().find(|l| l.grammar.name == g.name);
+                if l.is_none() && !broken.contains(&g.name) {
+                    found.borrow_mut().push(g.name.clone());
+                }
+                l.map(|l| &l.config)
+            };
+            let spans = spans::highlight(highlighter, config, text, inject).ok();
+            let named = found.into_inner();
+            if named.is_empty() || named == missing {
+                return spans;
+            }
+            missing = named;
+        }
     }
 }
 
 impl Languages {
-    /// A grammar that loaded when it was installed but no longer does, its
-    /// files changed since, is left out: its files show as plain text.
-    fn load_all(&self, loader: &mut WasmStore) -> Vec<Loaded> {
+    fn store(&self) -> io::Result<WasmStore> {
+        WasmStore::new(&self.wasm).map_err(|e| io::Error::other(e.to_string()))
+    }
+
+    /// Copied, as `installed` is never held while a grammar runs.
+    fn available(&self) -> Vec<Available> {
         let installed = self.entries();
         let grammars = installed
             .iter()
             .flat_map(|i| i.pack.grammars.iter().map(move |g| (i, g)));
         grammars
-            .filter_map(|(i, g)| load::load(loader, &i.pack.name, &i.dir, g).ok())
+            .map(|(i, g)| Available {
+                pack: i.pack.name.clone(),
+                dir: i.dir.clone(),
+                grammar: g.clone(),
+            })
             .collect()
+    }
+
+    /// Compiles each of `names` not yet compiled or found broken.
+    fn load(
+        &self,
+        available: &[Available],
+        loaded: &mut Vec<Loaded>,
+        broken: &mut Vec<String>,
+        names: &[String],
+    ) {
+        let new: Vec<&Available> = available
+            .iter()
+            .filter(|a| names.contains(&a.grammar.name))
+            .filter(|a| !broken.contains(&a.grammar.name))
+            .filter(|a| !loaded.iter().any(|l| l.grammar.name == a.grammar.name))
+            .collect();
+        if new.is_empty() {
+            return;
+        }
+        // What compiling leaves in the store is dropped with it.
+        let Ok(mut store) = self.store() else { return };
+        for a in new {
+            match load::load(&mut store, &a.pack, &a.dir, &a.grammar) {
+                Ok(l) => loaded.push(l),
+                Err(_) => broken.push(a.grammar.name.clone()),
+            }
+        }
     }
 }
 

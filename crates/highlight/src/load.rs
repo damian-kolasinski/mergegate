@@ -53,14 +53,12 @@ pub(crate) fn load(
 
 /// The grammar an injection names: by grammar name, alias, then extension,
 /// as a Markdown fence may say `rust`, `rs` or `sh`.
-pub(crate) fn injected<'a>(loaded: &'a [Loaded], name: &str) -> Option<&'a HighlightConfiguration> {
+pub(crate) fn named<'a>(
+    grammars: impl Iterator<Item = &'a Grammar> + Clone,
+    name: &str,
+) -> Option<&'a Grammar> {
     let name = name.trim().to_ascii_lowercase();
-    let find = |matches: &dyn Fn(&Grammar) -> bool| {
-        loaded
-            .iter()
-            .find(|l| matches(&l.grammar))
-            .map(|l| &l.config)
-    };
+    let find = |matches: &dyn Fn(&Grammar) -> bool| grammars.clone().find(|g| matches(g));
     find(&|g| g.name == name)
         .or_else(|| find(&|g| g.aliases.iter().any(|a| a.eq_ignore_ascii_case(&name))))
         .or_else(|| find(&|g| g.extensions.iter().any(|e| e.eq_ignore_ascii_case(&name))))
