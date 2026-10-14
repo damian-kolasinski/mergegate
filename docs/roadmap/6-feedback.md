@@ -43,7 +43,7 @@ Each PR is a vertical slice through to the CLI or the UI; a slice too big for on
 - `feedback-4-comments`: draft line comments on the hub, sent with the review and quoted in its event and `mg wait`. *In review.*
 - `feedback-5-comment-ui`: commenting from the diff with `c` or the gutter, editing drafts, and sent comments inline. *In review.*
 - `feedback-6-replies`: `mg reply`, the replies in the item's diff, `item.changed`. *In review.*
-- `feedback-6-replies-ui`: the agent's replies in the diff's threads, as they come. *Planned.*
+- `feedback-6-replies-ui`: the agent's replies in the diff's threads, as they come. *In review.*
 - `feedback-7-operator-replies`: the operator's draft replies on the hub, sent with the next review and printed by `mg wait`. *Planned.*
 - `feedback-7-operator-replies-ui`: replying from the diff's threads, and editing or deleting a draft reply. *Planned.*
 - `feedback-8-conversation`: the Conversation list and the item's comments and replies on their own route, which the item screen then refetches instead of its whole diff; F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*

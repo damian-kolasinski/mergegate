@@ -12,6 +12,8 @@ import type { Comments } from "./comments";
 import type { CommentEditor } from "./editor";
 import styles from "./drafts.module.css";
 
+export type Drafts = ReturnType<typeof useDrafts>;
+
 /**
  * The operator's draft comments on every revision, which stay on the hub
  * until a review sends them all.
@@ -36,6 +38,11 @@ export function useDrafts(
   const isDraft = (comment: Comment) =>
     list().some((other) => other.id === comment.id);
   const editKey = (comment: Comment) => `edit ${comment.id}`;
+  /** Drafts that went out, from this tab or another. */
+  const sent = (comments: Comment[]) => {
+    const ids = new Set(comments.map((comment) => comment.id));
+    setList((all) => all.filter((comment) => !ids.has(comment.id)));
+  };
 
   return {
     list,
@@ -105,10 +112,11 @@ export function useDrafts(
         )
         .finally(() => setDeleting(undefined));
     },
+    sent,
     /** A review sent every draft the hub had for the item. */
     submitted(review: Review) {
-      const ids = new Set(review.comments.map((comment) => comment.id));
-      setList((all) => all.filter((comment) => !ids.has(comment.id)));
+      sent(review.comments);
+      // The review waited for every editor to be empty.
       for (const comment of review.comments) editor.close(editKey(comment));
     },
   };

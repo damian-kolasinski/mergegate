@@ -65,7 +65,8 @@ async function send(path: string, init: RequestInit): Promise<unknown> {
   return body;
 }
 
-type Listener = () => void;
+/** `event` is undefined on a (re)connect, which may have missed any. */
+type Listener = (event?: UiEvent) => void;
 
 const listeners = new Map<UiEvent["type"], Set<Listener>>();
 let source: EventSource | undefined;
@@ -75,15 +76,20 @@ let source: EventSource | undefined;
  * calling component lives. It also runs on every (re)connect: events sent
  * while the stream was down are lost, so the page refetches instead.
  */
-export function onHubEvent(type: UiEvent["type"], listener: Listener): void {
+export function onHubEvent<T extends UiEvent["type"]>(
+  type: T,
+  listener: (event?: Extract<UiEvent, { type: T }>) => void,
+): void {
   let forType = listeners.get(type);
   if (!forType) {
     forType = new Set();
     listeners.set(type, forType);
   }
-  forType.add(listener);
+  // Only events of `type` reach it.
+  const any = listener as Listener;
+  forType.add(any);
   const added = forType;
-  onCleanup(() => added.delete(listener));
+  onCleanup(() => added.delete(any));
   connect();
 }
 
@@ -105,7 +111,7 @@ function connect() {
   source = new EventSource("/api/events/ui");
   source.onmessage = (message: MessageEvent<string>) => {
     const event = JSON.parse(message.data) as UiEvent;
-    for (const listener of listeners.get(event.type) ?? []) listener();
+    for (const listener of listeners.get(event.type) ?? []) listener(event);
   };
   source.onopen = () => {
     for (const forType of listeners.values()) {
