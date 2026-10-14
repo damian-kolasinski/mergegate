@@ -52,6 +52,7 @@ impl Hub {
             target: "main".into(),
             upstream: self.repo.root().to_owned(),
             github: None,
+            bots: Vec::new(),
         }
     }
 

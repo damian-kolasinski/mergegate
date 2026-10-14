@@ -36,7 +36,7 @@ pub fn resume<S: ItemStore + ReviewStore + FeedbackStore + AgentStore>(
         .rev()
         .find_map(|event| match event.kind {
             EventKind::ReviewSubmitted(review) => Some(review),
-            EventKind::Notice(_) => None,
+            EventKind::Notice(_) | EventKind::ExternalComments(_) | EventKind::Override(_) => None,
         });
     let conversation = read_conversation(store, id, item.revision.number)?;
     let agent = store.agent(id)?;

@@ -132,3 +132,97 @@ fn a_migration_that_breaks_a_foreign_key_fails() {
         .unwrap();
     assert_eq!(left, 1);
 }
+
+#[test]
+fn schema_1_data_survives_the_external_review_rebuilds() {
+    use mergegate_core::feedback::{EventKind, FeedbackStore, Notice, NoticeKind, Source};
+    use mergegate_core::item::{ItemId, ItemState};
+    use mergegate_core::review::{
+        Author, CommentId, NewComment, NewReply, ReplyStatus, ReviewStore, Side,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("hub.db");
+    drop(open_with(&db, &MIGRATIONS[..1]).unwrap());
+    let (head, base, at) = ("a".repeat(40), "0".repeat(40), "2026-01-01T00:00:00.000Z");
+    // Each table's newest row is deleted, so its sequence is ahead of its
+    // rows and must carry over.
+    Connection::open(&db)
+        .unwrap()
+        .execute_batch(&format!(
+            "INSERT INTO projects (id, name, backend, target, upstream)
+                 VALUES (1, 'app', 'local', 'main', '/src/app');
+             INSERT INTO items (id, project_id, number, branch, title, state, backend, target,
+                                created_at)
+                 VALUES (1, 1, 1, 'work', 'Work', 'changes_requested', 'local', 'main', '{at}');
+             INSERT INTO revisions (item_id, number, head, base, files, additions, deletions,
+                                    submitted_at)
+                 VALUES (1, 1, '{head}', '{base}', 0, 0, 0, '{at}');
+             INSERT INTO reviews (id, item_id, revision, verdict, summary, submitted_at)
+                 VALUES (1, 1, 1, 'changes_requested', 'Fix it', '{at}');
+             INSERT INTO comments (item_id, revision, review_id, path, side, start_line, line,
+                                   body, quote, created_at)
+                 VALUES (1, 1, 1, 'a.rs', 'new', 1, 2, 'Leaks', 'fn a() {{}}', '{at}'),
+                        (1, 1, NULL, 'a.rs', 'new', 1, 1, 'Gone', 'fn a() {{', '{at}');
+             DELETE FROM comments WHERE id = 2;
+             INSERT INTO replies (comment_id, author, status, revision, body, created_at)
+                 VALUES (1, 'agent', 'rejected', 1, 'It is closed', '{at}'),
+                        (1, 'operator', NULL, 1, 'Gone', '{at}');
+             DELETE FROM replies WHERE id = 2;
+             INSERT INTO events (item_id, type, revision, source, review_id)
+                 VALUES (1, 'review.submitted', 1, 'operator', 1);
+             INSERT INTO events (item_id, type, revision, source, body)
+                 VALUES (1, 'merge.held', 1, 'operator', 'Gone');
+             DELETE FROM events WHERE cursor = 2;"
+        ))
+        .unwrap();
+
+    let mut store = Store::open(&db).unwrap();
+    let app = ItemId::parse("app#1").unwrap();
+    let comments = store.comments(&app).unwrap();
+    assert_eq!(comments.len(), 1);
+    let anchor = comments[0].anchor.as_ref().unwrap();
+    assert_eq!((anchor.side, anchor.line), (Side::New, 2));
+    assert_eq!(comments[0].review, Some(1));
+    assert_eq!(comments[0].external, None);
+    let replies = store.replies(&app).unwrap();
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].status, Some(ReplyStatus::Rejected));
+    assert!(!replies[0].overrides);
+    let events = store.events(&app, 0).unwrap();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(&events[0].kind, EventKind::ReviewSubmitted(r) if r.comments == comments));
+
+    // IDs a deleted row had aren't given out again.
+    let draft = NewComment {
+        item: app.clone(),
+        revision: 1,
+        path: "a.rs".into(),
+        side: Side::New,
+        start_line: 1,
+        line: 1,
+        body: "Again".into(),
+        quote: "fn a() {".into(),
+    };
+    assert_eq!(store.insert_draft(draft).unwrap().id, CommentId(3));
+    let reply = NewReply {
+        comment: CommentId(1),
+        item: app.clone(),
+        author: Author::Operator,
+        status: None,
+        body: "Why?".into(),
+        revision: 1,
+    };
+    assert_eq!(store.insert_reply(reply).unwrap().id, 3);
+    let held = Notice {
+        revision: 1,
+        source: Source::Operator,
+        kind: NoticeKind::MergeHeld {
+            reason: "Wait".into(),
+        },
+    };
+    let event = store
+        .notify(&app, ItemState::ChangesRequested, held)
+        .unwrap();
+    assert_eq!(event.cursor, 3);
+}

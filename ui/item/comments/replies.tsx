@@ -79,6 +79,9 @@ function ReplyEntry(props: { comments: Comments; reply: Reply }) {
       >
         <header class={styles.meta}>
           <Meta>{props.reply.author === "agent" ? "Agent" : "You"}</Meta>
+          <Show when={props.reply.overrides}>
+            <Badge tone="brand">Override</Badge>
+          </Show>
           <Show when={props.comments.replyDrafts.isDraft(props.reply)}>
             <Badge tone="warning">Draft</Badge>
             <DraftReplyActions comments={props.comments} reply={props.reply} />

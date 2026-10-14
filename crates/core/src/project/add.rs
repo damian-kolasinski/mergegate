@@ -89,6 +89,7 @@ pub fn add(
         target,
         upstream: repo.root,
         github: github_repo,
+        bots: Vec::new(),
     };
     let upstream = fetch_from(&project, backend, github)?;
     git.sync_staging(&project.name, &upstream, &project.target)?;

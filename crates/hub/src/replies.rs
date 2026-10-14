@@ -99,6 +99,7 @@ pub(crate) fn to_api(reply: &Reply, newest: u32) -> api::review::Reply {
         }),
         body: reply.body.clone(),
         addressed_in: reply.addressed_in(newest),
+        overrides: reply.overrides,
         created_at: reply.created_at.clone(),
     }
 }

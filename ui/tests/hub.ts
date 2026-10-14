@@ -140,7 +140,8 @@ export const test = base.extend<{
   github: async ({}, use) => {
     const github = await FakeGithub.start();
     try {
-      const hub = new Hub(github.env);
+      // Polled often, so comments posted there show up while a test waits.
+      const hub = new Hub({ ...github.env, MG_GITHUB_POLL_MS: "200" });
       try {
         await use({ hub, github });
       } finally {

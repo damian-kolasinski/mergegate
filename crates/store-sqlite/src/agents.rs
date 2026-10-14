@@ -58,7 +58,7 @@ impl AgentStore for Store {
                  JOIN items i ON i.id = a.item_id
                  JOIN projects p ON p.id = i.project_id
                  JOIN (SELECT item_id, max(cursor) AS cursor FROM events
-                       WHERE source = 'operator' GROUP BY item_id) e
+                       WHERE source <> 'agent' GROUP BY item_id) e
                      ON e.item_id = a.item_id
                  WHERE a.wake IS NOT NULL AND e.cursor > max(i.delivered, a.woken)
                  ORDER BY a.item_id",

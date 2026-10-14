@@ -18,6 +18,7 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     let git = FakeGit::default()

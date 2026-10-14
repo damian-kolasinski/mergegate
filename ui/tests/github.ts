@@ -45,6 +45,36 @@ export class FakeGithub {
     git(dir, "clone", "--quiet", "--bare", dir, path);
   }
 
+  /**
+   * Comments on pull request `pull` of `acme/app` as `login`, which is a
+   * bot's when it ends in `[bot]`; with `path` and `line`, on those lines of
+   * the branch's head. Its ID on GitHub.
+   */
+  async comment(
+    pull: number,
+    comment: {
+      login: string;
+      body: string;
+      kind?: "issue" | "inline" | "review";
+      path?: string;
+      line?: number;
+    },
+  ): Promise<number> {
+    const response = await fetch(`${this.web}/_fake/comments`, {
+      method: "POST",
+      body: JSON.stringify({
+        repo: "acme/app",
+        pull,
+        kind: comment.kind ?? (comment.line ? "inline" : "issue"),
+        bot: comment.login.endsWith("[bot]"),
+        ...comment,
+      }),
+    });
+    if (!response.ok)
+      throw new Error(`fake-github answered ${response.status}`);
+    return ((await response.json()) as { id: number }).id;
+  }
+
   stop() {
     // Closing stdin is how it's told to stop.
     this.process.stdin?.end();

@@ -17,6 +17,7 @@ import { MergeBlocked } from "./merge-blocked";
 import styles from "./item.module.css";
 import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
+import { SyncGithub } from "./sync-github";
 import { useViewed } from "./viewed";
 
 /**
@@ -191,6 +192,9 @@ function Review(props: {
               toggle = element;
             }}
           />
+          <Show when={props.diff.item.backend === "github"}>
+            <SyncGithub item={props.diff.item.id} />
+          </Show>
           <Show when={open(state())}>
             <Abandon
               item={props.diff.item.id}

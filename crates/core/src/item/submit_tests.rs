@@ -12,6 +12,7 @@ fn project(name: &str, upstream: &str, target: &str) -> Project {
         target: target.into(),
         upstream: upstream.into(),
         github: None,
+        bots: Vec::new(),
     }
 }
 

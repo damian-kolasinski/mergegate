@@ -12,10 +12,11 @@ mod reply;
 mod store;
 mod submit;
 
-pub use comment::{Comment, CommentId, QUOTE_LINES, Side};
+pub use comment::{Anchor, Comment, CommentId, QUOTE_LINES, Side};
 pub(crate) use conversation::read as read_conversation;
 pub use conversation::{Conversation, conversation};
 pub use draft::{DraftError, QUOTE_LINE_CHARS, WriteDraft, delete_draft, edit_draft, write_draft};
+pub(crate) use draft::{quote, shown};
 pub use draft_reply::{DraftReplyError, delete_draft_reply, edit_draft_reply, write_draft_reply};
 pub use error::ReviewError;
 pub use open::{Thread, open_threads};
@@ -69,7 +70,7 @@ impl Verdict {
 
 /// Reviews and drafts are taken while the item is with the operator or its
 /// agent.
-fn reviewable(item: &Item) -> Result<(), ReviewError> {
+pub(crate) fn reviewable(item: &Item) -> Result<(), ReviewError> {
     match item.state {
         ItemState::NeedsReview | ItemState::ChangesRequested => Ok(()),
         ItemState::Merging => Err(ReviewError::Merging(item.id.clone())),

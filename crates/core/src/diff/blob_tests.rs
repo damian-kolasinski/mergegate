@@ -12,6 +12,7 @@ fn reads_a_blob_of_a_known_project_only() {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     let git = FakeGit::default();

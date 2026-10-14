@@ -2,8 +2,12 @@ import type { Comment } from "../../api/Comment";
 import type { Side } from "../../api/Side";
 import type { Spot } from "../../diff-view/diff-view";
 
-/** Where the diff shows a comment: under its last line. */
-export function spotOf(comment: Comment): Spot {
+/**
+ * Where the diff shows a comment: under its last line. One from GitHub on
+ * lines no revision's diff shows, or on no file, has no place there.
+ */
+export function spotOf(comment: Comment): Spot | undefined {
+  if (comment.path === null || comment.line === null) return undefined;
   return {
     path: comment.path,
     side: comment.side === "old" ? "deletions" : "additions",

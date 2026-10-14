@@ -1,6 +1,8 @@
 use mergegate_backend_github::GithubClient;
-use mergegate_core::github::{Github, GithubError, GithubRepo, Pull};
-use testkit::{FakeGithub, GithubPullState, TestRepo, git};
+use mergegate_core::github::{
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullLines,
+};
+use testkit::{FakeGithub, GithubNewComment, GithubPullState, TestRepo, git};
 
 /// GitHub with `acme/app`, whose `login` branch adds `login.rs` on `main`.
 fn setup() -> (FakeGithub, GithubClient, TestRepo) {
@@ -194,4 +196,142 @@ fn git_reaches_the_repository_with_the_remote() {
         ],
     );
     assert!(refs.starts_with(&repo.rev("login")), "{refs}");
+}
+
+/// Pull request 1, `login` into `main`.
+fn with_pull() -> (FakeGithub, GithubClient, TestRepo) {
+    let (github, client, repo) = setup();
+    client
+        .open_pull(&acme(), "login", "main", "Add login")
+        .unwrap();
+    (github, client, repo)
+}
+
+#[test]
+fn reads_who_is_signed_in_once() {
+    let (github, client, _repo) = setup();
+    assert_eq!(client.viewer().unwrap(), "operator");
+    github.set_viewer("someone");
+    assert_eq!(client.viewer().unwrap(), "operator");
+    let asked = github
+        .requests()
+        .iter()
+        .filter(|r| *r == "GET /api/user")
+        .count();
+    assert_eq!(asked, 1);
+}
+
+#[test]
+fn lists_every_kind_of_comment_on_a_pull_request() {
+    let (github, client, _repo) = with_pull();
+    let head = github.rev("acme/app", "login").unwrap();
+    let inline = GithubNewComment::inline("codex[bot]", "Leaks", "login.rs", None, 1);
+    let inline = github.comment("acme/app", 1, inline);
+    let issue = github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?"));
+    let review = github.comment("acme/app", 1, GithubNewComment::review("ana", "Close"));
+
+    let comments = client.pull_comments(&acme(), 1, false).unwrap();
+    let page = format!("{}/acme/app/pull/1", github.web_url());
+    let expected = vec![
+        PullComment {
+            kind: PullCommentKind::ReviewComment,
+            id: inline,
+            login: "codex[bot]".into(),
+            bot: true,
+            url: format!("{page}#discussion_r{inline}"),
+            body: "Leaks".into(),
+            lines: Some(PullLines {
+                path: "login.rs".into(),
+                old_side: false,
+                original_commit: head.clone(),
+                original_start_line: None,
+                original_line: Some(1),
+                commit: head.clone(),
+                start_line: None,
+                line: Some(1),
+            }),
+        },
+        PullComment {
+            kind: PullCommentKind::IssueComment,
+            id: issue,
+            login: "ana".into(),
+            bot: false,
+            url: format!("{page}#issuecomment-{issue}"),
+            body: "Why?".into(),
+            lines: None,
+        },
+        PullComment {
+            kind: PullCommentKind::Review,
+            id: review,
+            login: "ana".into(),
+            bot: false,
+            url: format!("{page}#pullrequestreview-{review}"),
+            body: "Close".into(),
+            lines: None,
+        },
+    ];
+    assert_eq!(comments, expected);
+
+    // A push outdates the inline comment: it keeps where it was written.
+    github.git("acme/app", ["update-ref", "refs/heads/login", "main"]);
+    let comments = client.pull_comments(&acme(), 1, false).unwrap();
+    let lines = comments[0].lines.clone().unwrap();
+    assert_eq!(
+        (lines.original_commit, lines.original_line, lines.line),
+        (head, Some(1), None)
+    );
+}
+
+#[test]
+fn asks_again_with_the_etag_unless_fresh() {
+    let (github, client, _repo) = with_pull();
+    let id = github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?"));
+    let first = client.pull_comments(&acme(), 1, false).unwrap();
+    assert_eq!(github.not_modified(), 0);
+
+    assert_eq!(client.pull_comments(&acme(), 1, false).unwrap(), first);
+    assert_eq!(github.not_modified(), 3);
+
+    // A fresh read sends no ETag.
+    assert_eq!(client.pull_comments(&acme(), 1, true).unwrap(), first);
+    assert_eq!(github.not_modified(), 3);
+
+    github.edit_comment(id, "Why not?");
+    let edited = client.pull_comments(&acme(), 1, false).unwrap();
+    assert_eq!(edited[0].body, "Why not?");
+    assert_eq!(github.not_modified(), 5);
+}
+
+#[test]
+fn follows_the_pages_of_a_long_list() {
+    let (github, client, _repo) = with_pull();
+    github.page_size(2);
+    for n in 0..5 {
+        github.comment(
+            "acme/app",
+            1,
+            GithubNewComment::issue("ana", &format!("{n}")),
+        );
+    }
+    let bodies = |comments: Vec<PullComment>| -> Vec<String> {
+        comments.into_iter().map(|c| c.body).collect()
+    };
+    let all = ["0", "1", "2", "3", "4"];
+    assert_eq!(
+        bodies(client.pull_comments(&acme(), 1, false).unwrap()),
+        all
+    );
+    // A later page's change wouldn't show in the first's ETag, so a list
+    // of pages is read whole every time.
+    github.edit_comment(5, "Last");
+    let again = bodies(client.pull_comments(&acme(), 1, false).unwrap());
+    assert_eq!(again, ["0", "1", "2", "3", "Last"]);
+    assert_eq!(github.not_modified(), 2);
+}
+
+#[test]
+fn comments_on_a_missing_pull_request_are_an_error() {
+    let (_github, client, _repo) = setup();
+    let err = client.pull_comments(&acme(), 9, false).unwrap_err();
+    assert!(matches!(err, GithubError::Failed(_)), "{err:?}");
 }

@@ -100,6 +100,7 @@ fn an_addressed_reply_is_addressed_in_the_next_revision() {
         body: String::new(),
         revision: 2,
         review: None,
+        overrides: false,
         created_at: String::new(),
     };
     assert_eq!(addressed.addressed_in(2), None);

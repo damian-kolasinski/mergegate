@@ -36,7 +36,8 @@ export function Conversation(props: {
 
 /**
  * Every comment on the item as `path:line @rN` with where the agent left it.
- * The diff shows only its own revision's, so the rest are answered here.
+ * The diff shows only its own revision's on lines it has, so the rest are
+ * answered here.
  */
 function ConversationList(props: {
   comments: Comments;
@@ -73,7 +74,7 @@ function Entry(props: {
   comment: Comment;
   onShow: () => void;
 }) {
-  const inDiff = () => props.comment.revision === props.comments.revision;
+  const inDiff = () => props.comments.threads.inDiff(props.comment);
   const replies = () => props.comments.thread(props.comment).length;
   return (
     <li class={styles.entry} aria-label={props.comment.id}>
@@ -87,7 +88,14 @@ function Entry(props: {
             <Show when={inDiff()}>
               <Show
                 when={props.comments.drafts.isDraft(props.comment)}
-                fallback={<Badge tone="success">Sent</Badge>}
+                fallback={
+                  <Show
+                    when={props.comment.external?.pending}
+                    fallback={<Badge tone="success">Sent</Badge>}
+                  >
+                    <Badge tone="warning">Held</Badge>
+                  </Show>
+                }
               >
                 <Badge tone="warning">Draft</Badge>
               </Show>
@@ -131,11 +139,19 @@ function Entry(props: {
   );
 }
 
+/**
+ * A comment from GitHub on lines no revision's diff shows names only its
+ * file, and one on no file the pull request.
+ */
 function whereOf(comment: Comment): string {
+  const at = ` @r${comment.revision}`;
+  if (comment.path === null || comment.line === null) {
+    return (comment.external?.path ?? "Pull request") + at;
+  }
   const lines =
     comment.start_line === comment.line
       ? `${comment.line}`
       : `${comment.start_line}–${comment.line}`;
   const side = comment.side === "old" ? " (old)" : "";
-  return `${comment.path}:${lines}${side} @r${comment.revision}`;
+  return `${comment.path}:${lines}${side}${at}`;
 }

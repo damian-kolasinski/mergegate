@@ -6,6 +6,7 @@ import { linesOf, sameSpot, spotOf } from "./anchor";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
 import { Editor } from "./editor";
+import { ExternalMeta, OverrideEditor, RejectionActions } from "./external";
 import { ReplyList } from "./replies";
 import { ReplyButton } from "./reply-drafts";
 import styles from "./thread.module.css";
@@ -27,12 +28,12 @@ export function useThreads(
       (a, b) => numberOf(a) - numberOf(b),
     ),
   );
-  const shown = createMemo(() =>
-    all().filter((comment) => comment.revision === revision),
-  );
+  const inDiff = (comment: Comment) =>
+    comment.revision === revision && spotOf(comment) !== undefined;
+  const shown = createMemo(() => all().filter(inDiff));
   /** The lines that hold a thread, for the diff to make room under. */
   const spots = createMemo(() => {
-    const spots = shown().map(spotOf);
+    const spots = shown().flatMap((comment) => spotOf(comment) ?? []);
     const composing = lists.composing();
     if (composing) spots.push(composing);
     return spots;
@@ -40,9 +41,14 @@ export function useThreads(
   return {
     /** Oldest first. */
     all,
+    /** Shown under its line in the diff, not only in the Conversation list. */
+    inDiff,
     spots,
     at: (spot: Spot) =>
-      shown().filter((comment) => sameSpot(spotOf(comment), spot)),
+      shown().filter((comment) => {
+        const at = spotOf(comment);
+        return at !== undefined && sameSpot(at, spot);
+      }),
   };
 }
 
@@ -89,17 +95,30 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
       >
         <header class={styles.meta}>
           <Show
-            when={props.comments.drafts.isDraft(props.comment)}
-            fallback={<Badge tone="success">Sent</Badge>}
+            when={props.comment.external}
+            fallback={
+              <Show
+                when={props.comments.drafts.isDraft(props.comment)}
+                fallback={<Badge tone="success">Sent</Badge>}
+              >
+                <Badge tone="warning">Draft</Badge>
+              </Show>
+            }
           >
-            <Badge tone="warning">Draft</Badge>
+            {(external) => <ExternalMeta external={external()} />}
           </Show>
-          <Meta>{linesOf(props.comment.start_line, props.comment.line)}</Meta>
+          <Show when={props.comment.start_line}>
+            {(start) => (
+              <Meta>{linesOf(start(), props.comment.line ?? start())}</Meta>
+            )}
+          </Show>
           <DraftActions comments={props.comments} comment={props.comment} />
+          <RejectionActions comments={props.comments} comment={props.comment} />
           <ReplyButton comments={props.comments} comment={props.comment} />
         </header>
         <p class={styles.body}>{props.comment.body}</p>
         <ReplyList comments={props.comments} comment={props.comment} />
+        <OverrideEditor comments={props.comments} comment={props.comment} />
         <Show when={props.comments.drafts.failure(props.comment)}>
           {(message) => (
             <p role="alert">

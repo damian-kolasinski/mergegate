@@ -13,6 +13,7 @@ fn revised() -> FakeStore {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     let git = FakeGit::default()

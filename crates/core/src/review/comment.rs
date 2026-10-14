@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::external::External;
 use crate::item::ItemId;
 
 /// How many of the commented lines a comment quotes, the last ones of its
@@ -26,23 +27,40 @@ impl fmt::Display for CommentId {
     }
 }
 
-/// A comment on lines `start_line..=line` of one side of a file in one
-/// revision.
+/// A comment on an item's revision: the operator's, drafted on lines of the
+/// diff, or one from GitHub, which may sit on the item as a whole.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Comment {
     pub id: CommentId,
     pub item: ItemId,
     pub revision: u32,
+    /// The lines it's on; none for one on the item as a whole.
+    pub anchor: Option<Anchor>,
+    pub body: String,
+    /// The review that sent an operator's comment; none while it's a draft,
+    /// and none on an external one, which no review sends.
+    pub review: Option<u64>,
+    /// Where an external comment came from; none on the operator's.
+    pub external: Option<External>,
+    pub created_at: String,
+}
+
+/// Lines `start_line..=line` of one side of a file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Anchor {
     pub path: String,
     pub side: Side,
     pub start_line: u32,
     pub line: u32,
-    pub body: String,
     /// The commented lines, at most [`QUOTE_LINES`] of them.
     pub quote: String,
-    /// The review that sent it; none while it's a draft.
-    pub review: Option<u64>,
-    pub created_at: String,
+}
+
+impl Comment {
+    /// The operator's, waiting for the next review to send it.
+    pub fn is_draft(&self) -> bool {
+        self.external.is_none() && self.review.is_none()
+    }
 }
 
 /// The side of the diff a comment's lines are on: the file before the change

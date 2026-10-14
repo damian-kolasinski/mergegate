@@ -17,15 +17,19 @@ pub struct Reply {
     /// The item's newest revision when the reply was written.
     pub revision: u32,
     /// The review that sent an operator's reply; none while it's a draft,
-    /// and none on the agent's, which go out as they're written.
+    /// and none on the agent's or an override, which go out as they're
+    /// written.
     pub review: Option<u64>,
+    /// The operator's override of the agent's rejection, which reopens the
+    /// thread; its body may be empty.
+    pub overrides: bool,
     pub created_at: String,
 }
 
 impl Reply {
     /// The operator's, waiting for the next review to send it.
     pub fn is_draft(&self) -> bool {
-        self.author == Author::Operator && self.review.is_none()
+        self.author == Author::Operator && self.review.is_none() && !self.overrides
     }
 
     /// The revision an `addressed` reply was addressed in: the first one
@@ -113,7 +117,7 @@ pub fn reply<S: ItemStore + ReviewStore>(
     } = request;
     let found = store
         .comment(comment)?
-        .filter(|c| c.review.is_some())
+        .filter(|c| !c.is_draft())
         .ok_or(ReplyError::NoComment(comment))?;
     let item = store
         .item(&found.item)?

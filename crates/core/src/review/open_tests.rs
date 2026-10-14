@@ -1,19 +1,24 @@
 use super::*;
+use crate::external::External;
+use crate::github::PullCommentKind;
 use crate::item::ItemId;
-use crate::review::{CommentId, Side};
+use crate::review::{Anchor, CommentId, Side};
 
 fn comment(id: u64, review: Option<u64>) -> Comment {
     Comment {
         id: CommentId(id),
         item: ItemId::parse("app#1").unwrap(),
         revision: 1,
-        path: "src/login.rs".into(),
-        side: Side::New,
-        start_line: 1,
-        line: 1,
+        anchor: Some(Anchor {
+            path: "src/login.rs".into(),
+            side: Side::New,
+            start_line: 1,
+            line: 1,
+            quote: "fn login()".into(),
+        }),
         body: "why?".into(),
-        quote: "fn login()".into(),
         review,
+        external: None,
         created_at: "2026-01-01T00:00:00Z".into(),
     }
 }
@@ -39,6 +44,7 @@ fn replies(replies: &[R]) -> Vec<Reply> {
             body: String::new(),
             revision,
             review: (author == OPERATOR && sent).then_some(9),
+            overrides: false,
             created_at: "2026-01-01T00:00:00Z".into(),
         })
         .collect()
@@ -113,4 +119,30 @@ fn drafts_are_not_threads() {
         .map(|t| t.comment.id)
         .collect();
     assert_eq!(ids, [CommentId(2)]);
+}
+
+#[test]
+fn held_external_comments_are_not_threads_yet() {
+    let external = |pending| {
+        let mut comment = comment(1, None);
+        comment.external = Some(External {
+            kind: PullCommentKind::IssueComment,
+            github_id: 7,
+            login: "alice".into(),
+            bot: false,
+            url: "https://github.com/acme/app/pull/1#issuecomment-7".into(),
+            path: None,
+            pending,
+            agreed_reply: None,
+        });
+        comment
+    };
+    for (pending, threads) in [(true, 0), (false, 1)] {
+        let conversation = Conversation {
+            newest: 1,
+            comments: vec![external(pending)],
+            replies: Vec::new(),
+        };
+        assert_eq!(open_threads(&conversation).len(), threads, "{pending}");
+    }
 }

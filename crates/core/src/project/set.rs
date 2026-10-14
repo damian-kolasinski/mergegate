@@ -5,12 +5,13 @@ use std::path::PathBuf;
 use super::add::parse_github;
 use super::{Backend, Project, ProjectError, ProjectStore, fetch_from, find};
 use crate::decision::Decision;
+use crate::external::same_login;
 use crate::git::Git;
 use crate::github::{Detected, Github, GithubRepo, detect};
 use crate::item::{Item, ItemBackend, ItemStore};
 
 /// The keys `mg project set` accepts.
-pub const KEYS: &[&str] = &["backend", "target", "upstream", "github"];
+pub const KEYS: &[&str] = &["backend", "target", "upstream", "github", "bots"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Setting {
@@ -19,6 +20,8 @@ pub enum Setting {
     /// Any path inside the repo, on the hub's machine.
     Upstream(PathBuf),
     Github(GithubRepo),
+    /// Logins, none to expect no bot.
+    Bots(Vec<String>),
 }
 
 impl Setting {
@@ -36,9 +39,33 @@ impl Setting {
             "target" => Ok(Self::Target(value.into())),
             "upstream" => Ok(Self::Upstream(value.into())),
             "github" => parse_github(value).map(Self::Github),
+            "bots" => parse_bots(value).map(Self::Bots),
             _ => Err(ProjectError::UnknownSetting(key.into())),
         }
     }
+}
+
+/// Comma-separated GitHub logins, a GitHub App's with or without its `[bot]`
+/// suffix; empty for none.
+fn parse_bots(value: &str) -> Result<Vec<String>, ProjectError> {
+    let mut bots: Vec<String> = Vec::new();
+    for login in value.split(',').map(str::trim).filter(|l| !l.is_empty()) {
+        let bare = login.strip_suffix("[bot]").unwrap_or(login);
+        let valid = !bare.is_empty()
+            && !bare.starts_with('-')
+            && bare.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        if !valid {
+            return Err(ProjectError::InvalidValue {
+                key: "bots",
+                value: value.into(),
+                expected: "GitHub logins separated by commas",
+            });
+        }
+        if !bots.iter().any(|b| same_login(b, login)) {
+            bots.push(login.to_owned());
+        }
+    }
+    Ok(bots)
 }
 
 #[derive(Debug)]
@@ -103,6 +130,12 @@ pub fn set<S: ProjectStore + ItemStore>(
                 return Ok(Changed::Decide(decision));
             }
             project.github = Some(github_repo);
+        }
+        Setting::Bots(bots) => {
+            // Only batches read it; staging doesn't care.
+            project.bots = bots;
+            store.update_project(&project)?;
+            return Ok(Changed::Project(project));
         }
         Setting::Target(target) => {
             let repo = git.inspect(&project.upstream)?;

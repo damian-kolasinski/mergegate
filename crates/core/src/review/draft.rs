@@ -135,7 +135,7 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
 }
 
 /// Whether one hunk shows lines `start_line..=line` of `side`.
-fn shown(hunks: &[Hunk], side: Side, start_line: u32, line: u32) -> bool {
+pub(crate) fn shown(hunks: &[Hunk], side: Side, start_line: u32, line: u32) -> bool {
     hunks.iter().any(|hunk| {
         let (first, count) = match side {
             Side::Old => (hunk.old_start, hunk.old_lines),
@@ -148,7 +148,7 @@ fn shown(hunks: &[Hunk], side: Side, start_line: u32, line: u32) -> bool {
 
 /// The last [`QUOTE_LINES`] of `text`'s lines `start_line..=line`, each cut
 /// to [`QUOTE_LINE_CHARS`]; `None` when it has no such lines.
-fn quote(text: &str, start_line: u32, line: u32) -> Option<String> {
+pub(crate) fn quote(text: &str, start_line: u32, line: u32) -> Option<String> {
     // Counted as git counts them: `\r\n` ends a line too, and a last line
     // without a newline is one.
     let lines: Vec<&str> = text.lines().collect();
@@ -214,9 +214,10 @@ fn draft<S: ItemStore + ReviewStore>(
             id: id.clone(),
             comment,
         })?;
-    match found.review {
-        None => Ok(found),
-        Some(_) => Err(DraftError::Sent(comment)),
+    if found.is_draft() {
+        Ok(found)
+    } else {
+        Err(DraftError::Sent(comment))
     }
 }
 

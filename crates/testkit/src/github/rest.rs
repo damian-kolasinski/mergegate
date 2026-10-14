@@ -1,10 +1,9 @@
 //! The REST endpoints the hub calls, answering as GitHub does, errors
 //! included.
 
-use std::process::Command;
-
 use serde_json::{Value, json};
 
+use super::comments::{self, CommentKind};
 use super::server::{Request, Response};
 use super::{Pull, PullState, Shared, State};
 
@@ -17,6 +16,9 @@ pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response
     let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let method = request.method.as_str();
+    if method == "GET" && segments == ["user"] {
+        return Response::json(200, &json!({ "login": state.viewer }));
+    }
     let ["repos", owner, name, rest @ ..] = segments.as_slice() else {
         return message(404, "Not Found");
     };
@@ -38,6 +40,16 @@ pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response
         }),
         ("PATCH", ["pulls", number]) => call.update(&mut state, number, &body),
         ("PUT", ["pulls", number, "merge"]) => call.merge(&mut state, number, &body),
+        ("GET", [list, number, which]) => {
+            let kind = match (*list, *which) {
+                ("pulls", "comments") => CommentKind::Inline,
+                ("issues", "comments") => CommentKind::Issue,
+                ("pulls", "reviews") => CommentKind::Review,
+                _ => return message(404, "Not Found"),
+            };
+            let head = shared.pull_head(&state, &call.repo, number.parse().unwrap_or(0));
+            comments::list(shared, &mut state, request, &call.repo, number, kind, head)
+        }
         ("DELETE", ["git", "refs", "heads", branch @ ..]) => call.delete_branch(&branch.join("/")),
         _ => message(404, "Not Found"),
     }
@@ -237,41 +249,11 @@ impl Call<'_> {
     }
 
     fn head_of(&self, branch: &str) -> Option<String> {
-        if branch.is_empty() {
-            return None;
-        }
-        self.bare(
-            &[
-                "rev-parse",
-                "--verify",
-                "--quiet",
-                &format!("refs/heads/{branch}^{{commit}}"),
-            ],
-            &[],
-        )
+        self.shared.head_of(&self.repo, branch)
     }
 
-    /// Runs git in the bare repository; its trimmed stdout if it succeeded.
     fn bare(&self, args: &[&str], vars: &[(&str, &str)]) -> Option<String> {
-        let mut cmd = Command::new("git");
-        for (key, _) in std::env::vars_os() {
-            if key.as_encoded_bytes().starts_with(b"GIT_") {
-                cmd.env_remove(key);
-            }
-        }
-        let output = cmd
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .envs(vars.iter().copied())
-            .arg("--git-dir")
-            .arg(self.shared.repo_path(&self.repo))
-            .args(args)
-            .output()
-            .expect("run git");
-        output
-            .status
-            .success()
-            .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        self.shared.bare(&self.repo, args, vars)
     }
 }
 

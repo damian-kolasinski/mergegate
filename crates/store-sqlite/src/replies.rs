@@ -9,14 +9,26 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::items::NOW;
 
-const COLUMNS: &str = "id, comment_id, author, status, review_id, revision, body, created_at";
+const COLUMNS: &str =
+    "id, comment_id, author, status, review_id, revision, body, override, created_at";
 
 pub(crate) fn insert(conn: &Connection, reply: NewReply) -> Result<Reply, StoreError> {
+    insert_as(conn, reply, false)
+}
+
+/// `overrides` marks the operator's override of the agent's rejection,
+/// which no review sends.
+pub(crate) fn insert_as(
+    conn: &Connection,
+    reply: NewReply,
+    overrides: bool,
+) -> Result<Reply, StoreError> {
     let row = conn
         .query_row(
             &format!(
-                "INSERT INTO replies (comment_id, author, status, revision, body, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, {NOW})
+                "INSERT INTO replies
+                     (comment_id, author, status, revision, body, override, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, {NOW})
                  RETURNING {COLUMNS}"
             ),
             params![
@@ -25,6 +37,7 @@ pub(crate) fn insert(conn: &Connection, reply: NewReply) -> Result<Reply, StoreE
                 reply.status.map(ReplyStatus::as_str),
                 reply.revision,
                 reply.body,
+                overrides,
             ],
             ReplyRow::read,
         )
@@ -97,7 +110,7 @@ pub(crate) fn one(conn: &Connection, id: u64) -> Result<Option<Reply>, StoreErro
 pub(crate) fn attach(conn: &Connection, item_id: i64, review: i64) -> Result<(), StoreError> {
     conn.execute(
         "UPDATE replies SET review_id = ?2
-         WHERE author = 'operator' AND review_id IS NULL
+         WHERE author = 'operator' AND review_id IS NULL AND override = 0
            AND comment_id IN (SELECT id FROM comments WHERE item_id = ?1)",
         params![item_id, review],
     )
@@ -108,7 +121,7 @@ pub(crate) fn attach(conn: &Connection, item_id: i64, review: i64) -> Result<(),
 pub(crate) fn set_body(conn: &Connection, id: u64, body: &str) -> Result<(), StoreError> {
     conn.execute(
         "UPDATE replies SET body = ?2
-         WHERE id = ?1 AND author = 'operator' AND review_id IS NULL",
+         WHERE id = ?1 AND author = 'operator' AND review_id IS NULL AND override = 0",
         params![id as i64, body],
     )
     .map_err(StoreError::new)?;
@@ -117,7 +130,8 @@ pub(crate) fn set_body(conn: &Connection, id: u64, body: &str) -> Result<(), Sto
 
 pub(crate) fn delete(conn: &Connection, id: u64) -> Result<(), StoreError> {
     conn.execute(
-        "DELETE FROM replies WHERE id = ?1 AND author = 'operator' AND review_id IS NULL",
+        "DELETE FROM replies
+         WHERE id = ?1 AND author = 'operator' AND review_id IS NULL AND override = 0",
         params![id as i64],
     )
     .map_err(StoreError::new)?;
@@ -133,6 +147,7 @@ struct ReplyRow {
     review: Option<i64>,
     revision: u32,
     body: String,
+    overrides: bool,
     created_at: String,
 }
 
@@ -146,7 +161,8 @@ impl ReplyRow {
             review: row.get(4)?,
             revision: row.get(5)?,
             body: row.get(6)?,
-            created_at: row.get(7)?,
+            overrides: row.get(7)?,
+            created_at: row.get(8)?,
         })
     }
 
@@ -173,6 +189,7 @@ impl ReplyRow {
             body: self.body,
             revision: self.revision,
             review: self.review.map(|r| r as u64),
+            overrides: self.overrides,
             created_at: self.created_at,
         })
     }

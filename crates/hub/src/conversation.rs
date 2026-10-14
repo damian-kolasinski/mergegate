@@ -46,10 +46,7 @@ async fn show(
 
 /// Drafts apart from what a review sent, as the UI shows them apart.
 pub(crate) fn to_api(conversation: &Conversation) -> api::review::Conversation {
-    let (drafts, sent): (Vec<_>, Vec<_>) = conversation
-        .comments
-        .iter()
-        .partition(|c| c.review.is_none());
+    let (drafts, sent): (Vec<_>, Vec<_>) = conversation.comments.iter().partition(|c| c.is_draft());
     let (draft_replies, sent_replies): (Vec<_>, Vec<_>) =
         conversation.replies.iter().partition(|r| r.is_draft());
     let reply = |reply| replies::to_api(reply, conversation.newest);

@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 
 use crate::agent::{Agent, AgentStore, DueWake};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
+use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
-use crate::github::{Github, GithubError, GithubRepo, Pull};
+use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
     NewRevision, Pushed, Revision, Submit, submit,
@@ -17,7 +18,7 @@ use crate::item::{
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
-    Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
+    Anchor, Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
 };
 use crate::store::StoreError;
 use crate::viewed::ViewedStore;
@@ -453,6 +454,7 @@ pub(crate) struct FakeStore {
     /// Oldest first.
     items: Vec<Item>,
     files: BTreeMap<(ItemId, u32), Vec<FileStat>>,
+    revisions: BTreeMap<(ItemId, u32), Revision>,
     diffs: BTreeMap<BlobPair, FileDiff>,
     viewed: BTreeSet<(ItemId, u32, String)>,
     reviews: Vec<Review>,
@@ -468,6 +470,10 @@ pub(crate) struct FakeStore {
     delivered: BTreeMap<ItemId, u64>,
     agents: BTreeMap<ItemId, Agent>,
     woken: BTreeMap<ItemId, u64>,
+    /// An external comment's `(seen_at, pending_at)`.
+    external: BTreeMap<CommentId, (u64, Option<u64>)>,
+    /// The external comments a batch carried.
+    batched: BTreeSet<CommentId>,
     clock: u32,
 }
 
@@ -483,6 +489,7 @@ impl FakeStore {
                 target: "main".into(),
                 upstream: "/src/app".into(),
                 github: None,
+                bots: Vec::new(),
             })
             .unwrap();
         let mut git = FakeGit::default()
@@ -541,13 +548,41 @@ impl FakeStore {
     fn revision(&mut self, id: &ItemId, number: u32, revision: NewRevision) -> Revision {
         self.files
             .insert((id.clone(), number), revision.files.clone());
-        Revision {
+        let revision = Revision {
             number,
             stat: DiffStat::of(&revision.files),
             head: revision.head,
             base: revision.base,
             submitted_at: self.now(),
-        }
+        };
+        self.revisions
+            .insert((id.clone(), number), revision.clone());
+        revision
+    }
+
+    /// The fake clock's stamp in milliseconds since the first.
+    pub fn millis(stamp: &str) -> u64 {
+        let seconds: u64 = stamp
+            .strip_prefix("2026-01-01T00:00:")
+            .and_then(|s| s.strip_suffix('Z'))
+            .and_then(|s| s.parse().ok())
+            .unwrap();
+        seconds * 1000
+    }
+
+    /// An external comment's `(seen_at, pending_at)`.
+    pub fn external_times(&self, id: CommentId) -> (u64, Option<u64>) {
+        self.external[&id]
+    }
+
+    fn push_event(&mut self, id: &ItemId, kind: EventKind) -> Event {
+        // Cursors are hub-wide, as the store's are.
+        let event = Event {
+            cursor: self.events.len() as u64 + 1,
+            kind,
+        };
+        self.events.push((id.clone(), event.clone()));
+        event
     }
 }
 
@@ -601,6 +636,15 @@ impl ItemStore for FakeStore {
 
     fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError> {
         Ok(self.items.iter().find(|i| i.id == *id).cloned())
+    }
+
+    fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError> {
+        Ok(self
+            .revisions
+            .iter()
+            .filter(|((item, _), _)| item == id)
+            .map(|(_, revision)| revision.clone())
+            .collect())
     }
 
     fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<FileStat>, StoreError> {
@@ -725,7 +769,7 @@ impl ReviewStore for FakeStore {
         let id = self.reviews.len() as u64 + 1;
         let mut comments = Vec::new();
         for comment in &mut self.comments {
-            if comment.item == review.item && comment.review.is_none() {
+            if comment.item == review.item && comment.is_draft() {
                 comment.review = Some(id);
                 comments.push(comment.clone());
             }
@@ -764,13 +808,16 @@ impl ReviewStore for FakeStore {
             id: CommentId(self.last_comment),
             item: comment.item,
             revision: comment.revision,
-            path: comment.path,
-            side: comment.side,
-            start_line: comment.start_line,
-            line: comment.line,
+            anchor: Some(Anchor {
+                path: comment.path,
+                side: comment.side,
+                start_line: comment.start_line,
+                line: comment.line,
+                quote: comment.quote,
+            }),
             body: comment.body,
-            quote: comment.quote,
             review: None,
+            external: None,
             created_at: self.now(),
         };
         self.comments.push(comment.clone());
@@ -790,7 +837,7 @@ impl ReviewStore for FakeStore {
         if let Some(draft) = self
             .comments
             .iter_mut()
-            .find(|c| c.id == id && c.review.is_none())
+            .find(|c| c.id == id && c.is_draft())
         {
             draft.body = body.into();
         }
@@ -798,7 +845,7 @@ impl ReviewStore for FakeStore {
     }
 
     fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError> {
-        self.comments.retain(|c| c.id != id || c.review.is_some());
+        self.comments.retain(|c| c.id != id || !c.is_draft());
         Ok(())
     }
 
@@ -817,6 +864,7 @@ impl ReviewStore for FakeStore {
             body: reply.body,
             revision: reply.revision,
             review: None,
+            overrides: false,
             created_at: self.now(),
         };
         self.replies.push(reply.clone());
@@ -888,6 +936,114 @@ impl FeedbackStore for FakeStore {
     }
 }
 
+impl ExternalStore for FakeStore {
+    fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError> {
+        self.last_comment += 1;
+        let comment = Comment {
+            id: CommentId(self.last_comment),
+            item: comment.item,
+            revision: comment.revision,
+            anchor: comment.anchor,
+            body: comment.body,
+            review: None,
+            external: Some(External {
+                kind: comment.kind,
+                github_id: comment.github_id,
+                login: comment.login,
+                bot: comment.bot,
+                url: comment.url,
+                path: comment.path,
+                pending: true,
+                agreed_reply: None,
+            }),
+            created_at: self.now(),
+        };
+        self.comments.push(comment.clone());
+        self.external.insert(comment.id, (now, Some(now)));
+        Ok(comment)
+    }
+
+    fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError> {
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        comment.body = body.into();
+        comment.external.as_mut().unwrap().pending = true;
+        let times = self.external.get_mut(&id).unwrap();
+        *times = (now, Some(times.1.unwrap_or(now)));
+        Ok(())
+    }
+
+    fn held(&self, id: &ItemId) -> Result<Option<Held>, StoreError> {
+        let item = self.item(id)?.unwrap();
+        let pushed = Self::millis(&item.revision.submitted_at);
+        let mut held: Option<Held> = None;
+        let mut heard = Vec::new();
+        for comment in self.comments.iter().filter(|c| c.item == *id) {
+            let Some(external) = &comment.external else {
+                continue;
+            };
+            let (seen, pending) = self.external[&comment.id];
+            if external.bot && seen >= pushed && !heard.contains(&external.login) {
+                heard.push(external.login.clone());
+            }
+            if let Some(pending) = pending {
+                let held = held.get_or_insert(Held {
+                    first: pending,
+                    last: seen,
+                    pushed,
+                    heard: Vec::new(),
+                });
+                held.first = held.first.min(pending);
+                held.last = held.last.max(seen);
+            }
+        }
+        Ok(held.map(|held| Held { heard, ..held }))
+    }
+
+    fn release(&mut self, id: &ItemId, revision: u32) -> Result<Option<Event>, StoreError> {
+        let mut comments = Vec::new();
+        for comment in self.comments.iter_mut().filter(|c| c.item == *id) {
+            let Some(times) = self.external.get_mut(&comment.id) else {
+                continue;
+            };
+            if times.1.take().is_none() {
+                continue;
+            }
+            comment.external.as_mut().unwrap().pending = false;
+            comments.push(Delivered {
+                comment: comment.clone(),
+                edited: !self.batched.insert(comment.id),
+            });
+        }
+        if comments.is_empty() {
+            return Ok(None);
+        }
+        let batch = Batch { revision, comments };
+        Ok(Some(
+            self.push_event(id, EventKind::ExternalComments(batch)),
+        ))
+    }
+
+    fn set_agreed(&mut self, id: CommentId, reply: u64) -> Result<(), StoreError> {
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        comment.external.as_mut().unwrap().agreed_reply = Some(reply);
+        Ok(())
+    }
+
+    fn insert_override(&mut self, reply: NewReply) -> Result<(Reply, Event), StoreError> {
+        let item = reply.item.clone();
+        let mut reply = self.insert_reply(reply)?;
+        reply.overrides = true;
+        self.replies.last_mut().unwrap().overrides = true;
+        let comment = self.comment(reply.comment)?.unwrap();
+        let kind = EventKind::Override(Box::new(Override {
+            comment,
+            reply: reply.clone(),
+        }));
+        let event = self.push_event(&item, kind);
+        Ok((reply, event))
+    }
+}
+
 impl AgentStore for FakeStore {
     fn agent(&self, id: &ItemId) -> Result<Agent, StoreError> {
         Ok(self.agents.get(id).cloned().unwrap_or_default())
@@ -911,7 +1067,7 @@ impl AgentStore for FakeStore {
                 .events(id, 0)?
                 .iter()
                 .rev()
-                .find(|e| e.source() == Source::Operator)
+                .find(|e| e.source() != Source::Agent)
                 .map_or(0, |e| e.cursor);
             if cursor > seen {
                 due.push(DueWake {
@@ -988,6 +1144,8 @@ pub(crate) struct FakeGithub {
     refusal: RefCell<Option<String>>,
     pulls: RefCell<Vec<FakePull>>,
     deleted: RefCell<Vec<(GithubRepo, String)>>,
+    /// Every pull request's, oldest first.
+    comments: RefCell<Vec<(GithubRepo, u64, PullComment)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1019,6 +1177,7 @@ impl Default for FakeGithub {
             refusal: RefCell::default(),
             pulls: RefCell::default(),
             deleted: RefCell::default(),
+            comments: RefCell::default(),
         }
     }
 }
@@ -1051,6 +1210,19 @@ impl FakeGithub {
 
     pub fn deleted(&self) -> Vec<(GithubRepo, String)> {
         self.deleted.borrow().clone()
+    }
+
+    /// What someone commenting on the pull request does; one with the
+    /// comment's kind and ID already there is edited.
+    pub fn comment(&self, repo: &str, number: u64, comment: PullComment) {
+        let repo = GithubRepo::parse(repo).unwrap();
+        let mut comments = self.comments.borrow_mut();
+        match comments.iter_mut().find(|(r, n, c)| {
+            *r == repo && *n == number && c.kind == comment.kind && c.id == comment.id
+        }) {
+            Some((_, _, known)) => *known = comment,
+            None => comments.push((repo, number, comment)),
+        }
     }
 
     fn signed_in(&self) -> Result<(), GithubError> {
@@ -1201,5 +1373,26 @@ impl Github for FakeGithub {
             .borrow_mut()
             .push((repo.clone(), branch.into()));
         Ok(())
+    }
+
+    fn viewer(&self) -> Result<String, GithubError> {
+        self.signed_in()?;
+        Ok("operator".into())
+    }
+
+    fn pull_comments(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        _fresh: bool,
+    ) -> Result<Vec<PullComment>, GithubError> {
+        self.signed_in()?;
+        Ok(self
+            .comments
+            .borrow()
+            .iter()
+            .filter(|(r, n, _)| r == repo && *n == number)
+            .map(|(_, _, c)| c.clone())
+            .collect())
     }
 }

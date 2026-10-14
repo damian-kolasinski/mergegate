@@ -3,6 +3,7 @@
 //! needed, and again whenever GitHub turns it down.
 
 mod api;
+mod comments;
 mod pulls;
 mod repo;
 mod token;
@@ -10,12 +11,13 @@ mod token;
 use std::path::PathBuf;
 
 use mergegate_core::git::Remote;
-use mergegate_core::github::{Github, GithubError, GithubRepo, Pull};
+use mergegate_core::github::{Github, GithubError, GithubRepo, Pull, PullComment};
 
 use api::Api;
 
 pub struct GithubClient {
     api: Api,
+    comments: comments::Cache,
     /// Where git reaches repositories, as in `https://github.com`.
     web: String,
 }
@@ -26,6 +28,7 @@ impl GithubClient {
     pub fn new(api: String, web: String, gh: PathBuf) -> Self {
         Self {
             api: Api::new(api, gh),
+            comments: comments::Cache::default(),
             web,
         }
     }
@@ -106,5 +109,18 @@ impl Github for GithubClient {
 
     fn delete_branch(&self, repo: &GithubRepo, branch: &str) -> Result<(), GithubError> {
         repo::delete_branch(&self.api, repo, branch)
+    }
+
+    fn viewer(&self) -> Result<String, GithubError> {
+        comments::viewer(&self.api, &self.comments)
+    }
+
+    fn pull_comments(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        fresh: bool,
+    ) -> Result<Vec<PullComment>, GithubError> {
+        comments::of_pull(&self.api, &self.comments, repo, number, fresh)
     }
 }

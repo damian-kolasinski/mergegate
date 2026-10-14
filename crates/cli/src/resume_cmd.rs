@@ -8,7 +8,7 @@ use api::review::{Author, ReplyStatus, Verdict};
 use serde::Serialize;
 
 use crate::client::{Client, segment};
-use crate::feedback_cmd::place;
+use crate::feedback_cmd::heading;
 use crate::output::{CliError, Outcome};
 
 #[derive(Serialize)]
@@ -83,8 +83,8 @@ fn prompt(resume: &Resume) -> String {
 
 fn describe(thread: &Thread, newest: u32) -> String {
     let comment = &thread.comment;
-    let mut out = format!("\n  {} {}\n", comment.id, place(comment, newest));
-    for line in comment.quote.lines() {
+    let mut out = format!("\n  {}\n", heading(comment, newest));
+    for line in comment.quote.iter().flat_map(|q| q.lines()) {
         out.push_str(format!("    > {line}").trim_end());
         out.push('\n');
     }
@@ -93,6 +93,7 @@ fn describe(thread: &Thread, newest: u32) -> String {
     }
     for reply in &thread.replies {
         let who = match (reply.author, reply.status) {
+            (Author::Operator, _) if reply.overrides => "operator (overrides you)".to_owned(),
             (Author::Operator, _) => "operator".to_owned(),
             (Author::Agent, status) => format!("you ({})", status.map_or("replied", reply_status)),
         };

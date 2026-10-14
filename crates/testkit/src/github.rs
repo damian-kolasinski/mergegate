@@ -6,6 +6,7 @@
 //! Point a hub at it with [`FakeGithub::env`]. Its pull requests' pages are
 //! plain HTML at their `html_url`, for a person following the link.
 
+mod comments;
 mod git_http;
 mod page;
 mod rest;
@@ -21,6 +22,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tempfile::TempDir;
 
 use crate::repo::git;
+
+pub use comments::{Comment, CommentKind, Inline, NewComment};
 
 pub struct FakeGithub {
     shared: Arc<Shared>,
@@ -39,7 +42,6 @@ struct Shared {
     stopping: AtomicBool,
 }
 
-#[derive(Default)]
 struct State {
     token: String,
     /// By `owner/repo`: whether the signed-in account may push.
@@ -47,6 +49,31 @@ struct State {
     pulls: Vec<Pull>,
     refusal: Option<String>,
     requests: Vec<String>,
+    comments: Vec<Comment>,
+    last_comment: u64,
+    /// Who `GET /user` says is signed in.
+    viewer: String,
+    /// The most a list page holds, whatever `per_page` asks for.
+    page_size: usize,
+    /// How many list requests were answered 304.
+    not_modified: usize,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            token: String::new(),
+            repos: BTreeMap::new(),
+            pulls: Vec::new(),
+            refusal: None,
+            requests: Vec::new(),
+            comments: Vec::new(),
+            last_comment: 0,
+            viewer: "operator".into(),
+            page_size: 100,
+            not_modified: 0,
+        }
+    }
 }
 
 /// A pull request as the fake keeps it.
@@ -202,6 +229,41 @@ impl FakeGithub {
         self.state().requests.clone()
     }
 
+    /// Posts `comment` on pull request `pull` of `repo`, an inline one on
+    /// its branch's head; its ID.
+    pub fn comment(&self, repo: &str, pull: u64, comment: NewComment) -> u64 {
+        let mut state = self.state();
+        let head = self.shared.pull_head(&state, repo, pull);
+        comments::add(&mut state, repo, pull, head, comment)
+    }
+
+    /// Changes comment `id`'s body, as its author editing it.
+    pub fn edit_comment(&self, id: u64, body: &str) {
+        assert!(
+            comments::edit(&mut self.state(), id, body),
+            "no comment {id}"
+        );
+    }
+
+    pub fn comments(&self) -> Vec<Comment> {
+        self.state().comments.clone()
+    }
+
+    /// `GET /user` says `login` is signed in.
+    pub fn set_viewer(&self, login: &str) {
+        self.state().viewer = login.into();
+    }
+
+    /// Lists come `size` items a page at most.
+    pub fn page_size(&self, size: usize) {
+        self.state().page_size = size;
+    }
+
+    /// How many list requests were answered 304, nothing having changed.
+    pub fn not_modified(&self) -> usize {
+        self.state().not_modified
+    }
+
     /// Runs git in `repo`'s bare repository and returns its stdout.
     #[track_caller]
     pub fn git<I, S>(&self, repo: &str, args: I) -> String
@@ -242,6 +304,51 @@ impl Shared {
 
     fn repo_path(&self, repo: &str) -> PathBuf {
         self.repos.join(format!("{repo}.git"))
+    }
+
+    /// What pull request `pull` of `repo` is at: its branch's head, or the
+    /// head it was merged at.
+    fn pull_head(&self, state: &State, repo: &str, pull: u64) -> Option<String> {
+        let pull = state
+            .pulls
+            .iter()
+            .find(|p| p.repo == repo && p.number == pull)?;
+        match &pull.state {
+            PullState::Merged { head, .. } => Some(head.clone()),
+            _ => self.head_of(repo, &pull.branch),
+        }
+    }
+
+    fn head_of(&self, repo: &str, branch: &str) -> Option<String> {
+        if branch.is_empty() {
+            return None;
+        }
+        let rev = format!("refs/heads/{branch}^{{commit}}");
+        self.bare(repo, &["rev-parse", "--verify", "--quiet", &rev], &[])
+    }
+
+    /// Runs git in `repo`'s bare repository; its trimmed stdout if it
+    /// succeeded.
+    fn bare(&self, repo: &str, args: &[&str], vars: &[(&str, &str)]) -> Option<String> {
+        let mut cmd = std::process::Command::new("git");
+        for (key, _) in std::env::vars_os() {
+            if key.as_encoded_bytes().starts_with(b"GIT_") {
+                cmd.env_remove(key);
+            }
+        }
+        let output = cmd
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .envs(vars.iter().copied())
+            .arg("--git-dir")
+            .arg(self.repo_path(repo))
+            .args(args)
+            .output()
+            .expect("run git");
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
 
     /// Whether the signed-in account may push to `repo`, if it exists. A

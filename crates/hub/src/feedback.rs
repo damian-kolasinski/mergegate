@@ -14,11 +14,12 @@ use mergegate_core::feedback::{
 };
 use mergegate_core::item::{Item, ItemId};
 use serde::Deserialize;
+use store_sqlite::Store;
 use tokio::time::Instant;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{comments, items, replies, reviews};
+use crate::{comments, external, items, replies, reviews};
 
 /// The longest one request waits; `mg wait` asks again to wait longer.
 const MAX_WAIT: Duration = Duration::from_secs(3600);
@@ -70,9 +71,20 @@ async fn read(
         if last || woke {
             // A wait's answer at its deadline can hold events its `mg wait`
             // isn't waiting for, and skips.
-            if (query.wait == 0 || woke) && !read.events.is_empty() {
-                state.wakes.handed(&id, read.cursor);
+            if !(query.wait == 0 || woke) || read.events.is_empty() {
+                return Ok(Json(to_api(&id, read)));
             }
+            let (read, released) = {
+                let id = id.clone();
+                state
+                    .blocking(move |store, _| handing(store, &id, query.since, read))
+                    .await
+                    .map_err(failure)?
+            };
+            if released {
+                external::released(&state, &id);
+            }
+            state.wakes.handed(&id, read.cursor);
             return Ok(Json(to_api(&id, read)));
         }
         // The store stays unlocked while this waits.
@@ -97,6 +109,25 @@ async fn acknowledge(
         .await
         .map_err(failure)?;
     Ok(Json(api::feedback::Acknowledged { delivered }))
+}
+
+/// `read` as it goes to the agent, with any held comments it takes along
+/// (`release_on_read`); whether it took some.
+fn handing(
+    store: &mut Store,
+    id: &ItemId,
+    since: Option<u64>,
+    read: Feedback,
+) -> Result<(Feedback, bool), FeedbackError> {
+    match mergegate_core::external::release_on_read(store, id, since, &read.events) {
+        Ok(true) => Ok((feedback::feedback(store, id, since)?, true)),
+        Ok(false) => Ok((read, false)),
+        // The comments wait for the poller, and the read goes ahead.
+        Err(e) => {
+            tracing::error!("handing {id}'s held comments to its agent: {e}");
+            Ok((read, false))
+        }
+    }
 }
 
 fn parse(id: &str) -> Result<ItemId, Failure> {
@@ -150,6 +181,11 @@ fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedback::Event 
                 branch: item.branch.clone(),
             },
         },
+        EventKind::ExternalComments(batch) => external::batch_to_api(&batch),
+        EventKind::Override(o) => api::feedback::EventBody::CommentOverride {
+            comment: Box::new(comments::to_api(&o.comment)),
+            reply: replies::sent(&o.reply),
+        },
     };
     api::feedback::Event {
         cursor: event.cursor,
@@ -164,6 +200,7 @@ pub(crate) fn source_to_api(source: Source) -> api::feedback::Source {
     match source {
         Source::Operator => api::feedback::Source::Operator,
         Source::Agent => api::feedback::Source::Agent,
+        Source::External => api::feedback::Source::External,
     }
 }
 
@@ -171,6 +208,7 @@ pub(crate) fn source_from_api(source: api::feedback::Source) -> Source {
     match source {
         api::feedback::Source::Operator => Source::Operator,
         api::feedback::Source::Agent => Source::Agent,
+        api::feedback::Source::External => Source::External,
     }
 }
 

@@ -1,4 +1,6 @@
+use mergegate_core::external::{ExternalStore, NewExternal};
 use mergegate_core::feedback::{FeedbackStore, Notice, NoticeKind, Source};
+use mergegate_core::github::PullCommentKind;
 use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 use mergegate_core::review::{NewReview, ReviewStore, Verdict};
@@ -17,6 +19,7 @@ fn store() -> (tempfile::TempDir, Store) {
             target: "main".into(),
             upstream: "/src/app".into(),
             github: None,
+            bots: Vec::new(),
         })
         .unwrap();
     for branch in ["one", "two"] {
@@ -144,4 +147,27 @@ fn the_agents_own_events_never_wake_it() {
     assert_eq!(due(&store), [("app#1".into(), "a".into(), 1)]);
     store.set_woken(&id("app#1"), 1).unwrap();
     assert_eq!(due(&store), []);
+}
+
+#[test]
+fn a_batch_of_external_comments_wakes_the_agent() {
+    let (_dir, mut store) = store();
+    store.set_agent(&id("app#1"), &waking("a")).unwrap();
+    let comment = NewExternal {
+        item: id("app#1"),
+        revision: 1,
+        anchor: None,
+        body: "Why?".into(),
+        kind: PullCommentKind::IssueComment,
+        github_id: 1,
+        login: "ana".into(),
+        bot: false,
+        url: "https://github.com/acme/app/pull/1#c1".into(),
+        path: None,
+    };
+    store.insert_external(comment, 1).unwrap();
+    // A held comment doesn't wake it; the batch does.
+    assert_eq!(due(&store), []);
+    store.release(&id("app#1"), 1).unwrap();
+    assert_eq!(due(&store), [("app#1".into(), "a".into(), 1)]);
 }

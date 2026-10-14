@@ -7,6 +7,7 @@ mod diff;
 mod doctor;
 mod draft_replies;
 mod events;
+mod external;
 mod feedback;
 mod git_http;
 mod guard;
