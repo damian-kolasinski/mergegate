@@ -41,6 +41,7 @@ async fn submit(
         .blocking(move |store, _| review::submit(store, request))
         .await
         .map_err(failure)?;
+    state.events.logged();
     state.events.send(UiEvent::InboxChanged);
     Ok((StatusCode::CREATED, Json(to_api(&review))))
 }

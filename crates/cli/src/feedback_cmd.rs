@@ -1,6 +1,8 @@
-//! `mg feedback`: an item's new events for its agent.
+//! `mg feedback`: an item's new events, without waiting. `mg wait` reads and
+//! prints them the same way.
 
 use api::feedback::{Acknowledge, Acknowledged, Event, EventBody, Feedback};
+use api::item::ItemState;
 use api::review::Verdict;
 
 use crate::client::{Client, Reply, segment};
@@ -8,7 +10,7 @@ use crate::output::{CliError, Outcome};
 
 pub fn run(item: String, since: Option<u64>) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
-    let feedback = read(&client, &item, since)?;
+    let feedback = read(&client, &item, since, None)?;
     let text = if feedback.events.is_empty() {
         format!("no new feedback on {}", feedback.item)
     } else {
@@ -17,18 +19,35 @@ pub fn run(item: String, since: Option<u64>) -> Result<Outcome, CliError> {
     Ok(deliver(client, &feedback, since, text))
 }
 
-/// The events after `since` (or after the delivered cursor).
-fn read(client: &Client, item: &str, since: Option<u64>) -> Result<Feedback, CliError> {
+/// The events after `since` (or after the delivered cursor). With `wait`,
+/// the hub holds the request for up to that many seconds until one arrives.
+pub(crate) fn read(
+    client: &Client,
+    item: &str,
+    since: Option<u64>,
+    wait: Option<(u64, &str)>,
+) -> Result<Feedback, CliError> {
     let since = since.map(|cursor| cursor.to_string());
     let mut query = Vec::new();
     if let Some(since) = &since {
         query.push(("since", since.as_str()));
     }
+    let seconds;
+    if let Some((wait, wake)) = wait {
+        seconds = wait.to_string();
+        query.push(("wait", seconds.as_str()));
+        query.push(("for", wake));
+    }
     client.get_query(&format!("/api/items/{}/feedback", segment(item)), &query)
 }
 
 /// Prints `feedback`, then acknowledges its events unless they are a replay.
-fn deliver(client: Client, feedback: &Feedback, since: Option<u64>, text: String) -> Outcome {
+pub(crate) fn deliver(
+    client: Client,
+    feedback: &Feedback,
+    since: Option<u64>,
+    text: String,
+) -> Outcome {
     let outcome = Outcome::done(feedback, text);
     // A replay may start past the delivered cursor, and acknowledging it
     // would skip the events before `since` that were never printed.
@@ -45,10 +64,18 @@ fn deliver(client: Client, feedback: &Feedback, since: Option<u64>, text: String
     })
 }
 
-fn describe(feedback: &Feedback) -> String {
+pub(crate) fn closed(state: ItemState) -> Option<&'static str> {
+    match state {
+        ItemState::Merged => Some("merged"),
+        ItemState::Abandoned => Some("abandoned"),
+        _ => None,
+    }
+}
+
+pub(crate) fn describe(feedback: &Feedback) -> String {
     let mut out: Vec<String> = feedback.events.iter().map(event).collect();
     out.push(format!(
-        "cursor {} (mg feedback --since {} replays from here)",
+        "cursor {} (mg wait --since {} replays from here)",
         feedback.cursor, feedback.cursor
     ));
     out.join("\n\n")

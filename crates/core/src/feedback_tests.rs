@@ -91,3 +91,16 @@ fn refuses_cursors_past_the_newest_event() {
         Err(FeedbackError::NoItem(_))
     ));
 }
+
+#[test]
+fn a_wait_for_the_operator_ends_on_an_operator_event() {
+    let mut store = FakeStore::with_item(1);
+    let app = id("app#1");
+    let events = feedback(&store, &app, None).unwrap().events;
+    assert!(!Wake::Any.by(&events));
+    assert!(!Wake::Operator.by(&events));
+    review(&mut store, "First");
+    let events = feedback(&store, &app, None).unwrap().events;
+    assert!(Wake::Any.by(&events));
+    assert!(Wake::Operator.by(&events));
+}

@@ -10,6 +10,7 @@ pub mod output;
 mod project_cmd;
 mod repo;
 mod submit_cmd;
+mod wait_cmd;
 
 use std::ffi::OsString;
 use std::process::ExitCode;
@@ -61,7 +62,24 @@ enum Command {
         #[arg(long)]
         title: Option<String>,
     },
-    /// Print the item's new feedback and mark it delivered
+    /// Wait until the item has feedback for its agent, print it and mark it
+    /// delivered
+    Wait {
+        /// The item, as in app#42
+        item: String,
+        /// Which events end the wait
+        #[arg(long = "for", value_enum, default_value = "any")]
+        wake: wait_cmd::Wake,
+        /// Seconds to wait before exiting with 75; 0 waits until there is
+        /// feedback
+        #[arg(long, default_value_t = 540)]
+        timeout: u64,
+        /// Replay the events after this cursor, even delivered ones, without
+        /// marking them delivered
+        #[arg(long)]
+        since: Option<u64>,
+    },
+    /// Print the item's new feedback and mark it delivered, without waiting
     Feedback {
         /// The item, as in app#42
         item: String,
@@ -93,6 +111,12 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
         Command::Project(command) => project_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
         Command::Submit { title } => submit_cmd::run(title),
+        Command::Wait {
+            item,
+            wake,
+            timeout,
+            since,
+        } => wait_cmd::run(item, wake, timeout, since),
         Command::Feedback { item, since } => feedback_cmd::run(item, since),
         Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),

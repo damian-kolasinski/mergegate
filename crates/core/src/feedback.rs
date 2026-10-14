@@ -1,6 +1,6 @@
-//! The event log: what an item's agent has to react to, read with
-//! `mg feedback` (design §6.1, §6.3). Each item keeps the cursor of the
-//! newest event its agent acknowledged, so a read that dropped before the
+//! The event log: what an item's agent has to react to, read with `mg wait`
+//! and `mg feedback` (design §6.1, §6.3). Each item keeps the cursor of the
+//! newest event its agent acknowledged, so a wait that dropped before the
 //! agent saw its events returns them again.
 
 use crate::item::{Item, ItemId, ItemStore};
@@ -50,6 +50,24 @@ impl Event {
     pub fn revision(&self) -> u32 {
         match &self.kind {
             EventKind::ReviewSubmitted(review) => review.revision,
+        }
+    }
+}
+
+/// Which events end a wait. It returns every undelivered event either way, so
+/// acknowledging them never skips one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Wake {
+    #[default]
+    Any,
+    Operator,
+}
+
+impl Wake {
+    pub fn by(self, events: &[Event]) -> bool {
+        match self {
+            Self::Any => !events.is_empty(),
+            Self::Operator => events.iter().any(|e| e.source() == Source::Operator),
         }
     }
 }

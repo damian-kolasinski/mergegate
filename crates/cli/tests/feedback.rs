@@ -1,5 +1,8 @@
-//! The operator's review reaching the agent (F6's last step, F7): the hub
-//! logs it, `mg feedback` delivers it once, and `--since` replays it.
+//! The operator's review reaching the agent (F6's last step, F7, F3's
+//! `mg wait`): the hub logs it, `mg wait` and `mg feedback` deliver it once,
+//! and `--since` replays it.
+
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use testkit::{Env, Reply, TestRepo, http_reply};
@@ -61,7 +64,7 @@ fn state(env: &Env) -> Value {
 }
 
 #[test]
-fn f7_feedback_returns_the_review_once() {
+fn f7_wait_returns_the_review_once() {
     let (env, _repo) = submitted();
     let submitted = review(
         &env,
@@ -72,7 +75,7 @@ fn f7_feedback_returns_the_review_once() {
     assert_eq!(submitted["revision"], 1);
     assert_eq!(state(&env), "changes_requested");
 
-    let run = env.mg(&["--json", "feedback", "app#1"]).assert_code(0);
+    let run = env.mg(&["--json", "wait", "app#1"]).assert_code(0);
     let feedback = run.json();
     assert_eq!(feedback["item"], "app#1");
     assert_eq!(feedback["state"], "changes_requested");
@@ -106,7 +109,7 @@ fn f7_feedback_prints_the_review_and_how_to_replay_it() {
     assert_eq!(
         run.stdout.trim(),
         "[1] app#1 r1: the operator requested changes\n  Handle the empty password.\n\n\
-         cursor 1 (mg feedback --since 1 replays from here)"
+         cursor 1 (mg wait --since 1 replays from here)"
     );
 }
 
@@ -118,7 +121,7 @@ fn f7_since_replays_delivered_events() {
     env.mg(&["--json", "feedback", "app#1"]).assert_code(0);
 
     let replay = env
-        .mg(&["--json", "feedback", "app#1", "--since", "1"])
+        .mg(&["--json", "wait", "app#1", "--since", "1"])
         .assert_code(0)
         .json();
     let cursors: Vec<_> = replay["events"]
@@ -160,12 +163,54 @@ fn f6_comment_keeps_the_item_waiting_for_the_operator() {
     review(&env, "comment", "Looks reasonable so far.");
     assert_eq!(state(&env), "needs_review");
 
-    let run = env.mg(&["feedback", "app#1"]).assert_code(0);
+    let run = env.mg(&["wait", "app#1"]).assert_code(0);
     assert!(
         run.stdout.contains("the operator commented"),
         "{}",
         run.stdout
     );
+}
+
+#[test]
+fn f3_wait_times_out_with_75() {
+    let (env, _repo) = submitted();
+    let started = Instant::now();
+    let run = env.mg(&["wait", "app#1", "--timeout", "1"]).assert_code(75);
+    assert!(started.elapsed() >= Duration::from_secs(1));
+    assert_eq!(
+        run.stdout.trim(),
+        "no feedback on app#1 yet; call mg wait again"
+    );
+}
+
+#[test]
+fn f3_wait_wakes_when_the_operator_submits() {
+    let (env, _repo) = submitted();
+    let started = Instant::now();
+    let run = std::thread::scope(|scope| {
+        let waiting = scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--timeout", "30"]));
+        std::thread::sleep(Duration::from_millis(500));
+        review(&env, "changes_requested", "Wake up.");
+        waiting.join().unwrap()
+    });
+    let feedback = run.assert_code(0).json();
+    assert_eq!(feedback["events"][0]["summary"], "Wake up.");
+    assert!(started.elapsed() < Duration::from_secs(10));
+}
+
+#[test]
+fn f3_stopping_the_hub_ends_a_pending_wait() {
+    let (env, _repo) = submitted();
+    let started = Instant::now();
+    let run = std::thread::scope(|scope| {
+        let waiting = scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--timeout", "30"]));
+        std::thread::sleep(Duration::from_millis(500));
+        env.mg(&["hub", "stop"]).assert_code(0);
+        waiting.join().unwrap()
+    });
+    let run = run.assert_code(69);
+    assert_eq!(run.json()["error"]["code"], "hub_unavailable", "{run:?}");
+    assert!(started.elapsed() < Duration::from_secs(10));
 }
 
 #[test]
@@ -199,9 +244,9 @@ fn reviews_refuse_what_they_cant_record() {
 }
 
 #[test]
-fn feedback_names_the_fix_for_unknown_items_and_cursors() {
+fn wait_names_the_fix_for_unknown_items_and_cursors() {
     let (env, _repo) = submitted();
-    let run = env.mg(&["--json", "feedback", "app#9"]).assert_code(1);
+    let run = env.mg(&["--json", "wait", "app#9"]).assert_code(1);
     let error = &run.json()["error"];
     assert_eq!(error["code"], "item_not_found");
     assert_eq!(error["hint"], "mg inbox");

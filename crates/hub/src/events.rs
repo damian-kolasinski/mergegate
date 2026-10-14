@@ -1,4 +1,5 @@
 //! `GET /api/events/ui`: tells open UIs what changed, so they refetch it.
+//! Also wakes the agents' waits when the event log grows.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -16,6 +17,8 @@ use crate::server::AppState;
 /// Fans events out to every open stream.
 pub(crate) struct Events {
     sender: broadcast::Sender<UiEvent>,
+    /// Counts appends to the event log; a waiting agent re-reads on a change.
+    logged: watch::Sender<u64>,
     stopping: watch::Sender<bool>,
 }
 
@@ -23,6 +26,7 @@ impl Events {
     pub(crate) fn new() -> Self {
         Self {
             sender: broadcast::channel(64).0,
+            logged: watch::Sender::new(0),
             stopping: watch::Sender::new(false),
         }
     }
@@ -32,8 +36,25 @@ impl Events {
         let _ = self.sender.send(event);
     }
 
-    /// Ends every stream. Graceful shutdown waits for open responses, and
-    /// these never finish on their own.
+    /// Call after a write commits that appended to the event log or closed
+    /// an item: waits re-read on it, and a closed item ends them.
+    pub(crate) fn logged(&self) {
+        self.logged
+            .send_modify(|count| *count = count.wrapping_add(1));
+    }
+
+    /// Changes after each [`Self::logged`]. Mark it seen before reading the
+    /// log, so an append during the read isn't missed.
+    pub(crate) fn log(&self) -> watch::Receiver<u64> {
+        self.logged.subscribe()
+    }
+
+    pub(crate) fn stopping(&self) -> watch::Receiver<bool> {
+        self.stopping.subscribe()
+    }
+
+    /// Ends every stream and wait. Graceful shutdown waits for open
+    /// responses, and these don't finish on their own.
     pub(crate) fn stop(&self) {
         self.stopping.send_replace(true);
     }
@@ -46,10 +67,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 async fn stream(
     State(state): State<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let receivers = (
-        state.events.sender.subscribe(),
-        state.events.stopping.subscribe(),
-    );
+    let receivers = (state.events.sender.subscribe(), state.events.stopping());
     let stream = futures_util::stream::unfold(receivers, |(mut events, mut stopping)| async move {
         let event = tokio::select! {
             _ = stopping.wait_for(|stopping| *stopping) => return None,
