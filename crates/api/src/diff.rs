@@ -26,6 +26,8 @@ pub struct File {
     pub additions: Option<u64>,
     pub deletions: Option<u64>,
     pub content: Content,
+    /// Marked viewed in this revision.
+    pub viewed: bool,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

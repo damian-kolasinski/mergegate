@@ -5,6 +5,7 @@ mod diffs;
 mod items;
 mod migrate;
 mod projects;
+mod viewed;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

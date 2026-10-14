@@ -13,6 +13,7 @@ use crate::item::{
 };
 use crate::project::{Project, ProjectName, ProjectStore};
 use crate::store::StoreError;
+use crate::viewed::ViewedStore;
 
 /// A commit ID for tests: `n` as 40 hex digits.
 pub(crate) fn commit(n: u8) -> String {
@@ -324,6 +325,7 @@ pub(crate) struct FakeStore {
     items: Vec<Item>,
     files: BTreeMap<(ItemId, u32), Vec<ChangedFile>>,
     diffs: BTreeMap<BlobPair, FileDiff>,
+    viewed: BTreeSet<(ItemId, u32, String)>,
     clock: u32,
 }
 
@@ -480,6 +482,33 @@ impl DiffStore for FakeStore {
         diff: &FileDiff,
     ) -> Result<(), StoreError> {
         self.diffs.insert(pair(old, new), diff.clone());
+        Ok(())
+    }
+}
+
+impl ViewedStore for FakeStore {
+    fn viewed(&self, id: &ItemId, revision: u32) -> Result<BTreeSet<String>, StoreError> {
+        Ok(self
+            .viewed
+            .iter()
+            .filter(|(i, r, _)| i == id && *r == revision)
+            .map(|(_, _, path)| path.clone())
+            .collect())
+    }
+
+    fn set_viewed(
+        &mut self,
+        id: &ItemId,
+        revision: u32,
+        path: &str,
+        viewed: bool,
+    ) -> Result<(), StoreError> {
+        let key = (id.clone(), revision, path.to_owned());
+        if viewed {
+            self.viewed.insert(key);
+        } else {
+            self.viewed.remove(&key);
+        }
         Ok(())
     }
 }

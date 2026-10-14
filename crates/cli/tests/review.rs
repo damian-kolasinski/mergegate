@@ -16,6 +16,20 @@ fn get(env: &Env, path: &str) -> Reply {
     )
 }
 
+fn put(env: &Env, path: &str, body: &Value) -> Reply {
+    let addr = env.hub_addr();
+    let body = body.to_string();
+    http_reply(
+        &addr,
+        &format!(
+            "PUT {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\
+             {}: ui\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+            api::CLIENT_HEADER,
+            body.len(),
+        ),
+    )
+}
+
 fn json_of(reply: &Reply) -> Value {
     serde_json::from_str(&reply.body).unwrap_or_else(|e| panic!("{e}: {}", reply.body))
 }
@@ -76,6 +90,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                     "old_start": 1, "old_lines": 2, "new_start": 1, "new_lines": 2,
                     "lines": [" title", "-body", "\\ No newline at end of file", "+body"],
                 }]},
+                "viewed": false,
             },
             {
                 "path": "gone.txt",
@@ -88,6 +103,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                     "old_start": 1, "old_lines": 1, "new_start": 0, "new_lines": 0,
                     "lines": ["-bye"],
                 }]},
+                "viewed": false,
             },
             {
                 "path": "logo.bin",
@@ -97,6 +113,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "additions": null,
                 "deletions": null,
                 "content": {"kind": "binary"},
+                "viewed": false,
             },
             {
                 "path": "src/new.rs",
@@ -109,6 +126,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                     "old_start": 1, "old_lines": 4, "new_start": 1, "new_lines": 4,
                     "lines": [" fn a() {}", " fn b() {}", " fn c() {}", "-fn d() {}", "+fn e() {}"],
                 }]},
+                "viewed": false,
             },
         ])
     );
@@ -148,4 +166,40 @@ fn f6_serves_blobs_for_good() {
     let unknown = get(&env, &format!("/api/projects/web/blobs/{readme}"));
     assert_eq!(unknown.status, 404, "{}", unknown.body);
     assert_eq!(json_of(&unknown)["error"]["code"], "project_not_found");
+}
+
+#[test]
+fn f6_marks_files_viewed() {
+    let (env, _repo) = submitted();
+    let viewed = |env: &Env| -> Vec<String> {
+        let diff = json_of(&get(env, "/api/items/app%231"));
+        diff["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f["viewed"] == true)
+            .map(|f| f["path"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let mark = |path: &str, viewed: bool| {
+        let body = json!({"revision": 1, "path": path, "viewed": viewed});
+        put(&env, "/api/items/app%231/viewed", &body)
+    };
+
+    for path in ["src/new.rs", "README"] {
+        let reply = mark(path, true);
+        assert_eq!(reply.status, 204, "{}", reply.body);
+    }
+    assert_eq!(viewed(&env), ["README", "src/new.rs"]);
+    assert_eq!(mark("README", false).status, 204);
+    assert_eq!(viewed(&env), ["src/new.rs"]);
+
+    let unchanged = mark("src/old.rs", true);
+    assert_eq!(unchanged.status, 404, "{}", unchanged.body);
+    assert_eq!(json_of(&unchanged)["error"]["code"], "file_not_found");
+    let body = json!({"revision": 2, "path": "README", "viewed": true});
+    let later = put(&env, "/api/items/app%231/viewed", &body);
+    assert_eq!(json_of(&later)["error"]["code"], "revision_not_found");
+    let missing = put(&env, "/api/items/app%232/viewed", &body);
+    assert_eq!(json_of(&missing)["error"]["code"], "item_not_found");
 }

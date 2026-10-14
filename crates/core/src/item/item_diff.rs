@@ -3,6 +3,7 @@
 use super::{ChangedFile, Item, ItemId, ItemStore};
 use crate::diff::{DiffStore, FileDiff};
 use crate::store::StoreError;
+use crate::viewed::ViewedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemDiff {
@@ -15,17 +16,20 @@ pub struct ItemDiff {
 pub struct DiffedFile {
     pub file: ChangedFile,
     pub diff: FileDiff,
+    /// Marked viewed in this revision.
+    pub viewed: bool,
 }
 
 /// `None` when there's no such item. Every diff was cached at submit, so this
 /// only reads.
-pub fn item_diff<S: ItemStore + DiffStore>(
+pub fn item_diff<S: ItemStore + DiffStore + ViewedStore>(
     store: &S,
     id: &ItemId,
 ) -> Result<Option<ItemDiff>, StoreError> {
     let Some(item) = store.item(id)? else {
         return Ok(None);
     };
+    let viewed = store.viewed(id, item.revision.number)?;
     let files = store
         .revision_files(id, item.revision.number)?
         .into_iter()
@@ -35,7 +39,8 @@ pub fn item_diff<S: ItemStore + DiffStore>(
                 .ok_or_else(|| {
                     StoreError::new(format!("{id} has no cached diff for {}", file.path))
                 })?;
-            Ok(DiffedFile { file, diff })
+            let viewed = viewed.contains(&file.path);
+            Ok(DiffedFile { file, diff, viewed })
         })
         .collect::<Result<_, StoreError>>()?;
     Ok(Some(ItemDiff { item, files }))
