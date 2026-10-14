@@ -5,6 +5,7 @@ use super::{Item, ItemBackend, ItemError, ItemGit, ItemId, ItemState, ItemStore}
 use crate::diff::DiffStore;
 use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::github::Github;
+use crate::highlight::HighlightStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Abandon {
@@ -17,7 +18,7 @@ pub struct Abandon {
 /// who abandoned it and why from an `item.abandoned` event. A `github`
 /// item's pull request is closed and its branch deleted first; the item stays
 /// open if GitHub fails, so nothing is left behind there unnoticed.
-pub fn abandon<S: ItemStore + DiffStore + FeedbackStore>(
+pub fn abandon<S: ItemStore + DiffStore + HighlightStore + FeedbackStore>(
     store: &mut S,
     git: &impl ItemGit,
     github: &impl Github,

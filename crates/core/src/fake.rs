@@ -11,6 +11,9 @@ use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExtern
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
 use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
+use crate::highlight::{
+    Grammar, HighlightStore, Highlighter, Highlights, LangError, Pack, Span, Tag,
+};
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
     NewRevision, Pushed, Revision, Submit, submit,
@@ -456,6 +459,8 @@ pub(crate) struct FakeStore {
     files: BTreeMap<(ItemId, u32), Vec<FileStat>>,
     revisions: BTreeMap<(ItemId, u32), Revision>,
     diffs: BTreeMap<BlobPair, FileDiff>,
+    /// By blob, grammar and version.
+    highlights: BTreeMap<(String, String, String), Highlights>,
     viewed: BTreeSet<(ItemId, u32, String)>,
     reviews: Vec<Review>,
     /// Every item's, oldest first.
@@ -543,6 +548,22 @@ impl FakeStore {
 
     pub fn forget_diffs(&mut self) {
         self.diffs.clear();
+    }
+
+    /// Blob, grammar and version of every cached entry.
+    pub fn highlighted(&self) -> Vec<(String, String, String)> {
+        self.highlights.keys().cloned().collect()
+    }
+
+    /// Blobs of every revision of the items `keep` picks.
+    fn blobs_of(&self, keep: impl Fn(&ItemId) -> bool) -> BTreeSet<String> {
+        self.files
+            .iter()
+            .filter(|((item, _), _)| keep(item))
+            .flat_map(|(_, files)| files)
+            .flat_map(|f| [f.file.old_blob.clone(), f.file.new_blob.clone()])
+            .flatten()
+            .collect()
     }
 
     fn revision(&mut self, id: &ItemId, number: u32, revision: NewRevision) -> Revision {
@@ -734,6 +755,116 @@ impl DiffStore for FakeStore {
         self.diffs
             .retain(|pair, _| !closing.contains(pair) || kept.contains(pair));
         Ok(())
+    }
+}
+
+impl HighlightStore for FakeStore {
+    fn highlights(
+        &self,
+        blob: &str,
+        grammar: &str,
+        version: &str,
+    ) -> Result<Option<Highlights>, StoreError> {
+        Ok(self
+            .highlights
+            .get(&(blob.into(), grammar.into(), version.into()))
+            .cloned())
+    }
+
+    fn has_highlights(&self, blob: &str, grammar: &str, version: &str) -> Result<bool, StoreError> {
+        Ok(self.highlights(blob, grammar, version)?.is_some())
+    }
+
+    fn insert_highlights(
+        &mut self,
+        blob: &str,
+        grammar: &str,
+        version: &str,
+        highlights: &Highlights,
+    ) -> Result<(), StoreError> {
+        self.highlights.insert(
+            (blob.into(), grammar.into(), version.into()),
+            highlights.clone(),
+        );
+        Ok(())
+    }
+
+    fn retain_highlights(&mut self, installed: &[(&str, &str)]) -> Result<(), StoreError> {
+        self.highlights
+            .retain(|(_, g, v), _| installed.contains(&(g.as_str(), v.as_str())));
+        Ok(())
+    }
+
+    fn prune_highlights(&mut self, id: &ItemId) -> Result<(), StoreError> {
+        let open: BTreeSet<ItemId> = self
+            .items
+            .iter()
+            .filter(|i| i.state.is_open())
+            .map(|i| i.id.clone())
+            .collect();
+        let kept = self.blobs_of(|item| open.contains(item));
+        let closing = self.blobs_of(|item| item == id);
+        self.highlights
+            .retain(|(blob, _, _), _| !closing.contains(blob) || kept.contains(blob));
+        Ok(())
+    }
+}
+
+/// Packs of one grammar each, named after their pack, with `name` as its
+/// extension. Each line highlights as one keyword span over its text.
+#[derive(Default)]
+pub(crate) struct FakeHighlighter {
+    pub packs: Vec<Pack>,
+}
+
+impl FakeHighlighter {
+    pub fn with(names: &[(&str, &str)]) -> Self {
+        Self {
+            packs: names.iter().map(|(n, v)| pack(n, v)).collect(),
+        }
+    }
+}
+
+pub(crate) fn pack(name: &str, version: &str) -> Pack {
+    Pack {
+        name: name.into(),
+        version: version.into(),
+        grammars: vec![Grammar {
+            name: name.into(),
+            extensions: vec![name.into()],
+            filenames: Vec::new(),
+            aliases: Vec::new(),
+        }],
+    }
+}
+
+impl Highlighter for FakeHighlighter {
+    fn packs(&self) -> Vec<Pack> {
+        self.packs.clone()
+    }
+
+    fn install(&self, from: &Path) -> Result<Vec<Pack>, LangError> {
+        Err(LangError::Empty(from.into()))
+    }
+
+    fn remove(&self, name: &str) -> Result<Pack, LangError> {
+        Err(LangError::NotInstalled(name.into()))
+    }
+
+    fn highlight(&self, grammar: &str, text: &str) -> Option<Highlights> {
+        self.packs.iter().find(|p| p.name == grammar)?;
+        let lines = text
+            .split('\n')
+            .map(|line| match line.encode_utf16().count() as u32 {
+                0 => Vec::new(),
+                len => vec![Span {
+                    start: 0,
+                    len,
+                    tag: Tag::Keyword,
+                }],
+            })
+            .collect();
+        Some(Highlights { lines })
     }
 }
 
