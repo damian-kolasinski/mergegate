@@ -1,0 +1,21 @@
+.textArea {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-container);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  color: var(--text-primary);
+  font: var(--type-p3);
+  resize: vertical;
+}
+
+.textArea::placeholder {
+  color: var(--text-subtle);
+}
+
+.textArea:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}

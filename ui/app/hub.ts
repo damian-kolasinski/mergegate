@@ -27,6 +27,15 @@ export async function putJson(path: string, body: unknown): Promise<void> {
   });
 }
 
+/** `POST`s `body` to a hub endpoint and returns what it answered. */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  return (await send(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", [clientHeader]: "ui" },
+    body: JSON.stringify(body),
+  })) as T;
+}
+
 /** `api::CLIENT_HEADER`. */
 const clientHeader = "x-mergegate-client";
 

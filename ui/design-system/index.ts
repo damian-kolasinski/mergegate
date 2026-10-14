@@ -4,7 +4,9 @@ import "./tokens.css";
 import "./base.css";
 
 export { Badge, type Tone } from "./badge";
+export { Button } from "./button";
 export { Empty } from "./empty";
 export { Row } from "./row";
 export { Section } from "./section";
 export { Meta, Mono } from "./text";
+export { TextArea } from "./text-area";

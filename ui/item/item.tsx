@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import type { File } from "../api/File";
+import type { ItemState } from "../api/ItemState";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { MarkViewed } from "../api/MarkViewed";
 import { getJson, putJson } from "../app/hub";
@@ -7,8 +8,9 @@ import { useKeys } from "../app/keys";
 import { inboxHref } from "../app/router";
 import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
 import { type Row as Line, rowsOf } from "../diff-view/patch";
-import { Badge, Empty, Meta, Mono, Row } from "../design-system";
+import { Badge, Empty, Meta, Mono, Row, type Tone } from "../design-system";
 import styles from "./item.module.css";
+import { ReviewBar } from "./review-bar";
 
 /**
  * An item's newest revision against its merge-base: every file in one
@@ -16,15 +18,28 @@ import styles from "./item.module.css";
  */
 export function ItemScreen(props: { id: string }) {
   const [diff, setDiff] = createSignal<ItemDiff>();
+  // The item as last fetched; its files stay those first shown.
+  const [state, setState] = createSignal<ItemState>();
   const [failure, setFailure] = createSignal<string>();
+  const fetchDiff = () =>
+    getJson<ItemDiff>(`/api/items/${encodeURIComponent(props.id)}`);
   // main.tsx keys the route, so this runs once per screen.
   createEffect(() => {
-    void getJson<ItemDiff>(`/api/items/${encodeURIComponent(props.id)}`).then(
-      setDiff,
+    void fetchDiff().then(
+      (fetched) => {
+        setState(fetched.item.state);
+        setDiff(fetched);
+      },
       (error: unknown) =>
         setFailure(error instanceof Error ? error.message : String(error)),
     );
   });
+  const refresh = () => {
+    void fetchDiff().then(
+      (fetched) => setState(fetched.item.state),
+      () => undefined,
+    );
+  };
 
   useKeys({
     Escape: () => {
@@ -35,12 +50,24 @@ export function ItemScreen(props: { id: string }) {
   return (
     <section class={styles.screen} aria-label={props.id}>
       <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
-      <Show when={diff()}>{(current) => <Review diff={current()} />}</Show>
+      <Show when={diff()}>
+        {(current) => (
+          <Review
+            diff={current()}
+            state={state() ?? current().item.state}
+            onReviewed={refresh}
+          />
+        )}
+      </Show>
     </section>
   );
 }
 
-function Review(props: { diff: ItemDiff }) {
+function Review(props: {
+  diff: ItemDiff;
+  state: ItemState;
+  onReviewed: () => void;
+}) {
   // Ids are `<project>#<number>`, and blobs are read per project.
   const project = () => props.diff.item.id.split("#")[0] ?? "";
   const blobUrl = (id: string) =>
@@ -168,6 +195,7 @@ function Review(props: { diff: ItemDiff }) {
         <Mono>{props.diff.item.id}</Mono>
         <h1 class={styles.title}>{props.diff.item.title}</h1>
         <Badge tone="brand">r{props.diff.item.revision.number}</Badge>
+        <Badge tone={stateTone[props.state]}>{stateLabel[props.state]}</Badge>
         <Meta>
           <Mono>{props.diff.item.branch}</Mono> →{" "}
           <Mono>{props.diff.item.target}</Mono>
@@ -219,8 +247,36 @@ function Review(props: { diff: ItemDiff }) {
           />
         </Show>
       </div>
+      <Show when={reviewable(props.state)}>
+        <ReviewBar
+          item={props.diff.item.id}
+          revision={props.diff.item.revision.number}
+          onSubmitted={props.onReviewed}
+        />
+      </Show>
     </>
   );
+}
+
+const stateLabel: Record<ItemState, string> = {
+  needs_review: "Needs review",
+  changes_requested: "Changes requested",
+  merging: "Merging",
+  merged: "Merged",
+  abandoned: "Abandoned",
+};
+
+const stateTone: Record<ItemState, Tone> = {
+  needs_review: "neutral",
+  changes_requested: "warning",
+  merging: "brand",
+  merged: "success",
+  abandoned: "neutral",
+};
+
+/** The hub takes a review while the item is with the operator or its agent. */
+function reviewable(state: ItemState): boolean {
+  return state === "needs_review" || state === "changes_requested";
 }
 
 function same(line: Line, other: Line | undefined): boolean {

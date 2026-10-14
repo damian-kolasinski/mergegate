@@ -1,8 +1,8 @@
-/* The header spans both panes; the file list and the diff scroll on their
-   own, so moving through one never moves the other. */
+/* The header and the review bar span both panes; the file list and the
+   diff scroll on their own, so moving through one never moves the other. */
 .screen {
   display: grid;
-  grid-template: auto 1fr / minmax(200px, 280px) 1fr;
+  grid-template: auto 1fr auto / minmax(200px, 280px) 1fr;
   height: 100%;
 }
 
