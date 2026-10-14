@@ -74,7 +74,8 @@ enum Command {
         /// feedback
         #[arg(long, default_value_t = 540)]
         timeout: u64,
-        /// Return the events after this cursor, even delivered ones
+        /// Replay the events after this cursor, even delivered ones, without
+        /// marking them delivered
         #[arg(long)]
         since: Option<u64>,
     },
@@ -82,7 +83,8 @@ enum Command {
     Feedback {
         /// The item, as in app#42
         item: String,
-        /// Return the events after this cursor, even delivered ones
+        /// Replay the events after this cursor, even delivered ones, without
+        /// marking them delivered
         #[arg(long)]
         since: Option<u64>,
     },

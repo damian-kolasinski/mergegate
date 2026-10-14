@@ -16,7 +16,7 @@ pub fn run(item: String, since: Option<u64>) -> Result<Outcome, CliError> {
     } else {
         describe(&feedback)
     };
-    Ok(deliver(client, &feedback, text))
+    Ok(deliver(client, &feedback, since, text))
 }
 
 /// The events after `since` (or after the delivered cursor). With `wait`,
@@ -41,10 +41,17 @@ pub(crate) fn read(
     client.get_query(&format!("/api/items/{}/feedback", segment(item)), &query)
 }
 
-/// Prints `feedback`, then acknowledges its events.
-pub(crate) fn deliver(client: Client, feedback: &Feedback, text: String) -> Outcome {
+/// Prints `feedback`, then acknowledges its events unless they are a replay.
+pub(crate) fn deliver(
+    client: Client,
+    feedback: &Feedback,
+    since: Option<u64>,
+    text: String,
+) -> Outcome {
     let outcome = Outcome::done(feedback, text);
-    if feedback.events.is_empty() {
+    // A replay may start past the delivered cursor, and acknowledging it
+    // would skip the events before `since` that were never printed.
+    if feedback.events.is_empty() || since.is_some() {
         return outcome;
     }
     let path = format!("/api/items/{}/feedback/ack", segment(&feedback.item));

@@ -55,27 +55,6 @@ fn review(item: &str, revision: u32, summary: &str) -> NewReview {
 }
 
 #[test]
-fn a_review_moves_the_item_and_logs_one_event() {
-    let (_dir, mut store) = store();
-    let app = id("app#1");
-    let written = store
-        .insert_review(review("app#1", 1, "Fix it"), ItemState::ChangesRequested)
-        .unwrap();
-    assert_eq!(written.revision, 1);
-    assert_eq!(written.summary, "Fix it");
-    assert!(written.submitted_at.ends_with('Z'));
-    let item = store.item(&app).unwrap().unwrap();
-    assert_eq!(item.state, ItemState::ChangesRequested);
-    // The review doesn't add a revision.
-    assert_eq!(item.revision.number, 2);
-
-    let events = store.events(&app, 0).unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, EventKind::ReviewSubmitted(written));
-    assert_eq!(store.last_cursor(&app).unwrap(), events[0].cursor);
-}
-
-#[test]
 fn cursors_are_hub_wide_and_events_per_item() {
     let (_dir, mut store) = store();
     let (app, web) = (id("app#1"), id("web#1"));

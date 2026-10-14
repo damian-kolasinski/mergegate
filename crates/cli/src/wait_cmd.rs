@@ -43,7 +43,7 @@ pub fn run(
         let feedback = read(&client, &item, since, Some((wait.min(REQUEST), wake)))?;
         if !feedback.events.is_empty() {
             let text = describe(&feedback);
-            return Ok(deliver(client, &feedback, text));
+            return Ok(deliver(client, &feedback, since, text));
         }
         if let Some(state) = closed(feedback.state) {
             let text = format!("{} is {state}", feedback.item);

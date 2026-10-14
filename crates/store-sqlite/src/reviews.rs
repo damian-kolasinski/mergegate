@@ -83,3 +83,7 @@ pub(crate) struct ReviewRow {
     pub summary: String,
     pub submitted_at: String,
 }
+
+#[cfg(test)]
+#[path = "reviews_tests.rs"]
+mod tests;
