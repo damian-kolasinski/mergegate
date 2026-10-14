@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::highlight::Span;
 use crate::attachment::Demo;
+use crate::highlight::Span;
 use crate::item::Item;
 use crate::merge::Blocked;
 use crate::review::Conversation;

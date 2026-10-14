@@ -2117,6 +2117,7 @@ dependencies = [
  "clap",
  "libc",
  "mergegate-api",
+ "mergegate-core",
  "mergegate-hub",
  "mergegate-skill",
  "mergegate-testkit",
