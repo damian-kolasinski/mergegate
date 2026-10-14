@@ -2,6 +2,7 @@
 
 mod client;
 mod doctor_cmd;
+mod feedback_cmd;
 mod hub_cmd;
 mod inbox_cmd;
 mod init_cmd;
@@ -60,6 +61,14 @@ enum Command {
         #[arg(long)]
         title: Option<String>,
     },
+    /// Print the item's new feedback and mark it delivered
+    Feedback {
+        /// The item, as in app#42
+        item: String,
+        /// Return the events after this cursor, even delivered ones
+        #[arg(long)]
+        since: Option<u64>,
+    },
     /// Open items: those waiting for review, with their agents, merging
     Inbox,
     /// Check that the hub, git and every project are set up to work
@@ -83,6 +92,7 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
         Command::Project(command) => project_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
         Command::Submit { title } => submit_cmd::run(title),
+        Command::Feedback { item, since } => feedback_cmd::run(item, since),
         Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),
     }

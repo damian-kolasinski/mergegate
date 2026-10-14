@@ -5,9 +5,11 @@ pub mod diff;
 pub mod doctor;
 pub mod error;
 pub mod event;
+pub mod feedback;
 pub mod hub;
 pub mod item;
 pub mod project;
+pub mod review;
 pub mod viewed;
 
 /// Version of the HTTP API between `mg` and the hub. A CLI refuses to talk to

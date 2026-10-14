@@ -6,8 +6,10 @@ pub mod diff;
 pub mod doctor;
 #[cfg(test)]
 mod fake;
+pub mod feedback;
 pub mod git;
 pub mod item;
 pub mod project;
+pub mod review;
 pub mod store;
 pub mod viewed;

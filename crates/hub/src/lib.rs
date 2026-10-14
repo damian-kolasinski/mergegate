@@ -3,6 +3,7 @@
 mod diff;
 mod doctor;
 mod events;
+mod feedback;
 mod git_http;
 mod guard;
 mod home;
@@ -10,6 +11,7 @@ mod items;
 mod lifecycle;
 mod projects;
 mod reply;
+mod reviews;
 mod server;
 mod ui;
 mod viewed;

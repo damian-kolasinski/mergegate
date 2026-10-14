@@ -1,0 +1,112 @@
+//! `GET /api/items/{id}/feedback` and `POST .../feedback/ack`: an item's
+//! events for its agent, read by `mg feedback`.
+
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use mergegate_core::feedback::{self, Event, EventKind, Feedback, FeedbackError, Source};
+use mergegate_core::item::ItemId;
+use serde::Deserialize;
+use std::sync::Arc;
+
+use crate::reply::Failure;
+use crate::server::AppState;
+use crate::{items, reviews};
+
+pub(crate) fn routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/api/items/{id}/feedback", get(read))
+        .route("/api/items/{id}/feedback/ack", post(acknowledge))
+}
+
+#[derive(Deserialize)]
+struct ReadQuery {
+    since: Option<u64>,
+}
+
+async fn read(
+    State(state): State<Arc<AppState>>,
+    id: Result<Path<String>, PathRejection>,
+    query: Result<Query<ReadQuery>, QueryRejection>,
+) -> Result<Json<api::feedback::Feedback>, Failure> {
+    let Path(id) = id?;
+    let Query(query) = query?;
+    let id = parse(&id)?;
+    let read = {
+        let id = id.clone();
+        state
+            .blocking(move |store, _| feedback::feedback(store, &id, query.since))
+            .await
+            .map_err(failure)?
+    };
+    Ok(Json(to_api(&id, read)))
+}
+
+async fn acknowledge(
+    State(state): State<Arc<AppState>>,
+    id: Result<Path<String>, PathRejection>,
+    request: Result<Json<api::feedback::Acknowledge>, JsonRejection>,
+) -> Result<Json<api::feedback::Acknowledged>, Failure> {
+    let Path(id) = id?;
+    let Json(request) = request?;
+    let id = parse(&id)?;
+    let delivered = state
+        .blocking(move |store, _| feedback::acknowledge(store, &id, request.cursor))
+        .await
+        .map_err(failure)?;
+    Ok(Json(api::feedback::Acknowledged { delivered }))
+}
+
+fn parse(id: &str) -> Result<ItemId, Failure> {
+    ItemId::parse(id)
+        .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
+}
+
+fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
+    api::feedback::Feedback {
+        item: id.to_string(),
+        state: items::state_to_api(read.item.state),
+        events: read
+            .events
+            .into_iter()
+            .map(|e| event_to_api(id, e))
+            .collect(),
+        cursor: read.cursor,
+    }
+}
+
+fn event_to_api(id: &ItemId, event: Event) -> api::feedback::Event {
+    let revision = event.revision();
+    let source = match event.source() {
+        Source::Operator => api::feedback::Source::Operator,
+    };
+    let body = match event.kind {
+        EventKind::ReviewSubmitted(review) => api::feedback::EventBody::ReviewSubmitted {
+            verdict: reviews::verdict_to_api(review.verdict),
+            summary: review.summary,
+        },
+    };
+    api::feedback::Event {
+        cursor: event.cursor,
+        item: id.to_string(),
+        revision,
+        source,
+        body,
+    }
+}
+
+fn failure(e: FeedbackError) -> Failure {
+    use FeedbackError as E;
+    use StatusCode as S;
+    let (status, code, hint) = match &e {
+        E::NoItem(_) => (S::NOT_FOUND, "item_not_found", Some("mg inbox".to_owned())),
+        E::NoEvent { .. } => (S::BAD_REQUEST, "invalid_cursor", None),
+        E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
+    };
+    if status.is_server_error() {
+        tracing::error!("{e}");
+    }
+    Failure::new(status, code, e.to_string(), hint)
+}

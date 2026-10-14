@@ -2,9 +2,11 @@
 //! open.
 
 mod diffs;
+mod feedback;
 mod items;
 mod migrate;
 mod projects;
+mod reviews;
 mod viewed;
 
 use std::path::{Path, PathBuf};
