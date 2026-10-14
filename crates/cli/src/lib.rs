@@ -65,7 +65,8 @@ enum Command {
     Feedback {
         /// The item, as in app#42
         item: String,
-        /// Return the events after this cursor, even delivered ones
+        /// Replay the events after this cursor, even delivered ones, without
+        /// marking them delivered
         #[arg(long)]
         since: Option<u64>,
     },

@@ -137,6 +137,24 @@ fn f7_since_replays_delivered_events() {
 }
 
 #[test]
+fn f7_a_replay_past_the_delivered_cursor_skips_nothing() {
+    let (env, _repo) = submitted();
+    review(&env, "comment", "First look.");
+    review(&env, "changes_requested", "Second look.");
+
+    let replay = env
+        .mg(&["--json", "feedback", "app#1", "--since", "1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(replay["events"].as_array().unwrap().len(), 1);
+    let new = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(new["events"].as_array().unwrap().len(), 2);
+}
+
+#[test]
 fn f6_comment_keeps_the_item_waiting_for_the_operator() {
     let (env, _repo) = submitted();
     review(&env, "comment", "Looks reasonable so far.");
