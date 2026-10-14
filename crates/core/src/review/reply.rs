@@ -23,6 +23,11 @@ pub struct Reply {
 }
 
 impl Reply {
+    /// The operator's, waiting for the next review to send it.
+    pub fn is_draft(&self) -> bool {
+        self.author == Author::Operator && self.review.is_none()
+    }
+
     /// The revision an `addressed` reply was addressed in: the first one
     /// submitted after it, once there is one.
     pub fn addressed_in(&self, newest: u32) -> Option<u32> {

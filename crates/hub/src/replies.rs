@@ -77,6 +77,11 @@ fn failure(e: ReplyError, comment: &str) -> Failure {
     Failure::new(status, code, message, hint)
 }
 
+/// An operator's reply a review sent, which no revision addresses.
+pub(crate) fn sent(reply: &Reply) -> api::review::Reply {
+    to_api(reply, reply.revision)
+}
+
 /// `newest` is the item's newest revision, which tells whether a later one
 /// addressed the reply.
 pub(crate) fn to_api(reply: &Reply, newest: u32) -> api::review::Reply {

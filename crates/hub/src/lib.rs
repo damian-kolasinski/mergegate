@@ -3,6 +3,7 @@
 mod comments;
 mod diff;
 mod doctor;
+mod draft_replies;
 mod events;
 mod feedback;
 mod git_http;

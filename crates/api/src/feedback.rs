@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::item::ItemState;
-use crate::review::{Comment, Verdict};
+use crate::review::{Comment, Reply, Verdict};
 
 /// `GET /api/items/{id}/feedback`: the events after `since`, or after the
 /// item's delivered cursor. With `wait` (seconds), the hub holds the request
@@ -44,6 +44,8 @@ pub enum EventBody {
         verdict: Verdict,
         summary: String,
         comments: Vec<Comment>,
+        /// The operator's answers on comments earlier reviews sent.
+        replies: Vec<Reply>,
     },
 }
 

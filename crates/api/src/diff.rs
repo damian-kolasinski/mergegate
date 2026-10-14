@@ -14,8 +14,11 @@ pub struct ItemDiff {
     pub comments: Vec<Comment>,
     /// The operator's, not sent yet, on every revision, oldest first.
     pub drafts: Vec<Comment>,
-    /// On every comment, oldest first.
+    /// The agent's and the sent ones of the operator, on every comment,
+    /// oldest first.
     pub replies: Vec<Reply>,
+    /// The operator's, not sent yet, oldest first.
+    pub draft_replies: Vec<Reply>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

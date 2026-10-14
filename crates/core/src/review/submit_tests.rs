@@ -75,7 +75,7 @@ fn a_review_sends_every_draft_on_the_item() {
         submit(&mut store, request(2, Verdict::Comment, ""))
             .unwrap_err()
             .to_string(),
-        "a review needs a summary or a comment"
+        "a review needs a summary, a comment or a reply"
     );
 }
 
@@ -117,7 +117,7 @@ fn refuses_reviews_that_cant_be_sent() {
     );
     assert_eq!(
         err(request(1, Verdict::ChangesRequested, " \n")),
-        "a review needs a summary or a comment"
+        "a review needs a summary, a comment or a reply"
     );
     for (closed, message) in [
         (ItemState::Merging, "app#1 is merging"),
