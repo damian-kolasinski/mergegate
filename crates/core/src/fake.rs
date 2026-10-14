@@ -13,7 +13,7 @@ use crate::item::{
     Revision, Submit, submit,
 };
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
-use crate::review::{NewReview, Review, ReviewStore};
+use crate::review::{Comment, CommentId, NewComment, NewReview, Review, ReviewStore};
 use crate::store::StoreError;
 use crate::viewed::ViewedStore;
 
@@ -330,6 +330,10 @@ pub(crate) struct FakeStore {
     viewed: BTreeSet<(ItemId, u32, String)>,
     reviews: Vec<Review>,
     /// Every item's, oldest first.
+    comments: Vec<Comment>,
+    /// Comment IDs aren't reused, as the store's aren't.
+    last_comment: u64,
+    /// Every item's, oldest first.
     events: Vec<(ItemId, Event)>,
     delivered: BTreeMap<ItemId, u64>,
     clock: u32,
@@ -563,12 +567,21 @@ impl ViewedStore for FakeStore {
 
 impl ReviewStore for FakeStore {
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError> {
+        let id = self.reviews.len() as u64 + 1;
+        let mut comments = Vec::new();
+        for comment in &mut self.comments {
+            if comment.item == review.item && comment.review.is_none() {
+                comment.review = Some(id);
+                comments.push(comment.clone());
+            }
+        }
         let review = Review {
-            id: self.reviews.len() as u64 + 1,
+            id,
             item: review.item,
             revision: review.revision,
             verdict: review.verdict,
             summary: review.summary,
+            comments,
             submitted_at: self.now(),
         };
         self.set_state(&review.item, state);
@@ -580,6 +593,50 @@ impl ReviewStore for FakeStore {
         };
         self.events.push((review.item.clone(), event));
         Ok(review)
+    }
+
+    fn insert_draft(&mut self, comment: NewComment) -> Result<Comment, StoreError> {
+        self.last_comment += 1;
+        let comment = Comment {
+            id: CommentId(self.last_comment),
+            item: comment.item,
+            revision: comment.revision,
+            path: comment.path,
+            side: comment.side,
+            start_line: comment.start_line,
+            line: comment.line,
+            body: comment.body,
+            quote: comment.quote,
+            review: None,
+            created_at: self.now(),
+        };
+        self.comments.push(comment.clone());
+        Ok(comment)
+    }
+
+    fn comments(&self, id: &ItemId) -> Result<Vec<Comment>, StoreError> {
+        Ok(self
+            .comments
+            .iter()
+            .filter(|c| c.item == *id)
+            .cloned()
+            .collect())
+    }
+
+    fn set_draft_body(&mut self, id: CommentId, body: &str) -> Result<(), StoreError> {
+        if let Some(draft) = self
+            .comments
+            .iter_mut()
+            .find(|c| c.id == id && c.review.is_none())
+        {
+            draft.body = body.into();
+        }
+        Ok(())
+    }
+
+    fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError> {
+        self.comments.retain(|c| c.id != id || c.review.is_some());
+        Ok(())
     }
 }
 

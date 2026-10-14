@@ -43,7 +43,7 @@ impl FeedbackStore for Store {
             let (cursor, row) = row.map_err(StoreError::new)?;
             Ok(Event {
                 cursor,
-                kind: EventKind::ReviewSubmitted(review(id, row)?),
+                kind: EventKind::ReviewSubmitted(review(&self.conn, id, row)?),
             })
         })
         .collect()

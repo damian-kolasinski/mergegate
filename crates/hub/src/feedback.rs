@@ -16,7 +16,7 @@ use tokio::time::Instant;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{items, reviews};
+use crate::{comments, items, reviews};
 
 /// The longest one request waits; `mg wait` asks again to wait longer.
 const MAX_WAIT: Duration = Duration::from_secs(3600);
@@ -116,6 +116,7 @@ fn event_to_api(id: &ItemId, event: Event) -> api::feedback::Event {
         EventKind::ReviewSubmitted(review) => api::feedback::EventBody::ReviewSubmitted {
             verdict: reviews::verdict_to_api(review.verdict),
             summary: review.summary,
+            comments: review.comments.iter().map(comments::to_api).collect(),
         },
     };
     api::feedback::Event {

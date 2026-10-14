@@ -12,6 +12,7 @@ use axum::{Json, Router};
 use mergegate_core::item::ItemId;
 use mergegate_core::review::{self, Review, ReviewError, SubmitReview, Verdict};
 
+use crate::comments;
 use crate::reply::Failure;
 use crate::server::AppState;
 
@@ -52,6 +53,7 @@ fn to_api(review: &Review) -> api::review::Review {
         revision: review.revision,
         verdict: verdict_to_api(review.verdict),
         summary: review.summary.clone(),
+        comments: review.comments.iter().map(comments::to_api).collect(),
         submitted_at: review.submitted_at.clone(),
     }
 }
@@ -63,7 +65,7 @@ pub(crate) fn verdict_to_api(verdict: Verdict) -> api::review::Verdict {
     }
 }
 
-fn failure(e: ReviewError) -> Failure {
+pub(crate) fn failure(e: ReviewError) -> Failure {
     use ReviewError as E;
     use StatusCode as S;
     let (status, code, hint) = match &e {
@@ -72,6 +74,13 @@ fn failure(e: ReviewError) -> Failure {
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::Empty => (S::BAD_REQUEST, "empty_review", None),
+        E::EmptyComment => (S::BAD_REQUEST, "empty_comment", None),
+        E::NoFile { .. } => (S::NOT_FOUND, "file_not_found", None),
+        E::NoLines { .. } => (S::BAD_REQUEST, "invalid_lines", None),
+        E::NotText(_) => (S::BAD_REQUEST, "not_text", None),
+        E::NoDraft { .. } => (S::NOT_FOUND, "draft_not_found", None),
+        E::Sent(_) => (S::CONFLICT, "comment_sent", None),
+        E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };
     if status.is_server_error() {

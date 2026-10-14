@@ -3,7 +3,7 @@
 
 use api::feedback::{Acknowledge, Acknowledged, Event, EventBody, Feedback};
 use api::item::ItemState;
-use api::review::Verdict;
+use api::review::{Comment, Side, Verdict};
 
 use crate::client::{Client, Reply, segment};
 use crate::output::{CliError, Outcome};
@@ -83,7 +83,11 @@ pub(crate) fn describe(feedback: &Feedback) -> String {
 
 fn event(event: &Event) -> String {
     match &event.body {
-        EventBody::ReviewSubmitted { verdict, summary } => {
+        EventBody::ReviewSubmitted {
+            verdict,
+            summary,
+            comments,
+        } => {
             let verdict = match verdict {
                 Verdict::Comment => "commented",
                 Verdict::ChangesRequested => "requested changes",
@@ -95,7 +99,33 @@ fn event(event: &Event) -> String {
             for line in summary.lines() {
                 out.push_str(&format!("\n  {line}"));
             }
+            for c in comments {
+                out.push_str(&format!("\n\n  {} {}", c.id, place(c, event.revision)));
+                for line in c.quote.lines() {
+                    out.push_str(format!("\n    > {line}").trim_end());
+                }
+                for line in c.body.lines() {
+                    out.push_str(&format!("\n    {line}"));
+                }
+            }
             out
         }
     }
+}
+
+/// `path:line`, or `path:start-line`, naming the old side and a revision
+/// other than the event's.
+fn place(comment: &Comment, revision: u32) -> String {
+    let mut out = format!("{}:", comment.path);
+    if comment.start_line != comment.line {
+        out.push_str(&format!("{}-", comment.start_line));
+    }
+    out.push_str(&comment.line.to_string());
+    if comment.side == Side::Old {
+        out.push_str(" (old)");
+    }
+    if comment.revision != revision {
+        out.push_str(&format!(" @r{}", comment.revision));
+    }
+    out
 }
