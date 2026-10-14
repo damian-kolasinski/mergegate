@@ -6,6 +6,7 @@ import { linesOf, sameSpot, spotOf } from "./anchor";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
 import { Editor } from "./editor";
+import { ReplyList } from "./replies";
 import styles from "./thread.module.css";
 
 /**
@@ -64,7 +65,7 @@ export function Thread(props: { comments: Comments; spot: Spot }) {
   );
 }
 
-/** A comment, or its editor while it's being edited. */
+/** A comment with its thread, or its editor while it's being edited. */
 function CommentCard(props: { comments: Comments; comment: Comment }) {
   return (
     <Show
@@ -91,6 +92,7 @@ function CommentCard(props: { comments: Comments; comment: Comment }) {
           <DraftActions comments={props.comments} comment={props.comment} />
         </header>
         <p class={styles.body}>{props.comment.body}</p>
+        <ReplyList comments={props.comments} comment={props.comment} />
         <Show when={props.comments.drafts.failure(props.comment)}>
           {(message) => (
             <p role="alert">
