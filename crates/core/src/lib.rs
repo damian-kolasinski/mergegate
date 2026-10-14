@@ -2,6 +2,7 @@
 //! reached through the port traits defined here and implemented by adapters.
 
 pub mod agent;
+pub mod attachment;
 pub mod decision;
 pub mod diff;
 pub mod doctor;
@@ -17,5 +18,6 @@ pub mod merge;
 pub mod project;
 pub mod resume;
 pub mod review;
+pub mod settings;
 pub mod store;
 pub mod viewed;

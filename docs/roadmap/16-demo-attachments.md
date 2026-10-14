@@ -17,7 +17,7 @@ Settled with the operator:
 
 Taken by the agent:
 
-7. **Stored by content hash** under `$MERGEGATE_HOME/attachments/`, so the same file is kept once. Migration `0002` adds `attachments` and `items.closed_at`; closed items already in the database count as closed at the upgrade.
+7. **Stored by content hash** under `$MERGEGATE_HOME/attachments/`, so the same file is kept once. Migration `0004` adds `attachments` and `items.closed_at`; closed items already in the database count as closed at the upgrade.
 8. **One upload route,** `POST /api/items/{id}/attachments?name=…[&revision=N]`, a raw body. `mg submit --attach` checks every file before it pushes, then uploads each to the revision the submit returned; an upload that fails after the submit names `mg attach`. `mg attach` adds to the newest revision. Attachments only accumulate.
 9. **Served at `GET /api/attachments/{sha256}`** with the stored type, `nosniff`, a `sandbox` CSP and single-range requests (video seeking needs them), cached as immutable.
 10. **Attaching tells the UI, not the agent:** `item.changed` and `inbox.changed`; no event in the item's log, no state change.
@@ -26,7 +26,7 @@ Taken by the agent:
 ## Where it lives
 
 - `core::attachment` (media sniffing, attach, demo choice, prune), `core::settings` (hub settings, the TTL), with `AttachmentStore` and `SettingsStore` ports.
-- `store-sqlite`: `attachments.rs`, `settings.rs` (over `hub_meta`), migration `0002_attachments.sql`; `items.closed_at` set by `notify`.
+- `store-sqlite`: `attachments.rs`, `settings.rs` (over `hub_meta`), migration `0004_attachments.sql`; `items.closed_at` set by `notify`.
 - `api::attachment`, `api::settings`; `ItemDiff.demo`, `InboxItem.demo`.
 - `hub`: `attachments.rs` (upload, serve, pruner), `settings.rs`.
 - `cli`: `attach_cmd.rs`, `--attach` on submit, `mg hub set`.
