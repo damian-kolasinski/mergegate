@@ -27,3 +27,10 @@
   text-align: right;
   white-space: nowrap;
 }
+
+.review {
+  flex: none;
+  width: 9em;
+  text-align: right;
+  white-space: nowrap;
+}

@@ -13,6 +13,7 @@ mod migrate;
 mod projects;
 mod replies;
 mod reviews;
+mod rules;
 mod settings;
 mod viewed;
 

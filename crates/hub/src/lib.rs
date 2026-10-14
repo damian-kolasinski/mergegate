@@ -23,6 +23,7 @@ mod replies;
 mod reply;
 mod resume;
 mod reviews;
+mod rules;
 mod server;
 mod settings;
 mod ui;

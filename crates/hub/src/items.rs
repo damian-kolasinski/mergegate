@@ -11,11 +11,12 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, Submit};
+use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{merge, projects};
+use crate::{merge, projects, rules};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -36,10 +37,26 @@ async fn submit(
         worktree: request.worktree,
         wake: request.wake,
     };
-    let submitted = state
-        .blocking_github(move |store, git, github| item::submit(store, git, github, request))
+    let app = state.clone();
+    let (moved, submitted) = state
+        .blocking_github(move |store, git, github| {
+            // So a rule the operator just wrote applies to this revision
+            // without waiting for the next poll.
+            let moved = match ProjectName::parse(&request.project) {
+                Ok(project) if store.project(&project)?.is_some() => {
+                    app.rules.sync(store, &project)?
+                }
+                _ => Vec::new(),
+            };
+            // The moves stand even when the submit fails, so the UI hears
+            // of them either way.
+            let submitted = item::submit(store, git, github, request);
+            Ok::<_, ItemError>((moved, submitted))
+        })
         .await
         .map_err(failure)?;
+    rules::changed(&state, &moved);
+    let submitted = submitted.map_err(failure)?;
     // A new wake command may be due for events already logged.
     state.wakes.recheck();
     if submitted.new_revision {
@@ -105,6 +122,8 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
             files: revision.stat.files,
             additions: revision.stat.additions,
             deletions: revision.stat.deletions,
+            review_additions: revision.stat.review_additions,
+            review_deletions: revision.stat.review_deletions,
             submitted_at: revision.submitted_at.clone(),
         },
         link: link(&item.backend),
@@ -137,6 +156,8 @@ fn inbox_entry(
         files: revision.stat.files,
         additions: revision.stat.additions,
         deletions: revision.stat.deletions,
+        review_additions: revision.stat.review_additions,
+        review_deletions: revision.stat.review_deletions,
         created_at: item.created_at.clone(),
         updated_at: revision.submitted_at.clone(),
         blocked,

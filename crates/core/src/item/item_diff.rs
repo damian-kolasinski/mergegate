@@ -5,6 +5,7 @@ use super::{ChangedFile, Item, ItemError, ItemId, ItemState, ItemStore};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::review::{self, Conversation, ReviewStore};
 use crate::store::StoreError;
+use crate::triage::Triage;
 use crate::viewed::ViewedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,8 +25,11 @@ pub struct DiffedFile {
     /// None once the item is abandoned: its diffs were dropped, and its blobs
     /// may be gone too.
     pub content: Option<Content>,
-    /// Marked viewed in this revision.
+    /// Marked viewed in this revision. A trusted file counts as viewed
+    /// without a mark.
     pub viewed: bool,
+    pub generated: bool,
+    pub triage: Triage,
 }
 
 /// `None` when there's no such item. An open item's diffs were all cached at
@@ -70,6 +74,8 @@ pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore>(
         .zip(contents)
         .map(|(stat, content)| DiffedFile {
             viewed: viewed.contains(&stat.file.path),
+            generated: stat.generated,
+            triage: stat.triage,
             file: stat.file,
             additions: stat.additions,
             deletions: stat.deletions,

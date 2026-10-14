@@ -89,6 +89,9 @@ pub struct Revision {
     pub files: u32,
     pub additions: u64,
     pub deletions: u64,
+    /// The lines of files in the review tier, which trusted ones leave out.
+    pub review_additions: u64,
+    pub review_deletions: u64,
     pub submitted_at: String,
 }
 
@@ -112,6 +115,9 @@ pub struct InboxItem {
     pub files: u32,
     pub additions: u64,
     pub deletions: u64,
+    /// As in [`Revision`].
+    pub review_additions: u64,
+    pub review_deletions: u64,
     pub created_at: String,
     /// When the newest revision was submitted.
     pub updated_at: String,

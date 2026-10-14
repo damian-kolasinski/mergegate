@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 
 use crate::project::ProjectName;
 
-/// The oldest git with `merge-tree --write-tree`, which merging relies on.
-pub const MIN_VERSION: (u32, u32) = (2, 38);
+/// The oldest git with `check-attr --source`, which triage reads
+/// `linguist-generated` with; merging's `merge-tree --write-tree` came in
+/// 2.38.
+pub const MIN_VERSION: (u32, u32) = (2, 40);
 
 /// A repository as the hub sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]

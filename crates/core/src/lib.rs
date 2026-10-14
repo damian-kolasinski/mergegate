@@ -20,4 +20,5 @@ pub mod resume;
 pub mod review;
 pub mod settings;
 pub mod store;
+pub mod triage;
 pub mod viewed;

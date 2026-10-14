@@ -38,8 +38,16 @@ fn line(i: &InboxItem) -> String {
         Some(link) => format!(" · {}", link.label),
         None => String::new(),
     };
+    // Only when trusted files leave lines out, which the total then shows.
+    let review = i.review_additions + i.review_deletions;
+    let review = if review == i.additions + i.deletions {
+        String::new()
+    } else {
+        let noun = if review == 1 { "line" } else { "lines" };
+        format!("{review} {noun} to review, ")
+    };
     format!(
-        "  {} r{}  {}  ({}{link} · {}, +{} -{})",
+        "  {} r{}  {}  ({}{link} · {}, {review}+{} -{})",
         i.id,
         i.revision,
         i.title,

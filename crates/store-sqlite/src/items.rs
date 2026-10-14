@@ -11,12 +11,17 @@ use rusqlite::{OptionalExtension, Row, Transaction, params};
 
 use crate::Store;
 use crate::projects::backend_named;
+use crate::rules::{columns, read_triage};
 
 /// An item with its newest revision. Callers add a `WHERE` and `ORDER BY`.
 const SELECT: &str = "
     SELECT p.name, i.number, i.branch, i.title, i.state, i.backend, i.target, i.created_at,
            r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
-           i.github, i.pull_number, i.pull_url
+           i.github, i.pull_number, i.pull_url,
+           (SELECT coalesce(sum(additions), 0) FROM revision_files
+            WHERE item_id = i.id AND revision = r.number AND tier = 'review'),
+           (SELECT coalesce(sum(deletions), 0) FROM revision_files
+            WHERE item_id = i.id AND revision = r.number AND tier = 'review')
     FROM items i
     JOIN projects p ON p.id = i.project_id
     JOIN revisions r ON r.item_id = i.id
@@ -69,7 +74,11 @@ impl ItemStore for Store {
         let mut stmt = self
             .conn
             .prepare_cached(
-                "SELECT r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at
+                "SELECT r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
+                        (SELECT coalesce(sum(additions), 0) FROM revision_files
+                         WHERE item_id = r.item_id AND revision = r.number AND tier = 'review'),
+                        (SELECT coalesce(sum(deletions), 0) FROM revision_files
+                         WHERE item_id = r.item_id AND revision = r.number AND tier = 'review')
                  FROM revisions r
                  JOIN items i ON i.id = r.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -87,6 +96,8 @@ impl ItemStore for Store {
                         files: row.get(3)?,
                         additions: row.get::<_, i64>(4)? as u64,
                         deletions: row.get::<_, i64>(5)? as u64,
+                        review_additions: row.get::<_, i64>(7)? as u64,
+                        review_deletions: row.get::<_, i64>(8)? as u64,
                     },
                     submitted_at: row.get(6)?,
                 })
@@ -99,7 +110,8 @@ impl ItemStore for Store {
         let mut stmt = self
             .conn
             .prepare_cached(
-                "SELECT f.path, f.old_path, f.old_blob, f.new_blob, f.additions, f.deletions
+                "SELECT f.path, f.old_path, f.old_blob, f.new_blob, f.additions, f.deletions,
+                        f.generated, f.tier, f.rule, f.guard, f.why
                  FROM revision_files f
                  JOIN items i ON i.id = f.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -111,7 +123,11 @@ impl ItemStore for Store {
             .query_map(
                 params![id.project().as_str(), id.number() as i64, revision],
                 |row| {
-                    Ok(FileStat {
+                    let triage = match read_triage(row, 7)? {
+                        Ok(triage) => triage,
+                        Err(e) => return Ok(Err(e)),
+                    };
+                    Ok(Ok(FileStat {
                         file: ChangedFile {
                             path: row.get(0)?,
                             old_path: row.get(1)?,
@@ -120,11 +136,13 @@ impl ItemStore for Store {
                         },
                         additions: row.get::<_, Option<i64>>(4)?.map(|n| n as u64),
                         deletions: row.get::<_, Option<i64>>(5)?.map(|n| n as u64),
-                    })
+                        generated: row.get(6)?,
+                        triage,
+                    }))
                 },
             )
             .map_err(StoreError::new)?;
-        rows.collect::<Result<_, _>>().map_err(StoreError::new)
+        rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
@@ -236,11 +254,12 @@ fn insert_revision(
         .prepare_cached(
             "INSERT INTO revision_files
                  (item_id, revision, position, path, old_path, old_blob, new_blob,
-                  additions, deletions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                  additions, deletions, generated, tier, rule, guard, why)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         )
         .map_err(StoreError::new)?;
     for (position, file) in revision.files.iter().enumerate() {
+        let [tier, rule, guard, why] = columns(&file.triage);
         stmt.execute(params![
             item_id,
             number,
@@ -251,6 +270,11 @@ fn insert_revision(
             file.file.new_blob,
             file.additions.map(|n| n as i64),
             file.deletions.map(|n| n as i64),
+            file.generated,
+            tier,
+            rule,
+            guard,
+            why,
         ])
         .map_err(StoreError::new)?;
     }
@@ -271,6 +295,8 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             files: row.get(11)?,
             additions: row.get::<_, i64>(12)? as u64,
             deletions: row.get::<_, i64>(13)? as u64,
+            review_additions: row.get::<_, i64>(18)? as u64,
+            review_deletions: row.get::<_, i64>(19)? as u64,
         },
         submitted_at: row.get(14)?,
     };

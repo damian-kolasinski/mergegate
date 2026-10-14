@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
@@ -64,6 +65,39 @@ pub(crate) fn run_command(cmd: Command, doing: &str) -> Result<String, GitError>
     if !output.status.success() {
         return Err(failed(doing, &output));
     }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Like [`run`], with `input` on stdin, for lists too long for arguments.
+pub(crate) fn run_with_input<I, S>(
+    home: &Path,
+    doing: &str,
+    args: I,
+    input: &[u8],
+) -> Result<String, GitError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut cmd = git(home);
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let cant_run =
+        |e: std::io::Error| GitError::Failed(format!("{doing} failed: can't run git: {e}"));
+    let mut child = cmd.spawn().map_err(cant_run)?;
+    let mut stdin = child.stdin.take().expect("piped");
+    // Written from its own thread: git answers as it reads, and would block
+    // on a full stdout pipe while we block on a full stdin one.
+    let input = input.to_vec();
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
+    let output = child.wait_with_output().map_err(cant_run)?;
+    let written = writer.join().expect("stdin writer panicked");
+    if !output.status.success() {
+        return Err(failed(doing, &output));
+    }
+    written.map_err(cant_run)?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 

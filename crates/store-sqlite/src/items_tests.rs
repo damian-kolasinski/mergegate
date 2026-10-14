@@ -39,6 +39,8 @@ fn revision(head: char) -> NewRevision {
                 },
                 additions: Some(5),
                 deletions: Some(2),
+                generated: false,
+                triage: Default::default(),
             },
             FileStat {
                 file: ChangedFile {
@@ -49,6 +51,8 @@ fn revision(head: char) -> NewRevision {
                 },
                 additions: None,
                 deletions: None,
+                generated: false,
+                triage: Default::default(),
             },
         ],
     }
@@ -88,7 +92,9 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
         DiffStat {
             files: 2,
             additions: 5,
-            deletions: 2
+            deletions: 2,
+            review_additions: 5,
+            review_deletions: 2,
         }
     );
     assert_eq!(a.created_at, a.revision.submitted_at);

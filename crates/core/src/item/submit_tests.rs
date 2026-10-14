@@ -4,6 +4,7 @@ use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::github::{GithubError, GithubRepo, Pull};
 use crate::item::{DiffStat, ItemId};
 use crate::project::{Backend, Project, ProjectError, ProjectName};
+use crate::triage::{RulesStore, Tier};
 
 fn project(name: &str, upstream: &str, target: &str) -> Project {
     Project {
@@ -86,7 +87,9 @@ fn opens_an_item_against_the_merge_base() {
         DiffStat {
             files: 2,
             additions: 3,
-            deletions: 0
+            deletions: 0,
+            review_additions: 3,
+            review_deletions: 0,
         }
     );
     assert_eq!(git.fetched(), [("app".into(), "main".into())]);
@@ -166,7 +169,9 @@ fn caches_each_files_diff_and_reuses_it_in_later_revisions() {
         DiffStat {
             files: 3,
             additions: 4,
-            deletions: 0
+            deletions: 0,
+            review_additions: 4,
+            review_deletions: 0,
         }
     );
 }
@@ -610,4 +615,36 @@ fn open_items_keep_their_repo_when_the_project_moves() {
     assert_eq!(git.upstream_branch(me_app, "search"), Some(commit(2)));
     let repos: Vec<String> = github.pulls().iter().map(|p| p.repo.to_string()).collect();
     assert_eq!(repos, ["acme/app", "me/app"]);
+}
+
+#[test]
+fn triages_each_file_by_the_applied_rules() {
+    let (mut store, git) = setup();
+    let git = git.generated(&["README.md"]);
+    let app = ProjectName::parse("app").unwrap();
+    let rules = crate::fake::rules(&[(Tier::Review, "src/**"), (Tier::Trusted, "**")]);
+    store.set_applied_rules(&app, &rules).unwrap();
+    git.push("app", "login", &commit(3));
+    let item = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        request("app", "login", 3),
+    )
+    .unwrap()
+    .item;
+    let files = store.revision_files(&item.id, 1).unwrap();
+    let triaged: Vec<_> = files
+        .iter()
+        .map(|f| (f.file.path.as_str(), f.generated, f.triage.tier))
+        .collect();
+    assert_eq!(
+        triaged,
+        [
+            ("README.md", true, Tier::Trusted),
+            ("src/login.rs", false, Tier::Review)
+        ]
+    );
+    let stat = item.revision.stat;
+    assert_eq!((stat.review_additions, stat.additions), (2, 3));
 }

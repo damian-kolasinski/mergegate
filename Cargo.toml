@@ -16,6 +16,7 @@ api = { path = "crates/api", package = "mergegate-api" }
 mergegate-core = { path = "crates/core" }
 git = { path = "crates/git", package = "mergegate-git" }
 backend-github = { path = "crates/backend-github", package = "mergegate-backend-github" }
+rules-toml = { path = "crates/rules-toml", package = "mergegate-rules-toml" }
 store-sqlite = { path = "crates/store-sqlite", package = "mergegate-store-sqlite" }
 highlight = { path = "crates/highlight", package = "mergegate-highlight" }
 hub = { path = "crates/hub", package = "mergegate-hub" }

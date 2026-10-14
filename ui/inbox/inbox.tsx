@@ -167,6 +167,11 @@ function Entry(props: {
         )}
       </Show>
       {/* A zero count leaves its cell empty so the columns stay aligned. */}
+      <span class={styles.review} title="Lines changed outside trusted files">
+        <Show when={trusts(props.item)}>
+          <Meta>{toReview(props.item)} to review</Meta>
+        </Show>
+      </span>
       <span class={styles.figure}>
         <Show when={props.item.additions}>
           <Meta tone="added">+{props.item.additions}</Meta>
@@ -187,6 +192,18 @@ function Entry(props: {
       </span>
     </Row>
   );
+}
+
+/** Whether rules trusted any of the item's changed lines. */
+function trusts(item: InboxItem): boolean {
+  return (
+    item.review_additions !== item.additions ||
+    item.review_deletions !== item.deletions
+  );
+}
+
+function toReview(item: InboxItem): number {
+  return item.review_additions + item.review_deletions;
 }
 
 function why(blocked: Blocked): string {

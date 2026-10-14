@@ -16,6 +16,10 @@ When the change has something to see, such as a screen, a flow or output, record
 
 The review screen shows the newest revision's attachments, or the newest earlier revision's while it has none, so a small fix needn't be recorded again. They stay in mergegate, even for GitHub projects.
 
+## What the operator reads
+
+The operator's rules sort each file of a revision into review or trusted: trusted files, such as lockfiles or generated code, are folded away and the rest are read. `mg rules list` shows the project's rules, first match wins. The operator writes them; don't edit the rules file. A change to a `.gitattributes` is always reviewed, as it can mark files generated.
+
 ## Reading a review
 
 A `review.submitted` event carries the verdict (`approved`, `changes_requested` or `comment`), the operator's summary, and the comments. Each comment has an ID (`c_17`), the file and lines it is on, the lines it quotes, and its body. `replies` holds the operator's answers to your replies on earlier comments.
@@ -42,7 +46,7 @@ On an item with a GitHub pull request, the hub reads the pull request's comments
 
 ## The queue
 
-`mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging.
+`mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging, each with the lines the operator has to read and its whole diff's.
 
 ## Giving up
 

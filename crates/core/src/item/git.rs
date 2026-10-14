@@ -1,5 +1,6 @@
 use crate::git::{GitError, Remote, Upstream};
 use crate::project::ProjectName;
+use crate::triage::Triage;
 
 /// What the item slice needs from the project's staging repo. Commits are
 /// full hex object IDs.
@@ -87,6 +88,9 @@ pub struct FileStat {
     /// Lines added and deleted; none when the change isn't text.
     pub additions: Option<u64>,
     pub deletions: Option<u64>,
+    /// `linguist-generated` as the revision's base sets it.
+    pub generated: bool,
+    pub triage: Triage,
 }
 
 /// A full object ID: 40 (SHA-1) or 64 (SHA-256) lowercase hex digits.
