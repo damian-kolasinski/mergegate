@@ -74,13 +74,6 @@ pub(crate) fn failure(e: ReviewError) -> Failure {
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::Empty => (S::BAD_REQUEST, "empty_review", None),
-        E::EmptyComment => (S::BAD_REQUEST, "empty_comment", None),
-        E::NoFile { .. } => (S::NOT_FOUND, "file_not_found", None),
-        E::NoLines { .. } => (S::BAD_REQUEST, "invalid_lines", None),
-        E::NotText(_) => (S::BAD_REQUEST, "not_text", None),
-        E::NoDraft { .. } => (S::NOT_FOUND, "draft_not_found", None),
-        E::Sent(_) => (S::CONFLICT, "comment_sent", None),
-        E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };
     if status.is_server_error() {

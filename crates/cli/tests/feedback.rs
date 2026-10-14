@@ -311,17 +311,23 @@ fn drafts_refuse_lines_they_cant_quote() {
     let (env, repo) = submitted();
     repo.commit_files("Logo", &[("logo.png", "PNG\0\0")]);
     env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
-    let on = |path: &str, side: &str, line: u32, body: &str| {
+    let on_revision = |revision: u32, path: &str, side: &str, line: u32, body: &str| {
         post(
             &env,
             "/api/items/app%231/drafts",
             &json!({
-                "revision": 2, "path": path, "side": side,
+                "revision": revision, "path": path, "side": side,
                 "start_line": line, "line": line, "body": body,
             }),
         )
     };
+    let on = |path: &str, side: &str, line: u32, body: &str| on_revision(2, path, side, line, body);
     let cases = [
+        (
+            on_revision(3, "src/login.rs", "new", 1, "x"),
+            404,
+            "revision_not_found",
+        ),
         (on("src/login.rs", "new", 2, "x"), 400, "invalid_lines"),
         (on("src/login.rs", "old", 1, "x"), 400, "invalid_lines"),
         (on("src/other.rs", "new", 1, "x"), 404, "file_not_found"),
@@ -346,6 +352,16 @@ fn drafts_refuse_lines_they_cant_quote() {
             ),
             404,
             "draft_not_found",
+        ),
+        (
+            send(
+                &env,
+                "DELETE",
+                "/api/items/app%239/drafts/c_1",
+                &json!(null),
+            ),
+            404,
+            "item_not_found",
         ),
     ];
     for (reply, status, code) in cases {

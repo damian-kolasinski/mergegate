@@ -135,3 +135,41 @@ fn drafts_change_until_a_review_sends_them() {
         .unwrap();
     assert_eq!(next.comments, []);
 }
+
+#[test]
+fn a_review_sends_only_its_items_drafts() {
+    let (_dir, mut store) = store();
+    store
+        .insert_item(NewItem {
+            project: ProjectName::parse("app").unwrap(),
+            branch: "other".into(),
+            title: "Other".into(),
+            state: ItemState::NeedsReview,
+            backend: Backend::Local,
+            target: "main".into(),
+            revision: NewRevision {
+                head: "b".repeat(40),
+                base: "0".repeat(40),
+                files: Vec::new(),
+            },
+        })
+        .unwrap();
+    let other = id("app#2");
+    let mine = store.insert_draft(draft(1, "Mine")).unwrap();
+    let elsewhere = store
+        .insert_draft(NewComment {
+            item: other.clone(),
+            ..draft(1, "Elsewhere")
+        })
+        .unwrap();
+
+    let written = store
+        .insert_review(review("app#1", 2, ""), ItemState::ChangesRequested)
+        .unwrap();
+    assert_eq!(
+        written.comments.iter().map(|c| c.id).collect::<Vec<_>>(),
+        [mine.id]
+    );
+    assert_eq!(store.comments(&id("app#1")).unwrap(), written.comments);
+    assert_eq!(store.comments(&other).unwrap(), [elsewhere]);
+}

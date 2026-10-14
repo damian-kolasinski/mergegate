@@ -38,10 +38,28 @@ fn a_draft_quotes_the_lines_it_is_on() {
 
 #[test]
 fn a_quote_keeps_the_last_lines_of_a_long_range() {
-    let lines = ["1", "2", "3", "4", "5", "6", "7"];
-    assert_eq!(quote(&lines, 1, 7), "3\n4\n5\n6\n7");
-    assert_eq!(quote(&lines, 4, 6), "4\n5\n6");
-    assert_eq!(quote(&lines, 7, 7), "7");
+    let text = "1\n2\n3\n4\n5\n6\n7\n";
+    assert_eq!(quote(text, 1, 7).unwrap(), "3\n4\n5\n6\n7");
+    assert_eq!(quote(text, 4, 6).unwrap(), "4\n5\n6");
+    assert_eq!(quote(text, 7, 7).unwrap(), "7");
+    assert_eq!(quote(text, 7, 8), None);
+}
+
+#[test]
+fn a_quote_counts_lines_as_git_does() {
+    assert_eq!(quote("a\r\nb\r\n", 1, 2).unwrap(), "a\nb");
+    assert_eq!(quote("a\nb", 2, 2).unwrap(), "b");
+    assert_eq!(quote("a\n", 2, 2), None);
+}
+
+#[test]
+fn a_quote_cuts_long_lines() {
+    let long = "x".repeat(QUOTE_LINE_CHARS + 50);
+    let quoted = quote(&format!("é{long}\nshort\n"), 1, 2).unwrap();
+    let (first, rest) = quoted.split_once('\n').unwrap();
+    assert_eq!(first.chars().count(), QUOTE_LINE_CHARS + 1);
+    assert!(first.starts_with('é') && first.ends_with('…'));
+    assert_eq!(rest, "short");
 }
 
 #[test]
@@ -96,6 +114,18 @@ fn refuses_drafts_on_lines_the_revision_doesnt_have() {
 }
 
 #[test]
+fn a_closed_item_keeps_its_drafts_only_to_delete() {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let draft = write_draft(&mut store, &git, on("README.md", Side::New, 1, 1)).unwrap();
+    store.set_state(&id("app#1"), ItemState::Abandoned);
+    let edited = edit_draft(&mut store, &id("app#1"), draft.id, "Later.".into()).unwrap_err();
+    assert_eq!(edited.to_string(), "app#1 is closed");
+    delete_draft(&mut store, &id("app#1"), draft.id).unwrap();
+    assert_eq!(store.comments(&id("app#1")).unwrap(), []);
+}
+
+#[test]
 fn drafts_change_until_a_review_sends_them() {
     let mut store = FakeStore::with_item(1);
     let git = FakeGit::default();
@@ -111,8 +141,8 @@ fn drafts_change_until_a_review_sends_them() {
     delete_draft(&mut store, &id("app#1"), second.id).unwrap();
     let gone = delete_draft(&mut store, &id("app#1"), second.id).unwrap_err();
     assert_eq!(gone.to_string(), "app#1 has no draft c_2");
-    let elsewhere = edit_draft(&mut store, &id("app#2"), first.id, "x".into()).unwrap_err();
-    assert_eq!(elsewhere.to_string(), "app#2 has no draft c_1");
+    let missing = edit_draft(&mut store, &id("app#2"), first.id, "x".into()).unwrap_err();
+    assert_eq!(missing.to_string(), "no item app#2");
 
     let request = SubmitReview {
         id: id("app#1"),

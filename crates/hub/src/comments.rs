@@ -9,10 +9,10 @@ use axum::http::StatusCode;
 use axum::routing::{post, put};
 use axum::{Json, Router};
 use mergegate_core::item::ItemId;
-use mergegate_core::review::{self, Comment, CommentId, Side, WriteDraft};
+use mergegate_core::review::{self, Comment, CommentId, DraftError, Side, WriteDraft};
 
 use crate::reply::Failure;
-use crate::reviews::failure;
+use crate::reviews;
 use crate::server::AppState;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
@@ -89,6 +89,28 @@ fn comment_id(id: &str) -> Result<CommentId, Failure> {
             None,
         )
     })
+}
+
+fn failure(e: DraftError) -> Failure {
+    use DraftError as E;
+    use StatusCode as S;
+    let message = e.to_string();
+    let (status, code) = match e {
+        // An item that can't take a review can't take a draft either.
+        E::Review(e) => return reviews::failure(e),
+        E::Empty => (S::BAD_REQUEST, "empty_comment"),
+        E::NoFile { .. } => (S::NOT_FOUND, "file_not_found"),
+        E::NoLines { .. } => (S::BAD_REQUEST, "invalid_lines"),
+        E::NotText(_) => (S::BAD_REQUEST, "not_text"),
+        E::NoDraft { .. } => (S::NOT_FOUND, "draft_not_found"),
+        E::Sent(_) => (S::CONFLICT, "comment_sent"),
+        E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed"),
+        E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed"),
+    };
+    if status.is_server_error() {
+        tracing::error!("{message}");
+    }
+    Failure::new(status, code, message, None)
 }
 
 pub(crate) fn to_api(comment: &Comment) -> api::review::Comment {

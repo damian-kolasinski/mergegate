@@ -9,7 +9,7 @@ mod store;
 mod submit;
 
 pub use comment::{Comment, CommentId, QUOTE_LINES, Side};
-pub use draft::{WriteDraft, delete_draft, edit_draft, write_draft};
+pub use draft::{DraftError, QUOTE_LINE_CHARS, WriteDraft, delete_draft, edit_draft, write_draft};
 pub use error::ReviewError;
 pub use store::{NewComment, NewReview, ReviewStore};
 pub use submit::{SubmitReview, submit};
