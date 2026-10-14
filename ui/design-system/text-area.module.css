@@ -1,6 +1,8 @@
 .textArea {
-  flex: 1;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  /* Dragged taller, it still leaves room for what's above it. */
+  max-height: 40vh;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-container);
   border-radius: var(--radius-small);
@@ -8,6 +10,10 @@
   color: var(--text-primary);
   font: var(--type-p3);
   resize: vertical;
+}
+
+.textArea:disabled {
+  color: var(--text-inactive);
 }
 
 .textArea::placeholder {

@@ -1,5 +1,4 @@
 .button {
-  flex: none;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
@@ -22,7 +21,8 @@
 }
 
 .button[data-variant="solid"]:hover:enabled {
-  background: var(--text-brand-hover);
+  border-color: var(--background-brand-hover);
+  background: var(--background-brand-hover);
 }
 
 .button:disabled {
