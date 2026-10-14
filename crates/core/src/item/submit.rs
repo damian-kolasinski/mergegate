@@ -1,9 +1,11 @@
 //! Registering pushed work as an item or a new revision (F4).
 
+use super::diff_files::diff_files;
 use super::{
     Item, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, valid_branch,
     valid_commit,
 };
+use crate::diff::{DiffGit, DiffStore};
 use crate::project::{ProjectStore, find};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,10 +23,11 @@ pub struct Submitted {
 }
 
 /// The branch must already be pushed to staging at `request.head`. The
-/// target is fetched fresh first, so the merge-base is current.
-pub fn submit<S: ProjectStore + ItemStore>(
+/// target is fetched fresh first, so the merge-base is current. Every file's
+/// diff is cached before the revision is recorded.
+pub fn submit<S: ProjectStore + ItemStore + DiffStore>(
     store: &mut S,
-    git: &impl ItemGit,
+    git: &(impl ItemGit + DiffGit),
     request: Submit,
 ) -> Result<Submitted, ItemError> {
     let project = find(store, &request.project)?;
@@ -75,6 +78,7 @@ pub fn submit<S: ProjectStore + ItemStore>(
         return Err(ItemError::NothingToSubmit { branch, target });
     }
     let files = git.changed_files(&project.name, &base, &head)?;
+    let files = diff_files(store, git, &project.name, files)?;
     let title = match (title.as_deref().map(str::trim), &existing) {
         (Some(title), _) if !title.is_empty() => title.to_owned(),
         (_, Some(item)) => item.title.clone(),

@@ -4,7 +4,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
 use mergegate_core::git::GitError;
-use mergegate_core::item::{FileStat, ItemGit};
+use mergegate_core::item::{ChangedFile, ItemGit, valid_commit};
 use mergegate_core::project::ProjectName;
 
 use crate::command::{run, run_optional};
@@ -61,7 +61,7 @@ impl ItemGit for HubGit {
         project: &ProjectName,
         base: &str,
         head: &str,
-    ) -> Result<Vec<FileStat>, GitError> {
+    ) -> Result<Vec<ChangedFile>, GitError> {
         let doing = "listing the changed files";
         let output = run(
             &self.home,
@@ -69,7 +69,8 @@ impl ItemGit for HubGit {
             [
                 self.git_dir(project).as_os_str(),
                 arg("diff"),
-                arg("--numstat"),
+                arg("--raw"),
+                arg("--no-abbrev"),
                 arg("-z"),
                 arg("-M"),
                 arg("--no-ext-diff"),
@@ -78,7 +79,7 @@ impl ItemGit for HubGit {
                 arg(head),
             ],
         )?;
-        parse_numstat(&output)
+        parse_raw(&output)
             .ok_or_else(|| GitError::Failed(format!("{doing} failed: can't parse {output:?}")))
     }
 
@@ -131,38 +132,39 @@ fn arg(s: &str) -> &OsStr {
     OsStr::new(s)
 }
 
-/// Parses `git diff --numstat -z`: `added TAB deleted TAB path NUL` per file,
-/// with `path` empty and followed by `old NUL new NUL` for a rename, and
-/// `-` for both counts of a binary file.
-fn parse_numstat(output: &str) -> Option<Vec<FileStat>> {
+/// Parses `git diff --raw -z --no-abbrev`: `:MODE MODE ID ID STATUS NUL
+/// path NUL` per file, with `old NUL new NUL` in place of `path NUL` for a
+/// rename. The ID on the side where the file doesn't exist is all zeros.
+fn parse_raw(output: &str) -> Option<Vec<ChangedFile>> {
     let mut fields = output.split('\0');
     let mut files = Vec::new();
     while let Some(field) = fields.next().filter(|f| !f.is_empty()) {
-        let mut parts = field.splitn(3, '\t');
-        let additions = count(parts.next()?)?;
-        let deletions = count(parts.next()?)?;
+        let mut parts = field.strip_prefix(':')?.split(' ').skip(2);
+        let old_blob = object(parts.next()?)?;
+        let new_blob = object(parts.next()?)?;
         let (path, old_path) = match parts.next()? {
-            "" => {
+            status if status.starts_with('R') => {
                 let old = fields.next()?;
                 (fields.next()?, Some(old.to_owned()))
             }
-            path => (path, None),
+            _ => (fields.next()?, None),
         };
-        files.push(FileStat {
+        files.push(ChangedFile {
             path: path.to_owned(),
             old_path,
-            additions,
-            deletions,
+            old_blob,
+            new_blob,
         });
     }
     Some(files)
 }
 
-/// A line count, or `Some(None)` for a binary file's `-`.
-fn count(field: &str) -> Option<Option<u64>> {
-    match field {
-        "-" => Some(None),
-        n => n.parse().ok().map(Some),
+/// An object ID, or `Some(None)` for the all-zero one.
+fn object(id: &str) -> Option<Option<String>> {
+    match id {
+        _ if !valid_commit(id) => None,
+        _ if id.bytes().all(|b| b == b'0') => Some(None),
+        id => Some(Some(id.to_owned())),
     }
 }
 

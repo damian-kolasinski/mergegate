@@ -1,0 +1,63 @@
+//! Diffing a revision's files at submit, so opening it later only reads.
+
+use super::{ChangedFile, FileStat, ItemError};
+use crate::diff::{DiffGit, DiffStore, FileDiff, compute};
+use crate::project::ProjectName;
+
+/// Files whose blobs are read at once: few enough git reads, and few enough
+/// blobs held in memory together.
+const BATCH: usize = 64;
+
+/// Counts each file's lines, diffing and caching the blob pairs the cache
+/// doesn't have yet.
+pub(super) fn diff_files(
+    store: &mut impl DiffStore,
+    git: &impl DiffGit,
+    project: &ProjectName,
+    files: Vec<ChangedFile>,
+) -> Result<Vec<FileStat>, ItemError> {
+    let mut counts = Vec::with_capacity(files.len());
+    let mut uncached = Vec::new();
+    for (index, file) in files.iter().enumerate() {
+        match store.diff(file.old_blob.as_deref(), file.new_blob.as_deref())? {
+            Some(diff) => counts.push((diff.additions, diff.deletions)),
+            None => {
+                counts.push((None, None));
+                uncached.push(index);
+            }
+        }
+    }
+    for batch in uncached.chunks(BATCH) {
+        let ids: Vec<&str> = batch
+            .iter()
+            .flat_map(|&i| [files[i].old_blob.as_deref(), files[i].new_blob.as_deref()])
+            .flatten()
+            .collect();
+        let mut blobs = git.blobs(project, &ids)?.into_iter();
+        // A side without an ID is an empty file; one whose ID names no blob
+        // can't be shown as text.
+        let mut side = |id: Option<&str>| match id {
+            Some(_) => blobs.next().flatten(),
+            None => Some(Vec::new()),
+        };
+        for &index in batch {
+            let file = &files[index];
+            let (old, new) = (file.old_blob.as_deref(), file.new_blob.as_deref());
+            let diff = match (side(old), side(new)) {
+                (Some(old), Some(new)) => compute(&old, &new),
+                _ => FileDiff::binary(),
+            };
+            store.insert_diff(old, new, &diff)?;
+            counts[index] = (diff.additions, diff.deletions);
+        }
+    }
+    Ok(files
+        .into_iter()
+        .zip(counts)
+        .map(|(file, (additions, deletions))| FileStat {
+            file,
+            additions,
+            deletions,
+        })
+        .collect())
+}

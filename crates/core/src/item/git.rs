@@ -32,7 +32,7 @@ pub trait ItemGit {
         project: &ProjectName,
         base: &str,
         head: &str,
-    ) -> Result<Vec<FileStat>, GitError>;
+    ) -> Result<Vec<ChangedFile>, GitError>;
 
     /// The subject of the first commit after `base` on the way to `head`.
     fn first_subject(
@@ -46,10 +46,19 @@ pub trait ItemGit {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileStat {
+pub struct ChangedFile {
     pub path: String,
     pub old_path: Option<String>,
-    /// Lines added and deleted; none for a binary file.
+    /// Object IDs before and after, none on the side where the file doesn't
+    /// exist. A submodule's are commits.
+    pub old_blob: Option<String>,
+    pub new_blob: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileStat {
+    pub file: ChangedFile,
+    /// Lines added and deleted; none when the change isn't text.
     pub additions: Option<u64>,
     pub deletions: Option<u64>,
 }

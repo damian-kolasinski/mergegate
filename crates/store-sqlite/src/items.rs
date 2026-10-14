@@ -154,8 +154,9 @@ fn insert_revision(
     let mut stmt = tx
         .prepare_cached(
             "INSERT INTO revision_files
-                 (item_id, revision, position, path, old_path, additions, deletions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 (item_id, revision, position, path, old_path, old_blob, new_blob,
+                  additions, deletions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .map_err(StoreError::new)?;
     for (position, file) in revision.files.iter().enumerate() {
@@ -163,8 +164,10 @@ fn insert_revision(
             item_id,
             number,
             position as i64,
-            file.path,
-            file.old_path,
+            file.file.path,
+            file.file.old_path,
+            file.file.old_blob,
+            file.file.new_blob,
             file.additions.map(|n| n as i64),
             file.deletions.map(|n| n as i64),
         ])

@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 
+use mergegate_core::diff::DiffGit;
 use mergegate_core::git::Git;
-use mergegate_core::item::{FileStat, ItemGit};
+use mergegate_core::item::{ChangedFile, ItemGit};
 use mergegate_core::project::ProjectName;
 use mergegate_git::{HttpRequest, HubGit};
 use tempfile::TempDir;
@@ -68,12 +69,23 @@ fn app() -> ProjectName {
     ProjectName::parse("app").unwrap()
 }
 
-fn file(path: &str, old_path: Option<&str>, lines: Option<(u64, u64)>) -> FileStat {
-    FileStat {
+/// `path`'s blob ID at `rev` in the worker's repo.
+fn blob(hub: &Hub, rev: &str, path: &str) -> String {
+    let id = hub.repo.git(["rev-parse", &format!("{rev}:{path}")]);
+    id.trim().to_owned()
+}
+
+fn file(
+    path: &str,
+    old_path: Option<&str>,
+    old: Option<String>,
+    new: Option<String>,
+) -> ChangedFile {
+    ChangedFile {
         path: path.into(),
         old_path: old_path.map(Into::into),
-        additions: lines.map(|l| l.0),
-        deletions: lines.map(|l| l.1),
+        old_blob: old,
+        new_blob: new,
     }
 }
 
@@ -94,9 +106,24 @@ fn reads_a_pushed_branch_against_its_merge_base() {
     assert_eq!(
         hub.git.changed_files(&app(), &base, &head).unwrap(),
         [
-            file("README.md", Some("README"), Some((0, 0))),
-            file("logo.png", None, None),
-            file("src/login.rs", None, Some((2, 0))),
+            file(
+                "README.md",
+                Some("README"),
+                Some(blob(&hub, "main", "README")),
+                Some(blob(&hub, "login", "README.md"))
+            ),
+            file(
+                "logo.png",
+                None,
+                None,
+                Some(blob(&hub, "login", "logo.png"))
+            ),
+            file(
+                "src/login.rs",
+                None,
+                None,
+                Some(blob(&hub, "login", "src/login.rs"))
+            ),
         ]
     );
     assert_eq!(
@@ -105,6 +132,33 @@ fn reads_a_pushed_branch_against_its_merge_base() {
             .unwrap()
             .as_deref(),
         Some("Add login")
+    );
+}
+
+#[test]
+fn reads_blobs_and_nothing_else() {
+    let hub = Hub::new();
+    let login = blob(&hub, "login", "src/login.rs");
+    let logo = blob(&hub, "login", "logo.png");
+    let commit = hub.repo.rev("login");
+    let missing = "1".repeat(40);
+    assert_eq!(
+        hub.git
+            .blobs(&app(), &[&login, &commit, &logo, &missing, "nope", &login])
+            .unwrap(),
+        [
+            Some(b"fn login() {\n}\n".to_vec()),
+            None,
+            Some(b"\0\x01\x02".to_vec()),
+            None,
+            None,
+            Some(b"fn login() {\n}\n".to_vec()),
+        ]
+    );
+    assert!(
+        hub.git
+            .blobs(&ProjectName::parse("web").unwrap(), &[&login])
+            .is_err()
     );
 }
 
