@@ -87,6 +87,14 @@ test("f6 j, k, ] and [ move the line cursor", async ({ page, hub }) => {
   // The next hunk is the next file's.
   await page.keyboard.press("]");
   await expect(cursor).toHaveText("bye");
+  // The diff reports the scroll that showed the line a frame later; the file
+  // moved to stays current past it.
+  await page.evaluate(
+    () =>
+      new Promise((done) =>
+        requestAnimationFrame(() => requestAnimationFrame(done)),
+      ),
+  );
   await expect(
     page.getByRole("navigation", { name: "Files" }).locator("[aria-current]"),
   ).toContainText("gone.txt");
