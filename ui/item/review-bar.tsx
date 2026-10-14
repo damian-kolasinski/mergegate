@@ -16,6 +16,8 @@ export function ReviewBar(props: {
   item: string;
   revision: number;
   drafts: number;
+  /** A comment being written, which the review would go out without. */
+  holding: boolean;
   onSubmitted: (review: Review) => void;
 }) {
   const [summary, setSummary] = createSignal("");
@@ -87,15 +89,18 @@ export function ReviewBar(props: {
         <Show when={props.drafts}>
           <Meta>{plural(props.drafts, "draft comment")}</Meta>
         </Show>
+        <Show when={props.holding}>
+          <Meta>Save or cancel the open comment first</Meta>
+        </Show>
         <Button
-          disabled={sending() || empty()}
+          disabled={sending() || empty() || props.holding}
           onClick={() => submit("comment")}
         >
           Comment
         </Button>
         <Button
           variant="solid"
-          disabled={sending() || empty()}
+          disabled={sending() || empty() || props.holding}
           onClick={() => submit("changes_requested")}
         >
           Request changes

@@ -17,6 +17,8 @@ export type DiffViewControl = {
   showRow(row: Row): void;
   /** Clears the cursor's line, for a file without one. */
   clearRow(): void;
+  /** Scrolls `spot` into view, leaving the cursor where it is. */
+  showLine(spot: Spot): void;
 };
 
 /** A line of one side of a file. */
@@ -42,6 +44,8 @@ export function DiffView(props: {
   onFile: (path: string) => void;
   /** A line the reviewer clicked. */
   onRow: (row: Row) => void;
+  /** Whether the gutter offers `+`; read once, as the view is built. */
+  commentable: boolean;
   /** Lines with something shown under them, which `note` renders. */
   notes: readonly Spot[];
   note: (spot: Spot) => JSX.Element;
@@ -68,7 +72,10 @@ export function DiffView(props: {
     expansionLineCount: 20,
     themeType: "system",
     enableLineSelection: true,
-    enableGutterUtility: true,
+    enableGutterUtility: untrack(() => props.commentable),
+    // CodeView pins `+` to the selected lines while there are some, so with
+    // the keyboard cursor in a file `+` comments on the cursor's line, as
+    // `c` does; elsewhere it follows the pointer.
     onGutterUtilityClick: (range, context) => {
       const side = range.endSide ?? range.side;
       if (!side) return;
@@ -216,18 +223,22 @@ export function DiffView(props: {
           endSide: row.side,
         };
         view.setSelectedLines({ id: row.path, range });
-        view.scrollTo({
-          type: "line",
-          id: row.path,
-          lineNumber: row.line,
-          side: row.side,
-          align: "nearest",
-          behavior: "instant",
-        });
+        showLine(row);
       },
+      showLine,
       clearRow: () => view.clearSelectedLines(),
     });
   });
+
+  const showLine = (spot: Spot) =>
+    view.scrollTo({
+      type: "line",
+      id: spot.path,
+      lineNumber: spot.line,
+      side: spot.side,
+      align: "nearest",
+      behavior: "instant",
+    });
 
   /**
    * The last file whose header is at or above `top`. Files at the end may be
@@ -253,7 +264,10 @@ export function DiffView(props: {
   return <div ref={root} class={styles.view} role="region" aria-label="Diff" />;
 }
 
-/** One note per line, keyed so an unmoved note keeps its element. */
+/**
+ * One note per line, in line order. CodeView matches notes to elements by
+ * index, so the notes after a new one render again.
+ */
 function notesByPath(spots: readonly Spot[]): Map<string, Note[]> {
   const byPath = new Map<string, Map<string, Note>>();
   for (const spot of spots) {

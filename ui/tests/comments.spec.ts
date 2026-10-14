@@ -33,7 +33,9 @@ test("f6 drafts written on the diff go out with the review", async ({
   await page.keyboard.press("j");
   await page.keyboard.press("j");
   await page.keyboard.press("c");
-  const editor = page.getByRole("textbox", { name: "Comment on line 1" });
+  const editor = page.getByRole("textbox", {
+    name: "Comment on login.rs line 1",
+  });
   await expect(editor).toBeFocused();
   await page.keyboard.type("Check the password.");
   await page.keyboard.press("ControlOrMeta+Enter");
@@ -50,12 +52,13 @@ test("f6 drafts written on the diff go out with the review", async ({
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(first).toContainText("Reject an empty password.");
 
-  // The gutter's `+` comments on the line under the pointer.
+  // Outside the cursor's file, the gutter's `+` comments on the line under
+  // the pointer.
   const notes = diff.getByRole("code").filter({ hasText: "three" });
   await notes.getByText("three", { exact: true }).hover();
   await notes.locator("[data-utility-button]").click();
   await page
-    .getByRole("textbox", { name: "Comment on line 3" })
+    .getByRole("textbox", { name: "Comment on notes.md line 3" })
     .fill("Say why.");
   await page.getByRole("button", { name: "Save draft" }).click();
   const second = page.getByRole("article", { name: "Comment c_2" });
@@ -91,7 +94,7 @@ test("drafts stay on the hub until sent", async ({ page, hub }) => {
   await page.keyboard.press("j");
   await page.keyboard.press("c");
   await expect(
-    page.getByRole("textbox", { name: "Comment on line 1" }),
+    page.getByRole("textbox", { name: "Comment on login.rs line 1" }),
   ).toBeFocused();
   await page.keyboard.type("On the old line.");
   await page.getByRole("button", { name: "Save draft" }).click();
@@ -115,4 +118,50 @@ test("drafts stay on the hub until sent", async ({ page, hub }) => {
   await expect(page.getByRole("textbox", { name: /^Comment on/ })).toHaveCount(
     0,
   );
+});
+
+test("an open comment keeps what's typed in it", async ({ page, hub }) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const diff = page.getByRole("region", { name: "Diff" });
+  await expect(diff.getByText("three", { exact: true })).toBeVisible();
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  // In the cursor's file, `+` comments on the cursor's line.
+  const login = diff.getByRole("code").filter({ hasText: "fn login" });
+  await login.locator("[data-utility-button]").click();
+  const editor = page.getByRole("textbox", {
+    name: "Comment on login.rs line 1",
+  });
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("Half a thought");
+
+  // Escape leaves the field, and again brings it back instead of leaving.
+  await page.keyboard.press("Escape");
+  await expect(editor).not.toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeFocused();
+  await expect(page).toHaveURL(/#\/items\/app%231$/);
+
+  // Another line's `+` and the shortcuts leave it be.
+  const notes = diff.getByRole("code").filter({ hasText: "three" });
+  await notes.getByText("three", { exact: true }).hover();
+  await notes.locator("[data-utility-button]").click();
+  await expect(editor).toHaveValue("Half a thought");
+  await expect(editor).toBeFocused();
+
+  // The review waits for it.
+  const review = page.getByRole("form", { name: "Review" });
+  await review.getByRole("textbox", { name: "Review summary" }).fill("Done.");
+  await expect(
+    review.getByText("Save or cancel the open comment first"),
+  ).toBeVisible();
+  await expect(
+    review.getByRole("button", { name: "Request changes" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(
+    review.getByRole("button", { name: "Request changes" }),
+  ).toBeEnabled();
 });

@@ -37,18 +37,24 @@ export function ItemScreen(props: { id: string }) {
     );
   });
 
-  useKeys({
-    Escape: () => {
-      location.hash = inboxHref;
-    },
-  });
-
   return (
     <section class={styles.screen} aria-label={props.id}>
       <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
-      <Show when={diff()}>{(current) => <Review diff={current()} />}</Show>
+      <Show when={diff()} fallback={<Leave />}>
+        {(current) => <Review diff={current()} />}
+      </Show>
     </section>
   );
+}
+
+/** Escape goes back to the inbox; the review binds its own. */
+function Leave() {
+  useKeys({ Escape: leave });
+  return null;
+}
+
+function leave() {
+  location.hash = inboxHref;
 }
 
 function Review(props: { diff: ItemDiff }) {
@@ -57,7 +63,13 @@ function Review(props: { diff: ItemDiff }) {
   const [moved, setMoved] = createSignal<ItemState>();
   const state = () => moved() ?? props.diff.item.state;
   // The screen fetches its diff once; comments then change here.
-  const comments = useComments(untrack(() => props.diff));
+  const comments = useComments(
+    untrack(() => props.diff),
+    {
+      reviewable: () => reviewable(state()),
+      reveal: (spot) => view?.showLine(spot),
+    },
+  );
   const reviewed = (review: SentReview) => {
     if (review.verdict === "changes_requested") setMoved("changes_requested");
     comments.submitted(review);
@@ -182,15 +194,22 @@ function Review(props: { diff: ItemDiff }) {
     }
   };
 
+  // An open comment takes the keys: the editor focuses a few frames after
+  // `c`, and what's typed before then mustn't move the cursor away from it.
+  const unlessWriting = (action: () => void) => () => {
+    if (!comments.editor()) action();
+  };
   useKeys({
-    c: comment,
-    n: () => stepFile(1),
-    p: () => stepFile(-1),
-    j: () => stepLine(1),
-    k: () => stepLine(-1),
-    "]": () => stepHunk(1),
-    "[": () => stepHunk(-1),
-    v: toggleViewed,
+    // Never leaves an open comment behind.
+    Escape: () => (comments.editor() ? comments.escape() : leave()),
+    c: unlessWriting(comment),
+    n: unlessWriting(() => stepFile(1)),
+    p: unlessWriting(() => stepFile(-1)),
+    j: unlessWriting(() => stepLine(1)),
+    k: unlessWriting(() => stepLine(-1)),
+    "]": unlessWriting(() => stepHunk(1)),
+    "[": unlessWriting(() => stepHunk(-1)),
+    v: unlessWriting(toggleViewed),
   });
 
   return (
@@ -245,6 +264,7 @@ function Review(props: { diff: ItemDiff }) {
             blobUrl={blobUrl}
             onFile={setCurrent}
             onRow={onRow}
+            commentable={reviewable(state())}
             notes={comments.spots()}
             note={(spot) => <Thread comments={comments} spot={spot} />}
             onComment={(span) => {
@@ -261,6 +281,7 @@ function Review(props: { diff: ItemDiff }) {
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
           drafts={comments.drafts().length}
+          holding={comments.holding()}
           onSubmitted={reviewed}
         />
       </Show>
