@@ -2,6 +2,7 @@ use mergegate_core::item::{
     ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
 };
 use mergegate_core::project::{Backend, Project, ProjectStore};
+use mergegate_core::triage::Preview;
 
 use super::*;
 
@@ -31,7 +32,7 @@ fn rule(id: u32, tier: Tier) -> Rule {
     Rule {
         id: RuleId::new(id),
         tier,
-        path: None,
+        path: Some(format!("r{id}/**")),
         kind: None,
         max_lines: None,
         diff_matches: None,
@@ -82,7 +83,9 @@ fn keeps_each_projects_rules_in_order() {
         },
     ])
     .unwrap();
-    store.set_applied_rules(&app(), &rules).unwrap();
+    store
+        .set_applied_rules(&app(), &rules, Some("text"))
+        .unwrap();
     assert_eq!(store.applied_rules(&app()).unwrap(), rules);
     let web = ProjectName::parse("web").unwrap();
     assert!(store.applied_rules(&web).unwrap().is_empty());
@@ -92,7 +95,7 @@ fn keeps_each_projects_rules_in_order() {
         ..rule(4, Tier::Trusted)
     }])
     .unwrap();
-    store.set_applied_rules(&app(), &fewer).unwrap();
+    store.set_applied_rules(&app(), &fewer, None).unwrap();
     assert_eq!(store.applied_rules(&app()).unwrap(), fewer);
 }
 
@@ -153,4 +156,168 @@ fn stores_each_files_triage_and_counts_only_reviewed_files() {
         .unwrap();
     let stat = store.item(&item.id).unwrap().unwrap().revision.stat;
     assert_eq!(stat.review_files, 3);
+}
+
+fn insert(store: &mut Store, branch: &str) -> ItemId {
+    store
+        .insert_item(NewItem {
+            project: app(),
+            branch: branch.into(),
+            title: branch.to_uppercase(),
+            state: ItemState::NeedsReview,
+            backend: ItemBackend::Local,
+            target: "main".into(),
+            revision: NewRevision {
+                head: "a".repeat(40),
+                base: "0".repeat(40),
+                files: vec![file("Cargo.lock", 4, Triage::default())],
+            },
+        })
+        .unwrap()
+        .id
+}
+
+fn hidden(item: &ItemId, rule: u32) -> Hidden {
+    Hidden {
+        item: item.clone(),
+        path: "Cargo.lock".into(),
+        rule: RuleId::new(rule),
+    }
+}
+
+#[test]
+fn keeps_proposals_with_their_previews() {
+    let (_dir, mut store) = store();
+    let (a, b) = (insert(&mut store, "a"), insert(&mut store, "b"));
+    assert_eq!(store.proposal(&app(), RuleId::new(1)).unwrap(), None);
+    let review = Proposal {
+        rule: rule(1, Tier::Review),
+        state: ProposalState::Applied,
+        preview: None,
+    };
+    let trusted = Proposal {
+        rule: Rule {
+            path: Some("*.lock".into()),
+            ..rule(2, Tier::Trusted)
+        },
+        state: ProposalState::Pending,
+        preview: Some(Preview {
+            items: 2,
+            hidden: vec![hidden(&b, 2), hidden(&a, 2)],
+        }),
+    };
+    store.insert_proposal(&app(), &review).unwrap();
+    store.insert_proposal(&app(), &trusted).unwrap();
+
+    assert_eq!(
+        store.proposal(&app(), RuleId::new(1)).unwrap(),
+        Some(review)
+    );
+    assert_eq!(
+        store.proposal(&app(), RuleId::new(2)).unwrap(),
+        Some(trusted.clone())
+    );
+    assert_eq!(
+        store.pending_proposals(&app()).unwrap(),
+        std::slice::from_ref(&trusted)
+    );
+    let web = ProjectName::parse("web").unwrap();
+    assert!(store.pending_proposals(&web).unwrap().is_empty());
+
+    store
+        .set_proposal_state(&app(), RuleId::new(2), ProposalState::Rejected)
+        .unwrap();
+    assert!(store.pending_proposals(&app()).unwrap().is_empty());
+    let rejected = store.proposal(&app(), RuleId::new(2)).unwrap().unwrap();
+    assert_eq!(rejected.state, ProposalState::Rejected);
+    assert_eq!(rejected.preview, trusted.preview);
+    assert!(
+        store
+            .set_proposal_state(&app(), RuleId::new(9), ProposalState::Applied)
+            .is_err()
+    );
+}
+
+#[test]
+fn keeps_one_held_edit_per_project() {
+    let (_dir, mut store) = store();
+    let a = insert(&mut store, "a");
+    assert_eq!(store.held_edit(&app()).unwrap(), None);
+    let edit = |id: u32| HeldEdit {
+        rules: Rules::new(vec![rule(1, Tier::Review), rule(id, Tier::Trusted)]).unwrap(),
+        text: format!("rules with R{id}"),
+        preview: Preview {
+            items: 1,
+            hidden: vec![hidden(&a, id)],
+        },
+    };
+    store.set_held_edit(&app(), Some(&edit(2))).unwrap();
+    assert_eq!(store.held_edit(&app()).unwrap(), Some(edit(2)));
+
+    // A proposal's preview survives replacing the edit.
+    let proposal = Proposal {
+        rule: rule(5, Tier::Trusted),
+        state: ProposalState::Pending,
+        preview: Some(Preview {
+            items: 1,
+            hidden: vec![hidden(&a, 5)],
+        }),
+    };
+    store.insert_proposal(&app(), &proposal).unwrap();
+    store.set_held_edit(&app(), Some(&edit(3))).unwrap();
+    assert_eq!(store.held_edit(&app()).unwrap(), Some(edit(3)));
+    store.set_held_edit(&app(), None).unwrap();
+    assert_eq!(store.held_edit(&app()).unwrap(), None);
+    assert_eq!(
+        store.proposal(&app(), RuleId::new(5)).unwrap(),
+        Some(proposal)
+    );
+}
+
+#[test]
+fn numbers_a_new_rule_past_every_one_used() {
+    let (_dir, mut store) = store();
+    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(1));
+    let rules = Rules::new(vec![rule(3, Tier::Review)]).unwrap();
+    store.set_applied_rules(&app(), &rules, None).unwrap();
+    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(4));
+
+    let held = HeldEdit {
+        rules: Rules::new(vec![rule(6, Tier::Trusted)]).unwrap(),
+        text: String::new(),
+        preview: Preview {
+            items: 0,
+            hidden: Vec::new(),
+        },
+    };
+    store.set_held_edit(&app(), Some(&held)).unwrap();
+    store.set_held_edit(&app(), None).unwrap();
+    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(7));
+
+    let proposal = Proposal {
+        rule: rule(7, Tier::Trusted),
+        state: ProposalState::Rejected,
+        preview: None,
+    };
+    store.insert_proposal(&app(), &proposal).unwrap();
+    // Retiring rules doesn't free their numbers.
+    store
+        .set_applied_rules(&app(), &Rules::new(Vec::new()).unwrap(), Some(""))
+        .unwrap();
+    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(8));
+    let web = ProjectName::parse("web").unwrap();
+    assert_eq!(store.next_rule_id(&web).unwrap(), RuleId::new(1));
+}
+
+#[test]
+fn keeps_the_text_its_rules_were_applied_from() {
+    let (_dir, mut store) = store();
+    assert_eq!(store.applied_text(&app()).unwrap(), None);
+    let rules = Rules::new(vec![rule(1, Tier::Review)]).unwrap();
+    store
+        .set_applied_rules(&app(), &rules, Some("one"))
+        .unwrap();
+    assert_eq!(store.applied_text(&app()).unwrap().as_deref(), Some("one"));
+    store.set_applied_rules(&app(), &rules, None).unwrap();
+    assert_eq!(store.applied_text(&app()).unwrap(), None);
 }

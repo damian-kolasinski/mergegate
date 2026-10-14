@@ -87,14 +87,97 @@ fn names_the_line_of_a_mistake() {
 fn a_missing_file_holds_no_rules() {
     let dir = tempfile::tempdir().unwrap();
     let file = RulesToml::new(dir.path().to_owned());
-    assert_eq!(file.read(&app()).unwrap(), []);
+    assert_eq!(file.read(&app()).unwrap(), None);
     std::fs::create_dir_all(dir.path().join("app/rules.toml")).unwrap();
-    assert!(matches!(
-        file.read(&app()),
-        Err(RulesFileError::Unreadable(_))
-    ));
+    assert!(matches!(file.read(&app()), Err(RulesFileError::Io(_))));
     assert_eq!(
         file.location(&app()),
         dir.path().join("app/rules.toml").display().to_string()
     );
+}
+
+fn rule(id: u32, tier: Tier) -> Rule {
+    Rule {
+        id: RuleId::new(id),
+        tier,
+        path: Some("docs/\"quoted\"/**".into()),
+        kind: Some(Kind::Added),
+        max_lines: Some(40),
+        diff_matches: Some(r"^\s*'x'".into()),
+        reason: "it's fine".into(),
+    }
+}
+
+const FILE: &str = r#"# The operator's rules.
+
+# Lockfiles change with every bump.
+[[rule]]
+id = "R1"
+tier = "trusted"
+path = "**/*.lock"
+reason = "regenerated"
+"#;
+
+#[test]
+fn inserts_a_review_rule_above_the_first_and_its_comment() {
+    let text = insert(FILE, &rule(2, Tier::Review), Place::First).unwrap();
+    assert_eq!(
+        text,
+        r#"# The operator's rules.
+
+[[rule]]
+id = "R2"
+tier = "review"
+path = 'docs/"quoted"/**'
+kind = "added"
+max_lines = 40
+diff_matches = '''^\s*'x''''
+reason = "it's fine"
+
+# Lockfiles change with every bump.
+[[rule]]
+id = "R1"
+tier = "trusted"
+path = "**/*.lock"
+reason = "regenerated"
+"#
+    );
+    let ids: Vec<_> = parse(&text).unwrap().iter().map(|r| r.id).collect();
+    assert_eq!(ids, [RuleId::new(2), RuleId::new(1)]);
+    assert_eq!(parse(&text).unwrap()[0], rule(2, Tier::Review));
+}
+
+#[test]
+fn inserts_a_trusted_rule_last() {
+    let text = insert(FILE, &rule(2, Tier::Trusted), Place::Last).unwrap();
+    assert!(text.starts_with(FILE), "{text}");
+    assert_eq!(parse(&text).unwrap()[1], rule(2, Tier::Trusted));
+    for empty in ["", "# nothing yet\n"] {
+        let text = insert(empty, &rule(1, Tier::Review), Place::First).unwrap();
+        assert_eq!(parse(&text).unwrap(), [rule(1, Tier::Review)]);
+        assert!(text.starts_with(empty.trim_end()), "{text}");
+    }
+}
+
+#[test]
+fn refuses_to_insert_where_it_would_change_other_rules() {
+    let inline = "rule = [{ id = \"R1\", tier = \"review\", path = \"a\", reason = \"b\" }]\n";
+    assert_eq!(parse(inline).unwrap().len(), 1);
+    let refused = insert(inline, &rule(2, Tier::Review), Place::First).unwrap_err();
+    assert_eq!(
+        refused,
+        "couldn't add R2 to the file without changing its other rules"
+    );
+    let broken = insert("[[rule]\n", &rule(2, Tier::Review), Place::First);
+    assert!(broken.unwrap_err().starts_with("line 1: "));
+}
+
+#[test]
+fn writes_the_file_creating_its_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = RulesToml::new(dir.path().to_owned());
+    file.write(&app(), FILE).unwrap();
+    let read = file.read(&app()).unwrap().unwrap();
+    assert_eq!(read.text, FILE);
+    assert_eq!(read.rules.len(), 1);
 }

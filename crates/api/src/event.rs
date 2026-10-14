@@ -19,4 +19,8 @@ pub enum UiEvent {
     /// open diff may show more highlighting, or less.
     #[serde(rename = "highlights.changed")]
     HighlightsChanged,
+    /// The project's rules, or the changes to them waiting for the
+    /// operator, changed.
+    #[serde(rename = "rules.changed")]
+    RulesChanged { project: String },
 }

@@ -113,7 +113,7 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(
         inbox,
-        json!({ "needs_you": [], "with_agents": [], "merging": [] })
+        json!({ "needs_you": [], "with_agents": [], "merging": [], "rules": [] })
     );
 }
 

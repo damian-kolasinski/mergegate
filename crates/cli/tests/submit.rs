@@ -140,7 +140,7 @@ fn f4_lists_open_items_in_the_inbox() {
     let empty = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(
         empty,
-        json!({"needs_you": [], "with_agents": [], "merging": []})
+        json!({"needs_you": [], "with_agents": [], "merging": [], "rules": []})
     );
     assert_eq!(
         env.mg(&["inbox"]).assert_code(0).stdout.trim_end(),

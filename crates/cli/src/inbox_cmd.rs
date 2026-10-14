@@ -28,7 +28,17 @@ fn describe(inbox: &Inbox) -> String {
         out.extend(items.iter().map(line));
     }
     if out.is_empty() {
-        return "no open items".to_owned();
+        out.push("no open items".to_owned());
+    }
+    for rules in &inbox.rules {
+        let changes = match rules.changes {
+            1 => "1 change to its rules waits".to_owned(),
+            n => format!("{n} changes to its rules wait"),
+        };
+        out.push(format!(
+            "{}: {changes} for the operator's approval in the UI",
+            rules.project
+        ));
     }
     out.join("\n")
 }

@@ -1,7 +1,8 @@
 //! Applying the operator's rules file, and re-triaging the open items when
 //! its rules change.
 
-use super::{Rules, RulesFile, RulesFileError, RulesStore, triage_files};
+use super::triage_files;
+use super::{HeldEdit, Rules, RulesFile, RulesFileError, RulesStore, loosens, preview};
 use crate::diff::DiffStore;
 use crate::item::{ItemId, ItemStore};
 use crate::project::ProjectName;
@@ -9,25 +10,29 @@ use crate::store::StoreError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Synced {
-    /// The file holds the applied rules.
+    /// Nothing the operator sees changed.
     Unchanged,
     /// The file's rules now apply; these open items' files moved between
     /// tiers or changed rule.
     Applied(Vec<ItemId>),
+    /// The file loosens the applied rules, so its edit waits for the
+    /// operator, with a new preview.
+    Held,
     /// The file can't be used, so the applied rules stay.
     Invalid(String),
 }
 
 /// Reads the file and applies its rules if they differ from the applied
-/// ones. No file means no rules.
+/// ones and hide nothing more, else holds them. No file means no rules.
 pub fn sync<S: RulesStore + ItemStore + DiffStore>(
     store: &mut S,
     file: &impl RulesFile,
     project: &ProjectName,
 ) -> Result<Synced, StoreError> {
-    let rules = match file.read(project) {
-        Ok(rules) => rules,
-        Err(RulesFileError::Invalid(e) | RulesFileError::Unreadable(e)) => {
+    let (rules, text) = match file.read(project) {
+        Ok(Some(file)) => (file.rules, Some(file.text)),
+        Ok(None) => (Vec::new(), None),
+        Err(RulesFileError::Invalid(e) | RulesFileError::Io(e)) => {
             return Ok(Synced::Invalid(e));
         }
     };
@@ -35,19 +40,46 @@ pub fn sync<S: RulesStore + ItemStore + DiffStore>(
         Ok(rules) => rules,
         Err(e) => return Ok(Synced::Invalid(e.to_string())),
     };
-    if store.applied_rules(project)? == rules {
+    let applied = store.applied_rules(project)?;
+    let held = store.held_edit(project)?;
+    if applied == rules {
+        // Comments and layout, which rejecting a later edit puts back too.
+        if store.applied_text(project)? != text {
+            store.set_applied_rules(project, &rules, text.as_deref())?;
+        }
+        if held.is_none() {
+            return Ok(Synced::Unchanged);
+        }
+        // The operator undid the edit by hand.
+        store.set_held_edit(project, None)?;
+        return Ok(Synced::Applied(Vec::new()));
+    }
+    if !loosens(&applied, &rules) {
+        // Recorded last, so a re-triage that fails partway runs again on
+        // the next sync.
+        let moved = retriage(store, project, &rules)?;
+        store.set_applied_rules(project, &rules, text.as_deref())?;
+        if held.is_some() {
+            store.set_held_edit(project, None)?;
+        }
+        return Ok(Synced::Applied(moved));
+    }
+    if held.is_some_and(|held| held.rules == rules) {
         return Ok(Synced::Unchanged);
     }
-    // Recorded last, so a re-triage that fails partway runs again on the
-    // next sync.
-    let moved = retriage(store, project, &rules)?;
-    store.set_applied_rules(project, &rules)?;
-    Ok(Synced::Applied(moved))
+    let preview = preview(store, project, &applied, &rules)?;
+    let edit = HeldEdit {
+        rules,
+        text: text.unwrap_or_default(),
+        preview,
+    };
+    store.set_held_edit(project, Some(&edit))?;
+    Ok(Synced::Held)
 }
 
 /// Every revision of an open item, not just the newest: an older one is
 /// still shown when its comments are answered.
-fn retriage<S: RulesStore + ItemStore + DiffStore>(
+pub(super) fn retriage<S: RulesStore + ItemStore + DiffStore>(
     store: &mut S,
     project: &ProjectName,
     rules: &Rules,

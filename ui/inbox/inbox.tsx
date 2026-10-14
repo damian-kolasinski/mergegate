@@ -4,7 +4,7 @@ import type { Inbox } from "../api/Inbox";
 import type { InboxItem } from "../api/InboxItem";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
-import { itemHref } from "../app/router";
+import { itemHref, rulesHref } from "../app/router";
 import {
   Badge,
   Empty,
@@ -82,42 +82,64 @@ export function InboxScreen() {
       <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
       <Show when={inbox()}>
         {(current) => (
-          <For each={GROUPS}>
-            {(group) => (
-              <Show
-                when={group.key === "needs_you" || current()[group.key].length}
-              >
-                <Section
-                  title={group.title}
-                  count={current()[group.key].length}
+          <>
+            <Show when={current().rules.length}>
+              <ul class={styles.rules} aria-label="Rule changes">
+                <For each={current().rules}>
+                  {(pending) => (
+                    <li>
+                      <a href={rulesHref(pending.project)}>
+                        <Badge tone="warning">
+                          {pending.project} · {pending.changes}{" "}
+                          {pending.changes === 1
+                            ? "rule change to approve"
+                            : "rule changes to approve"}
+                        </Badge>
+                      </a>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <For each={GROUPS}>
+              {(group) => (
+                <Show
+                  when={
+                    group.key === "needs_you" || current()[group.key].length
+                  }
                 >
-                  <Show
-                    when={current()[group.key].length}
-                    fallback={
-                      <Empty>
-                        Nothing to review. Items show up here when an agent runs{" "}
-                        <code>mg submit</code>.
-                      </Empty>
-                    }
+                  <Section
+                    title={group.title}
+                    count={current()[group.key].length}
                   >
-                    <ul>
-                      <For each={current()[group.key]}>
-                        {(item) => (
-                          <Entry
-                            item={item}
-                            now={now()}
-                            selected={item.id === selected()}
-                            onSelect={() => setSelectedId(item.id)}
-                            onOpen={() => open(item.id)}
-                          />
-                        )}
-                      </For>
-                    </ul>
-                  </Show>
-                </Section>
-              </Show>
-            )}
-          </For>
+                    <Show
+                      when={current()[group.key].length}
+                      fallback={
+                        <Empty>
+                          Nothing to review. Items show up here when an agent
+                          runs <code>mg submit</code>.
+                        </Empty>
+                      }
+                    >
+                      <ul>
+                        <For each={current()[group.key]}>
+                          {(item) => (
+                            <Entry
+                              item={item}
+                              now={now()}
+                              selected={item.id === selected()}
+                              onSelect={() => setSelectedId(item.id)}
+                              onOpen={() => open(item.id)}
+                            />
+                          )}
+                        </For>
+                      </ul>
+                    </Show>
+                  </Section>
+                </Show>
+              )}
+            </For>
+          </>
         )}
       </Show>
     </>

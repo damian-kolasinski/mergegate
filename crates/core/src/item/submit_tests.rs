@@ -621,7 +621,7 @@ fn triages_each_file_by_the_applied_rules() {
     let git = git.generated(&["README.md"]);
     let app = ProjectName::parse("app").unwrap();
     let rules = crate::fake::rules(&[(Tier::Review, "src/**"), (Tier::Trusted, "**")]);
-    store.set_applied_rules(&app, &rules).unwrap();
+    store.set_applied_rules(&app, &rules, None).unwrap();
     git.push("app", "login", &commit(3));
     let item = submit(
         &mut store,

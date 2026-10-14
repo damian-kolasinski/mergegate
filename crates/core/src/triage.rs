@@ -2,15 +2,25 @@
 //! (design §7). Only a rule the operator approved can hide a file.
 
 mod classify;
+mod edit;
 mod file;
 mod git;
+mod loosens;
+mod preview;
+mod propose;
 mod rules;
 mod store;
 mod sync;
 
 pub use classify::{GITATTRIBUTES, classify, triage_files};
-pub use file::{RulesFile, RulesFileError};
+pub use edit::{HeldEdit, decide_edit};
+pub use file::{Place, RulesFile, RulesFileError, RulesText};
 pub use git::TriageGit;
+pub use loosens::loosens;
+pub use preview::{Hidden, MERGED, Preview, preview};
+pub use propose::{
+    ChangeError, Decision, NewRule, Proposal, ProposalState, Proposed, decide_proposal, propose,
+};
 pub use rules::{Kind, Rule, RuleError, RuleId, Rules};
 pub use store::RulesStore;
 pub use sync::{Synced, sync};

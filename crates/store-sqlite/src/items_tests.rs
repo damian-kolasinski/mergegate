@@ -148,6 +148,30 @@ fn reads_any_item_by_id() {
 }
 
 #[test]
+fn lists_a_projects_last_merged_items_newest_first() {
+    let (_dir, mut store) = store();
+    let ids: Vec<_> = ["a", "b", "c", "d"]
+        .into_iter()
+        .map(|branch| store.insert_item(new_item("app", branch)).unwrap().id)
+        .collect();
+    store.insert_item(new_item("web", "a")).unwrap();
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged' WHERE number != 3", [])
+        .unwrap();
+    let merged = |limit| -> Vec<_> {
+        store
+            .merged_items(&name("app"), limit)
+            .unwrap()
+            .into_iter()
+            .map(|i| i.id)
+            .collect()
+    };
+    assert_eq!(merged(20), [ids[3].clone(), ids[1].clone(), ids[0].clone()]);
+    assert_eq!(merged(1), [ids[3].clone()]);
+}
+
+#[test]
 fn adds_revisions_with_their_files() {
     let (_dir, mut store) = store();
     let first = store.insert_item(new_item("app", "a")).unwrap();

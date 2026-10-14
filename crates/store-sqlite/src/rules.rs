@@ -1,76 +1,55 @@
-//! The `applied_rules` table, and the triage columns of `revision_files`.
+//! The rules tables: those applied, the changes waiting for the operator,
+//! and the triage columns of `revision_files`.
+
+mod held;
+mod proposals;
 
 use mergegate_core::item::ItemId;
 use mergegate_core::project::ProjectName;
 use mergegate_core::store::StoreError;
 use mergegate_core::triage::{
-    Guard, Kind, Rule, RuleId, Rules, RulesStore, Tier, Triage, TriagedBy,
+    Guard, HeldEdit, Hidden, Kind, Proposal, ProposalState, Rule, RuleId, Rules, RulesStore, Tier,
+    Triage, TriagedBy,
 };
-use rusqlite::{Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::Store;
 
 impl RulesStore for Store {
     fn applied_rules(&self, project: &ProjectName) -> Result<Rules, StoreError> {
-        let mut stmt = self
+        read_rules(&self.conn, "applied_rules", project)
+    }
+
+    fn applied_text(&self, project: &ProjectName) -> Result<Option<String>, StoreError> {
+        let text: Option<Option<String>> = self
             .conn
-            .prepare_cached(
-                "SELECT r.id, r.tier, r.path, r.kind, r.max_lines, r.diff_matches, r.reason
-                 FROM applied_rules r JOIN projects p ON p.id = r.project_id
-                 WHERE p.name = ?1
-                 ORDER BY r.position",
+            .query_row(
+                "SELECT f.applied_text FROM rules_files f JOIN projects p ON p.id = f.project_id
+                 WHERE p.name = ?1",
+                [project.as_str()],
+                |row| row.get(0),
             )
+            .optional()
             .map_err(StoreError::new)?;
-        let rules = stmt
-            .query_map([project.as_str()], read_rule)
-            .map_err(StoreError::new)?
-            .map(|row| row.map_err(StoreError::new)?)
-            .collect::<Result<Vec<_>, _>>()?;
-        Rules::new(rules).map_err(StoreError::new)
+        Ok(text.flatten())
     }
 
     fn set_applied_rules(
         &mut self,
         project: &ProjectName,
         rules: &Rules,
+        text: Option<&str>,
     ) -> Result<(), StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
-        let project_id: i64 = tx
-            .query_row(
-                "SELECT id FROM projects WHERE name = ?1",
-                [project.as_str()],
-                |row| row.get(0),
-            )
-            .map_err(StoreError::new)?;
+        let project_id = project_id(&tx, project)?;
+        write_rules(&tx, "applied_rules", project_id, rules)?;
         tx.execute(
-            "DELETE FROM applied_rules WHERE project_id = ?1",
-            [project_id],
+            "INSERT INTO rules_files (project_id, applied_text, last_rule) VALUES (?1, ?2, 0)
+             ON CONFLICT (project_id) DO UPDATE SET applied_text = excluded.applied_text",
+            params![project_id, text],
         )
         .map_err(StoreError::new)?;
-        {
-            let mut stmt = tx
-                .prepare_cached(
-                    "INSERT INTO applied_rules
-                         (project_id, position, id, tier, path, kind, max_lines, diff_matches,
-                          reason)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                )
-                .map_err(StoreError::new)?;
-            for (position, rule) in rules.rules().enumerate() {
-                stmt.execute(params![
-                    project_id,
-                    position as i64,
-                    rule.id.number(),
-                    rule.tier.as_str(),
-                    rule.path,
-                    rule.kind.map(Kind::as_str),
-                    rule.max_lines.map(|n| n as i64),
-                    rule.diff_matches,
-                    rule.reason,
-                ])
-                .map_err(StoreError::new)?;
-            }
-        }
+        used(&tx, project_id, rules.rules())?;
         tx.commit().map_err(StoreError::new)
     }
 
@@ -107,6 +86,208 @@ impl RulesStore for Store {
         }
         tx.commit().map_err(StoreError::new)
     }
+
+    fn next_rule_id(&self, project: &ProjectName) -> Result<RuleId, StoreError> {
+        let last: Option<u32> = self
+            .conn
+            .query_row(
+                "SELECT f.last_rule FROM rules_files f JOIN projects p ON p.id = f.project_id
+                 WHERE p.name = ?1",
+                [project.as_str()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StoreError::new)?;
+        Ok(RuleId::new(last.unwrap_or(0) + 1))
+    }
+
+    fn insert_proposal(
+        &mut self,
+        project: &ProjectName,
+        proposal: &Proposal,
+    ) -> Result<(), StoreError> {
+        proposals::insert(&mut self.conn, project, proposal)
+    }
+
+    fn proposal(&self, project: &ProjectName, id: RuleId) -> Result<Option<Proposal>, StoreError> {
+        Ok(proposals::select(&self.conn, project, Some(id))?.pop())
+    }
+
+    fn pending_proposals(&self, project: &ProjectName) -> Result<Vec<Proposal>, StoreError> {
+        let mut all = proposals::select(&self.conn, project, None)?;
+        all.retain(|p| p.state == ProposalState::Pending);
+        Ok(all)
+    }
+
+    fn set_proposal_state(
+        &mut self,
+        project: &ProjectName,
+        id: RuleId,
+        state: ProposalState,
+    ) -> Result<(), StoreError> {
+        proposals::set_state(&self.conn, project, id, state)
+    }
+
+    fn held_edit(&self, project: &ProjectName) -> Result<Option<HeldEdit>, StoreError> {
+        held::select(&self.conn, project)
+    }
+
+    fn set_held_edit(
+        &mut self,
+        project: &ProjectName,
+        edit: Option<&HeldEdit>,
+    ) -> Result<(), StoreError> {
+        held::set(&mut self.conn, project, edit)
+    }
+}
+
+fn project_id(conn: &Connection, project: &ProjectName) -> Result<i64, StoreError> {
+    conn.query_row(
+        "SELECT id FROM projects WHERE name = ?1",
+        [project.as_str()],
+        |row| row.get(0),
+    )
+    .map_err(StoreError::new)
+}
+
+/// Raises the project's `last_rule` to cover `rules`.
+fn used<'a>(
+    conn: &Connection,
+    project_id: i64,
+    rules: impl IntoIterator<Item = &'a Rule>,
+) -> Result<(), StoreError> {
+    let Some(last) = rules.into_iter().map(|r| r.id.number()).max() else {
+        return Ok(());
+    };
+    conn.execute(
+        "INSERT INTO rules_files (project_id, last_rule) VALUES (?1, ?2)
+         ON CONFLICT (project_id) DO UPDATE SET last_rule = max(last_rule, excluded.last_rule)",
+        params![project_id, last],
+    )
+    .map_err(StoreError::new)?;
+    Ok(())
+}
+
+/// `applied_rules` or `held_rules`, which share their columns.
+fn read_rules(conn: &Connection, table: &str, project: &ProjectName) -> Result<Rules, StoreError> {
+    let mut stmt = conn
+        .prepare_cached(&format!(
+            "SELECT r.id, r.tier, r.path, r.kind, r.max_lines, r.diff_matches, r.reason
+             FROM {table} r JOIN projects p ON p.id = r.project_id
+             WHERE p.name = ?1
+             ORDER BY r.position"
+        ))
+        .map_err(StoreError::new)?;
+    let rules = stmt
+        .query_map([project.as_str()], read_rule)
+        .map_err(StoreError::new)?
+        .map(|row| row.map_err(StoreError::new)?)
+        .collect::<Result<Vec<_>, _>>()?;
+    Rules::new(rules).map_err(StoreError::new)
+}
+
+fn write_rules(
+    conn: &Connection,
+    table: &str,
+    project_id: i64,
+    rules: &Rules,
+) -> Result<(), StoreError> {
+    conn.execute(
+        &format!("DELETE FROM {table} WHERE project_id = ?1"),
+        [project_id],
+    )
+    .map_err(StoreError::new)?;
+    let mut stmt = conn
+        .prepare_cached(&format!(
+            "INSERT INTO {table}
+                 (project_id, position, id, tier, path, kind, max_lines, diff_matches, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+        ))
+        .map_err(StoreError::new)?;
+    for (position, rule) in rules.rules().enumerate() {
+        let [id, tier, path, kind, max_lines, diff_matches, reason] = rule_columns(rule);
+        stmt.execute(params![
+            project_id,
+            position as i64,
+            id,
+            tier,
+            path,
+            kind,
+            max_lines,
+            diff_matches,
+            reason
+        ])
+        .map_err(StoreError::new)?;
+    }
+    Ok(())
+}
+
+/// The columns [`read_rule`] reads, in its order.
+fn rule_columns(rule: &Rule) -> [rusqlite::types::Value; 7] {
+    use rusqlite::types::Value;
+    let text = |s: Option<&str>| s.map_or(Value::Null, |s| Value::Text(s.to_owned()));
+    [
+        Value::Integer(rule.id.number().into()),
+        text(Some(rule.tier.as_str())),
+        text(rule.path.as_deref()),
+        text(rule.kind.map(Kind::as_str)),
+        rule.max_lines
+            .map_or(Value::Null, |n| Value::Integer(n as i64)),
+        text(rule.diff_matches.as_deref()),
+        text(Some(&rule.reason)),
+    ]
+}
+
+/// A change's preview files: a proposal's, or the held edit's for none.
+fn write_hidden(
+    conn: &Connection,
+    project_id: i64,
+    proposal: Option<RuleId>,
+    hidden: &[Hidden],
+) -> Result<(), StoreError> {
+    let mut stmt = conn
+        .prepare_cached(
+            "INSERT INTO hidden_files (project_id, proposal, item_id, path, rule)
+             VALUES (?1, ?2, (SELECT id FROM items WHERE project_id = ?1 AND number = ?3), ?4,
+                     ?5)",
+        )
+        .map_err(StoreError::new)?;
+    for file in hidden {
+        stmt.execute(params![
+            project_id,
+            proposal.map(RuleId::number),
+            file.item.number() as i64,
+            file.path,
+            file.rule.number(),
+        ])
+        .map_err(StoreError::new)?;
+    }
+    Ok(())
+}
+
+fn read_hidden(
+    conn: &Connection,
+    project: &ProjectName,
+    project_id: i64,
+    proposal: Option<RuleId>,
+) -> Result<Vec<Hidden>, StoreError> {
+    let mut stmt = conn
+        .prepare_cached(
+            "SELECT i.number, h.path, h.rule FROM hidden_files h JOIN items i ON i.id = h.item_id
+             WHERE h.project_id = ?1 AND h.proposal IS ?2
+             ORDER BY h.rowid",
+        )
+        .map_err(StoreError::new)?;
+    stmt.query_map(params![project_id, proposal.map(RuleId::number)], |row| {
+        Ok(Hidden {
+            item: ItemId::new(project.clone(), row.get::<_, i64>(0)? as u64),
+            path: row.get(1)?,
+            rule: RuleId::new(row.get(2)?),
+        })
+    })
+    .map_err(StoreError::new)?
+    .collect::<rusqlite::Result<_>>()
+    .map_err(StoreError::new)
 }
 
 /// `tier`, `rule`, `guard` and `why`, as written.
@@ -149,6 +330,7 @@ pub(crate) fn read_triage(row: &Row, first: usize) -> rusqlite::Result<Result<Tr
     })())
 }
 
+/// A rule from `row`'s first seven columns, in [`rule_columns`]' order.
 fn read_rule(row: &Row) -> rusqlite::Result<Result<Rule, StoreError>> {
     let id: u32 = row.get(0)?;
     let tier: String = row.get(1)?;

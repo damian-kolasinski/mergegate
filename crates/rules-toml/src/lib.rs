@@ -4,7 +4,9 @@
 use std::path::PathBuf;
 
 use mergegate_core::project::ProjectName;
-use mergegate_core::triage::{Kind, Rule, RuleId, RulesFile, RulesFileError, Tier};
+use mergegate_core::triage::{
+    Kind, Place, Rule, RuleId, RulesFile, RulesFileError, RulesText, Tier,
+};
 use serde::{Deserialize, Deserializer, de};
 
 pub struct RulesToml {
@@ -24,21 +26,99 @@ impl RulesToml {
 }
 
 impl RulesFile for RulesToml {
-    fn read(&self, project: &ProjectName) -> Result<Vec<Rule>, RulesFileError> {
+    fn read(&self, project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
         let path = self.path(project);
         match std::fs::read_to_string(&path) {
-            Ok(text) => parse(&text).map_err(RulesFileError::Invalid),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-            Err(e) => Err(RulesFileError::Unreadable(format!(
+            Ok(text) => {
+                let rules = parse(&text).map_err(RulesFileError::Invalid)?;
+                Ok(Some(RulesText { text, rules }))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(RulesFileError::Io(format!(
                 "reading {} failed: {e}",
                 path.display()
             ))),
         }
     }
 
+    fn write(&self, project: &ProjectName, text: &str) -> Result<(), RulesFileError> {
+        let path = self.path(project);
+        let failed = |e: std::io::Error| {
+            RulesFileError::Io(format!("writing {} failed: {e}", path.display()))
+        };
+        // Renamed into place, so the hub's next read never sees half a file.
+        let temporary = path.with_extension("toml.tmp");
+        std::fs::create_dir_all(self.projects.join(project.as_str())).map_err(failed)?;
+        std::fs::write(&temporary, text).map_err(failed)?;
+        std::fs::rename(&temporary, &path).map_err(failed)
+    }
+
+    fn insert(&self, text: &str, rule: &Rule, at: Place) -> Result<String, RulesFileError> {
+        insert(text, rule, at).map_err(RulesFileError::Invalid)
+    }
+
     fn location(&self, project: &ProjectName) -> String {
         self.path(project).display().to_string()
     }
+}
+
+/// `text` with `rule`'s table spliced in: first goes above the first
+/// `[[rule]]` and the comment lines right over it, which describe that rule.
+fn insert(text: &str, rule: &Rule, at: Place) -> Result<String, String> {
+    let mut expected = parse(text)?;
+    at.insert(&mut expected, rule.clone());
+    let lines: Vec<&str> = text.lines().collect();
+    let header = lines.iter().position(|line| {
+        let line: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+        line.starts_with("[[rule]]")
+    });
+    let block = render(rule);
+    let spliced = match (at, header) {
+        (Place::First, Some(mut first)) => {
+            while first > 0 && lines[first - 1].trim_start().starts_with('#') {
+                first -= 1;
+            }
+            let (before, after) = lines.split_at(first);
+            let mut out: String = before.iter().map(|l| format!("{l}\n")).collect();
+            out.push_str(&block);
+            out.push('\n');
+            out.extend(after.iter().map(|l| format!("{l}\n")));
+            out
+        }
+        _ if text.trim().is_empty() => block,
+        _ => format!("{}\n\n{block}", text.trim_end()),
+    };
+    // A `[[rule]]` line inside a multi-line string would put it wrong.
+    if parse(&spliced).ok() != Some(expected) {
+        return Err(format!(
+            "couldn't add {} to the file without changing its other rules",
+            rule.id
+        ));
+    }
+    Ok(spliced)
+}
+
+fn render(rule: &Rule) -> String {
+    let quoted = |s: &str| toml::Value::String(s.to_owned()).to_string();
+    let mut out = format!(
+        "[[rule]]\nid = \"{}\"\ntier = \"{}\"\n",
+        rule.id,
+        rule.tier.as_str()
+    );
+    if let Some(path) = &rule.path {
+        out.push_str(&format!("path = {}\n", quoted(path)));
+    }
+    if let Some(kind) = rule.kind {
+        out.push_str(&format!("kind = \"{}\"\n", kind.as_str()));
+    }
+    if let Some(max) = rule.max_lines {
+        out.push_str(&format!("max_lines = {max}\n"));
+    }
+    if let Some(regex) = &rule.diff_matches {
+        out.push_str(&format!("diff_matches = {}\n", quoted(regex)));
+    }
+    out.push_str(&format!("reason = {}\n", quoted(&rule.reason)));
+    out
 }
 
 #[derive(Deserialize)]

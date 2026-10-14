@@ -18,7 +18,7 @@ The review screen shows the newest revision's attachments, or the newest earlier
 
 ## What the operator reads
 
-The operator's rules sort each file of a revision into review or trusted: trusted files, such as lockfiles or generated code, are folded away and the rest are read. `mg rules list` shows the project's rules, first match wins. The operator writes them; don't edit the rules file. A change to a `.gitattributes` is always reviewed, as it can mark files generated.
+The operator's rules sort each file of a revision into review or trusted: trusted files, such as lockfiles or generated code, are folded away and the rest are read. `mg rules list` shows the project's rules, first match wins. The operator writes them; don't edit the rules file. When the operator asks you for a rule, propose it: see [operator.md](operator.md). A change to a `.gitattributes` is always reviewed, as it can mark files generated.
 
 ## Reading a review
 

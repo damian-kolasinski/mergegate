@@ -78,7 +78,7 @@ fn f14_the_agent_abandons_its_item() {
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(
         inbox,
-        json!({ "needs_you": [], "with_agents": [], "merging": [] })
+        json!({ "needs_you": [], "with_agents": [], "merging": [], "rules": [] })
     );
     repo.commit_files("Again", &[("src/login.rs", "fn login() { }\n")]);
     let again = env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
