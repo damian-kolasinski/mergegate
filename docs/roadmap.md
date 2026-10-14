@@ -13,7 +13,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **Pure `core` logic** (comment re-mapping, interdiffs, rule matching, ordering) gets table and golden tests. Each suite keeps its cases in one data file, not one snapshot file per case.
 - **UI tests** use Playwright against the same harness, with state created through `mg` commands.
 - **Benchmarks** come with every speed-sensitive path a PR adds (tech-stack §9).
-- **Size:** a PR changes at most 25 files; larger work ships as a stack of PRs (`ship` skill).
+- **Size:** a PR changes at most 30 files; larger work ships as a stack of PRs (`ship` skill).
 - **The skill grows with the CLI.** PR 8 writes it for the commands that exist; each later PR adds its own commands to it, and the PR 8 test keeps the two in sync.
 
 ## Working on a step

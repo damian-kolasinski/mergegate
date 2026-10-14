@@ -17,7 +17,7 @@ Run the relevant checks (`.claude/scripts/check.sh`) if they have not already pa
 
 ## Size limit
 
-A PR changes at most 25 files against its base. Lockfiles and files generated from committed sources (such as TypeScript types generated from `api`) do not count. After staging, check with `git diff --cached --name-only $(git merge-base origin/<base> HEAD)`, so committed, staged and new files are all counted.
+A PR changes at most 30 files against its base. Lockfiles and files generated from committed sources (such as TypeScript types generated from `api`) do not count. After staging, check with `git diff --cached --name-only $(git merge-base origin/<base> HEAD)`, so committed, staged and new files are all counted.
 
 If the work is over the limit, ship it as a stack of PRs instead of one:
 
