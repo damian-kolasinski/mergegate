@@ -99,6 +99,7 @@
   --background-warning-hover: var(--ramp-yellow-700);
   /* Derived: a solid fill like the status ones, and the selected row. */
   --background-brand: var(--ramp-blue-700);
+  --background-brand-hover: var(--ramp-blue-800);
   --background-selected: var(--ramp-blue-100);
 
   --border-container: var(--ramp-grey-400);
@@ -155,6 +156,7 @@
     --background-warning: var(--ramp-yellow-100);
     --background-warning-hover: var(--ramp-yellow-200);
     --background-brand: var(--ramp-blue-100);
+    --background-brand-hover: var(--ramp-blue-200);
     --background-selected: var(--ramp-blue-900);
 
     --border-container: var(--ramp-grey-500);

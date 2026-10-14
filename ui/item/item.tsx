@@ -1,5 +1,7 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import type { File } from "../api/File";
+import type { ItemState } from "../api/ItemState";
+import type { Verdict } from "../api/Verdict";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { MarkViewed } from "../api/MarkViewed";
 import { getJson, putJson } from "../app/hub";
@@ -7,8 +9,9 @@ import { useKeys } from "../app/keys";
 import { inboxHref } from "../app/router";
 import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
 import { type Row as Line, rowsOf } from "../diff-view/patch";
-import { Badge, Empty, Meta, Mono, Row } from "../design-system";
+import { Badge, Empty, Meta, Mono, Row, type Tone } from "../design-system";
 import styles from "./item.module.css";
+import { ReviewBar } from "./review-bar";
 
 /**
  * An item's newest revision against its merge-base: every file in one
@@ -41,6 +44,14 @@ export function ItemScreen(props: { id: string }) {
 }
 
 function Review(props: { diff: ItemDiff }) {
+  // As the hub moves it: Request changes hands the item back, Comment keeps
+  // it with the operator.
+  const [moved, setMoved] = createSignal<ItemState>();
+  const state = () => moved() ?? props.diff.item.state;
+  const reviewed = (verdict: Verdict) => {
+    if (verdict === "changes_requested") setMoved("changes_requested");
+  };
+
   // Ids are `<project>#<number>`, and blobs are read per project.
   const project = () => props.diff.item.id.split("#")[0] ?? "";
   const blobUrl = (id: string) =>
@@ -168,6 +179,7 @@ function Review(props: { diff: ItemDiff }) {
         <Mono>{props.diff.item.id}</Mono>
         <h1 class={styles.title}>{props.diff.item.title}</h1>
         <Badge tone="brand">r{props.diff.item.revision.number}</Badge>
+        <Badge tone={stateTone[state()]}>{stateLabel[state()]}</Badge>
         <Meta>
           <Mono>{props.diff.item.branch}</Mono> →{" "}
           <Mono>{props.diff.item.target}</Mono>
@@ -219,8 +231,36 @@ function Review(props: { diff: ItemDiff }) {
           />
         </Show>
       </div>
+      <Show when={reviewable(state())}>
+        <ReviewBar
+          item={props.diff.item.id}
+          revision={props.diff.item.revision.number}
+          onSubmitted={reviewed}
+        />
+      </Show>
     </>
   );
+}
+
+const stateLabel: Record<ItemState, string> = {
+  needs_review: "Needs review",
+  changes_requested: "Changes requested",
+  merging: "Merging",
+  merged: "Merged",
+  abandoned: "Abandoned",
+};
+
+const stateTone: Record<ItemState, Tone> = {
+  needs_review: "neutral",
+  changes_requested: "warning",
+  merging: "brand",
+  merged: "success",
+  abandoned: "neutral",
+};
+
+/** The hub takes a review while the item is with the operator or its agent. */
+function reviewable(state: ItemState): boolean {
+  return state === "needs_review" || state === "changes_requested";
 }
 
 function same(line: Line, other: Line | undefined): boolean {

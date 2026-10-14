@@ -1,0 +1,27 @@
+.textArea {
+  display: block;
+  width: 100%;
+  /* Dragged taller, it still leaves room for what's above it. */
+  max-height: 40vh;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-container);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  color: var(--text-primary);
+  font: var(--type-p3);
+  resize: vertical;
+}
+
+.textArea:disabled {
+  color: var(--text-inactive);
+}
+
+.textArea::placeholder {
+  color: var(--text-subtle);
+}
+
+.textArea:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
