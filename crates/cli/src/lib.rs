@@ -11,6 +11,8 @@ pub mod output;
 mod project_cmd;
 mod reply_cmd;
 mod repo;
+mod resume_cmd;
+mod skill_cmd;
 mod submit_cmd;
 mod wait_cmd;
 
@@ -63,6 +65,11 @@ enum Command {
         /// Item title [default: the first commit's subject]
         #[arg(long)]
         title: Option<String>,
+        /// Shell command the hub runs in this worktree when the item has
+        /// events from the operator you haven't read; `{item}` becomes its
+        /// ID, "" removes it
+        #[arg(long, value_name = "CMD")]
+        wake: Option<String>,
     },
     /// Wait until the item has feedback for its agent, print it and mark it
     /// delivered
@@ -108,10 +115,19 @@ enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
+    /// Print a prompt that brings a new agent session up to date on an item,
+    /// without marking anything delivered
+    Resume {
+        /// The item, as in app#42
+        item: String,
+    },
     /// Open items: those waiting for review, with their agents, merging
     Inbox,
     /// Check that the hub, git and every project are set up to work
     Doctor,
+    /// The agent skill matching this mg
+    #[command(subcommand)]
+    Skill(skill_cmd::SkillCommand),
 }
 
 pub fn main() -> ExitCode {
@@ -130,7 +146,7 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
         Command::Hub(command) => hub_cmd::run(command),
         Command::Project(command) => project_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
-        Command::Submit { title } => submit_cmd::run(title),
+        Command::Submit { title, wake } => submit_cmd::run(title, wake),
         Command::Wait {
             item,
             wake,
@@ -144,8 +160,10 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             body,
         } => reply_cmd::run(comment, status, body),
         Command::Abandon { item, reason } => abandon_cmd::run(item, reason),
+        Command::Resume { item } => resume_cmd::run(item),
         Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),
+        Command::Skill(command) => skill_cmd::run(command),
     }
 }
 
@@ -186,3 +204,7 @@ fn usage(e: clap::Error, json: bool) -> ExitCode {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod tests;

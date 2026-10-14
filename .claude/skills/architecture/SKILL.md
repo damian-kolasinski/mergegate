@@ -16,6 +16,7 @@ crates/
   <adapter>/       one crate per port implementation, e.g. backend-github, store-sqlite
   hub/             composition root of the daemon; build.rs embeds the UI
   cli/             composition root of mg
+  skill/           the agent skill folder, embedded in mg
   testkit/         test harness: drives the real hub, git and mg binaries
 ui/                SolidJS bundled by esbuild; one pnpm package
   app/             entry point, routing, hub client and keyboard map; wires

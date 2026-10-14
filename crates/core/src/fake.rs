@@ -5,8 +5,9 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::agent::{Agent, AgentStore, DueWake};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
-use crate::feedback::{Event, EventKind, FeedbackStore, Notice};
+use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Repo};
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
@@ -357,6 +358,8 @@ pub(crate) struct FakeStore {
     /// Every item's, oldest first.
     events: Vec<(ItemId, Event)>,
     delivered: BTreeMap<ItemId, u64>,
+    agents: BTreeMap<ItemId, Agent>,
+    woken: BTreeMap<ItemId, u64>,
     clock: u32,
 }
 
@@ -393,6 +396,8 @@ impl FakeStore {
                 branch: "login".into(),
                 head: commit(n + 1),
                 title: None,
+                worktree: None,
+                wake: None,
             };
             submit(&mut store, &git, request).unwrap();
         }
@@ -771,6 +776,49 @@ impl FeedbackStore for FakeStore {
         };
         self.events.push((id.clone(), event.clone()));
         Ok(event)
+    }
+}
+
+impl AgentStore for FakeStore {
+    fn agent(&self, id: &ItemId) -> Result<Agent, StoreError> {
+        Ok(self.agents.get(id).cloned().unwrap_or_default())
+    }
+
+    fn set_agent(&mut self, id: &ItemId, agent: &Agent) -> Result<(), StoreError> {
+        self.agents.insert(id.clone(), agent.clone());
+        Ok(())
+    }
+
+    fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError> {
+        let mut due = Vec::new();
+        for (id, agent) in &self.agents {
+            let Some(command) = &agent.wake else {
+                continue;
+            };
+            let seen = self
+                .delivered(id)?
+                .max(self.woken.get(id).copied().unwrap_or(0));
+            let cursor = self
+                .events(id, 0)?
+                .iter()
+                .rev()
+                .find(|e| e.source() == Source::Operator)
+                .map_or(0, |e| e.cursor);
+            if cursor > seen {
+                due.push(DueWake {
+                    item: id.clone(),
+                    command: command.clone(),
+                    worktree: agent.worktree.clone(),
+                    cursor,
+                });
+            }
+        }
+        Ok(due)
+    }
+
+    fn set_woken(&mut self, id: &ItemId, cursor: u64) -> Result<(), StoreError> {
+        self.woken.insert(id.clone(), cursor);
+        Ok(())
     }
 }
 

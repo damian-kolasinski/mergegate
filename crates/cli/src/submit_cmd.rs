@@ -9,7 +9,7 @@ use crate::output::{CliError, Outcome};
 use crate::project_cmd::route;
 use crate::repo::{self, REMOTE};
 
-pub fn run(title: Option<String>) -> Result<Outcome, CliError> {
+pub fn run(title: Option<String>, wake: Option<String>) -> Result<Outcome, CliError> {
     repo::require()?;
     let client = Client::connect(&crate::home()?)?;
     let project = remote_project()?;
@@ -43,6 +43,9 @@ pub fn run(title: Option<String>) -> Result<Outcome, CliError> {
         branch,
         head,
         title,
+        // Where `mg resume` sends a new session, and the wake command runs.
+        worktree: repo::read(&["rev-parse", "--show-toplevel"])?,
+        wake,
     };
     let submitted = match client.post::<Submitted>("/api/items", &request)? {
         Reply::Done(submitted) => submitted,

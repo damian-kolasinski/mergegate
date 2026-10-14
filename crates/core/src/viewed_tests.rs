@@ -36,6 +36,8 @@ fn revised() -> FakeStore {
             branch: "login".into(),
             head,
             title: None,
+            worktree: None,
+            wake: None,
         };
         submit(&mut store, &git, request).unwrap();
     }

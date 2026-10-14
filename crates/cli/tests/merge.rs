@@ -97,10 +97,19 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
         wait.stdout.trim(),
         format!(
             "[1] app#1 r1: the operator approved\n  Ship it.\n\n\
-             [2] app#1 r1: the operator merged it as {commit}\n\n\
+             [2] app#1 r1: the operator merged it as {commit}\n\n  \
+             Clean up feature as agreed with the operator; by default:\n    \
+             git switch --detach\n    git branch -D feature\n\n\
              cursor 2 (mg wait --since 2 replays from here)\n\napp#1 is merged"
         )
     );
+    // The squash leaves the branch unmerged to git, so the event names it.
+    let replay = env
+        .mg(&["--json", "feedback", "app#1", "--since", "1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(replay["events"][0]["type"], "item.merged");
+    assert_eq!(replay["events"][0]["branch"], "feature");
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(
         inbox,

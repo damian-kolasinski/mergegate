@@ -33,6 +33,8 @@ fn two_items() -> (FakeStore, FakeGit) {
             branch: branch.into(),
             head: commit(2),
             title: None,
+            worktree: None,
+            wake: None,
         };
         submit(&mut store, &git, request).unwrap();
     }
@@ -113,6 +115,8 @@ fn drops_its_pins_and_the_diffs_no_open_item_uses() {
         branch: "login".into(),
         head: commit(3),
         title: None,
+        worktree: None,
+        wake: None,
     };
     submit(&mut store, &git, request).unwrap();
     assert_eq!(store.diffs().len(), 3);

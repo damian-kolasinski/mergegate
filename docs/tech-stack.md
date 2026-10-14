@@ -146,7 +146,7 @@ Rules are stored in `rules.toml`. Proposals waiting for approval live in the dat
 ## 8. Agent surface
 
 1. **Self-describing CLI.** Short `--help`, errors that name the next command, `needs_decision` with options. Output is compact by default, because every byte costs tokens.
-2. **Skill embedded in the binary.** `mg skill install` writes the copy matching that binary, so the skill and the CLI never drift. A test asserts that every command the skill mentions exists.
+2. **Skill embedded in the binary.** `crates/skill` holds the folder and embeds it with `include_str!`; `mg skill install` writes the copy matching that binary, so the skill and the CLI never drift. A test asserts that every command and flag the skill names exists in clap's tree, and that the skill names every command.
 3. **`mg resume`** prints a self-contained prompt for agents without skill support.
 
 No MCP server. The CLI works in every harness, while MCP tool schemas cost context in every session.

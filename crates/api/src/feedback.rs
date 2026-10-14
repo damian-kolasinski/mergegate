@@ -72,9 +72,10 @@ pub enum EventBody {
         paths: Vec<String>,
         commands: Vec<String>,
     },
-    /// The approved revision landed on the target as `commit`.
+    /// The approved revision landed on the target as `commit`. A squash
+    /// leaves `branch` unmerged to git, so deleting it takes `git branch -D`.
     #[serde(rename = "item.merged")]
-    ItemMerged { commit: String },
+    ItemMerged { commit: String, branch: String },
 }
 
 /// Which events end a wait; `for` on the feedback route.

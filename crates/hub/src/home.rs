@@ -72,6 +72,11 @@ impl Home {
         self.root.join("projects")
     }
 
+    /// The stderr of each item's newest wake command, one file per item.
+    pub fn wake_logs(&self) -> PathBuf {
+        self.root.join("wakes")
+    }
+
     /// What the hub's git commands see as `HOME`, so the settings of the user
     /// running the hub never apply to them.
     pub fn git_home(&self) -> PathBuf {

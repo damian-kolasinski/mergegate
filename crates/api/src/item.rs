@@ -23,6 +23,14 @@ pub struct Submit {
     pub head: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// The absolute path of the worktree submitting, which `mg resume` names
+    /// and a wake command runs in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<String>,
+    /// The shell command the hub runs when the item has events its agent
+    /// hasn't read; empty removes it, none keeps the item's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wake: Option<String>,
 }
 
 /// `POST /api/items/{id}/abandon`, answered with the closed [`Item`]. Its

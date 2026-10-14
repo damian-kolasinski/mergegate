@@ -34,6 +34,8 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
         branch: "login".into(),
         head: commit(2),
         title: None,
+        worktree: None,
+        wake: None,
     };
     submit(&mut store, &git, request).unwrap();
     (store, git)

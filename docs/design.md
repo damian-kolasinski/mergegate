@@ -97,6 +97,7 @@ Principles
 - **Tailscale identity instead of tokens.** For each tailnet connection, the hub asks the local Tailscale daemon who is calling (`whois`). Devices owned by the same Tailscale user as the hub are trusted automatically. Other devices need `mg hub allow <device>`. There's nothing to copy between machines, so an agent can connect a worker end to end (F2).
 - Fallback for networks without Tailscale: `mg hub token create` on the hub, `mg connect <url> --token T` on the worker.
 - `mg wait` connections are resumable via an event cursor, so a dropped connection never loses feedback.
+- Only a worker on the hub's machine may set `mg submit --wake`: the hub runs whatever command it is given.
 
 ## 5. Item lifecycle
 
@@ -169,7 +170,7 @@ mg lang remove <name> | update
 mg connect <hub>                                         On a worker: point the CLI at a hub
 mg init                                                  In any clone: add the `mergegate` remote
 mg doctor                                                Check hub, auth, remote, GitHub access
-mg skill install [--dir PATH]                            Install the agent skill (§11)
+mg skill install [--dir PATH]                            Write the agent skill and print where (§11)
 ```
 
 `MERGEGATE_HOME` selects the data directory (default `~/.mergegate`) for both the hub and the CLI, which finds the hub's address there. A development build can run next to the installed one without sharing state.
@@ -210,7 +211,9 @@ mg resume <item>                                 Print a self-contained prompt (
                                                  feedback) for starting a fresh agent session.
 ```
 
-`mg submit` also takes `--wake CMD`: a command the hub runs when the item has new events, typically the agent's own "resume this session" command (§6.5).
+`mg resume` holds the skill's rules, the item, its branch and the worktree it was last submitted from, the last review, and every comment still open with its thread. A comment is settled when the agent's latest reply is `rejected`, or `addressed` and a revision was submitted since, and the operator hasn't replied after it. It acknowledges nothing, so the old session's unread events still reach `mg wait`.
+
+`mg submit` also takes `--wake CMD`: a command the hub runs when the item has new events from the operator, typically the agent's own "resume this session" command (§6.5). The latest submit that passes it wins, and `--wake ""` removes it.
 
 ### 6.2 Operator-agent commands
 
@@ -246,7 +249,7 @@ mg rules list | propose ... | show <id>                See §7.3.
 
 The cursor is the event's position in the item's log, and comment IDs are hub-wide. A comment anchors to a line range on one side of a file in one revision and quotes the last few of its lines, so the agent needn't open the file to know what it means. Comments are on lines only; a whole-file remark goes in the review's summary. `replies` are the operator's answers to the agent's replies on earlier comments. Only events the agent acts on enter the log; its own submits and replies don't.
 
-Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
+Event types: `review.submitted`, `external.comments` (each comment carries `author` and `kind: bot|human`), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit and the branch, which git sees as unmerged), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (operator overrode an agent's rejection of an external comment).
 
 ### 6.4 Push extension point
 
@@ -272,6 +275,8 @@ The agent picks the cheapest way to wait that its environment supports. The skil
 | run a command in the background and be notified when it exits | `mg wait --timeout 0` in the background | none |
 | be resumed by a shell command | `mg submit --wake "<resume cmd>"`, then ends its turn | none |
 | neither | loops `mg wait --timeout N`, N just under its tool-call limit | one small turn per timeout |
+
+A wake runs as `sh -c CMD` in the worktree of the item's latest submit, with `{item}` replaced and `MG_ITEM`, `MG_CURSOR` and `MERGEGATE_HOME` set, in its own process group. It runs when the item has events from the operator its agent hasn't acknowledged (its own, like an `mg abandon`, never wake it), but not while a read of the item is in flight, not for events a read already returned, and only one at a time per item, looking again when the command exits. Each event wakes at most once, across hub restarts. The command's stderr goes to `wakes/<item>.log` in the hub's home, not a pipe, since the session it starts may outlive the hub; the hub logs a failed command and doesn't retry. `mg resume` shows the wake an earlier session left, so a new one replaces it. The external-comment debounce (PR 10) will apply to wakes too, and once workers connect from other machines (PR 19) they can't set one (§4).
 
 ## 7. File triage
 
@@ -429,11 +434,13 @@ mergegate/
   references/
     setup.md          set up the hub, projects, workers and judge; which decisions to ask the operator
     authoring.md      submit, wait, reply; guide format; demos
-    operator.md       priorities, the event stream, rules
+    operator.md       priorities, the event stream, rules (lands with their commands)
     waiting.md        choose how to wait by capability (§6.5)
 ```
 
-- `mg skill install` copies it into an agent's skills directory. An agent can also install it itself, since it's just a folder.
+- The skill names only commands that exist, and a test keeps the two in sync both ways; each command lands in the skill with the PR that adds it.
+- `mg skill install` writes the folder matching the binary (to `$MERGEGATE_HOME/skill/mergegate`, or `--dir PATH`) and prints where; it isn't agent-specific, so each agent copies or links it into wherever it loads skills from. It replaces the whole folder, so files a newer build dropped go too.
+- Install also asks the agent to settle with its operator what to do with a branch after its item merges: the squash leaves it unmerged to git. The skill's default is to detach, then `git branch -D` it.
 - The skill covers setup too, so "set up mergegate" is a request to an agent, not a manual.
 
 Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` with a guide, demo, and the priority/note from the task brief; wait for feedback the cheapest way available; reply to every comment with `addressed`/`rejected` + reason; evaluate external feedback critically before acting; when a command returns `needs_decision`, ask the operator.
