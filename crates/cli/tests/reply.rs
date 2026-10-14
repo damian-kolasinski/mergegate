@@ -1,26 +1,31 @@
 //! The agent answering the operator's comments (F7's last step): `mg reply`
 //! marks a sent comment addressed, rejected or a question, and the item shows
-//! the reply on the comment's thread.
+//! the reply on the comment's thread. The operator answers back with draft
+//! replies, which the next review sends.
 
 use serde_json::{Value, json};
-use testkit::{Env, TestRepo, http_reply};
+use testkit::{Env, Reply, TestRepo, http_reply};
 
 fn env() -> Env {
     Env::new(env!("CARGO_BIN_EXE_mg"))
 }
 
-fn post(env: &Env, path: &str, body: &Value) -> Value {
+fn send(env: &Env, method: &str, path: &str, body: &Value) -> Reply {
     let addr = env.hub_addr();
     let body = body.to_string();
-    let reply = http_reply(
+    http_reply(
         &addr,
         &format!(
-            "POST {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\
+            "{method} {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\
              {}: ui\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
             api::CLIENT_HEADER,
             body.len(),
         ),
-    );
+    )
+}
+
+fn post(env: &Env, path: &str, body: &Value) -> Value {
+    let reply = send(env, "POST", path, body);
     assert!(reply.status < 300, "{}", reply.body);
     serde_json::from_str(&reply.body).unwrap()
 }
@@ -141,4 +146,113 @@ fn replies_answer_only_sent_comments_and_say_why() {
         "empty_reply",
     );
     assert_eq!(item(&env)["replies"], json!([]));
+}
+
+#[test]
+fn f7_the_operators_replies_go_out_with_the_next_review() {
+    let (env, _repo) = reviewed();
+    env.mg(&[
+        "reply",
+        "c_1",
+        "--status",
+        "question",
+        "--body",
+        "Empty or missing?",
+    ])
+    .assert_code(0);
+    env.mg(&["feedback", "app#1"]).assert_code(0);
+    let kept = post(
+        &env,
+        "/api/comments/c_1/drafts",
+        &json!({ "body": "Both." }),
+    );
+    let dropped = post(
+        &env,
+        "/api/comments/c_1/drafts",
+        &json!({ "body": "Neither." }),
+    );
+    let draft = |reply: &Value| format!("/api/comments/c_1/drafts/{}", reply["id"]);
+    let edited = send(
+        &env,
+        "PUT",
+        &draft(&kept),
+        &json!({ "body": " Both, please.\n" }),
+    );
+    assert_eq!(edited.status, 200, "{}", edited.body);
+    let deleted = send(&env, "DELETE", &draft(&dropped), &json!(null));
+    assert_eq!(deleted.status, 204, "{}", deleted.body);
+    let bodies = |replies: &Value| {
+        replies
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|reply| (reply["author"].clone(), reply["body"].clone()))
+            .collect::<Vec<_>>()
+    };
+    let shown = item(&env);
+    assert_eq!(
+        bodies(&shown["draft_replies"]),
+        [(json!("operator"), json!("Both, please."))]
+    );
+    assert_eq!(
+        bodies(&shown["replies"]),
+        [(json!("agent"), json!("Empty or missing?"))]
+    );
+
+    let sent = post(
+        &env,
+        "/api/items/app%231/reviews",
+        &json!({ "revision": 1, "verdict": "comment", "summary": "" }),
+    );
+    assert_eq!(
+        bodies(&sent["replies"]),
+        [(json!("operator"), json!("Both, please."))]
+    );
+    let text = env.mg(&["feedback", "app#1"]).assert_code(0);
+    assert_eq!(
+        text.stdout.trim(),
+        "[2] app#1 r1: the operator commented\n\n  \
+         c_2 src/login.rs:1\n    > fn login() {}\n    Check the password.\n\n  \
+         reply to c_1\n    Both, please.\n\n\
+         cursor 2 (mg wait --since 2 replays from here)"
+    );
+    let shown = item(&env);
+    assert_eq!(shown["draft_replies"], json!([]));
+    assert_eq!(
+        bodies(&shown["replies"]),
+        [
+            (json!("agent"), json!("Empty or missing?")),
+            (json!("operator"), json!("Both, please."))
+        ]
+    );
+
+    // Sent, it stays as the agent read it.
+    let late = send(
+        &env,
+        "PUT",
+        &draft(&kept),
+        &json!({ "body": "Never mind." }),
+    );
+    assert_eq!(late.status, 409, "{}", late.body);
+}
+
+#[test]
+fn only_sent_comments_take_the_operators_replies() {
+    let (env, _repo) = reviewed();
+    let refused = |path: &str, body: &str| {
+        let reply = send(&env, "POST", path, &json!({ "body": body }));
+        let error: Value = serde_json::from_str(&reply.body).unwrap();
+        (reply.status, error["error"]["code"].clone())
+    };
+    assert_eq!(
+        refused("/api/comments/c_2/drafts", "Hm."),
+        (404, json!("comment_not_found"))
+    );
+    assert_eq!(
+        refused("/api/comments/c_1/drafts", " "),
+        (400, json!("empty_reply"))
+    );
+    let missing = send(&env, "DELETE", "/api/comments/c_1/drafts/7", &json!(null));
+    assert_eq!(missing.status, 404, "{}", missing.body);
+    assert_eq!(item(&env)["draft_replies"], json!([]));
 }

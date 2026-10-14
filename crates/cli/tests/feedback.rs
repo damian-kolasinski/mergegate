@@ -113,6 +113,7 @@ fn f7_wait_returns_the_review_once() {
             "verdict": "changes_requested",
             "summary": "Handle the empty password.\nThanks!",
             "comments": [],
+            "replies": [],
         }])
     );
 

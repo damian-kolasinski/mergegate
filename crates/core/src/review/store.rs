@@ -5,7 +5,7 @@ use crate::store::StoreError;
 /// Reviews, their comments and the events that carry them. The store stamps
 /// submit and create times.
 pub trait ReviewStore {
-    /// Records the review with every draft on its item, moves the item to
+    /// Records the review with every draft and draft reply on its item, moves the item to
     /// `state` and appends the review's `review.submitted` event, all or
     /// nothing: an agent never misses a review the operator saw go through.
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError>;
@@ -25,6 +25,15 @@ pub trait ReviewStore {
     fn comment(&self, id: CommentId) -> Result<Option<Comment>, StoreError>;
 
     fn insert_reply(&mut self, reply: NewReply) -> Result<Reply, StoreError>;
+
+    /// The reply, on whichever item, draft or sent.
+    fn reply(&self, id: u64) -> Result<Option<Reply>, StoreError>;
+
+    /// Changes nothing once the reply was sent.
+    fn set_draft_reply_body(&mut self, id: u64, body: &str) -> Result<(), StoreError>;
+
+    /// Deletes nothing once the reply was sent.
+    fn delete_draft_reply(&mut self, id: u64) -> Result<(), StoreError>;
 
     /// Every reply on `id`'s comments, oldest first.
     fn replies(&self, id: &ItemId) -> Result<Vec<Reply>, StoreError>;

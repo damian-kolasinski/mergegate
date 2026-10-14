@@ -4,6 +4,7 @@
 
 mod comment;
 mod draft;
+mod draft_reply;
 mod error;
 mod reply;
 mod store;
@@ -11,6 +12,7 @@ mod submit;
 
 pub use comment::{Comment, CommentId, QUOTE_LINES, Side};
 pub use draft::{DraftError, QUOTE_LINE_CHARS, WriteDraft, delete_draft, edit_draft, write_draft};
+pub use draft_reply::{DraftReplyError, delete_draft_reply, edit_draft_reply, write_draft_reply};
 pub use error::ReviewError;
 pub use reply::{Author, Reply, ReplyError, ReplyStatus, WriteReply, reply};
 pub use store::{NewComment, NewReply, NewReview, ReviewStore};
@@ -30,6 +32,9 @@ pub struct Review {
     pub summary: String,
     /// The drafts the review sent, oldest first.
     pub comments: Vec<Comment>,
+    /// The operator's draft replies the review sent, oldest first, on
+    /// comments earlier reviews sent.
+    pub replies: Vec<Reply>,
     pub submitted_at: String,
 }
 

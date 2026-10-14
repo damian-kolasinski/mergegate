@@ -47,7 +47,9 @@ impl ReviewStore for Store {
         )
         .map_err(StoreError::new)?;
         comments::attach(&tx, item_id, id)?;
+        replies::attach(&tx, item_id, id)?;
         let sent = comments::of_item(&tx, &review.item, Some(id as u64))?;
+        let answers = replies::of_item(&tx, &review.item, Some(id as u64))?;
         tx.commit().map_err(StoreError::new)?;
         Ok(Review {
             id: id as u64,
@@ -56,6 +58,7 @@ impl ReviewStore for Store {
             verdict: review.verdict,
             summary: review.summary,
             comments: sent,
+            replies: answers,
             submitted_at,
         })
     }
@@ -84,8 +87,20 @@ impl ReviewStore for Store {
         replies::insert(&self.conn, reply)
     }
 
+    fn reply(&self, id: u64) -> Result<Option<Reply>, StoreError> {
+        replies::one(&self.conn, id)
+    }
+
+    fn set_draft_reply_body(&mut self, id: u64, body: &str) -> Result<(), StoreError> {
+        replies::set_body(&self.conn, id, body)
+    }
+
+    fn delete_draft_reply(&mut self, id: u64) -> Result<(), StoreError> {
+        replies::delete(&self.conn, id)
+    }
+
     fn replies(&self, id: &ItemId) -> Result<Vec<Reply>, StoreError> {
-        replies::of_item(&self.conn, id)
+        replies::of_item(&self.conn, id, None)
     }
 }
 
@@ -109,6 +124,7 @@ pub(crate) fn review(
         verdict: verdict_named(&row.verdict)?,
         summary: row.summary,
         comments: comments::of_item(conn, item, Some(row.id as u64))?,
+        replies: replies::of_item(conn, item, Some(row.id as u64))?,
         submitted_at: row.submitted_at,
     })
 }

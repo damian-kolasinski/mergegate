@@ -337,6 +337,7 @@ pub(crate) struct FakeStore {
     last_comment: u64,
     /// Every item's, oldest first.
     replies: Vec<Reply>,
+    last_reply: u64,
     /// Every item's, oldest first.
     events: Vec<(ItemId, Event)>,
     delivered: BTreeMap<ItemId, u64>,
@@ -579,6 +580,13 @@ impl ReviewStore for FakeStore {
                 comments.push(comment.clone());
             }
         }
+        let mut replies = Vec::new();
+        for reply in &mut self.replies {
+            if reply.item == review.item && reply.is_draft() {
+                reply.review = Some(id);
+                replies.push(reply.clone());
+            }
+        }
         let review = Review {
             id,
             item: review.item,
@@ -586,6 +594,7 @@ impl ReviewStore for FakeStore {
             verdict: review.verdict,
             summary: review.summary,
             comments,
+            replies,
             submitted_at: self.now(),
         };
         self.set_state(&review.item, state);
@@ -648,8 +657,9 @@ impl ReviewStore for FakeStore {
     }
 
     fn insert_reply(&mut self, reply: NewReply) -> Result<Reply, StoreError> {
+        self.last_reply += 1;
         let reply = Reply {
-            id: self.replies.len() as u64 + 1,
+            id: self.last_reply,
             comment: reply.comment,
             item: reply.item,
             author: reply.author,
@@ -661,6 +671,22 @@ impl ReviewStore for FakeStore {
         };
         self.replies.push(reply.clone());
         Ok(reply)
+    }
+
+    fn reply(&self, id: u64) -> Result<Option<Reply>, StoreError> {
+        Ok(self.replies.iter().find(|r| r.id == id).cloned())
+    }
+
+    fn set_draft_reply_body(&mut self, id: u64, body: &str) -> Result<(), StoreError> {
+        if let Some(draft) = self.replies.iter_mut().find(|r| r.id == id && r.is_draft()) {
+            draft.body = body.into();
+        }
+        Ok(())
+    }
+
+    fn delete_draft_reply(&mut self, id: u64) -> Result<(), StoreError> {
+        self.replies.retain(|r| r.id != id || !r.is_draft());
+        Ok(())
     }
 
     fn replies(&self, id: &ItemId) -> Result<Vec<Reply>, StoreError> {

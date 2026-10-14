@@ -12,9 +12,9 @@ use axum::{Json, Router};
 use mergegate_core::item::ItemId;
 use mergegate_core::review::{self, Review, ReviewError, SubmitReview, Verdict};
 
-use crate::comments;
 use crate::reply::Failure;
 use crate::server::AppState;
+use crate::{comments, replies};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/items/{id}/reviews", post(submit))
@@ -54,6 +54,7 @@ fn to_api(review: &Review) -> api::review::Review {
         verdict: verdict_to_api(review.verdict),
         summary: review.summary.clone(),
         comments: review.comments.iter().map(comments::to_api).collect(),
+        replies: review.replies.iter().map(replies::sent).collect(),
         submitted_at: review.submitted_at.clone(),
     }
 }

@@ -11,7 +11,7 @@ pub enum ReviewError {
     Closed(ItemId),
     #[error("{0} is merging")]
     Merging(ItemId),
-    #[error("a review needs a summary or a comment")]
+    #[error("a review needs a summary, a comment or a reply")]
     Empty,
     #[error(transparent)]
     Store(#[from] StoreError),

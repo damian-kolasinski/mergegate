@@ -21,7 +21,7 @@ The operator's review reaches the authoring agent, and the agent's answers come 
 11. *(agent)* **Only agent-facing events enter the log** for now: `review.submitted`. An agent's own submits and replies don't.
 12. *(agent)* **`--for operator` picks what ends a wait, not what it returns:** the wait returns every undelivered event once one from the operator is among them, so acknowledging never skips one. `--for any` is the default.
 13. *(agent)* **`--timeout 0` waits until an event**; the CLI repeats bounded long-polls. The hub's wait holds no lock while it sleeps.
-14. *(agent)* **Comment keeps the item in Needs you and still notifies the agent**; Request changes moves it to Changes requested. A review needs a summary or a comment. Submitted comments can't be edited.
+14. *(agent)* **Comment keeps the item in Needs you and still notifies the agent**; Request changes moves it to Changes requested. A review needs a summary, a comment or a draft reply. Submitted comments can't be edited.
 15. *(agent)* **"Addressed in rN"** is derived: the first revision submitted after the reply.
 16. *(agent)* **Keys:** `c` comments on the cursor's line, `r` focuses the review bar's summary for Request changes.
 
@@ -29,7 +29,7 @@ The operator's review reaches the authoring agent, and the agent's answers come 
 
 - `core::review`: reviews, drafts, comments and their replies, and the `ReviewStore` port. `core::feedback`: the event log, the delivered cursor, and the `FeedbackStore` port.
 - `store-sqlite`: `0006_reviews.sql` (reviews, events, the cursor), `0007_comments.sql` (drafts and sent comments), `0008_replies.sql`.
-- `api::review`, `api::feedback`; `hub::reviews`, `hub::feedback` (long-poll), `hub::comments`, `hub::replies`.
+- `api::review`, `api::feedback`; `hub::reviews`, `hub::feedback` (long-poll), `hub::comments`, `hub::replies`, `hub::draft_replies`.
 - `cli`: `wait_cmd`, `feedback_cmd`, `reply_cmd`.
 - UI: the review bar and comment threads in `ui/item/`, annotations in `ui/diff-view/`, `Button` and `TextArea` in the design system.
 
@@ -44,9 +44,9 @@ Each PR is a vertical slice through to the CLI or the UI; a slice too big for on
 - `feedback-5-comment-ui`: commenting from the diff with `c` or the gutter, editing drafts, and sent comments inline. *In review.*
 - `feedback-6-replies`: `mg reply`, the replies in the item's diff, `item.changed`. *In review.*
 - `feedback-6-replies-ui`: the agent's replies in the diff's threads, as they come. *In review.*
-- `feedback-7-operator-replies`: the operator's draft replies on the hub, sent with the next review and printed by `mg wait`. *Planned.*
+- `feedback-7-operator-replies`: the operator's draft replies on the hub, sent with the next review and printed by `mg wait`. *In review.*
 - `feedback-7-operator-replies-ui`: replying from the diff's threads, and editing or deleting a draft reply. *Planned.*
-- `feedback-8-conversation`: the Conversation list and the item's comments and replies on their own route, which the item screen then refetches instead of its whole diff; F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*
+- `feedback-8-conversation`: the Conversation list and the item's comments and replies on their own route (drafts on older revisions included, which the diff doesn't show), which the item screen then refetches instead of its whole diff; F6/F7 end to end, doc updates, deleting this brief and roadmap row 6. *Planned.*
 
 ## Open
 

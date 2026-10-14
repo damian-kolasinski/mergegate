@@ -1,3 +1,4 @@
+use mergegate_core::feedback::{EventKind, FeedbackStore};
 use mergegate_core::item::{ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 use mergegate_core::review::{Comment, NewComment, NewReview, ReviewStore, Side, Verdict};
@@ -75,6 +76,15 @@ fn agent(comment: u64, status: ReplyStatus, body: &str) -> NewReply {
     }
 }
 
+fn operator(comment: u64, body: &str) -> NewReply {
+    NewReply {
+        author: Author::Operator,
+        status: None,
+        body: body.into(),
+        ..agent(comment, ReplyStatus::Addressed, "")
+    }
+}
+
 #[test]
 fn replies_thread_on_their_items_comments() {
     let (_dir, mut store) = store();
@@ -130,4 +140,53 @@ fn a_comment_is_found_by_its_id_alone() {
     assert_eq!(found.body, "Why?");
     assert_eq!(found.review, Some(2));
     assert_eq!(store.comment(CommentId(3)).unwrap(), None);
+}
+
+#[test]
+fn the_next_review_sends_its_items_draft_replies() {
+    let (_dir, mut store) = store();
+    let question = store
+        .insert_reply(agent(1, ReplyStatus::Question, "Empty or missing?"))
+        .unwrap();
+    let draft = store.insert_reply(operator(1, "Both.")).unwrap();
+    let elsewhere = store.insert_reply(operator(2, "Later.")).unwrap();
+    assert_eq!(
+        (draft.author, draft.status, draft.review),
+        (Author::Operator, None, None)
+    );
+    store
+        .set_draft_reply_body(draft.id, "Both, please.")
+        .unwrap();
+    assert_eq!(
+        store.reply(draft.id).unwrap().unwrap().body,
+        "Both, please."
+    );
+
+    let review = NewReview {
+        item: id("app#1"),
+        revision: 1,
+        verdict: Verdict::Comment,
+        summary: String::new(),
+    };
+    let sent = store.insert_review(review, ItemState::NeedsReview).unwrap();
+    let draft = Reply {
+        review: Some(sent.id),
+        body: "Both, please.".into(),
+        ..draft
+    };
+    assert_eq!(sent.replies, std::slice::from_ref(&draft));
+    let events = store.events(&id("app#1"), 0).unwrap();
+    assert_eq!(events[1].kind, EventKind::ReviewSubmitted(sent));
+    assert_eq!(
+        store.replies(&id("app#1")).unwrap(),
+        [question, draft.clone()]
+    );
+    assert_eq!(store.reply(elsewhere.id).unwrap(), Some(elsewhere.clone()));
+
+    // Sent, it stays as the agent read it.
+    store.set_draft_reply_body(draft.id, "Neither.").unwrap();
+    store.delete_draft_reply(draft.id).unwrap();
+    assert_eq!(store.reply(draft.id).unwrap(), Some(draft));
+    store.delete_draft_reply(elsewhere.id).unwrap();
+    assert_eq!(store.reply(elsewhere.id).unwrap(), None);
 }

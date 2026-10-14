@@ -30,6 +30,8 @@ pub struct Review {
     pub summary: String,
     /// The drafts the review sent, oldest first.
     pub comments: Vec<Comment>,
+    /// The operator's draft replies the review sent, oldest first.
+    pub replies: Vec<Reply>,
     pub submitted_at: String,
 }
 
@@ -75,6 +77,15 @@ pub struct WriteDraft {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditDraft {
+    pub body: String,
+}
+
+/// `POST /api/comments/{comment}/drafts` and
+/// `PUT /api/comments/{comment}/drafts/{reply}`: the operator's draft reply on
+/// a sent comment, which the next review sends. Answered with the [`Reply`].
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriteDraftReply {
     pub body: String,
 }
 

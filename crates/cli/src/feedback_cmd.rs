@@ -87,6 +87,7 @@ fn event(event: &Event) -> String {
             verdict,
             summary,
             comments,
+            replies,
         } => {
             let verdict = match verdict {
                 Verdict::Comment => "commented",
@@ -105,6 +106,12 @@ fn event(event: &Event) -> String {
                     out.push_str(format!("\n    > {line}").trim_end());
                 }
                 for line in c.body.lines() {
+                    out.push_str(&format!("\n    {line}"));
+                }
+            }
+            for r in replies {
+                out.push_str(&format!("\n\n  reply to {}", r.comment));
+                for line in r.body.lines() {
                     out.push_str(&format!("\n    {line}"));
                 }
             }
