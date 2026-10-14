@@ -244,10 +244,19 @@ fn f4_submitting_opens_a_pull_request_and_keeps_it_up_to_date() {
     assert_eq!(error_code(&moved), "branch_moved");
     assert_eq!(
         moved["error"]["message"],
-        format!("GitHub has login at {theirs}, which mergegate didn't push")
+        format!(
+            "GitHub has login at {theirs}, which mergegate didn't push; build on it to submit again"
+        )
     );
-    assert_eq!(github.rev(ACME, "login"), Some(theirs));
+    assert_eq!(github.rev(ACME, "login"), Some(theirs.clone()));
     assert_eq!(item(&env)["revision"]["number"], 2);
+
+    // Built on, it goes through.
+    repo.git(["reset", "--quiet", "--hard", theirs.as_str()]);
+    repo.commit_files("Add logout", &[("src/logout.rs", "\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    assert_eq!(github.rev(ACME, "login"), Some(repo.rev("HEAD")));
+    assert_eq!(item(&env)["revision"]["number"], 3);
 }
 
 #[test]

@@ -13,7 +13,8 @@ use crate::remote::authorize_remote;
 
 /// Leased, so the push only replaces the branch where mergegate last pushed
 /// it: an agent's rebase goes through, anyone else's push to the remote
-/// stops it. Staging keeps that place under `refs/mergegate/published/`,
+/// stops it until the agent builds on it, as pushing a head that contains
+/// it loses nobody's work. Staging keeps that place under `refs/mergegate/published/`,
 /// rather than taking it from the item, so a submit that failed after its
 /// push, or a merge that left its branch behind, doesn't block the next;
 /// `pushed`, the open item's head, stands in only when staging has lost it.
@@ -64,9 +65,9 @@ pub(crate) fn push_branch(
         ],
     )?
     .map(|id| id.trim().to_owned());
-    let mut lease = last.as_deref().or(pushed);
+    let mut lease = last.or(pushed.map(str::to_owned));
     loop {
-        let output = push(lease)?;
+        let output = push(lease.as_deref())?;
         if !output.status.success() {
             // Turned down: say where the branch is, unless it's turned down
             // for another reason, as a protected branch is.
@@ -81,8 +82,12 @@ pub(crate) fn push_branch(
                     lease = None;
                     continue;
                 }
-                Some(found) if Some(found.as_str()) != lease => {
-                    return Ok(Pushed::Moved(found));
+                Some(found) if Some(&found) != lease.as_ref() => {
+                    if !contains(home, &git_dir, head, &found)? {
+                        return Ok(Pushed::Moved(found));
+                    }
+                    lease = Some(found);
+                    continue;
                 }
                 _ => return Err(failed(&doing, &output)),
             }
@@ -99,6 +104,21 @@ pub(crate) fn push_branch(
         )?;
         return Ok(Pushed::Done);
     }
+}
+
+/// Whether `head` has `commit` in its history. Staging lacks `commit` unless
+/// the agent fetched it and pushed it with `head`, which is all this asks.
+fn contains(home: &Path, git_dir: &OsStr, head: &str, commit: &str) -> Result<bool, GitError> {
+    let mut cmd = command::git(home);
+    cmd.args([
+        git_dir,
+        OsStr::new("merge-base"),
+        OsStr::new("--is-ancestor"),
+        OsStr::new(commit),
+        OsStr::new(head),
+    ]);
+    let output = output_of(cmd, &format!("checking {head} contains {commit}"))?;
+    Ok(output.status.success())
 }
 
 fn remote_head(

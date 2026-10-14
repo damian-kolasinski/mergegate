@@ -39,14 +39,20 @@ impl Setup {
         setup
             .repo
             .commit_files("Add login", &[("login.rs", "fn login() {}\n")]);
-        let staging = setup._dir.path().join("projects/app/staging.git");
-        setup.repo.git([
+        setup.stage("login");
+        setup
+    }
+
+    /// Pushes the operator's `branch` to staging, as `mg submit` does.
+    fn stage(&self, branch: &str) {
+        let staging = self._dir.path().join("projects/app/staging.git");
+        self.repo.git([
             "push".as_ref(),
             "--quiet".as_ref(),
+            "--force".as_ref(),
             staging.as_os_str(),
-            "login:refs/heads/login".as_ref(),
+            format!("{branch}:refs/heads/{branch}").as_ref(),
         ]);
-        setup
     }
 
     fn remote(&self) -> Remote {
@@ -166,23 +172,81 @@ fn pushes_a_branch_named_under_one_it_pushed_before() {
 fn never_replaces_a_branch_it_never_pushed() {
     let setup = Setup::new();
     let main = setup.repo.rev("main");
+    let head = setup.repo.rev("login");
     setup.github.git(
         "acme/app",
-        ["update-ref", "refs/heads/login", main.as_str()],
+        [
+            "fetch".as_ref(),
+            "--quiet".as_ref(),
+            setup.repo.root().as_os_str(),
+            "login:login".as_ref(),
+        ],
     );
-    let head = setup.repo.rev("login");
     let pushed = setup
         .git
-        .push_branch(&app(), &setup.remote(), "login", &head, None);
-    assert_eq!(pushed.unwrap(), Pushed::Moved(main.clone()));
-    assert_eq!(setup.github.rev("acme/app", "login"), Some(main.clone()));
+        .push_branch(&app(), &setup.remote(), "login", &main, None);
+    assert_eq!(pushed.unwrap(), Pushed::Moved(head.clone()));
+    assert_eq!(setup.github.rev("acme/app", "login"), Some(head.clone()));
 
     // Unless an open item pushed it there, and staging lost the record.
     let item = setup
         .git
-        .push_branch(&app(), &setup.remote(), "login", &head, Some(&main));
+        .push_branch(&app(), &setup.remote(), "login", &main, Some(&head));
     assert_eq!(item.unwrap(), Pushed::Done);
-    assert_eq!(setup.github.rev("acme/app", "login"), Some(head));
+    assert_eq!(setup.github.rev("acme/app", "login"), Some(main));
+}
+
+#[test]
+fn builds_on_a_push_it_didnt_make() {
+    let setup = Setup::new();
+    let remote = setup.remote();
+    let head = setup.repo.rev("login");
+    let pushed = setup.git.push_branch(&app(), &remote, "login", &head, None);
+    assert_eq!(pushed.unwrap(), Pushed::Done);
+
+    // Someone else pushes a fix to the branch on GitHub.
+    setup.repo.commit_files(
+        "Fix login",
+        &[("login.rs", "fn login() -> bool { true }\n")],
+    );
+    let fix = setup.repo.rev("login");
+    setup.github.git(
+        "acme/app",
+        [
+            "fetch".as_ref(),
+            "--quiet".as_ref(),
+            setup.repo.root().as_os_str(),
+            "login:login".as_ref(),
+        ],
+    );
+
+    // A rebase that drops it is stopped.
+    setup
+        .repo
+        .git(["reset", "--quiet", "--hard", head.as_str()]);
+    setup
+        .repo
+        .commit_files("Log out", &[("logout.rs", "fn logout() {}\n")]);
+    setup.stage("login");
+    let dropped = setup.repo.rev("login");
+    let moved = setup
+        .git
+        .push_branch(&app(), &remote, "login", &dropped, None);
+    assert_eq!(moved.unwrap(), Pushed::Moved(fix.clone()));
+    assert_eq!(setup.github.rev("acme/app", "login"), Some(fix.clone()));
+
+    // The agent fetches the fix and builds on it: that goes through.
+    setup.repo.git(["reset", "--quiet", "--hard", fix.as_str()]);
+    setup
+        .repo
+        .commit_files("Log out", &[("logout.rs", "fn logout() {}\n")]);
+    setup.stage("login");
+    let built = setup.repo.rev("login");
+    let pushed = setup
+        .git
+        .push_branch(&app(), &remote, "login", &built, None);
+    assert_eq!(pushed.unwrap(), Pushed::Done);
+    assert_eq!(setup.github.rev("acme/app", "login"), Some(built));
 }
 
 #[test]

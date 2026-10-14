@@ -64,7 +64,8 @@ pub trait ItemGit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pushed {
     Done,
-    /// The remote has the branch at this commit, which the hub didn't push.
+    /// The remote has the branch at this commit, which the hub didn't push
+    /// and the head doesn't contain.
     Moved(String),
     /// The remote no longer has the branch of an open pull request.
     Gone,

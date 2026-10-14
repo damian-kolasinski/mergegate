@@ -467,7 +467,7 @@ fn never_overwrites_a_branch_someone_else_pushed_to_github() {
     assert_eq!(
         err.to_string(),
         format!(
-            "GitHub has login at {}, which mergegate didn't push",
+            "GitHub has login at {}, which mergegate didn't push; build on it to submit again",
             commit(4)
         )
     );
