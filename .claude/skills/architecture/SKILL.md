@@ -25,6 +25,7 @@ ui/                SolidJS bundled by esbuild; one pnpm package
   <feature>/       UI features
   tests/           Playwright against the real hub; state comes from mg commands
   api/             TypeScript generated from `api` by `pnpm gen`; gitignored
+langs/             language pack builder: pinned grammars and queries, build.mjs
 ```
 
 ## Rules
