@@ -5,8 +5,16 @@ import {
 } from "@pierre/diffs";
 import { createEffect, type JSX, onCleanup, onMount, untrack } from "solid-js";
 import { render } from "solid-js/web";
+import type { BlobHighlights } from "../api/BlobHighlights";
 import type { File } from "../api/File";
 import styles from "./diff-view.module.css";
+import {
+  highlightCSS,
+  paintSide,
+  paintingOf,
+  paintings,
+  samePainting,
+} from "./highlight";
 import { type Row, toFileDiff } from "./patch";
 
 /** What the review screen drives the view with. */
@@ -40,6 +48,8 @@ export function DiffView(props: {
   viewed: ReadonlySet<string>;
   /** Where a blob's bytes are, for expanding gaps. */
   blobUrl: (id: string) => string;
+  /** Where a blob's spans are, for expanding gaps. */
+  highlightsUrl: (grammar: string, blob: string) => string;
   /** The file at the top of the view, as it scrolls. */
   onFile: (path: string) => void;
   /** A line the reviewer clicked. */
@@ -71,6 +81,7 @@ export function DiffView(props: {
     stickyHeaders: true,
     expansionLineCount: 20,
     themeType: "system",
+    unsafeCSS: highlightCSS,
     enableLineSelection: true,
     enableGutterUtility: untrack(() => props.commentable),
     // CodeView pins `+` to the selected lines while there are some, so with
@@ -112,6 +123,8 @@ export function DiffView(props: {
       const [before, after] = await Promise.all([
         text(props.blobUrl(file.old_blob)),
         text(props.blobUrl(file.new_blob)),
+        paintBlob(file, "deletions", file.old_blob),
+        paintBlob(file, "additions", file.new_blob),
       ]);
       return {
         oldFile: {
@@ -131,8 +144,10 @@ export function DiffView(props: {
           return "Too large to show";
         case "gone":
           return "Diff dropped when the item closed";
-        default:
-          return undefined;
+        default: {
+          const pack = byPath.get(diff.name)?.missing_pack;
+          return pack ? `No ${pack} language pack` : undefined;
+        }
       }
     },
     onSelectedLinesChange: (selection) => {
@@ -147,13 +162,56 @@ export function DiffView(props: {
     },
   });
 
+  /**
+   * Adds a side's spans to `file`'s painting before an expanded gap renders.
+   * A blob the hub hasn't highlighted yet shows plain.
+   */
+  const paintBlob = async (
+    file: File,
+    side: "deletions" | "additions",
+    blob: string,
+  ) => {
+    if (file.grammar === null) return;
+    const response = await fetch(props.highlightsUrl(file.grammar, blob));
+    if (!response.ok) return;
+    const spans = (await response.json()) as BlobHighlights;
+    const painting = paintings.get(file.path);
+    if (painting) paintSide(painting, side, spans);
+  };
+
+  // The same files again bring new spans, as the hub highlights them: only
+  // the files whose spans changed render again. Any other files rebuild the
+  // view.
   createEffect(() => {
+    const files = props.files;
+    const same =
+      files.length === byPath.size &&
+      files.every((file) => byPath.has(file.path));
+    if (same) {
+      for (const file of files) {
+        const shown = byPath.get(file.path);
+        byPath.set(file.path, file);
+        const item = items.get(file.path);
+        if (!item || (shown && samePainting(shown, file))) continue;
+        paint(file);
+        const changed = {
+          ...item,
+          fileDiff: toFileDiff(file),
+          version: (item.version ?? 0) + 1,
+        };
+        items.set(file.path, changed);
+        view.updateItem(changed);
+      }
+      return;
+    }
     byPath.clear();
     items.clear();
+    paintings.clear();
     const viewed = untrack(() => props.viewed);
     const notes = untrack(() => notesByPath(props.notes));
-    for (const file of props.files) {
+    for (const file of files) {
       byPath.set(file.path, file);
+      paint(file);
       items.set(file.path, {
         id: file.path,
         type: "diff",
@@ -213,6 +271,7 @@ export function DiffView(props: {
       observer.disconnect();
       unsubscribe();
       view.cleanUp();
+      paintings.clear();
       for (const dispose of mounted.values()) dispose();
       mounted.clear();
     });
@@ -312,6 +371,12 @@ function sameNotes(a: readonly Note[], b: readonly Note[]): boolean {
     a.length === b.length &&
     a.every((note, index) => note.metadata === b[index]?.metadata)
   );
+}
+
+function paint(file: File) {
+  const painting = paintingOf(file);
+  if (painting) paintings.set(file.path, painting);
+  else paintings.delete(file.path);
 }
 
 async function text(url: string): Promise<string> {

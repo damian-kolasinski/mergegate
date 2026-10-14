@@ -130,6 +130,22 @@ function Review(props: {
   const project = () => props.diff.item.id.split("#")[0] ?? "";
   const blobUrl = (id: string) =>
     `/api/projects/${encodeURIComponent(project())}/blobs/${id}`;
+  const highlightsUrl = (grammar: string, blob: string) =>
+    `/api/highlights/${encodeURIComponent(grammar)}/${blob}`;
+  // The hub highlights in the background, and again as packs come and go;
+  // the same revision's files then bring their new spans. The screen keys
+  // the review by its diff, so the item is fixed for its life.
+  const [files, setFiles] = createSignal(untrack(() => props.diff.files));
+  const item = untrack(() => props.diff.item);
+  onHubEvent("highlights.changed", () => {
+    const revision = item.revision.number;
+    void getJson<ItemDiff>(`/api/items/${encodeURIComponent(item.id)}`).then(
+      (next) => {
+        if (next.item.revision.number === revision) setFiles(next.files);
+      },
+      () => undefined,
+    );
+  });
 
   /** Marking the current file viewed moves on to the next one. */
   const toggleViewed = () => {
@@ -232,9 +248,10 @@ function Review(props: {
           fallback={<Empty>This revision changes no files.</Empty>}
         >
           <DiffView
-            files={props.diff.files}
+            files={files()}
             viewed={viewed.paths()}
             blobUrl={blobUrl}
+            highlightsUrl={highlightsUrl}
             onFile={nav.scrolledTo}
             onRow={nav.clicked}
             commentable={reviewable(state())}
