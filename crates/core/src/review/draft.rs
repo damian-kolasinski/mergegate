@@ -4,7 +4,7 @@
 use super::{
     Comment, CommentId, NewComment, QUOTE_LINES, ReviewError, ReviewStore, Side, reviewable,
 };
-use crate::diff::{Content, DiffGit, DiffStore};
+use crate::diff::{Content, DiffGit, DiffStore, Hunk};
 use crate::git::GitError;
 use crate::item::{ItemId, ItemStore};
 use crate::store::StoreError;
@@ -37,7 +37,7 @@ pub enum DraftError {
         revision: u32,
         path: String,
     },
-    #[error("{path} has no lines {start_line}-{line} on the {} side", side.as_str())]
+    #[error("the diff of {path} shows no lines {start_line}-{line} on the {} side", side.as_str())]
     NoLines {
         path: String,
         side: Side,
@@ -56,8 +56,9 @@ pub enum DraftError {
     Store(#[from] StoreError),
 }
 
-/// Drafts a comment on lines the revision's side of the file has. The comment
-/// quotes them from the file, so it reads the same whatever the diff showed.
+/// Drafts a comment on lines of one hunk of the revision's diff, on one side.
+/// The comment quotes them from the file, so it reads the same whatever the
+/// diff showed.
 pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
     store: &mut S,
     git: &impl DiffGit,
@@ -95,15 +96,19 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
     let diff = store
         .diff(file.old_blob.as_deref(), file.new_blob.as_deref())?
         .ok_or_else(|| StoreError::new(format!("{id} has no cached diff for {path}")))?;
-    if diff.content == Content::Binary {
-        return Err(DraftError::NotText(path));
-    }
     let no_lines = || DraftError::NoLines {
         path: path.clone(),
         side,
         start_line,
         line,
     };
+    // The UI puts a comment under its line, so one on a line the diff
+    // doesn't show, as in an expanded gap, would be sent but never seen.
+    match &diff.content {
+        Content::Binary => return Err(DraftError::NotText(path)),
+        Content::Text(hunks) if shown(hunks, side, start_line, line) => {}
+        Content::Text(_) | Content::TooLarge => return Err(no_lines()),
+    }
     let blob = match side {
         Side::Old => file.old_blob,
         Side::New => file.new_blob,
@@ -126,6 +131,18 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
         quote,
     };
     Ok(store.insert_draft(comment)?)
+}
+
+/// Whether one hunk shows lines `start_line..=line` of `side`.
+fn shown(hunks: &[Hunk], side: Side, start_line: u32, line: u32) -> bool {
+    hunks.iter().any(|hunk| {
+        let (first, count) = match side {
+            Side::Old => (hunk.old_start, hunk.old_lines),
+            Side::New => (hunk.new_start, hunk.new_lines),
+        };
+        // A side without lines starts at the line before the hunk.
+        count > 0 && first <= start_line && start_line <= line && line < first + count
+    })
 }
 
 /// The last [`QUOTE_LINES`] of `text`'s lines `start_line..=line`, each cut

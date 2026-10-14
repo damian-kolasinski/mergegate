@@ -1,4 +1,5 @@
 use super::*;
+use crate::diff::Hunk;
 use crate::fake::{FakeGit, FakeStore, commit};
 use crate::item::ItemState;
 use crate::review::{SubmitReview, Verdict, submit};
@@ -34,6 +35,26 @@ fn a_draft_quotes_the_lines_it_is_on() {
     assert_eq!(old.id, CommentId(2));
     assert_eq!(old.quote, commit(1));
     assert_eq!(store.comments(&id("app#1")).unwrap(), [range, old]);
+}
+
+#[test]
+fn a_draft_is_on_lines_one_hunk_shows() {
+    let hunk = |old_start, old_lines, new_start, new_lines| Hunk {
+        old_start,
+        old_lines,
+        new_start,
+        new_lines,
+        lines: Vec::new(),
+    };
+    let hunks = [hunk(1, 4, 1, 5), hunk(20, 0, 21, 2)];
+    assert!(shown(&hunks, Side::New, 1, 5));
+    assert!(shown(&hunks, Side::Old, 2, 4));
+    assert!(shown(&hunks, Side::New, 21, 22));
+    // Between the hunks, across them, and on a side a hunk has no lines of.
+    assert!(!shown(&hunks, Side::New, 6, 6));
+    assert!(!shown(&hunks, Side::New, 5, 21));
+    assert!(!shown(&hunks, Side::Old, 20, 20));
+    assert!(!shown(&hunks, Side::New, 3, 2));
 }
 
 #[test]
@@ -99,12 +120,12 @@ fn refuses_drafts_on_lines_the_revision_doesnt_have() {
     // An added file has no old side.
     assert_eq!(
         err(on("src/login.rs", Side::Old, 1, 1)),
-        "src/login.rs has no lines 1-1 on the old side"
+        "the diff of src/login.rs shows no lines 1-1 on the old side"
     );
     for (start_line, line) in [(0, 1), (2, 1), (2, 3)] {
         assert_eq!(
             err(on("README.md", Side::New, start_line, line)),
-            format!("README.md has no lines {start_line}-{line} on the new side")
+            format!("the diff of README.md shows no lines {start_line}-{line} on the new side")
         );
     }
     store.set_state(&id("app#1"), ItemState::Merged);
