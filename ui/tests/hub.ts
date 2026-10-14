@@ -92,21 +92,32 @@ export class Project {
     git(this.dir, "commit", "--quiet", "-m", "seed");
   }
 
-  /** Commits `files` on a new `branch` off `main` and submits it. */
+  /**
+   * Commits `files` on a new `branch` off `main` and submits it, with the
+   * files at the `attach` paths attached.
+   */
   submit(
     branch: string,
     title: string,
     files: Record<string, string | Buffer | null>,
+    attach: string[] = [],
   ) {
     git(this.dir, "switch", "--quiet", "-c", branch, "main");
-    this.revise(title, files);
+    this.revise(title, files, attach);
   }
 
   /** Commits `files` on the current branch and submits the new revision. */
-  revise(title: string, files: Record<string, string | Buffer | null>) {
+  revise(
+    title: string,
+    files: Record<string, string | Buffer | null>,
+    attach: string[] = [],
+  ) {
     this.write(files);
     git(this.dir, "commit", "--quiet", "-m", title);
-    this.hub.mg(["submit"], this.dir);
+    this.hub.mg(
+      ["submit", ...attach.flatMap((file) => ["--attach", file])],
+      this.dir,
+    );
   }
 
   /** Writes `files` and stages them; `null` deletes one. */

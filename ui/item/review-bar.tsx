@@ -100,6 +100,8 @@ export function ReviewBar(props: {
     if (!confirming()) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      // A dialog over the screen, such as the demo viewer, closes first.
+      if (document.querySelector("[role=dialog][aria-modal=true]")) return;
       event.preventDefault();
       setConfirming(false);
     };

@@ -152,6 +152,11 @@ function Entry(props: {
           </span>
         )}
       </Show>
+      <Show when={props.item.demo}>
+        <span class={styles.flag} title="Has screenshots or recordings">
+          <Badge tone="brand">▶ demo</Badge>
+        </span>
+      </Show>
       <Show when={props.item.blocked}>
         {(blocked) => (
           <span class={styles.flag} title={why(blocked())}>
