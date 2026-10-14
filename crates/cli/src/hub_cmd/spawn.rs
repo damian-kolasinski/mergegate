@@ -41,6 +41,7 @@ impl Spawned {
             .stdout(child_stdout)
             .stderr(log);
         new_session(&mut cmd);
+        close_inherited_on_exec();
         let child = cmd
             .spawn()
             .map_err(|e| io_error("starting the hub process", e))?;
@@ -73,6 +74,34 @@ impl Spawned {
     pub fn abandon(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+/// Marks every descriptor beyond stderr close-on-exec, so the hub holds
+/// none that mg inherited. A caller's pipe left open in the hub keeps the
+/// caller waiting for its end as long as the hub runs, and one leaks in
+/// easily: macOS can't create a pipe close-on-exec, so a parent spawning on
+/// several threads can hand one command's pipe to another.
+#[allow(unsafe_code)]
+fn close_inherited_on_exec() {
+    let Ok(entries) = std::fs::read_dir("/dev/fd") else {
+        return;
+    };
+    // Listed first: the listing's own descriptor is among them, closed by
+    // the time they're marked.
+    let fds: Vec<i32> = entries
+        .filter_map(|e| e.ok()?.file_name().to_str()?.parse().ok())
+        .filter(|&fd| fd > 2)
+        .collect();
+    for fd in fds {
+        // SAFETY: fcntl only reads and sets a descriptor's flags; on one
+        // closed since it was listed it fails with EBADF, which is ignored.
+        unsafe {
+            let flags = libc::fcntl(fd, libc::F_GETFD);
+            if flags != -1 {
+                libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+            }
+        }
     }
 }
 
