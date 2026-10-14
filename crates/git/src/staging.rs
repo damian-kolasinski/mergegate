@@ -4,11 +4,17 @@
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
-use mergegate_core::git::GitError;
+use mergegate_core::git::{GitError, Upstream};
 
-use crate::command::run;
+use crate::command::{self, run, run_command};
+use crate::remote::{authorize, describe, location};
 
-pub(crate) fn sync(home: &Path, dir: &Path, upstream: &Path, target: &str) -> Result<(), GitError> {
+pub(crate) fn sync(
+    home: &Path,
+    dir: &Path,
+    upstream: &Upstream,
+    target: &str,
+) -> Result<(), GitError> {
     if let Some(parent) = dir.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| GitError::Failed(format!("creating {} failed: {e}", parent.display())))?;
@@ -22,7 +28,7 @@ pub(crate) fn sync(home: &Path, dir: &Path, upstream: &Path, target: &str) -> Re
     synced
 }
 
-fn mirror(home: &Path, dir: &Path, upstream: &Path, target: &str) -> Result<(), GitError> {
+fn mirror(home: &Path, dir: &Path, upstream: &Upstream, target: &str) -> Result<(), GitError> {
     let arg = OsStr::new;
     // Re-running init on an existing repo is safe, and finishes one an
     // earlier run left half made.
@@ -81,27 +87,27 @@ fn mirror(home: &Path, dir: &Path, upstream: &Path, target: &str) -> Result<(), 
 pub(crate) fn fetch(
     home: &Path,
     dir: &Path,
-    upstream: &Path,
+    upstream: &Upstream,
     target: &str,
 ) -> Result<(), GitError> {
     let mut git_dir = OsString::from("--git-dir=");
     git_dir.push(dir);
     let refspec = format!("+refs/heads/{target}:refs/heads/{target}");
-    run(
-        home,
-        &format!("fetching {target} from {}", upstream.display()),
-        [
-            git_dir.as_os_str(),
-            OsStr::new("fetch"),
-            OsStr::new("--quiet"),
-            OsStr::new("--no-tags"),
-            OsStr::new("--no-write-fetch-head"),
-            // A shallow upstream makes staging shallow too, instead of failing.
-            OsStr::new("--update-shallow"),
-            upstream.as_os_str(),
-            OsStr::new(&refspec),
-        ],
-    )?;
+    let mut cmd = command::git(home);
+    cmd.args([
+        git_dir.as_os_str(),
+        OsStr::new("fetch"),
+        OsStr::new("--quiet"),
+        OsStr::new("--no-tags"),
+        OsStr::new("--no-write-fetch-head"),
+        // A shallow upstream makes staging shallow too, instead of failing.
+        OsStr::new("--update-shallow"),
+        location(upstream),
+        OsStr::new(&refspec),
+    ]);
+    authorize(&mut cmd, upstream);
+    let doing = format!("fetching {target} from {}", describe(upstream));
+    run_command(cmd, &doing)?;
     Ok(())
 }
 

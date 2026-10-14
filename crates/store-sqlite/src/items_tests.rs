@@ -1,3 +1,4 @@
+use mergegate_core::github::{GithubRepo, Pull};
 use mergegate_core::item::{ChangedFile, FileStat};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 
@@ -12,6 +13,7 @@ fn store() -> (tempfile::TempDir, Store) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: format!("/src/{name}").into(),
+            github: None,
         };
         store.insert_project(&project).unwrap();
     }
@@ -57,7 +59,7 @@ fn new_item(project: &str, branch: &str) -> NewItem {
         branch: branch.into(),
         title: format!("Work on {branch}"),
         state: ItemState::NeedsReview,
-        backend: Backend::Local,
+        backend: ItemBackend::Local,
         target: "main".into(),
         revision: revision('a'),
     }
@@ -75,8 +77,8 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
     assert_eq!(c.id.to_string(), "app#2");
     assert_eq!(a.title, "Work on a");
     assert_eq!(
-        (a.state, a.backend, a.target.as_str()),
-        (ItemState::NeedsReview, Backend::Local, "main")
+        (a.state, &a.backend, a.target.as_str()),
+        (ItemState::NeedsReview, &ItemBackend::Local, "main")
     );
     assert_eq!(a.revision.number, 1);
     assert_eq!(a.revision.head, "a".repeat(40));
@@ -98,6 +100,30 @@ fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
     );
     assert_eq!(store.open_item(&name("app"), "a").unwrap(), Some(a));
     assert_eq!(store.open_item(&name("web"), "a").unwrap(), None);
+}
+
+#[test]
+fn keeps_a_github_items_pull_request() {
+    let (_dir, mut store) = store();
+    let mut web = store.project(&name("web")).unwrap().unwrap();
+    web.backend = Backend::Github;
+    web.github = GithubRepo::parse("acme/web");
+    store.update_project(&web).unwrap();
+    let backend = ItemBackend::Github {
+        repo: GithubRepo::parse("acme/web").unwrap(),
+        pull: Pull {
+            number: 12,
+            url: "https://github.com/acme/web/pull/12".into(),
+        },
+    };
+    let item = store
+        .insert_item(NewItem {
+            backend: backend.clone(),
+            ..new_item("web", "a")
+        })
+        .unwrap();
+    assert_eq!(item.backend, backend);
+    assert_eq!(store.item(&item.id).unwrap(), Some(item));
 }
 
 #[test]

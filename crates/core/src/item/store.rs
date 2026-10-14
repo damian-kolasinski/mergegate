@@ -1,5 +1,5 @@
-use super::{FileStat, Item, ItemId, ItemState};
-use crate::project::{Backend, ProjectName};
+use super::{FileStat, Item, ItemBackend, ItemId, ItemState};
+use crate::project::ProjectName;
 use crate::store::StoreError;
 
 /// Items and their revisions. The store stamps creation and submit times.
@@ -33,7 +33,7 @@ pub struct NewItem {
     pub branch: String,
     pub title: String,
     pub state: ItemState,
-    pub backend: Backend,
+    pub backend: ItemBackend,
     pub target: String,
     pub revision: NewRevision,
 }

@@ -1,6 +1,4 @@
-use std::path::Path;
-
-use crate::git::GitError;
+use crate::git::{GitError, Remote, Upstream};
 use crate::project::ProjectName;
 
 /// What the item slice needs from the project's staging repo. Commits are
@@ -11,9 +9,24 @@ pub trait ItemGit {
     fn fetch_target(
         &self,
         project: &ProjectName,
-        upstream: &Path,
+        upstream: &Upstream,
         target: &str,
     ) -> Result<(), GitError>;
+
+    /// Pushes staging's `head` to `branch` on `remote`, provided the remote
+    /// has the branch where this staging last pushed it, or doesn't have it.
+    /// `pushed` is the head of the open item whose pull request the branch
+    /// carries: the lease when staging has no record, and a branch that's
+    /// gone isn't created again under it. A remote already at `head` counts
+    /// as pushed, so a submit that failed after its push can be retried.
+    fn push_branch(
+        &self,
+        project: &ProjectName,
+        remote: &Remote,
+        branch: &str,
+        head: &str,
+        pushed: Option<&str>,
+    ) -> Result<Pushed, GitError>;
 
     fn branch_head(&self, project: &ProjectName, branch: &str) -> Result<Option<String>, GitError>;
 
@@ -46,6 +59,16 @@ pub trait ItemGit {
 
     /// Deletes every ref under `prefix`, which ends in `/`. None is fine.
     fn unpin(&self, project: &ProjectName, prefix: &str) -> Result<(), GitError>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pushed {
+    Done,
+    /// The remote has the branch at this commit, which the hub didn't push
+    /// and the head doesn't contain.
+    Moved(String),
+    /// The remote no longer has the branch of an open pull request.
+    Gone,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -84,9 +84,9 @@ Principles
 - **Git moves the code; the hub API handles coordination.** The hub is a git remote (`mergegate`). `mg submit` pushes commits to it and then registers the revision via the API. The hub never reaches into a worker's filesystem.
 - **One code path for both backends.** Code always arrives at the hub's *staging* bare repo the same way. It is the hub's private workspace, so the daemon never touches the operator's working tree while you work.
 - **Where code lands depends on the backend.** The project's *upstream* is either GitHub (`github`) or the operator's existing repo on the hub machine (`local`).
-  - `github`: the hub pushes the branch to GitHub and opens or updates the PR. Merging squashes through the GitHub API.
+  - `github`: the hub pushes the branch to GitHub under the agent's branch name and opens or updates the PR: titled as the item (and retitled with it), with an empty body, never a draft. The push leases the branch from where the hub last pushed it (staging remembers that per branch), so anything pushed there by someone else stops the submit (`branch_moved`) instead of being overwritten until the agent builds on it, while a retry after a submit that failed partway, or a later item reusing a merged item's branch name, goes through. An open item whose branch is gone from GitHub, as closing its PR there may leave it, stops at `branch_gone` rather than pushing to a PR GitHub won't reopen. An existing open PR from the branch into the item's target is adopted. A submit waits for GitHub; if GitHub can't be reached, the submit fails and nothing is recorded. Merging test-merges in staging first (a conflict is a `merge.conflict`, as on `local`), then squash-merges through the API at the approved head only, deletes the branch and re-fetches the target. A retried merge that GitHub already made is recorded as merged. A merge GitHub refuses (branch protection, required checks) is held with GitHub's reason. Abandoning closes the PR and deletes the branch, and waits for GitHub too.
   - `local`: the hub squashes the item in staging (`git merge-tree`, no working tree needed), then pushes that one commit to the operator's repo with `receive.denyCurrentBranch=updateInstead` semantics. If the target branch is checked out and clean, the checkout fast-forwards in place. If it has uncommitted changes, the merge is held and the UI says why. Nothing is ever force-updated.
-- **Every item lands as one squash commit** on the target, on both backends: authored and committed by the operator (their repo's `user.name` and `user.email`), with the subject `<title> (app#42)`. Nothing in it names an agent. Since git doesn't see the item's branch as merged afterwards, agents delete it with `git branch -D`.
+- **Every item lands as one squash commit** on the target, on both backends: authored and committed by the operator (their repo's `user.name` and `user.email`), with the subject `<title> (app#42)`. Nothing in it names an agent. On `github` GitHub writes the commit, so its author is the operator's GitHub account (the one `gh` is signed in as) and its committer is GitHub. Since git doesn't see the item's branch as merged afterwards, agents delete it with `git branch -D`.
 - **Workers take the target from the hub.** `git fetch mergegate` returns the latest target (mirrored from the upstream), so new worktrees start from what was actually merged. The hub re-fetches the target from the upstream before every fetch and submit, so a worker's push to it doesn't stick.
 - **Every revision is pinned.** The hub keeps each revision's head at `refs/mergegate/items/<n>/r<rev>`, hidden from workers' pushes and fetches, so a force-push to the branch can't drop the commits an older revision points at.
 - **Diffs are computed on the hub** from staging: the merge-base against the target (or the parent revision for a stacked item, §5.1), and interdiffs between revisions.
@@ -97,6 +97,7 @@ Principles
 - **Tailscale identity instead of tokens.** For each tailnet connection, the hub asks the local Tailscale daemon who is calling (`whois`). Devices owned by the same Tailscale user as the hub are trusted automatically. Other devices need `mg hub allow <device>`. There's nothing to copy between machines, so an agent can connect a worker end to end (F2).
 - Fallback for networks without Tailscale: `mg hub token create` on the hub, `mg connect <url> --token T` on the worker.
 - `mg wait` connections are resumable via an event cursor, so a dropped connection never loses feedback.
+- **The hub signs in to GitHub as the operator's `gh` does.** It runs `gh auth token --hostname github.com` and keeps the token in memory only, never on disk or in logs, reading it again after GitHub turns it down. Git gets it as an HTTP header through the environment, scoped to the repository's URL, so it never shows in the process list or reaches another remote. A logged-out `gh` is an error whose fix is `gh auth login`. Only github.com is supported.
 - Only a worker on the hub's machine may set `mg submit --wake`: the hub runs whatever command it is given. The hub decides by the connection, not by anything the client sends: a `--wake` that arrives over the tailnet or with a token is refused with an error, so the agent knows to wait with `mg wait` instead. Since a wake runs in the worktree of the item's latest submit, a submit from another machine clears the item's wake, so a remote worker can't choose the directory a trusted command starts in.
 
 ## 5. Item lifecycle
@@ -158,9 +159,9 @@ mg hub set listen local|tailnet
 mg hub devices | allow <device> | deny <device>         Tailscale devices allowed to connect
 mg hub token create                                      Fallback auth for non-Tailscale networks
 
-mg project add [PATH] [--name NAME] [--backend github|local] [--target BRANCH]
-                                                         PATH in a linked worktree registers its main repo
-mg project set <project> <key> <value>                   backend, target, upstream, bots, …
+mg project add [PATH] [--name NAME] [--backend github|local] [--github OWNER/REPO]
+               [--target BRANCH]                         PATH in a linked worktree registers its main repo
+mg project set <project> <key> <value>                   backend, target, upstream, github, bots, …
 mg project show [<project>]                              Default: the project at the current directory
 mg judge set none|jev|anthropic|openai-compatible|command [provider options]
 mg lang list [--available]                               Syntax highlighting language packs (hub only)
@@ -175,7 +176,9 @@ mg skill install [--dir PATH]                            Write the agent skill a
 
 `MERGEGATE_HOME` selects the data directory (default `~/.mergegate`) for both the hub and the CLI, which finds the hub's address there. A development build can run next to the installed one without sharing state.
 
-Changing a project's backend or target applies to new items. Open items keep their settings until they close, and the command lists them in its `needs_decision` so the operator knows.
+A repo with a GitHub remote is asked which backend to use (a `needs_decision`, defaulting to `github`); one without lands on `local`. The GitHub repository is origin's if origin is on github.com, else the only github.com remote, else a `needs_decision`; `--github` names it and implies `--backend github`. The hub checks that the operator can push to it before registering. A local project keeps its GitHub repository, so switching backends back and forth needs no flags.
+
+Changing a project's backend, GitHub repository or target applies to new items. Open items keep their settings until they close, and the command lists them in its `needs_decision` so the operator knows.
 
 ### 6.1 Authoring agent commands
 
@@ -337,12 +340,14 @@ Any hosted provider sees diff content, so it's opt-in per project. Judge results
 |---|---|---|
 | Upstream | GitHub remote | The operator's repo on the hub machine |
 | Code transport | worker → hub staging → hub pushes the branch to GitHub | worker → hub staging |
-| PR | Hub opens/updates the PR (operator's `gh` credentials) | none |
+| PR | Hub opens/updates the PR (operator's `gh` token, §4) | none |
 | External comments | Hub polls PR comments (bots and humans) → `external.comments` events | n/a |
 | Operator comments | Local only | Local only |
 | Agent replies | Local only, shown next to each comment | Local only |
 | Merge | Squash through the GitHub merge API | Squash in staging, push to the operator's repo (`updateInstead`) |
 | Stacked item | PR targets the parent's branch; retargeted to the target after the parent merges | Merged in staging after its parent |
+
+A PR merged, closed or pushed to on GitHub directly isn't picked up yet: the item stays open, and its next submit stops at the moved branch.
 
 The only things mergegate writes to GitHub are branches, PRs and merges. Agent replies stay in mergegate, which keeps the GitHub thread clean for human reviewers there.
 

@@ -31,7 +31,7 @@ The principle behind most choices below: **precompute at submit time, display at
 | Storage | SQLite, WAL (rusqlite) | Event log is an append-only table; its rowid is the `mg wait` cursor. Attachments stored on disk by content hash. |
 | Git reads | gitoxide (`gix`) + imara-diff | Blob/tree reads, tree diffs, rev walks, line mapping for comment anchoring. |
 | Git writes | `git` ≥ 2.38 subprocess | `http-backend` (receive), `merge-tree --write-tree`, push upstream, `updateInstead`. Run with a sanitized environment (§5). |
-| GitHub | HTTP client with typed endpoints, ETag-conditional polling | Token from `gh auth token`. No octocrab. |
+| GitHub | ureq (blocking, rustls) with typed endpoints, ETag-conditional polling | Token from `gh auth token`, in memory only; git gets it as an `http.<url>.extraheader` through `GIT_CONFIG_*` variables. No octocrab, no tokio in the adapter: the hub calls it from `spawn_blocking`, as it does git. `MG_GITHUB_API_URL` and `MG_GITHUB_URL` point it elsewhere, for the fake. |
 | Highlighting | tree-sitter, grammars loaded as WASM at runtime | See §6. |
 | Tailscale | LocalAPI `whois` (or `tailscale whois --json`), cached per peer | No Go client library in Rust; the macOS app exposes the LocalAPI differently from Linux, so this is an adapter with per-platform discovery. |
 | UI | SolidJS + TypeScript, esbuild with `esbuild-plugin-solid`, pnpm; embedded in the binary | Fine-grained reactivity, no virtual DOM, ~7 KB runtime. The hub's `build.rs` builds it, so a plain `cargo build` yields a binary with the UI; without pnpm it embeds a stub page that `mg doctor` reports, and `MG_REQUIRE_UI=1` makes that an error. ESLint with `eslint-plugin-solid` lints, Biome only formats. |
@@ -170,7 +170,7 @@ The UI also prefetches the next item and next file, and updates optimistically (
 
 - Real git repos in temp dirs for git, diff, merge and anchoring tests.
 - Golden files for diffs, interdiffs, highlighting spans and triage output.
-- A stateful fake GitHub server for the backend; an optional contract test checks it against the real API.
+- A stateful fake GitHub server for the backend (`testkit::FakeGithub`, REST, git over HTTP and a fake `gh`; also the `fake-github` binary for the browser tests); an optional contract test checks it against the real API.
 - Playwright end-to-end tests against a real hub, with state created through `mg` commands rather than a prepared database. Chromium only: the operator uses Chrome and Arc.
 - Benchmarks for every budget in §9; a regression fails the build.
 
@@ -179,4 +179,7 @@ The UI also prefetches the next item and next file, and updates optimistically (
 - Should a tiny core set of languages (Markdown, JSON, TOML) be bundled, so highlighting works offline before any `mg lang add`?
 - Highlighting with CodeView in place: Shiki in a worker, as Pierre does it, which reverses decision 3 and the language packs, or the hub's tree-sitter spans fed through CodeView's token hooks.
 - Per-platform Tailscale LocalAPI discovery on macOS: decide between the LocalAPI and the `tailscale` CLI after a spike.
+- A contract test running `backend-github`'s calls against a scratch repository on real GitHub, opt-in, so the fake can't drift from what GitHub answers.
+- The hub holds its store lock across GitHub calls in a submit, merge or abandon, so one slow GitHub call stalls every other request for up to the 30 s timeout. Release the lock around them once that shows up in daily use.
+- Staging mirrors one target ref per project, from whichever upstream the backend uses; switching backends re-syncs it from the new upstream, so a `local` item and a `github` item open at once diff against the same target.
 - A target renamed to or from a nested name (`release` and `release/1.0`) can't coexist in staging while an open item keeps the old one, and the fetch fails with git's error. Mirror targets under their own ref namespace?

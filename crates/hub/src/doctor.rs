@@ -18,7 +18,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 
 async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::Report>, Failure> {
     let checks = state
-        .blocking(|store, git| mergegate_core::doctor::checks(store, git))
+        .blocking_github(|store, git, github| mergegate_core::doctor::checks(store, git, github))
         .await
         .map_err(|e| {
             tracing::error!("{e}");

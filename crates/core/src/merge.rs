@@ -7,6 +7,8 @@ mod approve;
 mod backend;
 mod blocked;
 mod error;
+mod git;
+mod github;
 mod hold;
 mod land;
 
@@ -14,6 +16,8 @@ pub use approve::{Approve, approve};
 pub use backend::{Landing, MergeBackend};
 pub use blocked::{Blocked, blocked};
 pub use error::MergeError;
+pub use git::{MergeGit, Trial};
+pub use github::GithubBackend;
 pub use hold::{cancel, retry};
 
 use crate::item::Item;

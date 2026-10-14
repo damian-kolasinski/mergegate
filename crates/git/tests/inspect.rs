@@ -105,3 +105,24 @@ fn a_path_outside_any_repo_is_not_a_repo() {
         );
     }
 }
+
+#[test]
+fn lists_remotes_with_their_urls() {
+    let repo = TestRepo::new("app");
+    repo.git(["remote", "add", "origin", "git@github.com:acme/app.git"]);
+    repo.git(["remote", "add", "fork", "https://github.com/me/app"]);
+
+    let found = hub_git().inspect(repo.root()).unwrap();
+    let remotes: Vec<_> = found
+        .remotes
+        .iter()
+        .map(|r| (r.name.as_str(), r.url.as_str()))
+        .collect();
+    assert_eq!(
+        remotes,
+        [
+            ("fork", "https://github.com/me/app"),
+            ("origin", "git@github.com:acme/app.git"),
+        ]
+    );
+}

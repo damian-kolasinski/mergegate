@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::{FakeGit, FakeStore};
+use crate::fake::{FakeGit, FakeGithub, FakeStore};
 use crate::project::{AddProject, add};
 
 #[test]
@@ -13,7 +13,7 @@ fn finds_projects_by_name_and_by_path() {
         path: "/src/app".into(),
         ..AddProject::default()
     };
-    add(&mut store, &git, request).unwrap();
+    add(&mut store, &git, &FakeGithub::default(), request).unwrap();
 
     assert_eq!(find(&store, "app").unwrap().upstream, Path::new("/src/app"));
     assert!(matches!(find(&store, "nope"), Err(ProjectError::NotFound(n)) if n == "nope"));

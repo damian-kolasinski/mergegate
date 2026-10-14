@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use mergegate_core::diff::DiffGit;
-use mergegate_core::git::Git;
+use mergegate_core::git::{Git, Upstream};
 use mergegate_core::item::{ChangedFile, ItemGit};
 use mergegate_core::project::ProjectName;
 use mergegate_git::{HttpRequest, HubGit};
@@ -25,7 +25,8 @@ impl Hub {
         let staging = dir.path().join("projects/app/staging.git");
         let repo = TestRepo::new("app");
         repo.commit_files("Readme", &[("README", "hello\n")]);
-        git.sync_staging(&app(), repo.root(), "main").unwrap();
+        git.sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+            .unwrap();
         repo.git(["checkout", "--quiet", "-b", "login"]);
         repo.commit_files(
             "Add login",
@@ -181,7 +182,7 @@ fn fetching_a_target_leaves_head_and_other_targets_alone() {
     hub.repo.git(["branch", "release"]);
 
     hub.git
-        .fetch_target(&app(), hub.repo.root(), "release")
+        .fetch_target(&app(), &Upstream::Repo(hub.repo.root().into()), "release")
         .unwrap();
     assert_eq!(hub.staging_rev("release"), hub.repo.rev("release"));
     assert_eq!(
@@ -191,7 +192,7 @@ fn fetching_a_target_leaves_head_and_other_targets_alone() {
     // main is fetched only when asked for.
     assert_ne!(hub.staging_rev("main"), hub.repo.rev("main"));
     hub.git
-        .fetch_target(&app(), hub.repo.root(), "main")
+        .fetch_target(&app(), &Upstream::Repo(hub.repo.root().into()), "main")
         .unwrap();
     assert_eq!(hub.staging_rev("main"), hub.repo.rev("main"));
     assert_eq!(hub.staging_rev("login"), hub.repo.rev("login"));

@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 api.workspace = true
+backend-github.workspace = true
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json", "query"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 git.workspace = true

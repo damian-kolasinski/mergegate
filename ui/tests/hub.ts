@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test as base } from "@playwright/test";
+import { FakeGithub } from "./github";
 
 /**
  * One isolated mergegate install with its own running hub, as testkit's
@@ -19,7 +20,8 @@ export class Hub {
   readonly root = realpathSync(mkdtempSync(join(tmpdir(), "mg-ui-")));
   readonly url: string;
 
-  constructor() {
+  /** `env` is set for every `mg`, and so for the hub, e.g. a fake GitHub's. */
+  constructor(private readonly env: Record<string, string> = {}) {
     this.mg(["hub", "start", "--port", "0"]);
     const info = JSON.parse(
       readFileSync(join(this.root, "home", "hub.json"), "utf8"),
@@ -31,7 +33,11 @@ export class Hub {
   mg(args: string[], cwd = this.root): unknown {
     const stdout = execFileSync(mgBin(), ["--json", ...args], {
       cwd,
-      env: { ...isolated(), MERGEGATE_HOME: join(this.root, "home") },
+      env: {
+        ...isolated(),
+        ...this.env,
+        MERGEGATE_HOME: join(this.root, "home"),
+      },
       encoding: "utf8",
     });
     return JSON.parse(stdout);
@@ -44,6 +50,22 @@ export class Hub {
     git(dir, "init", "--quiet", "--initial-branch=main");
     git(dir, "commit", "--quiet", "--allow-empty", "-m", "initial");
     this.mg(["project", "add"], dir);
+    this.mg(["init"], dir);
+    return new Project(this, dir);
+  }
+
+  /**
+   * As `project`, but landing through pull requests on `acme/{name}`, which
+   * `github` serves.
+   */
+  githubProject(name: string, github: FakeGithub): Project {
+    const dir = join(this.root, name);
+    mkdirSync(dir);
+    git(dir, "init", "--quiet", "--initial-branch=main");
+    git(dir, "commit", "--quiet", "--allow-empty", "-m", "initial");
+    git(dir, "remote", "add", "origin", `git@github.com:acme/${name}.git`);
+    github.createRepo(`acme/${name}`, dir);
+    this.mg(["project", "add", "--backend", "github"], dir);
     this.mg(["init"], dir);
     return new Project(this, dir);
   }
@@ -102,13 +124,30 @@ export class Project {
   }
 }
 
-export const test = base.extend<{ hub: Hub }>({
+export const test = base.extend<{
+  hub: Hub;
+  github: { hub: Hub; github: FakeGithub };
+}>({
   hub: async ({}, use) => {
     const hub = new Hub();
     try {
       await use(hub);
     } finally {
       hub.stop();
+    }
+  },
+  /** A hub signed in to a fake GitHub, which starts first. */
+  github: async ({}, use) => {
+    const github = await FakeGithub.start();
+    try {
+      const hub = new Hub(github.env);
+      try {
+        await use({ hub, github });
+      } finally {
+        hub.stop();
+      }
+    } finally {
+      github.stop();
     }
   },
 });
@@ -121,12 +160,12 @@ function mgBin(): string {
   return bin;
 }
 
-function git(dir: string, ...args: string[]) {
+export function git(dir: string, ...args: string[]) {
   execFileSync("git", args, { cwd: dir, env: isolated(), stdio: "ignore" });
 }
 
 /** This process's environment without the developer's git or mg settings. */
-function isolated(): NodeJS.ProcessEnv {
+export function isolated(): NodeJS.ProcessEnv {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) =>

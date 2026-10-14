@@ -9,7 +9,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use mergegate_core::item::{self, Item, ItemError, ItemState, Submit};
+use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, Submit};
 use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
@@ -36,7 +36,7 @@ async fn submit(
         wake: request.wake,
     };
     let submitted = state
-        .blocking(move |store, git| item::submit(store, git, request))
+        .blocking_github(move |store, git, github| item::submit(store, git, github, request))
         .await
         .map_err(failure)?;
     // A new wake command may be due for events already logged.
@@ -90,7 +90,7 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
         title: item.title.clone(),
         branch: item.branch.clone(),
         state: state_to_api(item.state),
-        backend: projects::backend_to_api(item.backend),
+        backend: projects::backend_to_api(item.backend.kind()),
         target: item.target.clone(),
         revision: api::item::Revision {
             number: revision.number,
@@ -101,7 +101,19 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
             deletions: revision.stat.deletions,
             submitted_at: revision.submitted_at.clone(),
         },
+        link: link(&item.backend),
         created_at: item.created_at.clone(),
+    }
+}
+
+fn link(backend: &ItemBackend) -> Option<api::item::Link> {
+    match backend {
+        ItemBackend::Github { pull, .. } => Some(api::item::Link {
+            label: pull.to_string(),
+            title: "Pull request on GitHub".into(),
+            url: pull.url.clone(),
+        }),
+        ItemBackend::Local => None,
     }
 }
 
@@ -118,6 +130,7 @@ fn inbox_entry(item: &Item, blocked: Option<api::merge::Blocked>) -> api::item::
         created_at: item.created_at.clone(),
         updated_at: revision.submitted_at.clone(),
         blocked,
+        link: link(&item.backend),
     }
 }
 
@@ -136,10 +149,11 @@ pub(crate) fn failure(e: ItemError) -> Failure {
     use StatusCode as S;
     let e = match e {
         E::Project(e) => return projects::failure(e),
+        E::Github(e) => return projects::github_failure(e),
         e => e,
     };
     let (status, code, hint) = match &e {
-        E::Project(_) => unreachable!("answered above"),
+        E::Project(_) | E::Github(_) => unreachable!("answered above"),
         E::InvalidBranch(_) => (S::BAD_REQUEST, "invalid_branch", None),
         E::InvalidCommit(_) => (S::BAD_REQUEST, "invalid_commit", None),
         E::TargetBranch { .. } => (
@@ -155,6 +169,10 @@ pub(crate) fn failure(e: ItemError) -> Failure {
         E::NoItem(_) => (S::NOT_FOUND, "item_not_found", Some("mg inbox".to_owned())),
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::NothingToSubmit { .. } => (S::BAD_REQUEST, "nothing_to_submit", None),
+        // Pushing over it would drop commits the hub didn't push.
+        E::BranchMoved { .. } => (S::CONFLICT, "branch_moved", None),
+        // Its pull request was closed on GitHub, which can't reopen it.
+        E::BranchGone { .. } => (S::CONFLICT, "branch_gone", None),
         E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };

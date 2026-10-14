@@ -14,7 +14,7 @@ use axum::routing::any;
 use futures_util::StreamExt;
 use git::HttpRequest;
 use mergegate_core::item::ItemGit;
-use mergegate_core::project::{ProjectError, ProjectName, ProjectStore};
+use mergegate_core::project::{self, ProjectError, ProjectName, ProjectStore};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdout, Command};
 
@@ -49,14 +49,17 @@ async fn serve(
         && path == "/info/refs"
         && query.split('&').any(|p| p == "service=git-upload-pack");
     let command = state
-        .blocking(move |store, git| {
+        .blocking_github(move |store, git, github| {
             let name = ProjectName::parse(&name).map_err(|_| ProjectError::NotFound(name))?;
             let project = store
                 .project(&name)?
                 .ok_or_else(|| ProjectError::NotFound(name.to_string()))?;
-            if fetching
-                && let Err(e) = git.fetch_target(&project.name, &project.upstream, &project.target)
-            {
+            let fetched = || {
+                let upstream = project::fetch_from(&project, project.backend, github)?;
+                git.fetch_target(&project.name, &upstream, &project.target)?;
+                Ok::<_, ProjectError>(())
+            };
+            if fetching && let Err(e) = fetched() {
                 // Serve what staging has; the worker sees a stale target at worst.
                 tracing::warn!("{e}");
             }

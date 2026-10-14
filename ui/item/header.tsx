@@ -1,7 +1,7 @@
 import { type JSX, Show } from "solid-js";
 import type { Item } from "../api/Item";
 import type { ItemState } from "../api/ItemState";
-import { Badge, Meta, Mono, type Tone } from "../design-system";
+import { Badge, ExternalLink, Meta, Mono, type Tone } from "../design-system";
 import { Counts } from "./counts";
 import styles from "./header.module.css";
 
@@ -25,6 +25,13 @@ export function ItemHeader(props: {
       <Meta>
         <Mono>{props.item.branch}</Mono> → <Mono>{props.item.target}</Mono>
       </Meta>
+      <Show when={props.item.link}>
+        {(link) => (
+          <ExternalLink href={link().url} title={link().title}>
+            {link().label}
+          </ExternalLink>
+        )}
+      </Show>
       <Counts
         additions={props.item.revision.additions}
         deletions={props.item.revision.deletions}

@@ -1,6 +1,7 @@
 //! Items: units of work submitted for review, one revision per submit.
 
 mod abandon;
+mod backend;
 mod branch;
 mod close;
 mod diff_files;
@@ -9,23 +10,23 @@ mod git;
 mod id;
 mod inbox;
 mod item_diff;
+mod publish;
 mod state;
 mod store;
 mod submit;
 
 pub use abandon::{Abandon, abandon};
+pub use backend::ItemBackend;
 pub use branch::valid_branch;
 pub(crate) use close::close;
 pub use error::ItemError;
-pub use git::{ChangedFile, FileStat, ItemGit, valid_commit};
+pub use git::{ChangedFile, FileStat, ItemGit, Pushed, valid_commit};
 pub use id::{IdError, ItemId};
 pub use inbox::{Inbox, inbox};
 pub use item_diff::{DiffedFile, ItemDiff, item_diff};
 pub use state::ItemState;
 pub use store::{ItemStore, NewItem, NewRevision};
 pub use submit::{Submit, Submitted, submit};
-
-use crate::project::Backend;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {
@@ -35,7 +36,7 @@ pub struct Item {
     pub state: ItemState,
     /// The project's backend and target when the item was opened. The item
     /// keeps them until it closes, even if the project's settings change.
-    pub backend: Backend,
+    pub backend: ItemBackend,
     pub target: String,
     /// The newest revision.
     pub revision: Revision,

@@ -1,0 +1,62 @@
+// F4 and F8 on the github backend, from the UI: an item's pull request is
+// linked from the inbox and the review screen, and opens on GitHub.
+
+import { expect, test } from "./hub";
+
+test("f4 links an item to its pull request", async ({ page, github }) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  const url = `${github.github.web}/acme/app/pull/1`;
+  await page.goto(github.hub.url);
+
+  const row = page
+    .getByRole("region", { name: "Needs you" })
+    .getByRole("listitem");
+  const link = row.getByRole("link", { name: "#1" });
+  await expect(link).toHaveAttribute("href", url);
+  await expect(link).toHaveAttribute("target", "_blank");
+
+  // Following the link opens GitHub, and leaves the inbox where it was.
+  const opened = page.waitForEvent("popup");
+  await link.click();
+  const pull = await opened;
+  await expect(pull.getByRole("heading")).toHaveText("Add login #1");
+  await expect(pull.getByText("Open", { exact: true })).toBeVisible();
+  await expect(page).not.toHaveURL(/#\/items/);
+
+  await row.click();
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute(
+    "href",
+    url,
+  );
+});
+
+test("f8 approving merges the pull request", async ({ page, github }) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+  await page
+    .getByRole("group", { name: "Confirm merge" })
+    .getByRole("button", { name: "Merge" })
+    .click();
+  await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
+
+  await page.goto(`${github.github.web}/acme/app/pull/1`);
+  await expect(page.getByText(/^Merged as [0-9a-f]{7}$/)).toBeVisible();
+});
+
+test("an item on the local backend has no pull request", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  await expect(
+    page.getByRole("region", { name: "app#1" }).getByText("Add login"),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /^#\d+/ })).toHaveCount(0);
+});

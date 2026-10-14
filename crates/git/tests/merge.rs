@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use mergegate_core::git::Git;
-use mergegate_core::item::{DiffStat, Item, ItemId, ItemState, Revision};
+use mergegate_core::git::{Git, Upstream};
+use mergegate_core::item::{DiffStat, Item, ItemBackend, ItemId, ItemState, Revision};
 use mergegate_core::merge::{Landing, MergeBackend};
 use mergegate_core::project::{Backend, Project, ProjectName};
 use mergegate_git::HubGit;
@@ -24,7 +24,8 @@ impl Hub {
         let staging = dir.path().join("projects/app/staging.git");
         let repo = TestRepo::new("app");
         repo.commit_files("Readme", &[("README", "hello\n")]);
-        git.sync_staging(&app(), repo.root(), "main").unwrap();
+        git.sync_staging(&app(), &Upstream::Repo(repo.root().into()), "main")
+            .unwrap();
         repo.git(["checkout", "--quiet", "-b", "login"]);
         repo.commit_files("Add login", &[("src/login.rs", "fn login() {}\n")]);
         repo.commit_files("Greet", &[("README", "hello, login\n")]);
@@ -50,6 +51,7 @@ impl Hub {
             backend: Backend::Local,
             target: "main".into(),
             upstream: self.repo.root().to_owned(),
+            github: None,
         }
     }
 
@@ -59,7 +61,7 @@ impl Hub {
             branch: "login".into(),
             title: "Add login".into(),
             state: ItemState::Merging,
-            backend: Backend::Local,
+            backend: ItemBackend::Local,
             target: "main".into(),
             revision: Revision {
                 number: 1,

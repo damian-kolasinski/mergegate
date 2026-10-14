@@ -11,6 +11,7 @@ fn reads_a_blob_of_a_known_project_only() {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     let git = FakeGit::default();

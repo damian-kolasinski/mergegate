@@ -1,6 +1,7 @@
 //! The git port: the repositories on the hub's machine, and the hub's own
 //! staging repos.
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::project::ProjectName;
@@ -18,11 +19,57 @@ pub struct Repo {
     pub branches: Vec<String>,
     /// The branch checked out in the main worktree, if HEAD is on one.
     pub head: Option<String>,
+    /// Its configured remotes, sorted by name.
+    pub remotes: Vec<RepoRemote>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoRemote {
+    pub name: String,
+    /// The fetch URL, as configured.
+    pub url: String,
 }
 
 impl Repo {
     pub fn has_branch(&self, branch: &str) -> bool {
         self.branches.iter().any(|b| b == branch)
+    }
+}
+
+/// Where staging takes a project's target from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Upstream {
+    /// [`Repo::root`] of the operator's repo on the hub's machine.
+    Repo(PathBuf),
+    Remote(Remote),
+}
+
+/// A repository git reaches over HTTPS, as the hub's GitHub account.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Remote {
+    pub url: String,
+    /// The HTTP header that authorizes git at `url`, and nowhere else.
+    pub auth: Secret,
+}
+
+/// A credential. It never shows in debug output, so it can't reach a log or
+/// an error message by accident.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Secret(String);
+
+impl Secret {
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Secret(..)")
     }
 }
 
@@ -44,7 +91,7 @@ pub trait Git {
     fn sync_staging(
         &self,
         project: &ProjectName,
-        upstream: &Path,
+        upstream: &Upstream,
         target: &str,
     ) -> Result<(), GitError>;
 

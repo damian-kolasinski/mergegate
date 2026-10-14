@@ -34,8 +34,12 @@ fn describe(inbox: &Inbox) -> String {
 }
 
 fn line(i: &InboxItem) -> String {
+    let link = match &i.link {
+        Some(link) => format!(" · {}", link.label),
+        None => String::new(),
+    };
     format!(
-        "  {} r{}  {}  ({} · {}, +{} -{})",
+        "  {} r{}  {}  ({}{link} · {}, +{} -{})",
         i.id,
         i.revision,
         i.title,

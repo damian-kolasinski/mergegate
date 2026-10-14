@@ -15,6 +15,7 @@ api = { path = "crates/api", package = "mergegate-api" }
 # Not `core`: that name would shadow the language's own `core` crate.
 mergegate-core = { path = "crates/core" }
 git = { path = "crates/git", package = "mergegate-git" }
+backend-github = { path = "crates/backend-github", package = "mergegate-backend-github" }
 store-sqlite = { path = "crates/store-sqlite", package = "mergegate-store-sqlite" }
 hub = { path = "crates/hub", package = "mergegate-hub" }
 skill = { path = "crates/skill", package = "mergegate-skill" }

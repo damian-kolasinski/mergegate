@@ -34,7 +34,7 @@ async fn abandon(
         reason: request.reason,
     };
     let item = state
-        .blocking(move |store, git| item::abandon(store, git, request))
+        .blocking_github(move |store, git, github| item::abandon(store, git, github, request))
         .await
         .map_err(items::failure)?;
     state.events.logged();

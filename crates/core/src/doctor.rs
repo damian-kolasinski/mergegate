@@ -1,7 +1,8 @@
 //! The checks behind `mg doctor` that only the hub can run.
 
 use crate::git::{self, Git, GitError};
-use crate::project::{Project, ProjectStore};
+use crate::github::{Github, GithubError};
+use crate::project::{Backend, Project, ProjectStore};
 use crate::store::StoreError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,7 +23,11 @@ pub struct Check {
     pub fix: Option<String>,
 }
 
-pub fn checks(store: &impl ProjectStore, git: &impl Git) -> Result<Vec<Check>, StoreError> {
+pub fn checks(
+    store: &impl ProjectStore,
+    git: &impl Git,
+    github: &impl Github,
+) -> Result<Vec<Check>, StoreError> {
     let mut checks = vec![git_version(git)];
     let projects = store.projects()?;
     if projects.is_empty() {
@@ -33,7 +38,7 @@ pub fn checks(store: &impl ProjectStore, git: &impl Git) -> Result<Vec<Check>, S
             Some("mg project add PATH".into()),
         ));
     }
-    checks.extend(projects.iter().map(|p| project(git, p)));
+    checks.extend(projects.iter().map(|p| project(git, github, p)));
     Ok(checks)
 }
 
@@ -64,7 +69,7 @@ fn git_version(git: &impl Git) -> Check {
     }
 }
 
-fn project(git: &impl Git, project: &Project) -> Check {
+fn project(git: &impl Git, github: &impl Github, project: &Project) -> Check {
     let name = format!("project {}", project.name);
     let fail = |message: String, fix: String| check(&name, CheckStatus::Fail, message, Some(fix));
     let upstream = project.upstream.display();
@@ -88,17 +93,32 @@ fn project(git: &impl Git, project: &Project) -> Check {
             set("target", "BRANCH"),
         );
     }
+    let mut backend = project.backend.as_str().to_owned();
+    if project.backend == Backend::Github {
+        let Some(repo) = &project.github else {
+            return fail(
+                "no GitHub repository set".into(),
+                set("github", "OWNER/REPO"),
+            );
+        };
+        match github.check_access(repo) {
+            Ok(()) => backend = format!("github {repo}"),
+            Err(e @ GithubError::NotLoggedIn(_)) => {
+                return fail(e.to_string(), "gh auth login".into());
+            }
+            Err(e @ GithubError::NoAccess(_)) => {
+                return fail(e.to_string(), set("github", "OWNER/REPO"));
+            }
+            Err(e) => return check(&name, CheckStatus::Fail, e.to_string(), None),
+        }
+    }
     // Setting the target again re-syncs the staging repo.
     let resync = set("target", &project.target);
     match git.staging_has(&project.name, &project.target) {
         Ok(true) => check(
             &name,
             CheckStatus::Ok,
-            format!(
-                "{} · {} · {upstream}",
-                project.backend.as_str(),
-                project.target
-            ),
+            format!("{backend} · {} · {upstream}", project.target),
             None,
         ),
         Ok(false) => fail(

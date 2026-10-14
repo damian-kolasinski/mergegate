@@ -1,7 +1,7 @@
 use super::*;
 use crate::fake::FakeStore;
-use crate::item::{ItemId, NewItem, NewRevision};
-use crate::project::{Backend, ProjectName};
+use crate::item::{ItemBackend, ItemId, NewItem, NewRevision};
+use crate::project::ProjectName;
 
 fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
     let item = NewItem {
@@ -9,7 +9,7 @@ fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
         branch: branch.into(),
         title: format!("Work on {branch}"),
         state: ItemState::NeedsReview,
-        backend: Backend::Local,
+        backend: ItemBackend::Local,
         target: "main".into(),
         revision: NewRevision {
             head: "1".repeat(40),

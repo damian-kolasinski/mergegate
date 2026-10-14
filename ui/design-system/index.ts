@@ -6,6 +6,7 @@ import "./base.css";
 export { Badge, type Tone } from "./badge";
 export { Button } from "./button";
 export { Empty } from "./empty";
+export { ExternalLink } from "./external-link";
 export { Row } from "./row";
 export { Section } from "./section";
 export { Meta, Mono } from "./text";

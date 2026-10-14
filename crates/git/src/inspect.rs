@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use mergegate_core::git::{GitError, Repo};
+use mergegate_core::git::{GitError, Repo, RepoRemote};
 
 pub(crate) fn inspect(path: &Path) -> Result<Repo, GitError> {
     let failed = |e: &dyn std::fmt::Display| {
@@ -52,9 +52,24 @@ pub(crate) fn inspect(path: &Path) -> Result<Repo, GitError> {
         .map_err(|e| failed(&e))?
         .map(|name| name.shorten().to_string());
 
+    let config = repo.config_snapshot();
+    // Sorted by name: the set is ordered.
+    let remotes = repo
+        .remote_names()
+        .into_iter()
+        .filter_map(|name| {
+            let url = config.string(format!("remote.{name}.url").as_str())?;
+            Some(RepoRemote {
+                name: name.to_string(),
+                url: url.to_string(),
+            })
+        })
+        .collect();
+
     Ok(Repo {
         root,
         branches,
         head,
+        remotes,
     })
 }

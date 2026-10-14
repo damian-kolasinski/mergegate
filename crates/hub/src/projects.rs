@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use mergegate_core::github::GithubError;
 use mergegate_core::project::{
     self, AddProject, Added, Backend, Changed, Project, ProjectError, ProjectStore, Setting,
 };
@@ -46,9 +47,10 @@ async fn add(
         name: request.name,
         backend: request.backend.map(backend_from_api),
         target: request.target,
+        github: request.github,
     };
     match state
-        .blocking(move |store, git| project::add(store, git, request))
+        .blocking_github(move |store, git, github| project::add(store, git, github, request))
         .await
     {
         Ok(Added::Project(project)) => {
@@ -96,7 +98,9 @@ async fn set(
     }
     let confirm = request.confirm;
     match state
-        .blocking(move |store, git| project::set(store, git, &name, setting, confirm))
+        .blocking_github(move |store, git, github| {
+            project::set(store, git, github, &name, setting, confirm)
+        })
         .await
         .map_err(failure)?
     {
@@ -111,6 +115,7 @@ fn to_api(project: &Project) -> api::project::Project {
         backend: backend_to_api(project.backend),
         target: project.target.clone(),
         upstream: project.upstream.display().to_string(),
+        github: project.github.as_ref().map(ToString::to_string),
     }
 }
 
@@ -145,6 +150,10 @@ fn absolute(path: &str) -> Result<PathBuf, Failure> {
 pub(crate) fn failure(e: ProjectError) -> Failure {
     use ProjectError as E;
     use StatusCode as S;
+    let e = match e {
+        E::Github(e) => return github_failure(e),
+        e => e,
+    };
     let (status, code, hint) = match &e {
         E::NotARepo(_) => (S::BAD_REQUEST, "not_a_repo", None),
         E::NoCommits(_) => (
@@ -163,11 +172,17 @@ pub(crate) fn failure(e: ProjectError) -> Failure {
         ),
         E::UnknownBranch { .. } => (S::BAD_REQUEST, "unknown_branch", None),
         E::BranchUnderReview { .. } => (S::CONFLICT, "branch_under_review", None),
-        E::BackendUnavailable(_) => (
+        E::NoGithubRepo(_) => (
             S::BAD_REQUEST,
-            "backend_unavailable",
-            Some("use the local backend".into()),
+            "no_github_repo",
+            Some("--github OWNER/REPO".into()),
         ),
+        E::NoGithubSet(project) => (
+            S::BAD_REQUEST,
+            "no_github_repo",
+            Some(format!("mg project set {project} github OWNER/REPO")),
+        ),
+        E::Github(_) => unreachable!("answered above"),
         E::NotFound(_) => (
             S::NOT_FOUND,
             "project_not_found",
@@ -186,4 +201,18 @@ pub(crate) fn failure(e: ProjectError) -> Failure {
         tracing::error!("{e}");
     }
     Failure::new(status, code, e.to_string(), hint)
+}
+
+/// GitHub's own errors, wherever they come up.
+pub(crate) fn github_failure(e: GithubError) -> Failure {
+    use GithubError as E;
+    use StatusCode as S;
+    let (status, code, hint) = match &e {
+        E::NotLoggedIn(_) => (S::BAD_GATEWAY, "github_login", Some("gh auth login")),
+        E::NoAccess(_) => (S::BAD_GATEWAY, "github_no_access", None),
+        E::Refused(_) => (S::BAD_GATEWAY, "github_refused", None),
+        E::Failed(_) => (S::BAD_GATEWAY, "github_failed", None),
+    };
+    tracing::warn!("{e}");
+    Failure::new(status, code, e.to_string(), hint.map(Into::into))
 }

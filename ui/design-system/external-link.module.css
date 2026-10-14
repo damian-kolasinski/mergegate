@@ -1,0 +1,17 @@
+.link {
+  font: var(--type-p4);
+  white-space: nowrap;
+  color: var(--text-brand);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--text-brand-hover);
+  text-decoration: underline;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-small);
+}

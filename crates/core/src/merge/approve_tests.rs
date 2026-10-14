@@ -37,7 +37,7 @@ fn records_the_approval_then_closes_the_item_as_merged() {
     let merge = approve(
         &mut store,
         &FakeGit::default(),
-        &backend,
+        &[&backend],
         approving(1, " Ship it.\n"),
     )
     .unwrap();
@@ -71,7 +71,7 @@ fn a_merged_item_keeps_only_its_newest_revision_pinned() {
     git.pin(&project, "refs/mergegate/items/1/r1", &commit(2))
         .unwrap();
     let backend = FakeBackend::new(Backend::Local);
-    approve(&mut store, &git, &backend, approving(2, "")).unwrap();
+    approve(&mut store, &git, &[&backend], approving(2, "")).unwrap();
     assert_eq!(
         git.pins().into_iter().collect::<Vec<_>>(),
         [("refs/mergegate/items/1/r2".to_owned(), commit(3))]
@@ -86,7 +86,13 @@ fn a_conflict_hands_the_item_back_to_its_agent() {
         paths: vec!["README.md".into()],
     };
     let backend = FakeBackend::new(Backend::Local).then(Ok(conflict.clone()));
-    let merge = approve(&mut store, &FakeGit::default(), &backend, approving(1, "")).unwrap();
+    let merge = approve(
+        &mut store,
+        &FakeGit::default(),
+        &[&backend],
+        approving(1, ""),
+    )
+    .unwrap();
 
     assert_eq!(merge.item.state, ItemState::ChangesRequested);
     assert_eq!(merge.landing, conflict);
@@ -102,7 +108,13 @@ fn a_failure_to_land_holds_the_item_in_merging_with_gits_reason() {
     let mut store = FakeStore::with_item(1);
     let failure = GitError::Failed("the checkout of main has changes".into());
     let backend = FakeBackend::new(Backend::Local).then(Err(failure));
-    let merge = approve(&mut store, &FakeGit::default(), &backend, approving(1, "")).unwrap();
+    let merge = approve(
+        &mut store,
+        &FakeGit::default(),
+        &[&backend],
+        approving(1, ""),
+    )
+    .unwrap();
 
     assert_eq!(merge.item.state, ItemState::Merging);
     let reason = "the checkout of main has changes".to_owned();
@@ -123,7 +135,7 @@ fn only_the_newest_revision_of_an_open_item_merges() {
     let mut store = FakeStore::with_item(2);
     let git = FakeGit::default();
     let backend = FakeBackend::new(Backend::Local);
-    let stale = approve(&mut store, &git, &backend, approving(1, "")).unwrap_err();
+    let stale = approve(&mut store, &git, &[&backend], approving(1, "")).unwrap_err();
     assert!(
         matches!(
             stale,
@@ -137,18 +149,18 @@ fn only_the_newest_revision_of_an_open_item_merges() {
     );
 
     store.set_state(&id("app#1"), ItemState::Merging);
-    let merging = approve(&mut store, &git, &backend, approving(2, "")).unwrap_err();
+    let merging = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();
     assert!(matches!(merging, MergeError::Merging(_)), "{merging:?}");
 
     store.set_state(&id("app#1"), ItemState::Abandoned);
-    let closed = approve(&mut store, &git, &backend, approving(2, "")).unwrap_err();
+    let closed = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();
     assert!(matches!(closed, MergeError::Closed(_)), "{closed:?}");
 
     let missing = Approve {
         id: id("app#9"),
         ..approving(1, "")
     };
-    let none = approve(&mut store, &git, &backend, missing).unwrap_err();
+    let none = approve(&mut store, &git, &[&backend], missing).unwrap_err();
     assert!(matches!(none, MergeError::NoItem(_)), "{none:?}");
     assert!(backend.landed().is_empty());
     assert!(store.reviews().is_empty());
@@ -158,7 +170,13 @@ fn only_the_newest_revision_of_an_open_item_merges() {
 fn another_backends_item_is_refused_before_anything_is_recorded() {
     let mut store = FakeStore::with_item(1);
     let backend = FakeBackend::new(Backend::Github);
-    let error = approve(&mut store, &FakeGit::default(), &backend, approving(1, "")).unwrap_err();
+    let error = approve(
+        &mut store,
+        &FakeGit::default(),
+        &[&backend],
+        approving(1, ""),
+    )
+    .unwrap_err();
     assert!(matches!(error, MergeError::NoBackend { .. }), "{error:?}");
     assert!(store.reviews().is_empty());
     let item = store.item(&id("app#1")).unwrap().unwrap();

@@ -2,9 +2,10 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use super::target::{Target, choose};
-use super::{Backend, Project, ProjectError, ProjectName, ProjectStore};
-use crate::decision::Decision;
-use crate::git::Git;
+use super::{Backend, Project, ProjectError, ProjectName, ProjectStore, fetch_from};
+use crate::decision::{Decision, DecisionOption};
+use crate::git::{Git, Repo};
+use crate::github::{Detected, Github, GithubRepo, detect};
 
 #[derive(Debug, Clone, Default)]
 pub struct AddProject {
@@ -13,6 +14,8 @@ pub struct AddProject {
     pub name: Option<String>,
     pub backend: Option<Backend>,
     pub target: Option<String>,
+    /// `owner/name` on GitHub, when the remotes don't settle it.
+    pub github: Option<String>,
 }
 
 #[derive(Debug)]
@@ -24,16 +27,15 @@ pub enum Added {
 
 /// Registers the repo containing `request.path` and creates its staging repo.
 /// Problems the agent can fix itself are reported before the operator is
-/// asked anything.
+/// asked anything. A repo with a GitHub remote asks for the backend; the
+/// `github` one is only set up once GitHub confirms the operator can push.
 pub fn add(
     store: &mut impl ProjectStore,
     git: &impl Git,
+    github: &impl Github,
     request: AddProject,
 ) -> Result<Added, ProjectError> {
-    let backend = request.backend.unwrap_or(Backend::Local);
-    if backend != Backend::Local {
-        return Err(ProjectError::BackendUnavailable(backend));
-    }
+    let named = request.github.as_deref().map(parse_github).transpose()?;
     let repo = git.inspect(&request.path)?;
     if repo.branches.is_empty() {
         return Err(ProjectError::NoCommits(repo.root));
@@ -53,20 +55,101 @@ pub fn add(
     if store.project(&name)?.is_some() {
         return Err(ProjectError::NameTaken(name));
     }
+    let detected = match &named {
+        Some(repo) => Detected::One(repo.clone()),
+        None => detect(&repo.remotes),
+    };
+    let backend = match (request.backend, &named, &detected) {
+        (Some(backend), _, _) => backend,
+        (None, Some(_), _) => Backend::Github,
+        (None, None, Detected::None) => Backend::Local,
+        (None, None, _) => return Ok(Added::Decide(choosing_backend(&repo, &detected))),
+    };
+    let github_repo = match (backend, detected) {
+        (Backend::Local, _) => named,
+        (Backend::Github, Detected::One(github_repo)) => Some(github_repo),
+        (Backend::Github, Detected::Several(repos)) => {
+            return Ok(Added::Decide(choosing_github(&repo, repos)));
+        }
+        (Backend::Github, Detected::None) => return Err(ProjectError::NoGithubRepo(repo.root)),
+    };
     let target = match choose(&repo, request.target.as_deref())? {
         Target::Chosen(target) => target,
         Target::Decide(decision) => return Ok(Added::Decide(decision)),
     };
 
-    git.sync_staging(&name, &repo.root, &target)?;
+    if backend == Backend::Github
+        && let Some(github_repo) = &github_repo
+    {
+        github.check_access(github_repo)?;
+    }
     let project = Project {
         name,
         backend,
         target,
         upstream: repo.root,
+        github: github_repo,
     };
+    let upstream = fetch_from(&project, backend, github)?;
+    git.sync_staging(&project.name, &upstream, &project.target)?;
     store.insert_project(&project)?;
     Ok(Added::Project(project))
+}
+
+pub(super) fn parse_github(value: &str) -> Result<GithubRepo, ProjectError> {
+    GithubRepo::parse(value).ok_or_else(|| ProjectError::InvalidValue {
+        key: "github",
+        value: value.into(),
+        expected: "OWNER/REPO",
+    })
+}
+
+fn choosing_backend(repo: &Repo, detected: &Detected) -> Decision {
+    let on_github = match detected {
+        Detected::One(github_repo) => github_repo.to_string(),
+        _ => "GitHub".into(),
+    };
+    Decision {
+        question: format!(
+            "{} has a GitHub remote. Should its items land through pull requests on {on_github}, \
+             or straight on the target branch of this repo?",
+            repo.root.display()
+        ),
+        flag: "--backend".into(),
+        options: vec![
+            DecisionOption {
+                value: Backend::Github.as_str().into(),
+                description: Some(format!(
+                    "push each item's branch to {on_github}, open its pull request \
+                     and squash-merge it there"
+                )),
+            },
+            DecisionOption {
+                value: Backend::Local.as_str().into(),
+                description: Some("squash-merge into the target branch on this machine".into()),
+            },
+        ],
+        default: Some(Backend::Github.as_str().into()),
+    }
+}
+
+fn choosing_github(repo: &Repo, repos: Vec<GithubRepo>) -> Decision {
+    Decision {
+        question: format!(
+            "The remotes of {} point at several GitHub repositories, and none is origin. \
+             Which one should items publish to?",
+            repo.root.display()
+        ),
+        flag: "--github".into(),
+        options: repos
+            .into_iter()
+            .map(|github_repo| DecisionOption {
+                value: github_repo.to_string(),
+                description: None,
+            })
+            .collect(),
+        default: None,
+    }
 }
 
 /// The folder a repo is named after. A bare repo kept beside its worktrees,

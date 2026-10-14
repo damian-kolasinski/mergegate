@@ -8,6 +8,8 @@ use tempfile::TempDir;
 pub struct Env {
     home: TempDir,
     mg: PathBuf,
+    /// Set for every `mg`, and so for the hub it starts.
+    vars: Vec<(String, String)>,
 }
 
 /// The result of one `mg` invocation.
@@ -41,7 +43,17 @@ impl Env {
                 .tempdir()
                 .expect("create MERGEGATE_HOME"),
             mg: mg.into(),
+            vars: Vec::new(),
         }
+    }
+
+    /// Sets `vars` for every `mg` run from here on, as [`FakeGithub::env`]
+    /// gives them.
+    ///
+    /// [`FakeGithub::env`]: crate::FakeGithub::env
+    pub fn with_vars(mut self, vars: Vec<(String, String)>) -> Self {
+        self.vars = vars;
+        self
     }
 
     pub fn home(&self) -> &Path {
@@ -71,7 +83,8 @@ impl Env {
         cmd.args(args)
             .env("MERGEGATE_HOME", self.home())
             .env_remove("MG_JSON")
-            .env_remove("MG_UI_DIR");
+            .env_remove("MG_UI_DIR")
+            .envs(self.vars.iter().map(|(k, v)| (k, v)));
         cmd
     }
 

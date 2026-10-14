@@ -2,13 +2,14 @@
 
 use std::path::{Path, PathBuf};
 
+use mergegate_core::github::GithubRepo;
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, Row, params};
 
 use crate::Store;
 
-const COLUMNS: &str = "name, backend, target, upstream";
+const COLUMNS: &str = "name, backend, target, upstream, github";
 
 impl ProjectStore for Store {
     fn projects(&self) -> Result<Vec<Project>, StoreError> {
@@ -31,12 +32,13 @@ impl ProjectStore for Store {
     fn insert_project(&mut self, project: &Project) -> Result<(), StoreError> {
         self.conn
             .execute(
-                &format!("INSERT INTO projects ({COLUMNS}) VALUES (?1, ?2, ?3, ?4)"),
+                &format!("INSERT INTO projects ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5)"),
                 params![
                     project.name.as_str(),
                     project.backend.as_str(),
                     project.target,
                     utf8(&project.upstream)?,
+                    project.github.as_ref().map(ToString::to_string),
                 ],
             )
             .map_err(StoreError::new)?;
@@ -47,12 +49,14 @@ impl ProjectStore for Store {
         let changed = self
             .conn
             .execute(
-                "UPDATE projects SET backend = ?2, target = ?3, upstream = ?4 WHERE name = ?1",
+                "UPDATE projects SET backend = ?2, target = ?3, upstream = ?4, github = ?5
+                 WHERE name = ?1",
                 params![
                     project.name.as_str(),
                     project.backend.as_str(),
                     project.target,
                     utf8(&project.upstream)?,
+                    project.github.as_ref().map(ToString::to_string),
                 ],
             )
             .map_err(StoreError::new)?;
@@ -89,12 +93,19 @@ fn read(row: &Row) -> rusqlite::Result<Result<Project, StoreError>> {
     let backend: String = row.get(1)?;
     let target: String = row.get(2)?;
     let upstream: String = row.get(3)?;
+    let github: Option<String> = row.get(4)?;
     Ok((|| {
         Ok(Project {
             name: ProjectName::parse(&name).map_err(StoreError::new)?,
             backend: backend_named(&backend)?,
             target,
             upstream: PathBuf::from(upstream),
+            github: github
+                .map(|repo| {
+                    GithubRepo::parse(&repo)
+                        .ok_or_else(|| StoreError::new(format!("invalid GitHub repo {repo:?}")))
+                })
+                .transpose()?,
         })
     })())
 }

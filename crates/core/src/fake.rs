@@ -8,12 +8,13 @@ use std::path::{Path, PathBuf};
 use crate::agent::{Agent, AgentStore, DueWake};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
-use crate::git::{Git, GitError, Repo};
+use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
+use crate::github::{Github, GithubError, GithubRepo, Pull};
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
-    NewRevision, Revision, Submit, submit,
+    NewRevision, Pushed, Revision, Submit, submit,
 };
-use crate::merge::{Landing, MergeBackend};
+use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
     Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
@@ -37,9 +38,14 @@ pub(crate) struct FakeGit {
     version: Option<String>,
     fail_sync: bool,
     fail_unpin: bool,
+    /// The paths every trial merge conflicts on, if it does.
+    conflicts: Option<Vec<String>>,
     /// Commits of every repo, by ID. Each has at most one parent.
     commits: BTreeMap<String, Commit>,
-    upstream: BTreeMap<(PathBuf, String), String>,
+    /// Branches of every upstream, a remote's under its URL.
+    upstream: RefCell<BTreeMap<(PathBuf, String), String>>,
+    /// Where each project's staging last pushed a branch to its remote.
+    published: RefCell<BTreeMap<(String, String), String>>,
     staging: RefCell<BTreeMap<String, BTreeMap<String, String>>>,
     synced: RefCell<Vec<(String, PathBuf, String)>>,
     fetched: RefCell<Vec<(String, String)>>,
@@ -54,8 +60,10 @@ impl Default for FakeGit {
             version: Some("git version 2.50.1".into()),
             fail_sync: false,
             fail_unpin: false,
+            conflicts: None,
             commits: BTreeMap::new(),
-            upstream: BTreeMap::new(),
+            upstream: RefCell::default(),
+            published: RefCell::default(),
             staging: RefCell::default(),
             synced: RefCell::default(),
             fetched: RefCell::default(),
@@ -74,8 +82,26 @@ impl FakeGit {
             root: root.into(),
             branches,
             head: head.map(Into::into),
+            remotes: Vec::new(),
         });
         git
+    }
+
+    /// Gives the repo at `root`, already added, a remote.
+    pub fn remote(mut self, root: &str, name: &str, url: &str) -> Self {
+        let repo = self.repos.iter_mut().find(|r| r.root == Path::new(root));
+        let remotes = &mut repo.expect("add the repo first").remotes;
+        remotes.push(RepoRemote {
+            name: name.into(),
+            url: url.into(),
+        });
+        remotes.sort_by(|a, b| a.name.cmp(&b.name));
+        self
+    }
+
+    pub fn conflicting(mut self, paths: &[&str]) -> Self {
+        self.conflicts = Some(paths.iter().map(|p| (*p).into()).collect());
+        self
     }
 
     pub fn without_repo(mut self, root: &str) -> Self {
@@ -115,10 +141,34 @@ impl FakeGit {
         self
     }
 
-    pub fn upstream(mut self, root: &str, branch: &str, commit: &str) -> Self {
+    /// `root` is a repo's root or a remote's URL.
+    pub fn upstream(self, root: &str, branch: &str, commit: &str) -> Self {
         self.upstream
+            .borrow_mut()
             .insert((root.into(), branch.into()), commit.into());
         self
+    }
+
+    /// Where an upstream has `branch`, as a push left it.
+    pub fn upstream_branch(&self, root: &str, branch: &str) -> Option<String> {
+        self.upstream
+            .borrow()
+            .get(&(root.into(), branch.into()))
+            .cloned()
+    }
+
+    /// What someone pushing to an upstream outside mergegate does.
+    pub fn push_upstream(&self, root: &str, branch: &str, commit: &str) {
+        self.upstream
+            .borrow_mut()
+            .insert((root.into(), branch.into()), commit.into());
+    }
+
+    /// What deleting a branch on GitHub, outside mergegate, does.
+    pub fn delete_upstream(&self, root: &str, branch: &str) {
+        self.upstream
+            .borrow_mut()
+            .remove(&(root.into(), branch.into()));
     }
 
     /// What a worker's `git push` does.
@@ -183,13 +233,19 @@ impl FakeGit {
             .collect()
     }
 
-    fn fetch(&self, project: &ProjectName, upstream: &Path, target: &str) -> Result<(), GitError> {
+    fn fetch(
+        &self,
+        project: &ProjectName,
+        upstream: &Upstream,
+        target: &str,
+    ) -> Result<(), GitError> {
         if self.fail_sync {
             return Err(GitError::Failed("fetch failed".into()));
         }
         let head = self
             .upstream
-            .get(&(upstream.into(), target.into()))
+            .borrow()
+            .get(&(root_of(upstream), target.into()))
             .cloned()
             .unwrap_or_default();
         self.push(project.as_str(), target, &head);
@@ -210,13 +266,13 @@ impl Git for FakeGit {
     fn sync_staging(
         &self,
         project: &ProjectName,
-        upstream: &Path,
+        upstream: &Upstream,
         target: &str,
     ) -> Result<(), GitError> {
         self.fetch(project, upstream, target)?;
         self.synced
             .borrow_mut()
-            .push((project.to_string(), upstream.into(), target.into()));
+            .push((project.to_string(), root_of(upstream), target.into()));
         Ok(())
     }
 
@@ -239,7 +295,7 @@ impl ItemGit for FakeGit {
     fn fetch_target(
         &self,
         project: &ProjectName,
-        upstream: &Path,
+        upstream: &Upstream,
         target: &str,
     ) -> Result<(), GitError> {
         self.fetch(project, upstream, target)?;
@@ -247,6 +303,31 @@ impl ItemGit for FakeGit {
             .borrow_mut()
             .push((project.to_string(), target.into()));
         Ok(())
+    }
+
+    fn push_branch(
+        &self,
+        project: &ProjectName,
+        remote: &Remote,
+        branch: &str,
+        head: &str,
+        pushed: Option<&str>,
+    ) -> Result<Pushed, GitError> {
+        let mut upstream = self.upstream.borrow_mut();
+        let mut published = self.published.borrow_mut();
+        let key = (PathBuf::from(&remote.url), branch.to_owned());
+        let last = (project.to_string(), branch.to_owned());
+        let lease = published.get(&last).map(String::as_str).or(pushed);
+        match upstream.get(&key) {
+            Some(found) if found != head && Some(found.as_str()) != lease => {
+                return Ok(Pushed::Moved(found.clone()));
+            }
+            None if pushed.is_some() => return Ok(Pushed::Gone),
+            _ => {}
+        }
+        upstream.insert(key, head.into());
+        published.insert(last, head.into());
+        Ok(Pushed::Done)
     }
 
     fn branch_head(&self, project: &ProjectName, branch: &str) -> Result<Option<String>, GitError> {
@@ -324,6 +405,33 @@ impl ItemGit for FakeGit {
     }
 }
 
+impl MergeGit for FakeGit {
+    fn trial_merge(
+        &self,
+        project: &ProjectName,
+        upstream: &Upstream,
+        target: &str,
+        _head: &str,
+    ) -> Result<Trial, GitError> {
+        self.fetch(project, upstream, target)?;
+        Ok(match &self.conflicts {
+            Some(paths) => Trial::Conflict {
+                target_commit: self.branch_head(project, target)?.unwrap_or_default(),
+                paths: paths.clone(),
+            },
+            None => Trial::Clean,
+        })
+    }
+}
+
+/// The URL of a remote, as a path, so remotes and repos share one map.
+fn root_of(upstream: &Upstream) -> PathBuf {
+    match upstream {
+        Upstream::Repo(root) => root.clone(),
+        Upstream::Remote(remote) => PathBuf::from(&remote.url),
+    }
+}
+
 impl DiffGit for FakeGit {
     fn blobs(
         &self,
@@ -374,6 +482,7 @@ impl FakeStore {
                 backend: Backend::Local,
                 target: "main".into(),
                 upstream: "/src/app".into(),
+                github: None,
             })
             .unwrap();
         let mut git = FakeGit::default()
@@ -399,7 +508,7 @@ impl FakeStore {
                 worktree: None,
                 wake: None,
             };
-            submit(&mut store, &git, request).unwrap();
+            submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
         }
         store
     }
@@ -868,5 +977,229 @@ impl MergeBackend for FakeBackend {
             return Ok(Landing::Merged { commit: commit(9) });
         }
         script.remove(0)
+    }
+}
+
+/// GitHub as the operator's account sees it: every repository is theirs to
+/// push to unless denied. Git reaches each at `https://github.com/<repo>.git`.
+pub(crate) struct FakeGithub {
+    logged_in: bool,
+    denied: BTreeSet<GithubRepo>,
+    refusal: RefCell<Option<String>>,
+    pulls: RefCell<Vec<FakePull>>,
+    deleted: RefCell<Vec<(GithubRepo, String)>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FakePull {
+    pub repo: GithubRepo,
+    pub number: u64,
+    pub branch: String,
+    pub target: String,
+    pub title: String,
+    pub state: PullState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PullState {
+    Open,
+    Closed,
+    /// Squash-merged at this head, with this title.
+    Merged {
+        head: String,
+        title: String,
+    },
+}
+
+impl Default for FakeGithub {
+    fn default() -> Self {
+        Self {
+            logged_in: true,
+            denied: BTreeSet::new(),
+            refusal: RefCell::default(),
+            pulls: RefCell::default(),
+            deleted: RefCell::default(),
+        }
+    }
+}
+
+impl FakeGithub {
+    pub fn logged_out(mut self) -> Self {
+        self.logged_in = false;
+        self
+    }
+
+    pub fn denying(mut self, repo: &str) -> Self {
+        self.denied.insert(GithubRepo::parse(repo).unwrap());
+        self
+    }
+
+    /// Every merge from now on is refused with `reason`.
+    pub fn refuse(&self, reason: &str) {
+        self.refusal.replace(Some(reason.into()));
+    }
+
+    /// What someone opening a pull request on GitHub does.
+    pub fn open(&self, repo: &str, branch: &str, title: &str) -> Pull {
+        let repo = GithubRepo::parse(repo).unwrap();
+        self.open_pull(&repo, branch, "main", title).unwrap()
+    }
+
+    pub fn pulls(&self) -> Vec<FakePull> {
+        self.pulls.borrow().clone()
+    }
+
+    pub fn deleted(&self) -> Vec<(GithubRepo, String)> {
+        self.deleted.borrow().clone()
+    }
+
+    fn signed_in(&self) -> Result<(), GithubError> {
+        if self.logged_in {
+            Ok(())
+        } else {
+            Err(GithubError::NotLoggedIn("gh is not logged in".into()))
+        }
+    }
+
+    fn pull<T>(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        then: impl FnOnce(&mut FakePull) -> Result<T, GithubError>,
+    ) -> Result<T, GithubError> {
+        self.signed_in()?;
+        let mut pulls = self.pulls.borrow_mut();
+        let pull = pulls
+            .iter_mut()
+            .find(|p| p.repo == *repo && p.number == number)
+            .ok_or_else(|| GithubError::Failed(format!("no pull request {number}")))?;
+        then(pull)
+    }
+}
+
+fn pull_of(pull: &FakePull) -> Pull {
+    Pull {
+        number: pull.number,
+        url: format!("https://github.com/{}/pull/{}", pull.repo, pull.number),
+    }
+}
+
+impl Github for FakeGithub {
+    fn remote(&self, repo: &GithubRepo) -> Result<Remote, GithubError> {
+        self.signed_in()?;
+        Ok(Remote {
+            url: format!("https://github.com/{repo}.git"),
+            auth: Secret::new("Authorization: Basic dGVzdA==".into()),
+        })
+    }
+
+    fn check_access(&self, repo: &GithubRepo) -> Result<(), GithubError> {
+        self.signed_in()?;
+        if self.denied.contains(repo) {
+            return Err(GithubError::NoAccess(repo.clone()));
+        }
+        Ok(())
+    }
+
+    fn find_pull(
+        &self,
+        repo: &GithubRepo,
+        branch: &str,
+        target: &str,
+    ) -> Result<Option<Pull>, GithubError> {
+        self.signed_in()?;
+        Ok(self
+            .pulls
+            .borrow()
+            .iter()
+            .find(|p| {
+                p.repo == *repo
+                    && p.branch == branch
+                    && p.target == target
+                    && p.state == PullState::Open
+            })
+            .map(pull_of))
+    }
+
+    fn open_pull(
+        &self,
+        repo: &GithubRepo,
+        branch: &str,
+        target: &str,
+        title: &str,
+    ) -> Result<Pull, GithubError> {
+        self.check_access(repo)?;
+        let mut pulls = self.pulls.borrow_mut();
+        let pull = FakePull {
+            repo: repo.clone(),
+            number: pulls.len() as u64 + 1,
+            branch: branch.into(),
+            target: target.into(),
+            title: title.into(),
+            state: PullState::Open,
+        };
+        pulls.push(pull.clone());
+        Ok(pull_of(&pull))
+    }
+
+    fn retitle_pull(&self, repo: &GithubRepo, number: u64, title: &str) -> Result<(), GithubError> {
+        self.pull(repo, number, |pull| {
+            pull.title = title.into();
+            Ok(())
+        })
+    }
+
+    fn squash_merge(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        title: &str,
+        head: &str,
+    ) -> Result<String, GithubError> {
+        let refusal = self.refusal.borrow().clone();
+        self.pull(repo, number, |pull| {
+            if let PullState::Merged { head: merged, .. } = &pull.state
+                && merged == head
+            {
+                return Ok(commit(8));
+            }
+            if let Some(reason) = refusal {
+                return Err(GithubError::Refused(reason));
+            }
+            pull.state = PullState::Merged {
+                head: head.into(),
+                title: title.into(),
+            };
+            Ok(commit(8))
+        })
+    }
+
+    fn merged(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        head: &str,
+    ) -> Result<Option<String>, GithubError> {
+        self.pull(repo, number, |pull| {
+            Ok(
+                matches!(&pull.state, PullState::Merged { head: merged, .. } if merged == head)
+                    .then(|| commit(8)),
+            )
+        })
+    }
+
+    fn close_pull(&self, repo: &GithubRepo, number: u64) -> Result<(), GithubError> {
+        self.pull(repo, number, |pull| {
+            pull.state = PullState::Closed;
+            Ok(())
+        })
+    }
+
+    fn delete_branch(&self, repo: &GithubRepo, branch: &str) -> Result<(), GithubError> {
+        self.signed_in()?;
+        self.deleted
+            .borrow_mut()
+            .push((repo.clone(), branch.into()));
+        Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use mergegate_core::feedback::{FeedbackStore, Notice, NoticeKind, Source};
-use mergegate_core::item::{ItemState, ItemStore, NewItem, NewRevision};
+use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 use mergegate_core::review::{NewReview, ReviewStore, Verdict};
 
@@ -16,6 +16,7 @@ fn store() -> (tempfile::TempDir, Store) {
             backend: Backend::Local,
             target: "main".into(),
             upstream: "/src/app".into(),
+            github: None,
         })
         .unwrap();
     for branch in ["one", "two"] {
@@ -25,7 +26,7 @@ fn store() -> (tempfile::TempDir, Store) {
                 branch: branch.into(),
                 title: "Work".into(),
                 state: ItemState::NeedsReview,
-                backend: Backend::Local,
+                backend: ItemBackend::Local,
                 target: "main".into(),
                 revision: NewRevision {
                     head: "a".repeat(40),

@@ -2,15 +2,17 @@ use crate::git::GitError;
 use crate::item::Item;
 use crate::project::{Backend, Project};
 
-/// Where approved work lands: the operator's repo for `local`, GitHub from
-/// PR 9. An item merges only through the backend it was opened with.
+/// Where approved work lands: the operator's repo for `local`, the pull
+/// request for `github`. An item merges only through the backend it was
+/// opened with.
 pub trait MergeBackend {
     fn kind(&self) -> Backend;
 
     /// Lands `item`'s newest revision on its target as one commit, with
-    /// `message`, the target as its only parent and the operator as author.
-    /// A tree already on the target lands as the target's commit: that's a
-    /// merge whose push went through before the hub could record it.
+    /// `message` and the target as its only parent. The local backend makes
+    /// the operator its author; GitHub makes it the operator's account. A
+    /// merge that went through before the hub could record it lands again as
+    /// the commit it made.
     fn land(&self, project: &Project, item: &Item, message: &str) -> Result<Landing, GitError>;
 }
 
@@ -26,7 +28,8 @@ pub enum Landing {
         paths: Vec<String>,
     },
     /// The target can't take the commit until the operator acts, as when
-    /// their checkout of it has changes; `reason` is git's.
+    /// their checkout of it has changes or GitHub refuses the merge;
+    /// `reason` is git's or GitHub's.
     Held {
         reason: String,
     },
