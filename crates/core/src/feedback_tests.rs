@@ -24,6 +24,7 @@ fn summaries(feedback: &Feedback) -> Vec<&str> {
         .iter()
         .map(|e| match &e.kind {
             EventKind::ReviewSubmitted(review) => review.summary.as_str(),
+            EventKind::Notice(notice) => panic!("not a review: {notice:?}"),
         })
         .collect()
 }

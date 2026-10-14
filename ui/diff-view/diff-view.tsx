@@ -129,6 +129,8 @@ export function DiffView(props: {
           return "Binary file not shown";
         case "too_large":
           return "Too large to show";
+        case "gone":
+          return "Diff dropped when the item closed";
         default:
           return undefined;
       }

@@ -43,6 +43,8 @@ pub enum Content {
     Binary,
     /// Too many changed lines to show; only counted.
     TooLarge,
+    /// The item was abandoned, which dropped its diffs; only counted.
+    Gone,
 }
 
 /// A unified diff's hunk. Starts are 1-based, and a side with no lines starts

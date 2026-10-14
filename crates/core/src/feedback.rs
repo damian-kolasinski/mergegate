@@ -3,7 +3,7 @@
 //! newest event its agent acknowledged, so a wait that dropped before the
 //! agent saw its events returns them again.
 
-use crate::item::{Item, ItemId, ItemStore};
+use crate::item::{Item, ItemId, ItemState, ItemStore};
 use crate::review::Review;
 use crate::store::StoreError;
 
@@ -18,6 +18,15 @@ pub trait FeedbackStore {
     fn delivered(&self, id: &ItemId) -> Result<u64, StoreError>;
 
     fn set_delivered(&mut self, id: &ItemId, cursor: u64) -> Result<(), StoreError>;
+
+    /// Moves `id` to `state` and appends `notice`, all or nothing: an agent
+    /// never misses a change to its item that the operator saw happen.
+    fn notify(
+        &mut self,
+        id: &ItemId,
+        state: ItemState,
+        notice: Notice,
+    ) -> Result<Event, StoreError>;
 }
 
 /// One entry of the log. Cursors are hub-wide, so an item's events have
@@ -31,18 +40,50 @@ pub struct Event {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventKind {
     ReviewSubmitted(Review),
+    Notice(Notice),
+}
+
+/// Something that happened to the item itself, which the event is the only
+/// record of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notice {
+    /// The item's newest revision when it happened.
+    pub revision: u32,
+    pub source: Source,
+    pub kind: NoticeKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoticeKind {
+    /// `reason` is none when whoever abandoned it gave none.
+    Abandoned { reason: Option<String> },
 }
 
 /// Who an event comes from. External reviewers join in PR 10.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Operator,
+    /// The item's own agent, through `mg`.
+    Agent,
+}
+
+impl Source {
+    pub const ALL: [Self; 2] = [Self::Operator, Self::Agent];
+
+    /// The name the store spells the source with.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Operator => "operator",
+            Self::Agent => "agent",
+        }
+    }
 }
 
 impl Event {
     pub fn source(&self) -> Source {
-        match self.kind {
+        match &self.kind {
             EventKind::ReviewSubmitted(_) => Source::Operator,
+            EventKind::Notice(notice) => notice.source,
         }
     }
 
@@ -50,6 +91,7 @@ impl Event {
     pub fn revision(&self) -> u32 {
         match &self.kind {
             EventKind::ReviewSubmitted(review) => review.revision,
+            EventKind::Notice(notice) => notice.revision,
         }
     }
 }

@@ -55,15 +55,21 @@ pub fn run(
                 .ceil() as u64,
         };
         let feedback = read(&client, &item, since, Some((wait.min(REQUEST), query)))?;
+        // Closing an item logs an event, so the agent reads who closed it
+        // and why with whatever came before.
+        if let Some(state) = closed(feedback.state) {
+            let mut text = String::new();
+            if !feedback.events.is_empty() {
+                text = describe(&feedback) + "\n\n";
+            }
+            text.push_str(&format!("{} is {state}", feedback.item));
+            return Ok(deliver(client, &feedback, since, text).exit(exit::ITEM_CLOSED));
+        }
         // The hub also answers at its deadline, with events that may not be
         // the ones this waits for.
         if wake.by(&feedback.events) {
             let text = describe(&feedback);
             return Ok(deliver(client, &feedback, since, text));
-        }
-        if let Some(state) = closed(feedback.state) {
-            let text = format!("{} is {state}", feedback.item);
-            return Ok(Outcome::done(&feedback, text).exit(exit::ITEM_CLOSED));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             let text = format!("no feedback on {} yet; call mg wait again", feedback.item);

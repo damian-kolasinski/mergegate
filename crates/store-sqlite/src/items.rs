@@ -1,7 +1,8 @@
 //! The `items`, `revisions` and `revision_files` tables.
 
 use mergegate_core::item::{
-    ChangedFile, DiffStat, Item, ItemId, ItemState, ItemStore, NewItem, NewRevision, Revision,
+    ChangedFile, DiffStat, FileStat, Item, ItemId, ItemState, ItemStore, NewItem, NewRevision,
+    Revision,
 };
 use mergegate_core::project::ProjectName;
 use mergegate_core::store::StoreError;
@@ -62,11 +63,11 @@ impl ItemStore for Store {
             .transpose()
     }
 
-    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<ChangedFile>, StoreError> {
+    fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<FileStat>, StoreError> {
         let mut stmt = self
             .conn
             .prepare_cached(
-                "SELECT f.path, f.old_path, f.old_blob, f.new_blob
+                "SELECT f.path, f.old_path, f.old_blob, f.new_blob, f.additions, f.deletions
                  FROM revision_files f
                  JOIN items i ON i.id = f.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -78,11 +79,15 @@ impl ItemStore for Store {
             .query_map(
                 params![id.project().as_str(), id.number() as i64, revision],
                 |row| {
-                    Ok(ChangedFile {
-                        path: row.get(0)?,
-                        old_path: row.get(1)?,
-                        old_blob: row.get(2)?,
-                        new_blob: row.get(3)?,
+                    Ok(FileStat {
+                        file: ChangedFile {
+                            path: row.get(0)?,
+                            old_path: row.get(1)?,
+                            old_blob: row.get(2)?,
+                            new_blob: row.get(3)?,
+                        },
+                        additions: row.get::<_, Option<i64>>(4)?.map(|n| n as u64),
+                        deletions: row.get::<_, Option<i64>>(5)?.map(|n| n as u64),
                     })
                 },
             )

@@ -87,6 +87,7 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
     let Some(file) = store
         .revision_files(&id, revision)?
         .into_iter()
+        .map(|stat| stat.file)
         .find(|file| file.path == path)
     else {
         return Err(DraftError::NoFile { id, revision, path });

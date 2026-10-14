@@ -1,6 +1,8 @@
 //! Items: units of work submitted for review, one revision per submit.
 
+mod abandon;
 mod branch;
+mod close;
 mod diff_files;
 mod error;
 mod git;
@@ -11,6 +13,7 @@ mod state;
 mod store;
 mod submit;
 
+pub use abandon::{Abandon, abandon};
 pub use branch::valid_branch;
 pub use error::ItemError;
 pub use git::{ChangedFile, FileStat, ItemGit, valid_commit};
@@ -71,10 +74,11 @@ impl Item {
     /// The revision ref that keeps this revision's commits in staging, even
     /// after its branch is pushed over.
     pub fn pin_ref(&self) -> String {
-        format!(
-            "refs/mergegate/items/{}/r{}",
-            self.id.number(),
-            self.revision.number
-        )
+        format!("{}r{}", self.pins(), self.revision.number)
+    }
+
+    /// The prefix of every revision ref the item has.
+    pub fn pins(&self) -> String {
+        format!("refs/mergegate/items/{}/", self.id.number())
     }
 }

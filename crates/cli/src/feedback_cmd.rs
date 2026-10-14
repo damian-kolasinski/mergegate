@@ -1,7 +1,7 @@
 //! `mg feedback`: an item's new events, without waiting. `mg wait` reads and
 //! prints them the same way.
 
-use api::feedback::{Acknowledge, Acknowledged, Event, EventBody, Feedback};
+use api::feedback::{Acknowledge, Acknowledged, Event, EventBody, Feedback, Source};
 use api::item::ItemState;
 use api::review::{Comment, Side, Verdict};
 
@@ -114,6 +114,20 @@ fn event(event: &Event) -> String {
                 for line in r.body.lines() {
                     out.push_str(&format!("\n    {line}"));
                 }
+            }
+            out
+        }
+        EventBody::ItemAbandoned { reason } => {
+            let who = match event.source {
+                Source::Operator => "the operator",
+                Source::Agent => "its agent",
+            };
+            let mut out = format!(
+                "[{}] {} r{}: {who} abandoned it",
+                event.cursor, event.item, event.revision
+            );
+            for line in reason.iter().flat_map(|r| r.lines()) {
+                out.push_str(&format!("\n  {line}"));
             }
             out
         }

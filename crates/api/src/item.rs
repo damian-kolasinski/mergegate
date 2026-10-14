@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::feedback::Source;
 use crate::project::Backend;
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -21,6 +22,16 @@ pub struct Submit {
     pub head: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+}
+
+/// `POST /api/items/{id}/abandon`, answered with the closed [`Item`]. Its
+/// agent reads who closed it and why in an `item.abandoned` event.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Abandon {
+    pub source: Source,
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::StoreError;
 
@@ -17,6 +17,7 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0006_reviews.sql"),
     include_str!("../migrations/0007_comments.sql"),
     include_str!("../migrations/0008_replies.sql"),
+    include_str!("../migrations/0009_close_events.sql"),
 ];
 
 /// The schema version this build migrates databases to.
@@ -38,16 +39,34 @@ pub(crate) fn migrate(
     if current > 0 && current < latest {
         backup(conn, path, current)?;
     }
-    for (version, sql) in (1..).zip(migrations).skip(current as usize) {
-        let step = |conn: &mut Connection| -> rusqlite::Result<()> {
-            let tx = conn.transaction()?;
-            tx.execute_batch(sql)?;
-            tx.pragma_update(None, "user_version", version)?;
-            tx.commit()
-        };
-        step(conn).map_err(|source| StoreError::Migration { version, source })?;
-    }
-    Ok(())
+    // A migration may rebuild a table others reference, which SQLite does
+    // with foreign keys off (its "other kinds of table schema changes"), and
+    // the pragma does nothing inside a transaction. Each step checks the keys
+    // itself before it commits.
+    conn.pragma_update(None, "foreign_keys", false)?;
+    let migrated = (1..)
+        .zip(migrations)
+        .skip(current as usize)
+        .try_for_each(|(version, sql)| {
+            let step = |conn: &mut Connection| -> rusqlite::Result<()> {
+                let tx = conn.transaction()?;
+                tx.execute_batch(sql)?;
+                let broken: Option<String> = tx
+                    .query_row("PRAGMA foreign_key_check", [], |row| row.get(0))
+                    .optional()?;
+                if let Some(table) = broken {
+                    return Err(rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT_FOREIGNKEY),
+                        Some(format!("a row of {table} references one that's gone")),
+                    ));
+                }
+                tx.pragma_update(None, "user_version", version)?;
+                tx.commit()
+            };
+            step(conn).map_err(|source| StoreError::Migration { version, source })
+        });
+    conn.pragma_update(None, "foreign_keys", true)?;
+    migrated
 }
 
 pub(crate) fn user_version(conn: &Connection) -> rusqlite::Result<u32> {

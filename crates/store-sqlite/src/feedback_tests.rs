@@ -88,3 +88,54 @@ fn keeps_a_delivered_cursor_per_item() {
     assert_eq!(store.delivered(&web).unwrap(), 0);
     assert_eq!(store.delivered(&id("app#9")).unwrap(), 0);
 }
+
+#[test]
+fn a_notice_moves_the_item_and_reads_back_after_reviews() {
+    let (_dir, mut store) = store();
+    let app = id("app#1");
+    store
+        .insert_review(review("app#1", 2, "Fix it"), ItemState::ChangesRequested)
+        .unwrap();
+    let notice = |reason: Option<&str>| Notice {
+        revision: 2,
+        source: Source::Agent,
+        kind: NoticeKind::Abandoned {
+            reason: reason.map(Into::into),
+        },
+    };
+    let event = store
+        .notify(&app, ItemState::Abandoned, notice(Some("Superseded")))
+        .unwrap();
+    assert_eq!(event.cursor, store.last_cursor(&app).unwrap());
+    assert_eq!(event.kind, EventKind::Notice(notice(Some("Superseded"))));
+    assert_eq!(
+        store.item(&app).unwrap().unwrap().state,
+        ItemState::Abandoned
+    );
+
+    let events = store.events(&app, 0).unwrap();
+    assert_eq!(events.len(), 2);
+    assert!(matches!(events[0].kind, EventKind::ReviewSubmitted(_)));
+    assert_eq!(events[1], event);
+
+    let web = id("web#1");
+    let blank = store
+        .notify(&web, ItemState::Abandoned, notice(None))
+        .unwrap();
+    assert_eq!(store.events(&web, 0).unwrap(), [blank]);
+}
+
+#[test]
+fn a_notice_for_an_unknown_item_changes_nothing() {
+    let (_dir, mut store) = store();
+    let notice = Notice {
+        revision: 1,
+        source: Source::Operator,
+        kind: NoticeKind::Abandoned { reason: None },
+    };
+    let err = store
+        .notify(&id("app#9"), ItemState::Abandoned, notice)
+        .unwrap_err();
+    assert_eq!(err.to_string(), "no item app#9");
+    assert_eq!(store.last_cursor(&id("app#1")).unwrap(), 0);
+}

@@ -10,7 +10,7 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, X_CONTENT_TYPE_OPTIONS};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
-use mergegate_core::diff::{self, Content, FileDiff, LineKind};
+use mergegate_core::diff::{self, Content, LineKind};
 use mergegate_core::item::{self, DiffedFile, ItemId};
 
 use crate::reply::Failure;
@@ -33,9 +33,9 @@ async fn show(
     let found = {
         let id = id.clone();
         state
-            .blocking(move |store, _| item::item_diff(store, &id))
+            .blocking(move |store, git| item::item_diff(store, git, &id))
             .await
-            .map_err(|e| items::failure(e.into()))?
+            .map_err(items::failure)?
     };
     let diff = found.ok_or_else(|| {
         Failure::new(
@@ -84,12 +84,15 @@ async fn blob(
     ))
 }
 
-fn file_to_api(DiffedFile { file, diff, viewed }: DiffedFile) -> api::diff::File {
-    let FileDiff {
+fn file_to_api(
+    DiffedFile {
+        file,
         additions,
         deletions,
         content,
-    } = diff;
+        viewed,
+    }: DiffedFile,
+) -> api::diff::File {
     api::diff::File {
         path: file.path,
         old_path: file.old_path,
@@ -98,11 +101,12 @@ fn file_to_api(DiffedFile { file, diff, viewed }: DiffedFile) -> api::diff::File
         additions,
         deletions,
         content: match content {
-            Content::Text(hunks) => api::diff::Content::Text {
+            Some(Content::Text(hunks)) => api::diff::Content::Text {
                 hunks: hunks.into_iter().map(hunk_to_api).collect(),
             },
-            Content::Binary => api::diff::Content::Binary,
-            Content::TooLarge => api::diff::Content::TooLarge,
+            Some(Content::Binary) => api::diff::Content::Binary,
+            Some(Content::TooLarge) => api::diff::Content::TooLarge,
+            None => api::diff::Content::Gone,
         },
         viewed,
     }

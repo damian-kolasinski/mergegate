@@ -1,3 +1,4 @@
+use super::ItemId;
 use crate::git::GitError;
 use crate::project::ProjectError;
 use crate::store::StoreError;
@@ -6,6 +7,10 @@ use crate::store::StoreError;
 pub enum ItemError {
     #[error(transparent)]
     Project(#[from] ProjectError),
+    #[error("no item {0}")]
+    NoItem(ItemId),
+    #[error("{0} is closed")]
+    Closed(ItemId),
     #[error("{0:?} is not a valid branch name")]
     InvalidBranch(String),
     #[error("{0:?} is not a full commit ID")]
