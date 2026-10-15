@@ -108,6 +108,24 @@ fn warns_when_there_is_no_list() {
 }
 
 #[test]
+fn warns_when_the_list_names_no_files() {
+    // The list is the section's own bullets, so a sub-heading ends it.
+    for text in [
+        "## Files\nThe parser, then its tests.\n",
+        "## Files\n### Core\n- `z.rs` — the heart of it\n",
+    ] {
+        assert_eq!(
+            Guide::parse(text).warnings(text, &[]),
+            [
+                "the guide's `## Files` list names no `path` before the next heading, \
+                 so the files stay in path order"
+            ],
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn reads_a_numbered_list() {
     let guide = Guide::parse("## Files\n1. `b.rs` — first\n2) `a.rs`\n10. `c.rs`\n");
     assert_eq!(

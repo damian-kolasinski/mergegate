@@ -122,6 +122,12 @@ impl Guide {
         if !self.listed && !text.trim().is_empty() {
             warnings
                 .push("the guide has no `## Files` list, so the files stay in path order".into());
+        } else if self.listed && self.files.is_empty() {
+            warnings.push(
+                "the guide's `## Files` list names no `path` before the next heading, \
+                 so the files stay in path order"
+                    .into(),
+            );
         }
         warnings.extend(self.problems.iter().cloned());
         for listed in &self.files {
