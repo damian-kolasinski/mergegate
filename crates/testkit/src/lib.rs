@@ -12,6 +12,7 @@ mod files;
 mod github;
 mod http;
 mod repo;
+mod tailscale;
 
 pub use env::{Env, Run};
 pub use files::StaticFiles;
@@ -21,3 +22,4 @@ pub use github::{
 };
 pub use http::{Reply, http, http_reply};
 pub use repo::{TestRepo, commit_files, git};
+pub use tailscale::{FakeTailscale, HUB_OWNER};

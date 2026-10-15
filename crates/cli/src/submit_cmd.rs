@@ -51,6 +51,14 @@ pub fn run(
     let attach = attach_cmd::check(&attach)?;
     let guide = guide.as_deref().map(read_guide).transpose()?;
     let client = Client::connect(&crate::home()?)?;
+    // Before the push, so nothing is half done; the hub refuses it too.
+    if wake.is_some() && client.connected() {
+        return Err(CliError::new(
+            "wake_remote",
+            "a wake command runs on the hub's machine, and this mg works through a hub on another",
+        )
+        .hint("submit without --wake and run: mg wait ITEM"));
+    }
     let project = remote_project()?;
     let switch = "git switch -c NAME";
     // The full ref: `--short` gives `heads/NAME` when a tag shares the name.
