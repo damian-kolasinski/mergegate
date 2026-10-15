@@ -245,6 +245,9 @@ fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
         .insert_external(external(1, "ana", "Leaks", false), 100)
         .unwrap();
     store.release(&app(), 1).unwrap();
+    store
+        .insert_reply(reply(sent.id, Author::Operator, None, "Where?"))
+        .unwrap();
     store.edit_external(sent.id, "Leaks a handle", 200).unwrap();
     let drafted = store
         .insert_external(external(2, "ana", "Why?", false), 200)
@@ -281,9 +284,17 @@ fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
             (answered.id, "Rename it".into(), false)
         ]
     );
-    let replies = store.replies(&app()).unwrap();
-    assert_eq!(replies.len(), 1);
-    assert_eq!(replies[0].comment, answered.id);
+    // The operator's draft on the one kept stays; the deleted one's goes.
+    let replies: Vec<_> = store
+        .replies(&app())
+        .unwrap()
+        .into_iter()
+        .map(|r| (r.comment, r.body))
+        .collect();
+    assert_eq!(
+        replies,
+        [(sent.id, "Where?".into()), (answered.id, String::new())]
+    );
 }
 
 #[test]

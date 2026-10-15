@@ -65,6 +65,28 @@ pub(crate) fn of_pull(
     Ok(comments)
 }
 
+/// Asked fresh: it's asked for only when a list left it out, which a cached
+/// copy can't settle.
+pub(crate) fn one(
+    api: &Api,
+    repo: &GithubRepo,
+    number: u64,
+    kind: PullCommentKind,
+    id: u64,
+) -> Result<Option<PullComment>, GithubError> {
+    let path = match kind {
+        PullCommentKind::ReviewComment => format!("/repos/{repo}/pulls/comments/{id}"),
+        PullCommentKind::IssueComment => format!("/repos/{repo}/issues/comments/{id}"),
+        PullCommentKind::Review => format!("/repos/{repo}/pulls/{number}/reviews/{id}"),
+    };
+    let reply = api.get(&path)?;
+    match reply.status {
+        404 | 410 => Ok(None),
+        _ if reply.ok() => comment(kind, &reply.body),
+        _ => Err(reply.error()),
+    }
+}
+
 /// Every item of the list at `path`, following its pages.
 fn items(api: &Api, cache: &Cache, path: &str, fresh: bool) -> Result<Vec<Value>, GithubError> {
     let lists = || cache.lists.lock().unwrap_or_else(|e| e.into_inner());

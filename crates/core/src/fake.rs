@@ -13,7 +13,7 @@ use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
-use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
+use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind};
 use crate::highlight::{
     Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, PackSource,
     Release, Span, Tag,
@@ -2207,6 +2207,8 @@ pub(crate) struct FakeGithub {
     deleted: RefCell<Vec<(GithubRepo, String)>>,
     /// Every pull request's, oldest first.
     comments: RefCell<Vec<(GithubRepo, u64, PullComment)>>,
+    unlisted: RefCell<BTreeSet<(PullCommentKind, u64)>>,
+    unanswered: RefCell<BTreeSet<(PullCommentKind, u64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2239,6 +2241,8 @@ impl Default for FakeGithub {
             pulls: RefCell::default(),
             deleted: RefCell::default(),
             comments: RefCell::default(),
+            unlisted: RefCell::default(),
+            unanswered: RefCell::default(),
         }
     }
 }
@@ -2284,6 +2288,17 @@ impl FakeGithub {
             Some((_, _, known)) => *known = comment,
             None => comments.push((repo, number, comment)),
         }
+    }
+
+    /// Lists leave the comment out though GitHub still has it, as one read
+    /// while an earlier comment is deleted can.
+    pub fn unlist(&self, kind: PullCommentKind, id: u64) {
+        self.unlisted.borrow_mut().insert((kind, id));
+    }
+
+    /// Asking for the comment by itself fails.
+    pub fn fail_asking_for(&self, kind: PullCommentKind, id: u64) {
+        self.unanswered.borrow_mut().insert((kind, id));
     }
 
     fn signed_in(&self) -> Result<(), GithubError> {
@@ -2452,9 +2467,30 @@ impl Github for FakeGithub {
             .comments
             .borrow()
             .iter()
-            .filter(|(r, n, _)| r == repo && *n == number)
+            .filter(|(r, n, c)| {
+                r == repo && *n == number && !self.unlisted.borrow().contains(&(c.kind, c.id))
+            })
             .map(|(_, _, c)| c.clone())
             .collect())
+    }
+
+    fn pull_comment(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        kind: PullCommentKind,
+        id: u64,
+    ) -> Result<Option<PullComment>, GithubError> {
+        self.signed_in()?;
+        if self.unanswered.borrow().contains(&(kind, id)) {
+            return Err(GithubError::Failed("GitHub is down".into()));
+        }
+        Ok(self
+            .comments
+            .borrow()
+            .iter()
+            .find(|(r, n, c)| r == repo && *n == number && c.kind == kind && c.id == id)
+            .map(|(_, _, c)| c.clone()))
     }
 }
 

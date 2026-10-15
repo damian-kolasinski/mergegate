@@ -12,7 +12,7 @@ mod page;
 mod rest;
 mod server;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -51,6 +51,8 @@ struct State {
     requests: Vec<String>,
     comments: Vec<Comment>,
     last_comment: u64,
+    /// IDs of comments lists leave out though they are there.
+    unlisted: BTreeSet<u64>,
     /// Who `GET /user` says is signed in.
     viewer: String,
     /// The most a list page holds, whatever `per_page` asks for.
@@ -69,6 +71,7 @@ impl Default for State {
             requests: Vec::new(),
             comments: Vec::new(),
             last_comment: 0,
+            unlisted: BTreeSet::new(),
             viewer: "operator".into(),
             page_size: 100,
             not_modified: 0,
@@ -251,6 +254,12 @@ impl FakeGithub {
         let before = state.comments.len();
         state.comments.retain(|c| c.id != id);
         assert!(state.comments.len() < before, "no comment {id}");
+    }
+
+    /// Lists leave comment `id` out though GitHub still has it, as a list
+    /// read while an earlier comment is deleted can skip one across a page.
+    pub fn unlist_comment(&self, id: u64) {
+        self.state().unlisted.insert(id);
     }
 
     pub fn comments(&self) -> Vec<Comment> {

@@ -40,6 +40,20 @@ pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response
         }),
         ("PATCH", ["pulls", number]) => call.update(&mut state, number, &body),
         ("PUT", ["pulls", number, "merge"]) => call.merge(&mut state, number, &body),
+        ("GET", ["pulls", "comments", id]) => {
+            comments::one(shared, &state, &call.repo, None, CommentKind::Inline, id)
+        }
+        ("GET", ["issues", "comments", id]) => {
+            comments::one(shared, &state, &call.repo, None, CommentKind::Issue, id)
+        }
+        ("GET", ["pulls", number, "reviews", id]) => comments::one(
+            shared,
+            &state,
+            &call.repo,
+            Some(number),
+            CommentKind::Review,
+            id,
+        ),
         ("GET", [list, number, which]) => {
             let kind = match (*list, *which) {
                 ("pulls", "comments") => CommentKind::Inline,

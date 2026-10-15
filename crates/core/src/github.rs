@@ -90,6 +90,17 @@ pub trait Github {
         number: u64,
         fresh: bool,
     ) -> Result<Vec<PullComment>, GithubError>;
+
+    /// One comment of the pull request, asked for by itself; none when
+    /// GitHub says it's gone. A list can miss a comment that's still there,
+    /// so only this tells that one was deleted.
+    fn pull_comment(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        kind: PullCommentKind,
+        id: u64,
+    ) -> Result<Option<PullComment>, GithubError>;
 }
 
 /// A comment on a pull request as GitHub has it.

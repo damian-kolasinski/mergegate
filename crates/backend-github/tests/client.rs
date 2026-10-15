@@ -337,6 +337,39 @@ fn follows_the_pages_of_a_long_list() {
 }
 
 #[test]
+fn reads_one_comment_a_list_left_out_and_none_once_deleted() {
+    let (github, client, _repo) = with_pull();
+    let inline = GithubNewComment::inline("codex[bot]", "Leaks", "login.rs", None, 1);
+    let ids = [
+        github.comment("acme/app", 1, inline),
+        github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?")),
+        github.comment("acme/app", 1, GithubNewComment::review("ana", "Close")),
+    ];
+    let listed = client.pull_comments(&acme(), 1, true).unwrap();
+    for id in ids {
+        github.unlist_comment(id);
+    }
+    assert_eq!(client.pull_comments(&acme(), 1, true).unwrap(), []);
+    for comment in &listed {
+        let one = client.pull_comment(&acme(), 1, comment.kind, comment.id);
+        assert_eq!(one.unwrap().as_ref(), Some(comment));
+    }
+
+    github.delete_comment(ids[1]);
+    let gone = client.pull_comment(&acme(), 1, PullCommentKind::IssueComment, ids[1]);
+    assert_eq!(gone.unwrap(), None);
+    // A review asked for on another pull request isn't there.
+    let elsewhere = client.pull_comment(&acme(), 2, PullCommentKind::Review, ids[2]);
+    assert_eq!(elsewhere.unwrap(), None);
+
+    github.log_out();
+    let err = client
+        .pull_comment(&acme(), 1, PullCommentKind::ReviewComment, ids[0])
+        .unwrap_err();
+    assert!(matches!(err, GithubError::NotLoggedIn(_)), "{err:?}");
+}
+
+#[test]
 fn comments_on_a_missing_pull_request_are_an_error() {
     let (_github, client, _repo) = setup();
     let err = client.pull_comments(&acme(), 9, false).unwrap_err();

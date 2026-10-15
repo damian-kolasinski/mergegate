@@ -1,10 +1,10 @@
 //! Bringing a pull request's comments in: a new one is placed on a revision
 //! and held for the next batch, an edited one held again, and a held one
-//! GitHub no longer has withdrawn.
+//! GitHub deleted withdrawn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{ExternalError, ExternalStore, NewExternal};
+use super::{ExternalError, ExternalStore, GithubKey, NewExternal};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::github::{Github, GithubError, GithubRepo, PullComment, PullCommentKind, PullLines};
 use crate::item::{Item, ItemBackend, ItemId, ItemState, ItemStore, Revision};
@@ -47,22 +47,25 @@ pub fn fetch(
     Ok(github
         .pull_comments(repo, number, fresh)?
         .into_iter()
-        .filter(|c| !c.login.eq_ignore_ascii_case(&viewer) && !c.body.trim().is_empty())
+        .filter(|c| kept(c, &viewer))
         .collect())
 }
 
+pub(super) fn kept(comment: &PullComment, viewer: &str) -> bool {
+    !comment.login.eq_ignore_ascii_case(viewer) && !comment.body.trim().is_empty()
+}
+
 /// Records what `comments`, all of the pull request's that [`fetch`] keeps,
-/// adds to `id`'s and holds it for the next batch. A held comment missing
-/// from them is withdrawn ([`ExternalStore::withdraw_external`]); one a batch
-/// carried and nothing holds stays as the agent got it, since the agent may
-/// have answered it. Missing counts after `fetch`'s filter, so a comment
-/// edited down to nothing is withdrawn too rather than sent with the body it
-/// had.
+/// adds to `id`'s and holds it for the next batch. A held comment in `gone`
+/// ([`confirm_gone`](super::confirm_gone)) and not in `comments` is withdrawn
+/// ([`ExternalStore::withdraw_external`]); one a batch carried and nothing
+/// holds stays as the agent got it, since the agent may have answered it.
 pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     store: &mut S,
     git: &impl DiffGit,
     id: &ItemId,
     comments: Vec<PullComment>,
+    gone: &BTreeSet<GithubKey>,
     now: u64,
 ) -> Result<Ingested, ExternalError> {
     let item = store
@@ -115,7 +118,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
         }
     }
     for (key, (comment, _, pending)) in known {
-        if pending && !found.contains(&key) {
+        if pending && gone.contains(&key) && !found.contains(&key) {
             store.withdraw_external(comment)?;
             ingested.withdrawn += 1;
         }

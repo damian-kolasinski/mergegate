@@ -152,6 +152,7 @@ pub(super) fn list(
         .comments
         .iter()
         .filter(|c| c.repo == repo && c.pull == number && c.kind == kind)
+        .filter(|c| !state.unlisted.contains(&c.id))
         .map(|c| to_json(&shared.web, c, head.as_deref()))
         .collect();
     let per_page = request
@@ -191,6 +192,30 @@ pub(super) fn list(
             .push(("Link".into(), format!("<{next}>; rel=\"next\"")));
     }
     response
+}
+
+/// `GET .../pulls/comments/{id}`, `.../issues/comments/{id}` or
+/// `.../pulls/{n}/reviews/{id}`: one comment, listed or not.
+pub(super) fn one(
+    shared: &Shared,
+    state: &State,
+    repo: &str,
+    pull: Option<&str>,
+    kind: CommentKind,
+    id: &str,
+) -> Response {
+    let pull = pull.map(|n| n.parse::<u64>().unwrap_or(0));
+    let id = id.parse::<u64>().unwrap_or(0);
+    let found = state.comments.iter().find(|c| {
+        c.repo == repo && c.kind == kind && c.id == id && pull.is_none_or(|n| n == c.pull)
+    });
+    match found {
+        Some(comment) => {
+            let head = shared.pull_head(state, repo, comment.pull);
+            Response::json(200, &to_json(&shared.web, comment, head.as_deref()))
+        }
+        None => Response::json(404, &json!({ "message": "Not Found" })),
+    }
 }
 
 fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {

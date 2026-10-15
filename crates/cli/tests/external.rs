@@ -371,8 +371,15 @@ fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
     let comments = conversation(&env)["comments"].clone();
     assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
 
-    // One a batch carried stays, as the agent got it: its held edit is
-    // withdrawn with it.
+    // One a batch carried stays, as the agent got it, with the operator's
+    // draft reply: its held edit is withdrawn with it.
+    let comment = id(&comments[0]).to_owned();
+    let drafted = post(
+        &env,
+        &format!("/api/comments/{comment}/drafts"),
+        &json!({ "body": "Which test?" }),
+    );
+    assert_eq!(drafted.status, 201, "{}", drafted.body);
     github.edit_comment(kept, "Needs two tests.");
     until(&env, "the poller never saw the edit", |c| {
         c[0]["body"] == "Needs two tests."
@@ -380,10 +387,12 @@ fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
     github.delete_comment(kept);
     let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
     assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 0 }));
-    let comments = conversation(&env)["comments"].clone();
+    let shown = conversation(&env);
+    let comments = &shown["comments"];
     assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
     assert_eq!(comments[0]["body"], "Needs a test.");
     assert_eq!(comments[0]["external"]["pending"], false);
+    assert_eq!(shown["draft_replies"][0]["body"], "Which test?", "{shown}");
     let feedback = env
         .mg(&["--json", "feedback", "app#1"])
         .assert_code(0)
@@ -429,4 +438,51 @@ fn f5_an_expected_bots_comment_from_before_the_newest_push_doesnt_count() {
         .json();
     let comments = &feedback["events"][0]["comments"];
     assert_eq!(comments.as_array().unwrap().len(), 3, "{feedback}");
+}
+
+/// Waits out `polls` more reads of the pull request's conversation.
+fn polled(github: &FakeGithub, polls: usize) {
+    let reads = || {
+        let list = "GET /api/repos/acme/app/issues/1/comments";
+        github.requests().iter().filter(|r| *r == list).count()
+    };
+    let until = reads() + polls;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while reads() < until {
+        assert!(Instant::now() < deadline, "the poller stopped");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_held_comment_a_list_misses_stays_until_github_says_it_is_gone() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    let missed = github.comment(ACME, 1, GithubNewComment::issue("alice", "Typo here."));
+    until(&env, "the poller never saw it", |c| {
+        c.as_array().unwrap().len() == 1
+    });
+    let comment = id(&conversation(&env)["comments"][0]).to_owned();
+    let drafted = post(
+        &env,
+        &format!("/api/comments/{comment}/drafts"),
+        &json!({ "body": "Which one?" }),
+    );
+    assert_eq!(drafted.status, 201, "{}", drafted.body);
+
+    // A list read across a deletion skips it, but GitHub still has it.
+    github.unlist_comment(missed);
+    polled(&github, 3);
+    let shown = conversation(&env);
+    assert_eq!(shown["comments"][0]["id"], comment.as_str(), "{shown}");
+    assert_eq!(shown["comments"][0]["external"]["pending"], true);
+    assert_eq!(shown["draft_replies"][0]["body"], "Which one?", "{shown}");
+    let asked = format!("GET /api/repos/acme/app/issues/comments/{missed}");
+    assert!(github.requests().contains(&asked));
+
+    github.delete_comment(missed);
+    until(&env, "the poller never withdrew it", |c| {
+        c.as_array().unwrap().is_empty()
+    });
+    assert_eq!(conversation(&env)["draft_replies"], json!([]));
 }
