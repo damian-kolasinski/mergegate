@@ -230,6 +230,10 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
     let issue = github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?"));
     let review = github.comment("acme/app", 1, GithubNewComment::review("ana", "Close"));
 
+    let created = |id| {
+        let comment = github.comments().into_iter().find(|c| c.id == id);
+        comment.unwrap().created_at * 1_000
+    };
     let comments = client.pull_comments(&acme(), 1, false).unwrap();
     let page = format!("{}/acme/app/pull/1", github.web_url());
     let expected = vec![
@@ -250,6 +254,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
                 start_line: None,
                 line: Some(1),
             }),
+            created: created(inline),
         },
         PullComment {
             kind: PullCommentKind::IssueComment,
@@ -259,6 +264,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
             url: format!("{page}#issuecomment-{issue}"),
             body: "Why?".into(),
             lines: None,
+            created: created(issue),
         },
         PullComment {
             kind: PullCommentKind::Review,
@@ -268,6 +274,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
             url: format!("{page}#pullrequestreview-{review}"),
             body: "Close".into(),
             lines: None,
+            created: created(review),
         },
     ];
     assert_eq!(comments, expected);

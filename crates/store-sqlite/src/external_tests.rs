@@ -72,6 +72,7 @@ fn external(github_id: u64, login: &str, body: &str, anchored: bool) -> NewExter
         bot: login.ends_with("[bot]"),
         url: format!("https://github.com/o/app/pull/1#c{github_id}"),
         path: anchored.then(|| "src/login.rs".into()),
+        created: 0,
     }
 }
 
@@ -150,16 +151,25 @@ fn heard_counts_who_spoke_since_the_newest_push() {
     assert!(held.pushed.abs_diff(before) < 60_000, "{held:?}");
     assert!(held.heard.is_empty());
 
+    // GitHub's date counts, not when the hub saw it, nor an edit.
     let after = held.pushed + 1;
-    store
-        .insert_external(external(2, "codex[bot]", "Leaks", false), after)
-        .unwrap();
-    store
-        .insert_external(external(3, "ana", "Why?", false), after)
-        .unwrap();
-    store
-        .insert_external(external(4, "codex[bot]", "Again", false), after)
-        .unwrap();
+    let late = NewExternal {
+        created: held.pushed - 1_000,
+        ..external(2, "late[bot]", "Seen late", false)
+    };
+    let late = store.insert_external(late, after).unwrap();
+    store.edit_external(late.id, "Edited late", after).unwrap();
+    for (github_id, login, body) in [
+        (3, "codex[bot]", "Leaks"),
+        (4, "ana", "Why?"),
+        (5, "codex[bot]", "Again"),
+    ] {
+        let new = NewExternal {
+            created: held.pushed,
+            ..external(github_id, login, body, false)
+        };
+        store.insert_external(new, after).unwrap();
+    }
     let held = store.held(&app()).unwrap().unwrap();
     assert_eq!(held.heard, ["codex[bot]", "ana"]);
     assert_eq!((held.first, held.last), (1, after));

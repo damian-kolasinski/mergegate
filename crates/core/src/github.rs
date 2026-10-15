@@ -106,6 +106,9 @@ pub struct PullComment {
     pub body: String,
     /// Where an inline comment sits; none for the other kinds.
     pub lines: Option<PullLines>,
+    /// When it was posted, a review when it was submitted: Unix milliseconds
+    /// by GitHub's clock, which counts whole seconds.
+    pub created: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

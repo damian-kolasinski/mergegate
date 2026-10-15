@@ -78,6 +78,11 @@ fn id() -> ItemId {
 }
 
 fn comment(store: &mut FakeStore, github_id: u64, login: &str, now: u64) {
+    posted(store, github_id, login, now, now);
+}
+
+/// A comment GitHub dates `created` that the hub sees at `now`.
+fn posted(store: &mut FakeStore, github_id: u64, login: &str, created: u64, now: u64) {
     let new = NewExternal {
         item: id(),
         revision: 1,
@@ -89,6 +94,7 @@ fn comment(store: &mut FakeStore, github_id: u64, login: &str, now: u64) {
         bot: login.ends_with("[bot]"),
         url: String::new(),
         path: None,
+        created,
     };
     store.insert_external(new, now).unwrap();
 }
@@ -133,6 +139,26 @@ fn held_comments_go_once_the_project_s_bots_have_spoken() {
     assert_eq!(bodies, ["From alice", "From codex[bot]"]);
     assert!(batch.comments.iter().all(|d| !d.edited));
     assert_eq!(store.held(&id()).unwrap(), None);
+}
+
+#[test]
+fn a_bot_counts_by_when_github_dates_its_comment_not_when_the_hub_saw_it() {
+    let mut store = FakeStore::with_item(1);
+    expecting(&mut store, &["codex"]);
+    let pushed = FakeStore::millis(&store.item(&id()).unwrap().unwrap().revision.submitted_at);
+    // Its review of the revision before reached the hub after the push.
+    posted(&mut store, 1, "codex[bot]", pushed - 1_000, pushed + 10);
+    assert_eq!(
+        release_due(&mut store, &id(), pushed + 500, TIMING).unwrap(),
+        None
+    );
+
+    posted(&mut store, 2, "codex[bot]", pushed, pushed + 600);
+    assert!(
+        release_due(&mut store, &id(), pushed + 660, TIMING)
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[test]

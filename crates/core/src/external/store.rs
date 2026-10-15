@@ -49,6 +49,8 @@ pub struct NewExternal {
     pub bot: bool,
     pub url: String,
     pub path: Option<String>,
+    /// When it was posted, by GitHub's clock.
+    pub created: u64,
 }
 
 /// An item's held comments.
@@ -60,8 +62,11 @@ pub struct Held {
     pub last: u64,
     /// When the item's newest revision was submitted.
     pub pushed: u64,
-    /// Who was heard from since then, held or not, as GitHub spells them:
-    /// an expected reviewer may run as a plain user account rather than an
-    /// app, so this isn't limited to bots.
+    /// Who posted a comment since then by GitHub's clock, held or not, as
+    /// GitHub spells them: an expected reviewer may run as a plain user
+    /// account rather than an app, so this isn't limited to bots. When the
+    /// hub saw it doesn't count, as a review of the revision before may reach
+    /// the hub only after the push, and neither does an edit, as a bot that
+    /// keeps one summary comment may edit it when it starts a review.
     pub heard: Vec<String>,
 }

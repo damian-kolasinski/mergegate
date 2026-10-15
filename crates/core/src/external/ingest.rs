@@ -107,6 +107,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
                     bot: comment.bot,
                     url: comment.url,
                     path: comment.lines.map(|lines| lines.path),
+                    created: comment.created,
                 };
                 store.insert_external(new, now)?;
                 ingested.new += 1;

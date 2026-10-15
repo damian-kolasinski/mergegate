@@ -390,3 +390,43 @@ fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
         .json();
     assert_eq!(feedback["events"], json!([]), "{feedback}");
 }
+
+#[test]
+fn f5_an_expected_bots_comment_from_before_the_newest_push_doesnt_count() {
+    let github = FakeGithub::start();
+    let (env, repo) = submitted(&github, [NEVER, "200", NEVER]);
+    env.mg(&["--json", "project", "set", "app", "bots", "codex"])
+        .assert_code(0);
+    github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("codex[bot]", "r1 looks fine."),
+    );
+    github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    repo.commit_files("Add a test", &[("src/login_test.rs", "\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    // The hub first sees both comments after the push.
+    env.mg(&["hub", "stop"]).assert_code(0);
+    env.mg_with_env(
+        &["--json", "hub", "start", "--port", "0"],
+        &[("MG_GITHUB_POLL_MS", "100")],
+    )
+    .assert_code(0);
+    until(&env, "the poller never saw them", |c| {
+        c.as_array().unwrap().len() == 2
+    });
+    env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
+        .assert_code(75);
+
+    github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("codex[bot]", "r2 looks fine."),
+    );
+    let feedback = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
+        .assert_code(0)
+        .json();
+    let comments = &feedback["events"][0]["comments"];
+    assert_eq!(comments.as_array().unwrap().len(), 3, "{feedback}");
+}

@@ -45,8 +45,8 @@ impl ExternalStore for Store {
         tx.execute(
             "INSERT INTO external_comments
                  (comment_id, item_id, kind, github_id, login, bot, url, path, seen_at,
-                  pending_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                  pending_at, posted_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)",
             params![
                 id,
                 item_id,
@@ -57,6 +57,7 @@ impl ExternalStore for Store {
                 comment.url,
                 comment.path,
                 now as i64,
+                comment.created as i64,
             ],
         )
         .map_err(StoreError::new)?;
@@ -138,8 +139,9 @@ impl ExternalStore for Store {
         let (Some(first), Some(last)) = (first, last) else {
             return Ok(None);
         };
-        // The submit's stamp is the store's clock and `seen_at` the hub's,
-        // which is the same machine's.
+        // The submit's stamp is this machine's clock and `posted_at` GitHub's,
+        // which agree as far as NTP keeps them: far closer than the time a bot
+        // takes to review a push.
         let pushed: i64 = self
             .conn
             .query_row(
@@ -152,11 +154,15 @@ impl ExternalStore for Store {
                 |row| row.get(0),
             )
             .map_err(StoreError::new)?;
+        // GitHub drops the fraction of a second, so a comment counted came at
+        // or after the push. One in the push's second but after it counts as
+        // before: the batch waits for the bot's next comment or the cap, which
+        // is the side to err on, and no bot reviews a push that fast.
         let mut stmt = self
             .conn
             .prepare_cached(&format!(
                 "SELECT login FROM external_comments
-                 WHERE item_id = ({ITEM}) AND seen_at >= ?3
+                 WHERE item_id = ({ITEM}) AND posted_at >= ?3
                  GROUP BY login ORDER BY min(comment_id)"
             ))
             .map_err(StoreError::new)?;

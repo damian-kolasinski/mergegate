@@ -758,6 +758,8 @@ pub(crate) struct FakeStore {
     external: BTreeMap<CommentId, (u64, Option<u64>)>,
     /// The external comments a batch carried.
     batched: BTreeSet<CommentId>,
+    /// When GitHub says each external comment was posted.
+    posted: BTreeMap<CommentId, u64>,
     rules: BTreeMap<ProjectName, Rules>,
     applied_text: BTreeMap<ProjectName, String>,
     /// The highest rule number each project used.
@@ -1963,6 +1965,7 @@ impl FeedbackStore for FakeStore {
 impl ExternalStore for FakeStore {
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError> {
         self.last_comment += 1;
+        let posted = comment.created;
         let comment = Comment {
             id: CommentId(self.last_comment),
             item: comment.item,
@@ -1984,6 +1987,7 @@ impl ExternalStore for FakeStore {
         };
         self.comments.push(comment.clone());
         self.external.insert(comment.id, (now, Some(now)));
+        self.posted.insert(comment.id, posted);
         Ok(comment)
     }
 
@@ -2005,6 +2009,7 @@ impl ExternalStore for FakeStore {
             self.comments.retain(|c| c.id != id);
             self.replies.retain(|r| r.comment != id);
             self.external.remove(&id);
+            self.posted.remove(&id);
             return Ok(());
         }
         let sent = self
@@ -2038,7 +2043,7 @@ impl ExternalStore for FakeStore {
                 continue;
             };
             let (seen, pending) = self.external[&comment.id];
-            if external.bot && seen >= pushed && !heard.contains(&external.login) {
+            if self.posted[&comment.id] >= pushed && !heard.contains(&external.login) {
                 heard.push(external.login.clone());
             }
             if let Some(pending) = pending {
