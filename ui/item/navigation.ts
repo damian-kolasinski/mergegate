@@ -99,8 +99,11 @@ export function useNavigation(options: {
     scrolledTo: setCurrent,
     /** The operator clicked a line. */
     clicked(row: Line) {
+      // A line an expanded gap shows isn't a stop, and leaves the cursor.
       const line = lines().find((line) => same(line, row));
-      if (line) setCursor(line);
+      if (!line) return;
+      setCursor(line);
+      options.view()?.selectRow(line);
     },
   };
 }

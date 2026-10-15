@@ -127,8 +127,8 @@ test("an open comment keeps what's typed in it", async ({ page, hub }) => {
   await expect(diff.getByText("three", { exact: true })).toBeVisible();
   await page.keyboard.press("j");
   await page.keyboard.press("j");
-  // In the cursor's file, `+` comments on the cursor's line.
   const login = diff.getByRole("code").filter({ hasText: "fn login" });
+  await login.getByText("fn login(password: &str) {}").hover();
   await login.locator("[data-utility-button]").click();
   const editor = page.getByRole("textbox", {
     name: "Comment on login.rs line 1",
@@ -164,6 +164,52 @@ test("an open comment keeps what's typed in it", async ({ page, hub }) => {
   await expect(
     review.getByRole("button", { name: "Request changes" }),
   ).toBeEnabled();
+});
+
+test("`+` follows the pointer past the cursor, and stays at a dragged range's end", async ({
+  page,
+  hub,
+}) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const diff = page.getByRole("region", { name: "Diff" });
+  const notes = diff.getByRole("code").filter({ hasText: "three" });
+  await expect(notes.getByText("three", { exact: true })).toBeVisible();
+  const cursor = page.locator("[data-line][data-editor-active-line]");
+  const plus = notes.locator("[data-utility-button]");
+  const number = (line: number) =>
+    notes.locator(`[data-column-number="${line}"]`).last();
+
+  // Two lines of login.rs, then notes.md's first.
+  for (let step = 0; step < 3; step++) await page.keyboard.press("j");
+  await expect(cursor).toHaveText("one");
+  await notes.getByText("three", { exact: true }).hover();
+  await expect(number(3).locator("[data-utility-button]")).toHaveCount(1);
+  await plus.click();
+  await expect(
+    page.getByRole("textbox", { name: "Comment on notes.md line 3" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  // The line commented on takes the cursor, for `c` to comment on again.
+  await expect(cursor).toHaveText("three");
+
+  // A clicked line is the cursor's, and `+` still follows the pointer.
+  await number(2).click();
+  await expect(cursor).toHaveText("two");
+  await notes.getByText("three", { exact: true }).hover();
+  await expect(number(3).locator("[data-utility-button]")).toHaveCount(1);
+
+  // A dragged range keeps it at its end.
+  await number(1).hover();
+  await page.mouse.down();
+  await number(2).hover();
+  await page.mouse.up();
+  await notes.getByText("three", { exact: true }).hover();
+  await expect(number(2).locator("[data-utility-button]")).toHaveCount(1);
+  await plus.click();
+  await expect(
+    page.getByRole("textbox", { name: "Comment on notes.md lines 1–2" }),
+  ).toBeFocused();
 });
 
 test("a file marked viewed stays open while a comment is written on it", async ({
