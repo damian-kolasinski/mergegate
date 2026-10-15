@@ -50,6 +50,8 @@ impl FakeTailscale {
             ("MG_TAILNET_ADDR".into(), "127.0.0.1:0".into()),
             ("MG_TAILSCALE_CACHE_MS".into(), "0".into()),
             ("MG_TAILNET_RETRY_MS".into(), "100".into()),
+            // A machine busy running tests can take seconds to start a shell.
+            ("MG_TAILSCALE_TIMEOUT_MS".into(), "30000".into()),
         ]
     }
 

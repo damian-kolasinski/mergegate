@@ -2,7 +2,12 @@ use super::*;
 
 #[test]
 fn reads_what_the_program_prints() {
-    let output = spawn("sh", &["-c", "echo out; echo err >&2"], TIMEOUT).unwrap();
+    let output = spawn(
+        "sh",
+        &["-c", "echo out; echo err >&2"],
+        Duration::from_secs(30),
+    )
+    .unwrap();
     assert!(output.status.success());
     assert_eq!(output.stdout, b"out\n");
     assert_eq!(output.stderr, b"err\n");

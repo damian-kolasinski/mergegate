@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use mergegate_core::device::{Device, Status, Tailnet, TailnetError};
 
 pub struct TailscaleCli {
+    timeout: Duration,
     whois_ttl: Duration,
     whois: Mutex<HashMap<IpAddr, (Instant, Device)>>,
 }
@@ -19,27 +20,36 @@ pub struct TailscaleCli {
 impl TailscaleCli {
     /// Caches who an address belongs to for `whois_ttl`, since the hub asks on
     /// every request from the tailnet and the CLI takes tens of milliseconds.
-    pub fn new(whois_ttl: Duration) -> Self {
+    /// A CLI that hasn't answered in `timeout` is killed.
+    pub fn new(whois_ttl: Duration, timeout: Duration) -> Self {
         Self {
+            timeout,
             whois_ttl,
             whois: Mutex::default(),
         }
     }
 
-    /// A minute's cache, unless `MG_TAILSCALE_CACHE_MS` says otherwise, as
-    /// tests set it to 0 to change who an address is between requests.
+    /// A minute's cache and 5 seconds to answer, unless
+    /// `MG_TAILSCALE_CACHE_MS` and `MG_TAILSCALE_TIMEOUT_MS` say otherwise:
+    /// tests set the cache to 0 to change who an address is between
+    /// requests, and the timeout high for a machine busy running them.
     pub fn from_env() -> Self {
-        let ms = std::env::var("MG_TAILSCALE_CACHE_MS")
-            .ok()
-            .and_then(|ms| ms.parse().ok())
-            .unwrap_or(60_000);
-        Self::new(Duration::from_millis(ms))
+        let ms = |var: &str, default| {
+            std::env::var(var)
+                .ok()
+                .and_then(|ms| ms.parse().ok())
+                .map_or(default, Duration::from_millis)
+        };
+        Self::new(
+            ms("MG_TAILSCALE_CACHE_MS", Duration::from_secs(60)),
+            ms("MG_TAILSCALE_TIMEOUT_MS", Duration::from_secs(5)),
+        )
     }
 }
 
 impl Tailnet for TailscaleCli {
     fn status(&self) -> Result<Status, TailnetError> {
-        parse::status(&run::tailscale(&["status", "--json"])?)
+        parse::status(&run::tailscale(&["status", "--json"], self.timeout)?)
     }
 
     fn whois(&self, ip: IpAddr) -> Result<Device, TailnetError> {
@@ -50,9 +60,10 @@ impl Tailnet for TailscaleCli {
             return Ok(device.clone());
         }
         // Unlocked while the CLI runs, so one slow answer doesn't hold every
-        // other caller's request. Failures aren't cached: a device that just joined, or Tailscale
-        // that just came up, is let in on the next request.
-        let device = match run::tailscale(&["whois", "--json", &ip.to_string()]) {
+        // other caller's request. Failures aren't cached: a device that just
+        // joined, or Tailscale that just came up, is let in on the next
+        // request.
+        let device = match run::tailscale(&["whois", "--json", &ip.to_string()], self.timeout) {
             Ok(json) => parse::whois(&json)?,
             Err(TailnetError::Unavailable(why)) if why.contains("peer not found") => {
                 return Err(TailnetError::Unknown(ip));

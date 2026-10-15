@@ -10,15 +10,13 @@ use mergegate_core::device::TailnetError;
 /// Where the Mac app keeps its CLI when the operator never put it on `PATH`.
 const MAC_APP: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
 
-/// The CLI answers in tens of milliseconds. One that hangs, as it can while
-/// its daemon restarts, would otherwise hold a request, a change of listener
-/// or the hub's start for good.
-const TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Its stdout, or why it failed in the CLI's own words.
-pub(crate) fn tailscale(args: &[&str]) -> Result<Vec<u8>, TailnetError> {
-    let output = match spawn("tailscale", args, TIMEOUT) {
-        Err(e) if e.kind() == ErrorKind::NotFound => spawn(MAC_APP, args, TIMEOUT),
+/// Its stdout, or why it failed in the CLI's own words. The CLI answers in
+/// tens of milliseconds; one that hangs, as it can while its daemon restarts,
+/// would otherwise hold a request, a change of listener or the hub's start
+/// for good, so it is killed after `timeout`.
+pub(crate) fn tailscale(args: &[&str], timeout: Duration) -> Result<Vec<u8>, TailnetError> {
+    let output = match spawn("tailscale", args, timeout) {
+        Err(e) if e.kind() == ErrorKind::NotFound => spawn(MAC_APP, args, timeout),
         output => output,
     }
     .map_err(|e| {
