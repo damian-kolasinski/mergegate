@@ -166,17 +166,6 @@ No. mergegate is a personal tool: one operator per hub, reviewing the work of th
 
 Branches, pull requests and merges. Your review comments and the agent's replies stay in mergegate, which keeps the GitHub thread clean for human reviewers.
 
-## Status
-
-mergegate is young and developed in the open. Next on the [roadmap](docs/roadmap.md) are stacked items, so an agent can split work too big for one review into a stack that lands bottom first.
-
-## Learn more
-
-- [Design](docs/design.md): concepts, item lifecycle, triage, backends and the review UX in depth
-- [User flows](docs/user-flows.html): every flow, from setup to merge
-- [Tech stack](docs/tech-stack.md): Rust, axum, SQLite, gitoxide, tree-sitter and SolidJS, and why
-- [Agent skill](crates/skill/mergegate/SKILL.md): exactly what agents are told to do
-
 ## License
 
 [MIT](LICENSE) © Damian Kolasiński
