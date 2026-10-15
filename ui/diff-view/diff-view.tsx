@@ -1,6 +1,7 @@
 import {
   CodeView,
   type CodeViewDiffItem,
+  type CodeViewOptions,
   type DiffLineAnnotation,
 } from "@pierre/diffs";
 import { createEffect, type JSX, onCleanup, onMount, untrack } from "solid-js";
@@ -45,7 +46,7 @@ type Note = DiffLineAnnotation<string>;
 export function DiffView(props: {
   files: readonly File[];
   /** Paths shown collapsed to their header. */
-  viewed: ReadonlySet<string>;
+  collapsed: ReadonlySet<string>;
   /** Where a blob's bytes are, for expanding gaps. */
   blobUrl: (id: string) => string;
   /** Where a blob's spans are, for expanding gaps. */
@@ -54,7 +55,7 @@ export function DiffView(props: {
   onFile: (path: string) => void;
   /** A line the reviewer clicked. */
   onRow: (row: Row) => void;
-  /** Whether the gutter offers `+`; read once, as the view is built. */
+  /** Whether the gutter offers `+`. */
   commentable: boolean;
   /** Lines with something shown under them, which `note` renders. */
   notes: readonly Spot[];
@@ -76,7 +77,7 @@ export function DiffView(props: {
       dispose();
     }
   };
-  const view = new CodeView<string>({
+  let options: CodeViewOptions<string, undefined> = {
     diffStyle: "unified",
     stickyHeaders: true,
     expansionLineCount: 20,
@@ -167,6 +168,16 @@ export function DiffView(props: {
         hunkStart: false,
       });
     },
+  };
+  const view = new CodeView<string>(options);
+
+  // A held merge takes the item out of review and a cancel brings it back,
+  // with the same view on screen. Options are set as a whole.
+  createEffect(() => {
+    const commentable = props.commentable;
+    if (options.enableGutterUtility === commentable) return;
+    options = { ...options, enableGutterUtility: commentable };
+    view.setOptions(options);
   });
 
   /**
@@ -231,7 +242,7 @@ export function DiffView(props: {
     byPath.clear();
     items.clear();
     paintings.clear();
-    const viewed = untrack(() => props.viewed);
+    const collapsed = untrack(() => props.collapsed);
     const notes = untrack(() => notesByPath(props.notes));
     for (const file of files) {
       byPath.set(file.path, file);
@@ -240,7 +251,7 @@ export function DiffView(props: {
         id: file.path,
         type: "diff",
         fileDiff: toFileDiff(file),
-        collapsed: viewed.has(file.path),
+        collapsed: collapsed.has(file.path),
         annotations: notes.get(file.path) ?? [],
         version: (versions.get(file.path) ?? 0) + 1,
       });
@@ -265,15 +276,14 @@ export function DiffView(props: {
     }
   });
 
-  // Only the files whose mark changed render again.
+  // Only the files that opened or collapsed render again.
   createEffect(() => {
-    const viewed = props.viewed;
+    const collapsed = props.collapsed;
     for (const item of items.values()) {
-      const collapsed = viewed.has(item.id);
-      if (item.collapsed === collapsed) continue;
+      if (item.collapsed === collapsed.has(item.id)) continue;
       const changed = {
         ...item,
-        collapsed,
+        collapsed: !item.collapsed,
         version: (item.version ?? 0) + 1,
       };
       items.set(item.id, changed);

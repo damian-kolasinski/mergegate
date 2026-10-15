@@ -91,7 +91,15 @@ export function ReviewBar(props: {
   };
   const empty = () => !summary().trim() && !props.drafts && !props.replies;
 
+  // What would go out without what's held: an open comment, or drafts that
+  // can't move to this revision.
+  const held = () => sending() || props.holding || props.unplaced > 0;
+  // Either can come after the confirm opens, which then stays without its
+  // Merge: a comment started from it, or a newer revision.
+  const blocked = () => held() || props.behind;
+
   const approve = () => {
+    if (blocked()) return;
     const body: Approve = {
       revision: props.revision,
       summary: summary().trim(),
@@ -109,11 +117,8 @@ export function ReviewBar(props: {
       }, failed)
       .finally(() => setSending(false));
   };
-  // What would go out without what's held: an open comment, or drafts that
-  // can't move to this revision.
-  const held = () => sending() || props.holding || props.unplaced > 0;
   const confirm = () => {
-    if (!held() && !props.behind) setConfirming(true);
+    if (!blocked()) setConfirming(true);
   };
 
   useKeys({ r: () => field?.focus(), a: confirm });
@@ -198,11 +203,7 @@ export function ReviewBar(props: {
               >
                 Request changes
               </Button>
-              <Button
-                variant="solid"
-                disabled={held() || props.behind}
-                onClick={confirm}
-              >
+              <Button variant="solid" disabled={blocked()} onClick={confirm}>
                 Approve & merge
               </Button>
             </>
@@ -220,6 +221,7 @@ export function ReviewBar(props: {
             <Button onClick={() => setConfirming(false)}>Cancel</Button>
             <Button
               variant="solid"
+              disabled={blocked()}
               onClick={approve}
               ref={(element) => requestAnimationFrame(() => element.focus())}
             >

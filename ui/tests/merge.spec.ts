@@ -129,3 +129,99 @@ test("f8 cancelling a held merge puts the item back in review", async ({
     "merge.cancelled",
   ]);
 });
+
+test("f8 the merge confirm waits for an open comment", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("fn login() {}")).toBeVisible();
+  await page.keyboard.press("j");
+  await page.keyboard.press("a");
+  const merge = page
+    .getByRole("group", { name: "Confirm merge" })
+    .getByRole("button", { name: "Merge" });
+  await expect(merge).toBeFocused();
+
+  await page.keyboard.press("c");
+  const editor = page.getByRole("textbox", {
+    name: "Comment on src/login.rs line 1",
+  });
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("Name the error.");
+  await expect(merge).toBeDisabled();
+
+  // Saved, the comment goes out with the merge.
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(editor).toHaveCount(0);
+  await merge.click();
+  await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
+  expect(events(hub)).toMatchObject([
+    {
+      type: "review.submitted",
+      verdict: "approved",
+      comments: [{ body: "Name the error." }],
+    },
+    { type: "item.merged" },
+  ]);
+});
+
+test("f8 a newer revision takes the merge away from the confirm", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("fn login() {}")).toBeVisible();
+  await page.keyboard.press("a");
+  const merge = page
+    .getByRole("group", { name: "Confirm merge" })
+    .getByRole("button", { name: "Merge" });
+  await expect(merge).toBeFocused();
+
+  app.revise("Log in", { "src/login.rs": "fn login() { todo!() }\n" });
+  const banner = screen.getByRole("region", { name: "Newer revision" });
+  await expect(banner.getByText("r2 submitted")).toBeVisible();
+  await expect(merge).toBeDisabled();
+});
+
+test("f8 a held merge cancelled after a reload takes comments again", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ README: "hello\n" });
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  app.seed({ NOTES: "notes\n" });
+  writeFileSync(join(app.dir, "README"), "edited\n");
+  // Held before the screen opens.
+  const approved = await page.request.post(
+    `${hub.url}api/items/app%231/approve`,
+    {
+      data: { revision: 1, summary: "" },
+      headers: { "x-mergegate-client": "ui" },
+    },
+  );
+  expect(approved.ok()).toBe(true);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const held = screen.getByRole("region", { name: "Merge held" });
+  await held.getByRole("button", { name: "Cancel merge" }).click();
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  const line = screen.getByRole("code").filter({ hasText: "fn login" });
+  await line.getByText("fn login() {}").hover();
+  await expect(line.locator("[data-utility-button]")).toHaveCount(1);
+
+  // Held again, the gutter stops offering it.
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+  await page.getByRole("button", { name: "Merge", exact: true }).click();
+  await expect(held).toBeVisible();
+  await line.getByText("fn login() {}").hover();
+  await expect(line.locator("[data-utility-button]")).toHaveCount(0);
+});
