@@ -223,6 +223,36 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(screen.getByText("0 of 4 reviewed")).toBeVisible();
 });
 
+test("f6 v right after moving to a file still moves on", async ({
+  page,
+  hub,
+}) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const current = screen
+    .getByRole("navigation", { name: "Files" })
+    .locator("li[aria-current=true]");
+  await expect(page.getByText("changed 10", { exact: true })).toBeVisible();
+
+  // `v` lands after the view scrolled where `n` asked, in the frame after,
+  // but before the browser reports that scroll.
+  await page.evaluate(() => {
+    const press = (key: string) =>
+      window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+    press("n");
+    requestAnimationFrame(() => press("v"));
+  });
+  await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
+  await page.evaluate(
+    () =>
+      new Promise((done) =>
+        requestAnimationFrame(() => requestAnimationFrame(done)),
+      ),
+  );
+  await expect(current).toContainText("gone.txt");
+});
+
 test("f6 a file's checkbox marks it viewed", async ({ page, hub }) => {
   submitChange(hub);
   await page.goto(`${hub.url}#/items/app%231`);
