@@ -237,11 +237,9 @@ function Review(props: {
     props.diff.since === null ||
     (spot.side === "additions" &&
       own().some((file) => file.path === spot.path));
-  const nav = useNavigation({
-    files: shown,
-    viewed: viewed.paths,
-    view: () => view,
-  });
+  // Viewed files the operator was taken back into, to a comment, which stay
+  // open until marked again: collapsed, they'd hide the line.
+  const [opened, setOpened] = createSignal<ReadonlySet<string>>(new Set());
   // The screen fetches its diff once; comments then change here.
   const comments = useComments(
     untrack(() => props.diff),
@@ -252,6 +250,9 @@ function Review(props: {
         if (trusted().some((file) => file.path === spot.path)) {
           setShowTrusted(true);
         }
+        if (viewed.paths().has(spot.path) && !opened().has(spot.path)) {
+          setOpened((paths) => new Set(paths).add(spot.path));
+        }
         view?.showLine(spot);
       },
       showAll: () => setTalking(true),
@@ -259,6 +260,35 @@ function Review(props: {
       onScreen: onOwnSide,
     },
   );
+  // A viewed file collapses to its header, but not over the open editor,
+  // which would hold the review with nothing on screen to save or cancel.
+  // Only the path: the editor's state changes with every key typed, and each
+  // new set walks every file's lines again.
+  const writing = createMemo(() => comments.writing()?.path);
+  const collapsed = createMemo(
+    () =>
+      new Set(
+        [...viewed.paths()].filter(
+          (path) => path !== writing() && !opened().has(path),
+        ),
+      ) as ReadonlySet<string>,
+  );
+  /** A mark set or cleared on an opened file ends its opening. */
+  const mark = (path: string, value: boolean) => {
+    if (opened().has(path)) {
+      setOpened((paths) => {
+        const rest = new Set(paths);
+        rest.delete(path);
+        return rest;
+      });
+    }
+    viewed.mark(path, value);
+  };
+  const nav = useNavigation({
+    files: shown,
+    collapsed,
+    view: () => view,
+  });
   /** Closes the list, unless that would hide what's typed in it. */
   const hideAll = (): boolean => {
     if (comments.aside()) {
@@ -290,7 +320,7 @@ function Review(props: {
       return;
     }
     const value = !viewed.paths().has(file.path);
-    viewed.mark(file.path, value);
+    mark(file.path, value);
     if (value && file !== shown().at(-1)) nav.stepFile(1);
     else nav.showFile(file.path);
   };
@@ -441,7 +471,7 @@ function Review(props: {
         viewed={viewed.paths()}
         current={nav.current()}
         onShow={nav.showFile}
-        onViewed={viewed.mark}
+        onViewed={mark}
       />
       <div class={styles.diff}>
         <Show
@@ -460,7 +490,7 @@ function Review(props: {
         >
           <DiffView
             files={shown()}
-            viewed={viewed.paths()}
+            collapsed={collapsed()}
             blobUrl={blobUrl}
             highlightsUrl={highlightsUrl}
             onFile={nav.scrolledTo}

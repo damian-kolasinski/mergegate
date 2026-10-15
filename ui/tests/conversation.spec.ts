@@ -198,3 +198,43 @@ test("show in diff closes the list on the comment's line", async ({
     page.getByRole("article", { name: "Comment c_1" }),
   ).toBeInViewport();
 });
+
+test("show in diff opens a viewed file at the comment", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ "login.rs": "fn login() {}\n" });
+  app.submit("work", "Add login", {
+    "login.rs": "fn login(password: &str) {}\n",
+  });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const header = page.getByRole("region", { name: "app#1" });
+  await expect(page.getByText("fn login(password: &str) {}")).toBeVisible();
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  await expect(
+    page.getByRole("textbox", { name: "Comment on login.rs line 1" }),
+  ).toBeFocused();
+  await page.keyboard.type("Why?");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  const comment = page.getByRole("article", { name: "Comment c_1" });
+  await expect(comment).toBeVisible();
+  const mark = page
+    .getByRole("navigation", { name: "Files" })
+    .getByLabel("Viewed login.rs");
+  await mark.check();
+  await expect(comment).toHaveCount(0);
+
+  await header.getByRole("button", { name: "Conversation 1" }).click();
+  const list = page.getByRole("complementary", { name: "Conversation" });
+  await list.getByRole("button", { name: "Show in diff" }).click();
+  await expect(list).toHaveCount(0);
+  await expect(comment).toBeInViewport();
+  // Opened, not unmarked: marking it again collapses it.
+  await expect(mark).toBeChecked();
+  await mark.uncheck();
+  await mark.check();
+  await expect(comment).toHaveCount(0);
+});
