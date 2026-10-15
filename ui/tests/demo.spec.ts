@@ -38,6 +38,29 @@ test("f16 attachments show in the header and open full size", async ({
   await expect(chip).toBeFocused();
 });
 
+test("f16 Enter on the viewer's Close button closes it, not the item", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("parser", "Add the parser", { "p.rs": "p\n" }, [screen]);
+  app.submit("lexer", "Add the lexer", { "l.rs": "l\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  // Merged, the screen opens the next item on Enter.
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+  await page.getByRole("button", { name: "Merge", exact: true }).click();
+  const merged = page.getByRole("region", { name: "Merged" });
+  await expect(merged).toContainText("Next: app#2");
+
+  await page.getByRole("button", { name: /^Demo \(/ }).click();
+  const viewer = page.getByRole("dialog");
+  await expect(viewer.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(viewer).toBeHidden();
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
+});
+
 test("f16 a revision without attachments shows the last ones, labeled", async ({
   page,
   hub,
