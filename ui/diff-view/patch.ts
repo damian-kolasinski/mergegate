@@ -90,6 +90,29 @@ export function rowsOf(file: File): Row[] {
 }
 
 /**
+ * Whether one of `file`'s hunks shows lines `start..line` of `side`: the
+ * hub drafts a comment only there, as one in an expanded gap would show
+ * under no line once the diff is reloaded.
+ */
+export function shows(
+  file: File,
+  span: { side: Row["side"]; start: number; line: number },
+): boolean {
+  return hunksOf(file).some((hunk) => {
+    const [first, count] =
+      span.side === "deletions"
+        ? [hunk.old_start, hunk.old_lines]
+        : [hunk.new_start, hunk.new_lines];
+    return (
+      count > 0 &&
+      first <= span.start &&
+      span.start <= span.line &&
+      span.line < first + count
+    );
+  });
+}
+
+/**
  * Builds what `processFile` would parse from the hunks' patch, without
  * writing and reparsing it: for a near-cap file that round trip, which
  * copies every line through a TextEncoder, was a fifth of opening it.
