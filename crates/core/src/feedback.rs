@@ -3,6 +3,10 @@
 //! newest event its agent acknowledged, so a wait that dropped before the
 //! agent saw its events returns them again.
 
+mod log;
+
+pub use log::{Log, log};
+
 use crate::external::{Batch, Override};
 use crate::item::{Item, ItemId, ItemState, ItemStore};
 use crate::review::Review;
@@ -14,6 +18,12 @@ pub trait FeedbackStore {
 
     /// The cursor of `id`'s newest event, 0 when it has none.
     fn last_cursor(&self, id: &ItemId) -> Result<u64, StoreError>;
+
+    /// The items with events after `cursor`, any item's.
+    fn logged_since(&self, cursor: u64) -> Result<Vec<ItemId>, StoreError>;
+
+    /// The cursor of the newest event of any item, 0 before the first.
+    fn newest_cursor(&self) -> Result<u64, StoreError>;
 
     /// The cursor `id`'s agent acknowledged last, 0 before the first.
     fn delivered(&self, id: &ItemId) -> Result<u64, StoreError>;

@@ -1,4 +1,8 @@
-# Rules the operator asks for
+# Working for the operator
+
+What to do when the operator asks you to sort files, rank their queue, or watch the hub for them.
+
+## Rules
 
 The operator's rules sort each file into review or trusted (see [authoring.md](authoring.md)). Propose one only when the operator asks you to, as in "stop showing me lockfiles" or "always show me the migrations"; never to get your own work past review.
 
@@ -17,3 +21,22 @@ Each rule needs `--tier`, `--reason` (the operator's words, shown beside every f
 A `review` rule applies at once and goes first, so it wins over every trusted rule. A `trusted` rule hides files from the operator, so it waits for their approval in the UI: `mg rules propose` prints its ID and what it would have hidden in recent items, as in `R4 waits for the operator's approval in the UI: it would have hidden 3 files in 2 of 14 items`. Tell the operator it is waiting; you can't approve it. Once approved it goes last.
 
 `mg rules show R4` prints a proposed rule and whether the operator approved or rejected it; `mg rules list` shows the rules that apply and the changes waiting. Never edit the rules file yourself.
+
+## Priority
+
+Each open item can have a priority, `p0` (first) to `p3`, and a note saying why. The inbox shows both and orders each group by priority, then oldest first; an item without one comes after `p3`. When the operator asks you to rank their queue:
+
+```
+mg prioritize app#3 --priority p0 --note "blocks the release"
+mg prioritize app#5 --priority none
+```
+
+It sets both at once, so leaving out `--note` clears the old note. The operator changes them in the UI too, and the latest write wins. The item's agent isn't told.
+
+## Following the hub
+
+`mg events --follow` prints every item's events as they come, hub-wide; with `--json` each line is one JSON object shaped like an event from `mg wait`. Use it when the operator asks you to start work once an item merges, or to watch for conflicts. It starts from now; each event carries its `cursor`, and `--since CURSOR` resumes after it. Without `--follow`, `mg events --since CURSOR` prints what came after that cursor and exits.
+
+If the hub stops, the stream ends with an error and a non-zero exit: start it again with `--since` the last cursor you read, so nothing in between is missed.
+
+It marks nothing delivered, so each item's agent still gets its own events. Don't act on another agent's item: tell the operator, or start the work they asked for.

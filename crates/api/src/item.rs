@@ -15,6 +15,17 @@ pub enum ItemState {
     Abandoned,
 }
 
+/// How urgent an item is; p0 comes first and none sorts after p3.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Priority {
+    P0,
+    P1,
+    P2,
+    P3,
+}
+
 /// `POST /api/items`, answered with [`Submitted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Submit {
@@ -36,6 +47,23 @@ pub struct Submit {
     /// removes it, none keeps the last one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guide: Option<String>,
+    /// From the agent's brief; only the submit that opens the item sets
+    /// them, and a later one is warned to use `mg prioritize`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Priority>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// `POST /api/items/{id}/priority`, answered with the [`Item`]. It sets both:
+/// none clears the priority, and a missing note clears the old one.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Prioritize {
+    #[serde(default)]
+    pub priority: Option<Priority>,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// `POST /api/items/{id}/abandon`, answered with the closed [`Item`]. Its
@@ -75,6 +103,9 @@ pub struct Item {
     /// The item on its backend, if it has a page there.
     pub link: Option<Link>,
     pub created_at: String,
+    pub priority: Option<Priority>,
+    /// Why it has its priority.
+    pub note: Option<String>,
 }
 
 /// A page outside mergegate, as a pull request on GitHub.
@@ -103,7 +134,7 @@ pub struct Revision {
     pub submitted_at: String,
 }
 
-/// `GET /api/inbox`: open items, oldest first.
+/// `GET /api/inbox`: open items, each group by priority, then oldest first.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Inbox {
@@ -137,6 +168,8 @@ pub struct InboxItem {
     pub demo: bool,
     /// Set when a revision was submitted since the last reviewed one.
     pub changed_since: Option<ChangedSince>,
+    pub priority: Option<Priority>,
+    pub note: Option<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

@@ -9,6 +9,18 @@ export type Keymap = Readonly<Record<string, () => void>>;
  * never eat text or `cmd-r`.
  */
 export function useKeys(keymap: Keymap): void {
+  listen(keymap, false);
+}
+
+/**
+ * As `useKeys`, for a dialog: its keys come before every screen's, and the
+ * screens hear none while it lives, so `Enter` or `a` can't act behind it.
+ */
+export function useModalKeys(keymap: Keymap): void {
+  listen(keymap, true);
+}
+
+function listen(keymap: Keymap, modal: boolean): void {
   const onKey = (event: KeyboardEvent) => {
     if (
       event.defaultPrevented ||
@@ -19,13 +31,16 @@ export function useKeys(keymap: Keymap): void {
       return;
     }
     if (isEditable(event.target)) return;
+    // Capturing on window runs before any listener elsewhere; stopping here
+    // keeps the key from them but not from its default, such as `Tab`.
+    if (modal) event.stopPropagation();
     const action = keymap[event.key];
     if (!action) return;
     event.preventDefault();
     action();
   };
-  window.addEventListener("keydown", onKey);
-  onCleanup(() => window.removeEventListener("keydown", onKey));
+  window.addEventListener("keydown", onKey, modal);
+  onCleanup(() => window.removeEventListener("keydown", onKey, modal));
 }
 
 function isEditable(target: EventTarget | null): boolean {

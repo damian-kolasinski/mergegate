@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 
 use serde_json::Value;
 use tempfile::TempDir;
@@ -76,6 +76,17 @@ impl Env {
         let mut cmd = self.command(args);
         cmd.current_dir(dir);
         Self::run(cmd)
+    }
+
+    /// Starts `mg` without waiting for it, its stdout piped, for a command
+    /// that runs until stopped such as `mg events --follow`. The caller
+    /// kills it.
+    pub fn spawn(&self, args: &[&str]) -> Child {
+        self.command(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("start mg")
     }
 
     fn command(&self, args: &[&str]) -> Command {

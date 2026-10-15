@@ -6,8 +6,9 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use api::attachment::Attachment;
-use api::item::{Submit, Submitted};
+use api::item::{Priority, Submit, Submitted};
 use api::project::Project;
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use serde::Serialize;
 
 use crate::attach_cmd;
@@ -25,11 +26,25 @@ struct Output<'a> {
     attachments: &'a [Attachment],
 }
 
+/// `--priority`'s values. Unlike `mg prioritize` there's no `none`: an item
+/// opens without a priority anyway, and on a later submit `none` would read
+/// as clearing one, which only `mg prioritize` does.
+pub(crate) fn initial_priority() -> impl TypedValueParser<Value = Priority> {
+    PossibleValuesParser::new(["p0", "p1", "p2", "p3"]).map(|level| match level.as_str() {
+        "p0" => Priority::P0,
+        "p1" => Priority::P1,
+        "p2" => Priority::P2,
+        _ => Priority::P3,
+    })
+}
+
 pub fn run(
     title: Option<String>,
     wake: Option<String>,
     attach: Vec<PathBuf>,
     guide: Option<PathBuf>,
+    priority: Option<Priority>,
+    note: Option<String>,
 ) -> Result<Outcome, CliError> {
     repo::require()?;
     // Check and read before pushing, so a wrong file stops the submit.
@@ -71,6 +86,8 @@ pub fn run(
         worktree: repo::read(&["rev-parse", "--show-toplevel"])?,
         wake,
         guide,
+        priority,
+        note,
     };
     let submitted = match client.post::<Submitted>("/api/items", &request)? {
         Reply::Done(submitted) => submitted,

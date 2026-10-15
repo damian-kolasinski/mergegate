@@ -3,7 +3,7 @@
 use mergegate_core::github::{GithubRepo, Pull};
 use mergegate_core::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemBackend, ItemId, ItemState, ItemStore, NewItem,
-    NewRevision, Revision,
+    NewRevision, Priority, Revision,
 };
 use mergegate_core::project::{Backend, ProjectName};
 use mergegate_core::store::StoreError;
@@ -19,7 +19,8 @@ const SELECT: &str = "
            r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
            i.github, i.pull_number, i.pull_url,
            (SELECT count(*) FROM revision_files
-            WHERE item_id = i.id AND revision = r.number AND tier = 'review')
+            WHERE item_id = i.id AND revision = r.number AND tier = 'review'),
+           i.priority, i.note
     FROM items i
     JOIN projects p ON p.id = i.project_id
     JOIN revisions r ON r.item_id = i.id
@@ -172,8 +173,8 @@ impl ItemStore for Store {
         };
         tx.execute(
             "INSERT INTO items (project_id, number, branch, title, state, backend, target, created_at,
-                                github, pull_number, pull_url)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                github, pull_number, pull_url, priority, note)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 project_id,
                 number,
@@ -186,6 +187,8 @@ impl ItemStore for Store {
                 github,
                 pull.map(|pull| pull.number as i64),
                 pull.map(|pull| pull.url.as_str()),
+                item.priority.map(Priority::as_str),
+                item.note,
             ],
         )
         .map_err(StoreError::new)?;
@@ -223,6 +226,27 @@ impl ItemStore for Store {
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)?;
         self.written(id)
+    }
+
+    fn set_priority(
+        &mut self,
+        id: &ItemId,
+        priority: Option<Priority>,
+        note: Option<&str>,
+    ) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE items SET priority = ?3, note = ?4
+                 WHERE number = ?2 AND project_id = (SELECT id FROM projects WHERE name = ?1)",
+                params![
+                    id.project().as_str(),
+                    id.number() as i64,
+                    priority.map(Priority::as_str),
+                    note
+                ],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
     }
 
     fn guide(&self, id: &ItemId, revision: u32) -> Result<Option<String>, StoreError> {
@@ -346,6 +370,8 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
     let github: Option<String> = row.get(15)?;
     let pull_number: Option<i64> = row.get(16)?;
     let pull_url: Option<String> = row.get(17)?;
+    let priority: Option<String> = row.get(19)?;
+    let note: Option<String> = row.get(20)?;
     let pull = pull_number.zip(pull_url).map(|(number, url)| Pull {
         number: number as u64,
         url,
@@ -369,6 +395,12 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
                 )));
             }
         };
+        let priority = priority
+            .map(|p| {
+                Priority::parse(&p)
+                    .ok_or_else(|| StoreError::new(format!("unknown priority {p:?}")))
+            })
+            .transpose()?;
         let project = ProjectName::parse(&project).map_err(StoreError::new)?;
         Ok(Item {
             id: ItemId::new(project, number as u64),
@@ -379,6 +411,8 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             target,
             revision,
             created_at,
+            priority,
+            note,
         })
     })())
 }

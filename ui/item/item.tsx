@@ -1,5 +1,6 @@
 import { createMemo, createSignal, Show, untrack } from "solid-js";
 import type { Demo as DemoData } from "../api/Demo";
+import type { Item } from "../api/Item";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { ItemState } from "../api/ItemState";
 import type { Review as SentReview } from "../api/Review";
@@ -19,6 +20,7 @@ import { Intent } from "./intent";
 import { ItemHeader } from "./header";
 import { MergeBlocked } from "./merge-blocked";
 import { NewerRevision } from "./newer-revision";
+import { PriorityPicker } from "../priority/priority";
 import styles from "./item.module.css";
 import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
@@ -47,6 +49,9 @@ export function ItemScreen(props: { id: string }) {
     const shown = diff();
     return shown && `${shown.item.revision.number} ${closed(shown.item.state)}`;
   });
+  // The item as the hub last gave it, for what changes without a new diff:
+  // its priority and note.
+  const [latest, setLatest] = createSignal<Item>();
   // main.tsx keys the route, so the id is fixed for the screen's life.
   const id = untrack(() => props.id);
   // What the operator picked to compare against: `all` or a revision. Until
@@ -62,6 +67,7 @@ export function ItemScreen(props: { id: string }) {
   const show = (next: ItemDiff) => {
     setDiff(next);
     setDemo(next.demo);
+    setLatest(next.item);
   };
   void fetchDiff().then(show, failed);
   // A closed item's diffs are gone, so its review gives way to what's left.
@@ -70,6 +76,7 @@ export function ItemScreen(props: { id: string }) {
   // since the revision stays and only what's sent and blocked moves.
   const reload = (replace = false) => {
     void fetchDiff().then((next) => {
+      setLatest(next.item);
       const shown = diff();
       if (
         replace ||
@@ -122,11 +129,13 @@ export function ItemScreen(props: { id: string }) {
           {(current) => (
             <Review
               diff={current()}
+              latest={latest() ?? current().item}
               demo={demo()}
               newest={newest()}
               summary={summary()}
               onSummary={setSummary}
               onCompare={compare}
+              onPrioritized={setLatest}
               onClosed={() => reload()}
               onMerge={() => reload(true)}
             />
@@ -149,12 +158,14 @@ function leave() {
 
 function Review(props: {
   diff: ItemDiff;
+  latest: Item;
   demo: DemoData | null;
   /** A revision newer than the one on screen. */
   newest: number | undefined;
   summary: string;
   onSummary: (summary: string) => void;
   onCompare: (since: string) => void;
+  onPrioritized: (item: Item) => void;
   onClosed: () => void;
   onMerge: () => void;
 }) {
@@ -165,6 +176,9 @@ function Review(props: {
   // Every comment on the item, the older revisions' too, over the diff.
   const [talking, setTalking] = createSignal(false);
   const [abandoning, setAbandoning] = createSignal(false);
+  const [picking, setPicking] = createSignal(false);
+  const priority = () => props.latest.priority;
+  const note = () => props.latest.note;
   let toggle: HTMLButtonElement | undefined;
   let view: DiffViewControl | undefined;
   const viewed = useViewed(() => props.diff);
@@ -294,6 +308,10 @@ function Review(props: {
     "]": unlessWriting(() => nav.stepHunk(1)),
     "[": unlessWriting(() => nav.stepHunk(-1)),
     v: unlessWriting(toggleViewed),
+    // `p` is the previous file here.
+    P: unlessWriting(() => {
+      if (open(state())) setPicking(true);
+    }),
   });
 
   return (
@@ -302,6 +320,8 @@ function Review(props: {
         <ItemHeader
           item={props.diff.item}
           state={state()}
+          priority={priority()}
+          note={note()}
           viewed={done().size}
           files={own().length}
           failure={viewed.failure()}
@@ -337,6 +357,18 @@ function Review(props: {
             />
           </Show>
         </ItemHeader>
+        <Show when={picking()}>
+          <PriorityPicker
+            item={props.diff.item.id}
+            priority={priority()}
+            note={note()}
+            onClose={() => setPicking(false)}
+            onSaved={(item) => {
+              setPicking(false);
+              props.onPrioritized(item);
+            }}
+          />
+        </Show>
         <Show when={props.diff.guide}>
           {(guide) => <Intent guide={guide()} />}
         </Show>

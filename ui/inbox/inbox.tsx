@@ -5,6 +5,7 @@ import type { InboxItem } from "../api/InboxItem";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { itemHref, rulesHref } from "../app/router";
+import { PriorityBadge, PriorityPicker } from "../priority/priority";
 import {
   Badge,
   Empty,
@@ -68,12 +69,15 @@ export function InboxScreen() {
   const open = (id = selected()) => {
     if (id !== undefined) location.hash = itemHref(id);
   };
+  // The item `p` opened the priority picker on.
+  const [picking, setPicking] = createSignal<InboxItem>();
   useKeys({
     j: () => move(1),
     k: () => move(-1),
     ArrowDown: () => move(1),
     ArrowUp: () => move(-1),
     Enter: () => open(),
+    p: () => setPicking(items().find((item) => item.id === selected())),
   });
 
   // A failed refresh keeps the last inbox on screen, under the message.
@@ -142,6 +146,20 @@ export function InboxScreen() {
           </>
         )}
       </Show>
+      <Show when={picking()} keyed>
+        {(item) => (
+          <PriorityPicker
+            item={item.id}
+            priority={item.priority}
+            note={item.note}
+            onClose={() => setPicking(undefined)}
+            onSaved={() => {
+              setPicking(undefined);
+              void load();
+            }}
+          />
+        )}
+      </Show>
     </>
   );
 }
@@ -162,8 +180,17 @@ function Entry(props: {
       <span class={styles.id}>
         <Mono>{props.item.id}</Mono>
       </span>
+      <PriorityBadge priority={props.item.priority} note={props.item.note} />
       <span class={styles.title} title={props.item.branch}>
         {props.item.title}
+        <Show when={props.item.note}>
+          {(note) => (
+            <span class={styles.note} title={note()}>
+              {" · "}
+              {note()}
+            </span>
+          )}
+        </Show>
       </span>
       <Show when={props.item.link}>
         {(link) => (

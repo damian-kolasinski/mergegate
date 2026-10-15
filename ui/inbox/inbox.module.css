@@ -17,6 +17,11 @@
   color: var(--text-primary);
 }
 
+/* The priority's why, after the title and fainter than it. */
+.note {
+  color: var(--text-secondary);
+}
+
 .flag {
   flex: none;
 }

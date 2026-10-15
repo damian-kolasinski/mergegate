@@ -41,6 +41,8 @@ fn revised() -> FakeStore {
             worktree: None,
             wake: None,
             guide: None,
+            priority: None,
+            note: None,
         };
         submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }

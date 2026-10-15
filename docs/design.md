@@ -197,7 +197,8 @@ mg submit [--title T] [--base main] [--on <item>|none] [--guide FILE|-] [--attac
     `## Files` list of "- `path` — reason" bullets in the order to review them (§7.2). A revision
     submitted without one keeps the last; paths it can't place come back as warnings.
     --attach: demo screenshots / recordings.
-    --priority/--note: initial priority, passed down from the operator agent's task brief.
+    --priority/--note: initial priority, passed down from the operator agent's task brief;
+    only the submit that opens the item sets them (§10).
 
 mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     Block until there are unacknowledged events for this item.
@@ -236,9 +237,11 @@ mg resume <item>                                 Print a self-contained prompt (
 
 ```
 mg inbox [--json]                                      The review queue as the UI shows it.
-mg prioritize <item> --priority p0|p1|p2|p3 [--note "blocks auth refactor, 3 agents waiting"]
-mg events --follow [--json]                            Hub-wide event stream (merged, abandoned, …)
+mg prioritize <item> --priority p0|p1|p2|p3|none [--note "blocks auth refactor, 3 agents waiting"]
+mg events [--since CURSOR] [--follow] [--json]         Hub-wide event log (merged, abandoned, …)
                                                        so the operator agent can dispatch dependent work.
+                                                       Acknowledges nothing; --follow streams one JSON
+                                                       object per line, from now or --since.
 mg rules list | propose ... | show <id>                See §7.3.
 ```
 
@@ -396,7 +399,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - When rules trust some files, the file count shows the ones left to review next to the total ("9 of 14 files"). That is the real cost of the item.
 - A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
 - An item the operator reviewed on an earlier revision shows how many of its files changed since then ("2 changed since r1").
-- Keyboard-first: `j/k` move, `enter` open, `p` set priority.
+- Keyboard-first: `j/k` move, `enter` open, `p` set priority and note (`0`–`3`, `n` none, `enter` saves).
 
 ### 9.2 Review screen
 
@@ -438,14 +441,14 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **Replies thread under each comment:** the agent's, with their status (addressed in rN, rejected, question), and yours, drafted like comments and sent with the next review. "Addressed in rN" is the first revision submitted after the reply. Replies show as they arrive: the UI's stream carries `item.changed` pings and the screen rereads the item's conversation, as it does on reconnect.
 - **Conversation list** in the header: every comment as `path:line @rN` with its latest status and replies. A comment shows inline only on the revision it was written on until it is re-mapped, so older ones are answered here.
 - **New revision mid-review:** a banner says "rN submitted" and offers to show changes since the revision on screen. Nothing moves until you switch: comments and Request changes still go to the revision on screen, and Approve waits for the newest. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
-- Keyboard: `n/p` file, `]/[` hunk, `j/k` line, `v` viewed (and on to the next file), `Escape` closes the open editor, then the Conversation list, then goes back to the inbox, `c` comment on the line, `r` the review's summary, `a` approve.
+- Keyboard: `n/p` file, `]/[` hunk, `j/k` line, `v` viewed (and on to the next file), `Escape` closes the open editor, then the Conversation list, then goes back to the inbox, `c` comment on the line, `r` the review's summary, `a` approve, `P` set priority (`p` is taken).
 
 ## 10. Prioritization
 
 mergegate doesn't try to know the plan. The operator agent does.
 
-- **Initial, at submit:** the operator agent includes priority and a "why" note in the task brief it dispatches. The authoring agent passes them to `mg submit --priority --note`, so items arrive already prioritized.
-- **Updates, any time:** `mg prioritize` (operator agent, when the plan changes) or drag/keys in the UI (operator). The latest write wins, and the note is shown in the inbox.
+- **Initial, at submit:** the operator agent includes priority and a "why" note in the task brief it dispatches. The authoring agent passes them to `mg submit --priority --note`, so items arrive already prioritized. Only the submit that creates the item sets them; a later one warns and keeps what's there, so an agent repeating its brief can't undo the operator.
+- **Updates, any time:** `mg prioritize` (operator agent, when the plan changes) or the priority picker in the UI (operator). Priority and note are written together, the latest write wins, and the note is shown in the inbox. No priority sorts after p3.
 - **Derived signals** for tie-breaking and display: pairwise conflicts between open items, items stacked on it, age, review-tier size, open external comments.
 - **Optional judge pass** over the inbox: rank items given notes and signals. This is never needed for correctness.
 - `mg events --follow` lets the operator agent react to merges and start dependent work.

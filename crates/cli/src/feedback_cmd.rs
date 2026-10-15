@@ -81,7 +81,7 @@ pub(crate) fn describe(feedback: &Feedback) -> String {
     out.join("\n\n")
 }
 
-fn event(event: &Event) -> String {
+pub(crate) fn event(event: &Event) -> String {
     match &event.body {
         EventBody::ReviewSubmitted {
             verdict,

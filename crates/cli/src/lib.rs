@@ -4,12 +4,14 @@ mod abandon_cmd;
 mod attach_cmd;
 mod client;
 mod doctor_cmd;
+mod events_cmd;
 mod feedback_cmd;
 mod hub_cmd;
 mod inbox_cmd;
 mod init_cmd;
 mod lang_cmd;
 pub mod output;
+mod prioritize_cmd;
 mod project_cmd;
 mod reply_cmd;
 mod repo;
@@ -90,6 +92,13 @@ enum Command {
         /// bullets in the order to review them [default: the last one]
         #[arg(long, value_name = "FILE")]
         guide: Option<PathBuf>,
+        /// How urgent the item is, from your brief; only the submit that
+        /// opens the item sets it, mg prioritize changes it after
+        #[arg(long, value_parser = submit_cmd::initial_priority())]
+        priority: Option<api::item::Priority>,
+        /// Why it has that priority, for the operator; as --priority
+        #[arg(long)]
+        note: Option<String>,
     },
     /// Add screenshots or recordings to the item's newest revision
     Attach {
@@ -142,6 +151,27 @@ enum Command {
         /// The item, as in app#42
         item: String,
     },
+    /// Set how urgent an open item is, which orders the operator's inbox
+    Prioritize {
+        /// The item, as in app#42
+        item: String,
+        #[arg(long, value_enum)]
+        priority: prioritize_cmd::Level,
+        /// Why, for the operator; leaving it out clears the old one
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Every item's events, hub-wide, without marking any delivered
+    Events {
+        /// Start after this cursor [default: the newest, so only what comes
+        /// next]
+        #[arg(long)]
+        since: Option<u64>,
+        /// Keep printing events as they come, one per line (one JSON object
+        /// with --json), until interrupted
+        #[arg(long)]
+        follow: bool,
+    },
     /// Close an item without merging it; its pinned revisions and diffs go
     Abandon {
         /// The item, as in app#42
@@ -173,10 +203,12 @@ pub fn main() -> ExitCode {
         Err(e) => return usage(e, json_env || args.iter().any(|a| a == "--json")),
     };
     let json = cli.json || json_env;
-    output::emit(json, dispatch(cli.command))
+    output::emit(json, dispatch(cli.command, json))
 }
 
-fn dispatch(command: Command) -> Result<Outcome, CliError> {
+/// `json` is for commands that print as they go; the rest leave it to
+/// [`output::emit`].
+fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
     match command {
         Command::Hub(command) => hub_cmd::run(command),
         Command::Project(command) => project_cmd::run(command),
@@ -188,7 +220,9 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             wake,
             attach,
             guide,
-        } => submit_cmd::run(title, wake, attach, guide),
+            priority,
+            note,
+        } => submit_cmd::run(title, wake, attach, guide, priority, note),
         Command::Attach { item, files } => attach_cmd::run(item, files),
         Command::Wait {
             item,
@@ -203,6 +237,12 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             body,
         } => reply_cmd::run(comment, status, body),
         Command::Sync { item } => sync_cmd::run(item),
+        Command::Prioritize {
+            item,
+            priority,
+            note,
+        } => prioritize_cmd::run(item, priority, note),
+        Command::Events { since, follow } => events_cmd::run(since, follow, json),
         Command::Abandon { item, reason } => abandon_cmd::run(item, reason),
         Command::Resume { item } => resume_cmd::run(item),
         Command::Inbox => inbox_cmd::run(),
