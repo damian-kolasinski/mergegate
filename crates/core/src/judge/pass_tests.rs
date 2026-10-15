@@ -18,6 +18,7 @@ fn command(command: &str) -> JudgeSetting {
             command: command.into(),
         },
         threshold: 0.8,
+        order: Default::default(),
     }
 }
 

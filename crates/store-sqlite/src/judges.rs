@@ -4,6 +4,7 @@ use mergegate_core::item::ItemId;
 use mergegate_core::judge::{JudgeSetting, JudgeStore, Provider, Verdict};
 use mergegate_core::project::ProjectName;
 use mergegate_core::store::StoreError;
+use mergegate_core::triage::OrderBy;
 use rusqlite::{OptionalExtension, params};
 
 use crate::Store;
@@ -17,7 +18,7 @@ impl JudgeStore for Store {
         let row = self
             .conn
             .prepare_cached(
-                "SELECT j.provider, j.model, j.command, j.threshold FROM judges j
+                "SELECT j.provider, j.model, j.command, j.threshold, j.ordering FROM judges j
                  JOIN projects p ON p.id = j.project_id WHERE p.name = ?1",
             )
             .map_err(StoreError::new)?
@@ -27,11 +28,12 @@ impl JudgeStore for Store {
                     row.get::<_, Option<String>>(1)?,
                     row.get::<_, Option<String>>(2)?,
                     row.get::<_, f64>(3)?,
+                    row.get::<_, String>(4)?,
                 ))
             })
             .optional()
             .map_err(StoreError::new)?;
-        let Some((provider, model, command, threshold)) = row else {
+        let Some((provider, model, command, threshold, order)) = row else {
             return Ok(None);
         };
         let provider = match (provider.as_str(), model, command) {
@@ -39,9 +41,12 @@ impl JudgeStore for Store {
             ("command", _, Some(command)) => Provider::Command { command },
             _ => return Err(StoreError::new(format!("{project} has judge {provider:?}"))),
         };
+        let order = OrderBy::parse(&order)
+            .ok_or_else(|| StoreError::new(format!("{project} has order {order:?}")))?;
         Ok(Some(JudgeSetting {
             provider,
             threshold,
+            order,
         }))
     }
 
@@ -68,8 +73,8 @@ impl JudgeStore for Store {
         self.conn
             .prepare_cached(
                 "INSERT OR REPLACE INTO judges
-                     (project_id, provider, model, command, threshold, key)
-                 SELECT id, ?2, ?3, ?4, ?5, ?6 FROM projects WHERE name = ?1",
+                     (project_id, provider, model, command, threshold, ordering, key)
+                 SELECT id, ?2, ?3, ?4, ?5, ?6, ?7 FROM projects WHERE name = ?1",
             )
             .map_err(StoreError::new)?
             .execute(params![
@@ -78,6 +83,7 @@ impl JudgeStore for Store {
                 model,
                 command,
                 setting.threshold,
+                setting.order.as_str(),
                 setting.key(),
             ])
             .map_err(StoreError::new)?;

@@ -9,8 +9,8 @@ fn rank(path: &str, importance: Option<u8>, hint: Option<Hint>) -> Rank<'_> {
 }
 
 /// The paths in order, each marked `^` when the judge raised it.
-fn ordered(files: &[Rank], guide: &str) -> Vec<String> {
-    order(files, &Guide::parse(guide))
+fn ordered(files: &[Rank], guide: &str, by: OrderBy) -> Vec<String> {
+    order(files, &Guide::parse(guide), by)
         .into_iter()
         .map(|p| {
             let mark = if p.raised { "^" } else { "" };
@@ -121,6 +121,64 @@ fn orders_files() {
         ),
     ];
     for &(name, files, guide, want) in cases {
-        assert_eq!(ordered(files, guide), want, "{name}");
+        assert_eq!(ordered(files, guide, OrderBy::Guide), want, "{name}");
     }
+}
+
+#[test]
+fn orders_files_by_the_judge_alone() {
+    let cases: &[(&str, &[Rank], &str, &[&str])] = &[
+        (
+            "its scores go ahead of the guide's list, and nothing is raised",
+            &[
+                rank("a.rs", Some(30), None),
+                rank("b.rs", Some(20), None),
+                rank("c.rs", Some(60), None),
+                rank("d.rs", Some(90), None),
+            ],
+            GUIDE,
+            &["d.rs", "c.rs", "a.rs", "b.rs"],
+        ),
+        (
+            "the guide breaks its ties, ahead of the heuristics",
+            &[
+                rank("a.rs", Some(40), None),
+                rank("b.rs", Some(40), None),
+                rank("c.sql", Some(40), Some(Hint::Migration)),
+            ],
+            GUIDE,
+            &["b.rs", "a.rs", "c.sql"],
+        ),
+        (
+            "a file it skipped counts as an average one",
+            &[
+                rank("a.rs", Some(40), None),
+                rank("b.rs", None, None),
+                rank("c.rs", Some(60), None),
+            ],
+            GUIDE,
+            &["c.rs", "b.rs", "a.rs"],
+        ),
+        (
+            "before it scores anything, the guide's order",
+            &[
+                rank("a.rs", None, None),
+                rank("b.rs", None, None),
+                rank("c.sql", None, Some(Hint::Migration)),
+            ],
+            GUIDE,
+            &["b.rs", "a.rs", "c.sql"],
+        ),
+    ];
+    for &(name, files, guide, want) in cases {
+        assert_eq!(ordered(files, guide, OrderBy::Judge), want, "{name}");
+    }
+}
+
+#[test]
+fn names_each_order() {
+    for by in [OrderBy::Guide, OrderBy::Judge] {
+        assert_eq!(OrderBy::parse(by.as_str()), Some(by));
+    }
+    assert_eq!(OrderBy::parse("path"), None);
 }

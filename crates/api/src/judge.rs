@@ -13,6 +13,10 @@ pub struct Judge {
     /// The confidence from which the judge pulls a trusted file back into
     /// review; null with no judge.
     pub threshold: Option<f64>,
+    /// What leads the order of the files to review: `guide`, where the
+    /// judge raises only the files it scores 80 or more, or `judge`, whose
+    /// scores order them all; null with no judge.
+    pub order: Option<String>,
     /// Why the judge can't run as set, as Jev without its key.
     pub problem: Option<String>,
     /// Open items whose newest revision the judge hasn't scored yet,
@@ -39,4 +43,6 @@ pub struct SetJudge {
     pub model: Option<String>,
     pub command: Option<String>,
     pub threshold: Option<f64>,
+    /// `guide` or `judge` [default: guide].
+    pub order: Option<String>,
 }

@@ -25,6 +25,11 @@ pub enum JudgeCommand {
         /// a trusted file back into review [default: 0.8]
         #[arg(long)]
         threshold: Option<f64>,
+        /// What leads the order of the files to review: the guide's list,
+        /// with the files the judge scores 80 or more ahead of it, or the
+        /// judge's scores alone, the guide only breaking ties [default: guide]
+        #[arg(long, value_enum)]
+        order: Option<OrderArg>,
         /// [default: the project at the current directory]
         #[arg(long)]
         project: Option<String>,
@@ -41,6 +46,12 @@ pub enum ProviderArg {
     Command,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+pub enum OrderArg {
+    Guide,
+    Judge,
+}
+
 pub fn run(command: JudgeCommand) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
     let judge: Judge = match command {
@@ -49,6 +60,7 @@ pub fn run(command: JudgeCommand) -> Result<Outcome, CliError> {
             model,
             command,
             threshold,
+            order,
             project,
         } => {
             let project = named(&client, project)?;
@@ -62,6 +74,13 @@ pub fn run(command: JudgeCommand) -> Result<Outcome, CliError> {
                 model,
                 command,
                 threshold,
+                order: order.map(|order| {
+                    match order {
+                        OrderArg::Guide => "guide",
+                        OrderArg::Judge => "judge",
+                    }
+                    .into()
+                }),
             };
             client.put(&format!("{}/judge", route(&project)?), &request)?
         }
@@ -91,6 +110,14 @@ fn describe(judge: &Judge) -> String {
             "  a trusted file goes back to review at {}% confidence",
             (threshold * 100.0).round()
         ));
+    }
+    match judge.order.as_deref() {
+        Some("judge") => {
+            out.push("  its scores order the files to review; the guide breaks ties".into())
+        }
+        Some(_) => out
+            .push("  files to review follow the guide, after the ones it scores 80 or more".into()),
+        None => {}
     }
     if let Some(problem) = &judge.problem {
         out.push(format!("  it can't run: {problem}"));

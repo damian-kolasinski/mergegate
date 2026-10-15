@@ -2,7 +2,7 @@ use mergegate_core::item::{
     ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
 };
 use mergegate_core::project::{Backend, Project, ProjectStore};
-use mergegate_core::triage::{Tier, Triage};
+use mergegate_core::triage::{OrderBy, Tier, Triage};
 
 use super::*;
 
@@ -72,6 +72,7 @@ fn jev(model: &str, threshold: f64) -> JudgeSetting {
             model: model.into(),
         },
         threshold,
+        order: OrderBy::Guide,
     }
 }
 
@@ -100,6 +101,7 @@ fn keeps_each_projects_judge() {
             command: "claude -p".into(),
         },
         threshold: 0.5,
+        order: OrderBy::Judge,
     };
     store.set_judge_setting(&app(), Some(&command)).unwrap();
     assert_eq!(store.judge_setting(&app()).unwrap(), Some(command));

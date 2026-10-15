@@ -168,8 +168,18 @@ fn f12_the_judge_ranks_files_and_promotes_a_trusted_one() {
         .assert_code(0)
         .json();
     assert_eq!(
-        [&set["provider"], &set["model"], &set["threshold"]],
-        [&json!("jev"), &json!("jev-1.13.0"), &json!(0.8)]
+        [
+            &set["provider"],
+            &set["model"],
+            &set["threshold"],
+            &set["order"]
+        ],
+        [
+            &json!("jev"),
+            &json!("jev-1.13.0"),
+            &json!(0.8),
+            &json!("guide")
+        ]
     );
     submit(&env, &repo);
 
@@ -229,6 +239,40 @@ fn f12_the_judge_ranks_files_and_promotes_a_trusted_one() {
     assert_eq!(
         [&show["waiting"], &show["problem"]],
         [&json!(0), &json!(null)]
+    );
+    assert_eq!(jev.requests().len(), 1);
+
+    // Led by the judge, its scores place every file to review, the promoted
+    // one too, and the guide only breaks ties: nothing is judged again.
+    let set = env
+        .mg(&[
+            "--json",
+            "judge",
+            "set",
+            "jev",
+            "--order",
+            "judge",
+            "--project",
+            "app",
+        ])
+        .assert_code(0)
+        .json();
+    assert_eq!(set["order"], "judge");
+    let by_judge = item_when(&env, |item| item["files"][1]["path"] == "config/prod.toml");
+    assert_eq!(
+        ranked(&by_judge),
+        [
+            json!({ "path": "src/c.rs", "tier": "review", "importance": 100, "raised": false, "promoted": false }),
+            json!({ "path": "config/prod.toml", "tier": "review", "importance": 78, "raised": false, "promoted": true }),
+            json!({ "path": "src/a.rs", "tier": "review", "importance": 34, "raised": false, "promoted": false }),
+            json!({ "path": "src/b.rs", "tier": "review", "importance": 23, "raised": false, "promoted": false }),
+            json!({ "path": "Cargo.lock", "tier": "trusted", "importance": 1, "raised": false, "promoted": false }),
+        ]
+    );
+    let text = env.mg(&["judge", "show", "app"]).assert_code(0).stdout;
+    assert!(
+        text.contains("its scores order the files to review; the guide breaks ties"),
+        "{text}"
     );
     assert_eq!(jev.requests().len(), 1);
 
@@ -431,6 +475,10 @@ fn f12_judge_settings_are_checked() {
         ),
         (
             &["judge", "set", "none", "--threshold", "0.5"],
+            "none takes no options",
+        ),
+        (
+            &["judge", "set", "none", "--order", "judge"],
             "none takes no options",
         ),
     ] {

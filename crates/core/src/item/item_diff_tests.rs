@@ -289,6 +289,7 @@ fn judged(store: &mut FakeStore, verdicts: &[(&str, u8, Option<f64>)]) {
             command: "judge".into(),
         },
         threshold: 0.8,
+        order: Default::default(),
     };
     let app = ProjectName::parse("app").unwrap();
     store.set_judge_setting(&app, Some(&setting)).unwrap();

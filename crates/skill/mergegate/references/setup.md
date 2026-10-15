@@ -40,6 +40,8 @@ Diffs are highlighted by language packs installed on the hub; without one a file
 
 A judge scores how much each file of a submitted revision needs the operator, ranking the files to review, and may pull a file a rule trusted back into review. It is off until the operator picks one, and only they decide which, since it sends their code to a model. `mg judge set jev` uses Jev, which reads its key from `TYPESAFE_API_KEY` in the hub's environment (`--model NAME` pins another version). `mg judge set command --command 'CMD'` runs the operator's own command in the project's repo, reading the change as JSON on stdin and printing `{"files": [{"path", "importance", "reason", "promote"}]}`; importance is 1 to 100, promote a trusted file's 0 to 1 confidence that it needs a look. `--threshold N` sets the confidence from which it promotes (default 0.8), `--project NAME` the project, and `mg judge set none` turns it off.
 
+By default the guide's list leads the order of the files to review, and the judge only puts the files it scores 80 or more ahead of it. When the operator would rather the judge decide, `--order judge` lets its scores order every file, the guide only breaking ties; `--order guide` goes back. Changing the order or the threshold judges nothing again.
+
 `mg judge show` prints the project's judge, whether it can run, and the revisions it failed on; setting the judge again retries them.
 
 ## Clones

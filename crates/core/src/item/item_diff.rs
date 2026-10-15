@@ -234,7 +234,8 @@ pub fn item_diff<
             hint: f.hint,
         })
         .collect();
-    let placed = triage::order(&ranks, &parsed);
+    let by = setting.as_ref().map(|s| s.order).unwrap_or_default();
+    let placed = triage::order(&ranks, &parsed, by);
     let mut slots: Vec<Option<DiffedFile>> = review.into_iter().map(Some).collect();
     let mut files: Vec<DiffedFile> = placed
         .into_iter()

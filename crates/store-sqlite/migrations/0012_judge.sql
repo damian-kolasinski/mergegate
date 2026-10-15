@@ -2,13 +2,15 @@
 
 -- No row is no judge. `key` names what judged, as the domain derives it from
 -- the provider and its model or command: a revision is judged again only
--- when it changes. The threshold is applied on read, so it isn't in the key.
+-- when it changes. The threshold and the order are applied on read, so
+-- they aren't in the key.
 CREATE TABLE judges (
     project_id INTEGER PRIMARY KEY REFERENCES projects (id),
     provider   TEXT NOT NULL CHECK (provider IN ('jev', 'command')),
     model      TEXT,
     command    TEXT,
     threshold  REAL NOT NULL CHECK (threshold > 0 AND threshold <= 1),
+    ordering   TEXT NOT NULL CHECK (ordering IN ('guide', 'judge')),
     key        TEXT NOT NULL,
     CHECK ((provider = 'jev') = (model IS NOT NULL)
            AND (provider = 'command') = (command IS NOT NULL))

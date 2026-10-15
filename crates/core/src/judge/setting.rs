@@ -1,6 +1,7 @@
 use super::JudgeStore;
 use crate::project::{ProjectName, ProjectStore};
 use crate::store::StoreError;
+use crate::triage::OrderBy;
 
 /// Pinned, so a provider's upgrade doesn't silently reorder reviews.
 pub const DEFAULT_MODEL: &str = "jev-1.13.0";
@@ -13,6 +14,9 @@ pub struct JudgeSetting {
     pub provider: Provider,
     /// The promotion confidence, in (0, 1].
     pub threshold: f64,
+    /// What leads the order of the files to review; with no judge, the
+    /// guide.
+    pub order: OrderBy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +41,8 @@ impl Provider {
 
 impl JudgeSetting {
     /// What the verdicts are cached under: another model or command judges
-    /// again, another threshold doesn't, since promotion is applied on read.
+    /// again, another threshold or order doesn't, since both are applied on
+    /// read.
     pub fn key(&self) -> String {
         match &self.provider {
             Provider::Jev { model } => format!("jev {model}"),
@@ -51,9 +56,10 @@ impl JudgeSetting {
         model: Option<&str>,
         command: Option<&str>,
         threshold: Option<f64>,
+        order: Option<&str>,
     ) -> Result<Option<Self>, SettingError> {
         let provider = match (provider, model, command) {
-            ("none", None, None) if threshold.is_none() => return Ok(None),
+            ("none", None, None) if threshold.is_none() && order.is_none() => return Ok(None),
             ("none", ..) => return Err(SettingError::OptionsForNone),
             ("jev", model, None) => Provider::Jev {
                 model: nonempty(model, "--model")?.unwrap_or(DEFAULT_MODEL).into(),
@@ -72,9 +78,16 @@ impl JudgeSetting {
         if !(threshold > 0.0 && threshold <= 1.0) {
             return Err(SettingError::Threshold(threshold));
         }
+        let order = match order {
+            Some(order) => {
+                OrderBy::parse(order).ok_or_else(|| SettingError::Order(order.into()))?
+            }
+            None => OrderBy::default(),
+        };
         Ok(Some(Self {
             provider,
             threshold,
+            order,
         }))
     }
 }
@@ -103,6 +116,8 @@ pub enum SettingError {
     Empty(&'static str),
     #[error("the threshold must be above 0 and at most 1, got {0}")]
     Threshold(f64),
+    #[error("no order {0:?}; orders: guide, judge")]
+    Order(String),
     #[error("no project named {0}")]
     NoProject(ProjectName),
     #[error(transparent)]

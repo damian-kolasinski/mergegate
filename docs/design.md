@@ -166,7 +166,7 @@ mg project add [PATH] [--name NAME] [--backend github|local] [--github OWNER/REP
                [--target BRANCH] [--languages LIST|none]  PATH in a linked worktree registers its main repo
 mg project set <project> <key> <value>                   backend, target, upstream, github, bots, …
 mg project show [<project>]                              Default: the project at the current directory
-mg judge set none|jev|command [--model M] [--command CMD] [--threshold X] [--project P]
+mg judge set none|jev|command [--model M] [--command CMD] [--threshold X] [--order guide|judge] [--project P]
 mg judge show [<project>]                                The judge, and the revisions it failed on
 mg lang list [--available]                               Syntax highlighting language packs (hub only)
 mg lang add <name>... | --detect [<project>] | --from PATH
@@ -325,6 +325,8 @@ The files to review are ordered:
 2. The guide's `## Files` list, in its order. The guide alone can neither hide nor promote a file.
 3. The rest by the judge's score, a file it skipped counting as 50, then the heuristics, then path.
 
+That is the default, `--order guide`. With `mg judge set … --order judge` the operator, or their agent, lets the judge lead instead: its scores order every file to review, a file it skipped again counting as 50, then the guide's list breaks ties, then the heuristics and path. Nothing is "raised by the judge" then, since the judge places every file; until it has scored the revision, the order is the guide's.
+
 The trusted files come last, in path order. The heuristics read only paths and the diff, with no parse: lockfiles, generated files, tests, docs and pure deletions sink; migrations, changed declarations (a function, type or export) and config rise. A file nothing else explains shows the heuristic's hint ("ranked low: tests"). Promotion and order are applied when the item is read, so a rule change re-sorts without a new judge call.
 
 The asymmetry matters: the authoring agent grades its own work, and the judge can be wrong. Hiding a file is therefore always the result of a rule the operator approved.
@@ -369,7 +371,7 @@ stdin:  {"item": "app#42", "revision": 2, "title": "…", "guide": "…" | null,
 stdout: {"files": [{"path", "importance": 1-100, "reason"?: "one line", "promote"?: 0-1}]}
 ```
 
-The judge is per project and off until the operator picks one, since it sends their code to a model. It runs in the background, like highlighting: a submit or `mg judge set` wakes it, it judges the newest revision of every open item that lacks a verdict from the project's judge, and the UI is pinged when verdicts land; a submit never waits. Verdicts are kept per (revision, judge), where the judge is its provider and model or command; the threshold applies on read. A failed call is logged once and shown by `mg judge show` until the next `mg judge set` or hub start, which retry it; meanwhile the item reads as with no judge.
+The judge is per project and off until the operator picks one, since it sends their code to a model. It runs in the background, like highlighting: a submit or `mg judge set` wakes it, it judges the newest revision of every open item that lacks a verdict from the project's judge, and the UI is pinged when verdicts land; a submit never waits. Verdicts are kept per (revision, judge), where the judge is its provider and model or command; the threshold and the order apply on read. A failed call is logged once and shown by `mg judge show` until the next `mg judge set` or hub start, which retry it; meanwhile the item reads as with no judge.
 
 ## 8. Backends
 

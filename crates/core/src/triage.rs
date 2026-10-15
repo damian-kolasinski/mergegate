@@ -22,7 +22,7 @@ pub use git::TriageGit;
 pub use guide::{Guide, GuideFile};
 pub use heuristic::{Hint, hint};
 pub use loosens::loosens;
-pub use order::{Placed, RAISE_AT, Rank, order};
+pub use order::{OrderBy, Placed, RAISE_AT, Rank, order};
 pub use preview::{Hidden, MERGED, Preview, preview};
 pub use propose::{
     ChangeError, Decision, NewRule, Proposal, ProposalState, Proposed, decide_proposal, propose,

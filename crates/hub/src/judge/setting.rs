@@ -46,6 +46,7 @@ pub(super) async fn set(
         request.model.as_deref(),
         request.command.as_deref(),
         request.threshold,
+        request.order.as_deref(),
     )
     .map_err(failure)?;
     let app = state.clone();
@@ -63,7 +64,7 @@ pub(super) async fn set(
         })
         .await?;
     state.judge.notify_one();
-    // Another judge or threshold moves files in and out of review now,
+    // Another judge, threshold or order moves files around review now,
     // before the pass has judged anything.
     state.events.send(UiEvent::InboxChanged);
     for item in open {
@@ -86,6 +87,7 @@ fn read(
             model: None,
             command: None,
             threshold: None,
+            order: None,
             problem: None,
             waiting: 0,
             failures: Vec::new(),
@@ -101,6 +103,7 @@ fn read(
         model,
         command,
         threshold: Some(setting.threshold),
+        order: Some(setting.order.as_str().into()),
         problem,
         waiting: judge::unjudged(store, Some(project))?.len() as u32,
         failures: failures.of(project, &setting.key()),
@@ -132,7 +135,8 @@ fn failure(e: SettingError) -> Failure {
         | E::Misplaced(..)
         | E::OptionsForNone
         | E::Empty(_)
-        | E::Threshold(_) => "mg judge set none|jev|command",
+        | E::Threshold(_)
+        | E::Order(_) => "mg judge set none|jev|command",
     };
     Failure::new(
         StatusCode::BAD_REQUEST,
