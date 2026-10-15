@@ -148,7 +148,7 @@ fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
     }
 }
 
-fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedback::Event {
+pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedback::Event {
     let target = &item.target;
     let revision = event.revision();
     let source = source_to_api(event.source());
@@ -212,7 +212,7 @@ pub(crate) fn source_from_api(source: api::feedback::Source) -> Source {
     }
 }
 
-fn failure(e: FeedbackError) -> Failure {
+pub(crate) fn failure(e: FeedbackError) -> Failure {
     use FeedbackError as E;
     use StatusCode as S;
     let (status, code, hint) = match &e {

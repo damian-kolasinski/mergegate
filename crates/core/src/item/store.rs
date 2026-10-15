@@ -1,4 +1,4 @@
-use super::{FileStat, Item, ItemBackend, ItemId, ItemState, Revision};
+use super::{FileStat, Item, ItemBackend, ItemId, ItemState, Priority, Revision};
 use crate::interdiff::NewInterdiff;
 use crate::project::ProjectName;
 use crate::store::StoreError;
@@ -44,6 +44,13 @@ pub trait ItemStore {
         revision: u32,
         guide: Option<&str>,
     ) -> Result<(), StoreError>;
+
+    fn set_priority(
+        &mut self,
+        id: &ItemId,
+        priority: Option<Priority>,
+        note: Option<&str>,
+    ) -> Result<(), StoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +62,8 @@ pub struct NewItem {
     pub backend: ItemBackend,
     pub target: String,
     pub revision: NewRevision,
+    pub priority: Option<Priority>,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

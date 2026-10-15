@@ -134,6 +134,8 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
         backend: ItemBackend::Local,
         target: "main".into(),
         revision: revision(files),
+        priority: None,
+        note: None,
     };
     // app#1 has `a`, then `b` and `c` with `d` and `e` in its interdiff;
     // app#2 (open) has `b`, then `e` in its interdiff; app#3 (merged) `c`.

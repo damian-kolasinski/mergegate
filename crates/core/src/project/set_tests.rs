@@ -35,6 +35,8 @@ fn open_item(store: &mut FakeStore, branch: &str, target: &str) -> ItemId {
             interdiffs: Vec::new(),
             viewed: Vec::new(),
         },
+        priority: None,
+        note: None,
     };
     store.insert_item(item).unwrap().id
 }
@@ -304,6 +306,8 @@ fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
                 url: "https://github.com/acme/app/pull/7".into(),
             },
         },
+        priority: None,
+        note: None,
         target: "main".into(),
         revision: NewRevision {
             head: commit(2),

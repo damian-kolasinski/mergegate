@@ -37,6 +37,8 @@ fn store() -> (tempfile::TempDir, Store) {
             backend: ItemBackend::Local,
             target: "main".into(),
             revision: revision(),
+            priority: None,
+            note: None,
         })
         .unwrap();
     let app = ItemId::parse("app#1").unwrap();
@@ -177,6 +179,8 @@ fn a_review_sends_only_its_items_drafts() {
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
             },
+            priority: None,
+            note: None,
         })
         .unwrap();
     let other = id("app#2");

@@ -37,6 +37,8 @@ fn store() -> (tempfile::TempDir, Store) {
                 backend: ItemBackend::Local,
                 target: "main".into(),
                 revision: revision(),
+                priority: None,
+                note: None,
             })
             .unwrap();
     }
@@ -81,6 +83,22 @@ fn cursors_are_hub_wide_and_events_per_item() {
     assert_eq!(store.events(&app, 1).unwrap().len(), 1);
     assert_eq!(store.last_cursor(&web).unwrap(), 2);
     assert_eq!(store.last_cursor(&id("app#9")).unwrap(), 0);
+}
+
+#[test]
+fn finds_every_item_with_events_after_a_cursor() {
+    let (_dir, mut store) = store();
+    assert_eq!(store.newest_cursor().unwrap(), 0);
+    assert!(store.logged_since(0).unwrap().is_empty());
+    for (item, summary) in [("web#1", "w1"), ("app#1", "a1"), ("web#1", "w2")] {
+        store
+            .insert_review(review(item, 1, summary), ItemState::ChangesRequested)
+            .unwrap();
+    }
+    assert_eq!(store.newest_cursor().unwrap(), 3);
+    assert_eq!(store.logged_since(0).unwrap(), [id("app#1"), id("web#1")]);
+    assert_eq!(store.logged_since(2).unwrap(), [id("web#1")]);
+    assert!(store.logged_since(3).unwrap().is_empty());
 }
 
 #[test]

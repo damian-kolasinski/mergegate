@@ -40,6 +40,8 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
         worktree: None,
         wake: None,
         guide: None,
+        priority: None,
+        note: None,
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     (store, git)

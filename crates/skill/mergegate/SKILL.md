@@ -36,7 +36,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 `mg wait` exits 0 with events, 75 when it timed out with none (wait again), and 3 once the item is merged or abandoned. It prints the events and marks them delivered; `mg feedback app#3` does the same without waiting, and `--since CURSOR` replays from any cursor without marking anything.
 
-[references/authoring.md](references/authoring.md) covers titles, revisions, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, see [references/operator.md](references/operator.md).
+[references/authoring.md](references/authoring.md) covers titles, revisions, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, to rank their queue, or to watch the hub for events, see [references/operator.md](references/operator.md).
 
 ## After a merge
 

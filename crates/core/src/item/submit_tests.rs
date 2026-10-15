@@ -58,6 +58,8 @@ fn request(project: &str, branch: &str, head: u8) -> Submit {
         worktree: None,
         wake: None,
         guide: None,
+        priority: None,
+        note: None,
     }
 }
 
@@ -662,6 +664,8 @@ fn keeps_the_guide_and_warns_about_what_it_cannot_place() {
         &FakeGithub::default(),
         Submit {
             guide: Some(guide.into()),
+            priority: None,
+            note: None,
             ..request("app", "login", 2)
         },
     )
@@ -700,6 +704,8 @@ fn keeps_the_guide_and_warns_about_what_it_cannot_place() {
         &FakeGithub::default(),
         Submit {
             guide: Some(" \n".into()),
+            priority: None,
+            note: None,
             ..request("app", "login", 3)
         },
     )
@@ -707,4 +713,51 @@ fn keeps_the_guide_and_warns_about_what_it_cannot_place() {
     assert!(!again.new_revision);
     assert!(again.warnings.is_empty());
     assert_eq!(store.guide(&id, 2).unwrap(), None);
+}
+
+#[test]
+fn only_the_submit_that_opens_the_item_sets_its_priority() {
+    let (mut store, git) = setup();
+    git.push("app", "login", &commit(2));
+    let first = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        Submit {
+            priority: Some(Priority::P1),
+            // Blank is no note, as `mg prioritize` takes it.
+            note: Some("  ".into()),
+            ..request("app", "login", 2)
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        (first.item.priority, first.item.note),
+        (Some(Priority::P1), None)
+    );
+    assert!(first.warnings.is_empty());
+
+    // Even at the same head, a repeated brief keeps what's there.
+    let again = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        Submit {
+            priority: Some(Priority::P3),
+            note: Some("from the brief".into()),
+            ..request("app", "login", 2)
+        },
+    )
+    .unwrap();
+    assert!(!again.new_revision);
+    assert_eq!(
+        (again.item.priority, again.item.note),
+        (Some(Priority::P1), None)
+    );
+    assert_eq!(
+        again.warnings,
+        [
+            "--priority and --note set only a new item's; app#1 keeps p1, which mg prioritize changes"
+        ]
+    );
 }

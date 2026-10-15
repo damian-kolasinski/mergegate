@@ -3,6 +3,7 @@
 use mergegate_core::external::Batch;
 use mergegate_core::feedback::{Event, EventKind, FeedbackStore, Notice, NoticeKind, Source};
 use mergegate_core::item::{ItemId, ItemState};
+use mergegate_core::project::ProjectName;
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, Row, params};
 
@@ -66,6 +67,38 @@ impl FeedbackStore for Store {
                 params![id.project().as_str(), id.number() as i64],
                 |row| row.get(0),
             )
+            .map_err(StoreError::new)?;
+        Ok(cursor as u64)
+    }
+
+    fn logged_since(&self, cursor: u64) -> Result<Vec<ItemId>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT p.name, i.number FROM items i JOIN projects p ON p.id = i.project_id
+                 WHERE i.id IN (SELECT item_id FROM events WHERE cursor > ?1)
+                 ORDER BY i.id",
+            )
+            .map_err(StoreError::new)?;
+        let rows = stmt
+            .query_map([cursor as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(StoreError::new)?;
+        rows.map(|row| {
+            let (project, number) = row.map_err(StoreError::new)?;
+            let project = ProjectName::parse(&project).map_err(StoreError::new)?;
+            Ok(ItemId::new(project, number as u64))
+        })
+        .collect()
+    }
+
+    fn newest_cursor(&self) -> Result<u64, StoreError> {
+        let cursor: i64 = self
+            .conn
+            .query_row("SELECT coalesce(max(cursor), 0) FROM events", [], |row| {
+                row.get(0)
+            })
             .map_err(StoreError::new)?;
         Ok(cursor as u64)
     }

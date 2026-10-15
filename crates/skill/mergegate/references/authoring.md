@@ -7,6 +7,7 @@
 - `--title` names the item; it defaults to the first commit's subject. Make it a summary the operator can scan in a queue.
 - A submit at the same commit as the last revision adds no revision, but still records the worktree, any `--guide` and any `--wake`.
 - `--guide FILE` (or `-` for stdin) sends a guide for the review: see below.
+- `--priority p0|p1|p2|p3` and `--note "Why"` pass on how urgent the work is, when your brief says. Only the submit that opens the item sets them; later ones warn and keep what the operator set, which `mg prioritize` changes (see [operator.md](operator.md)).
 - `--wake CMD` leaves a command for the hub to run when the item has events from the operator you haven't read: see [waiting.md](waiting.md).
 
 The operator reviews the newest revision. Each revision is the whole branch against the target, so amend, rebase or add commits as you like before submitting again.
@@ -62,7 +63,7 @@ On an item with a GitHub pull request, the hub reads the pull request's comments
 
 ## The queue
 
-`mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging, each with the files the operator has to read when rules trust some, as in `4 of 6 files to review`.
+`mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging, each with the files the operator has to read when rules trust some, as in `4 of 6 files to review`. Each group is ordered by priority (`p0` first, then none), then oldest first, with each item's note under it.
 
 ## Giving up
 

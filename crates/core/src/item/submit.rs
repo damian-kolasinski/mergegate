@@ -1,9 +1,10 @@
 //! Registering pushed work as an item or a new revision (F4).
 
 use super::diff_files::diff_files;
+use super::priority::note_of;
 use super::publish::{Revision, publish};
 use super::{
-    Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision,
+    Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, Priority,
     valid_branch, valid_commit,
 };
 use crate::agent::{self, AgentStore};
@@ -29,13 +30,19 @@ pub struct Submit {
     /// The agent's review guide (F11); blank removes it. The last one is
     /// kept when none is sent.
     pub guide: Option<String>,
+    /// The item's priority and note from the agent's brief (§10). Only the
+    /// submit that opens the item sets them, so an agent repeating its brief
+    /// can't undo a change the operator made since.
+    pub priority: Option<Priority>,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submitted {
     pub item: Item,
     pub new_revision: bool,
-    /// What the agent should fix in the revision's guide.
+    /// What the agent should fix in the revision's guide, and a priority or
+    /// note it sent that the item ignored.
     pub warnings: Vec<String>,
 }
 
@@ -62,9 +69,13 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         worktree,
         wake,
         guide,
+        priority,
+        note,
         ..
     } = request;
     let guide = guide.map(|text| (!text.trim().is_empty()).then_some(text));
+    let note = note_of(note);
+    let prioritized = priority.is_some() || note.is_some();
     if !valid_branch(&branch) {
         return Err(ItemError::InvalidBranch(branch));
     }
@@ -92,10 +103,12 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
             None => store.guide(&item.id, number)?,
         };
         let files = store.revision_files(&item.id, number)?;
+        let mut warnings = warnings(guide.as_deref(), &files);
+        warnings.extend(prioritized.then(|| kept(item)));
         return Ok(Submitted {
             item: item.clone(),
             new_revision: false,
-            warnings: warnings(guide.as_deref(), &files),
+            warnings,
         });
     }
     match git.branch_head(&project.name, &branch)? {
@@ -190,7 +203,10 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         (None, Some(item)) => store.guide(&item.id, item.revision.number)?,
         (None, None) => None,
     };
-    let warnings = warnings(guide.as_deref(), &files);
+    let mut warnings = warnings(guide.as_deref(), &files);
+    if let Some(item) = existing.as_ref().filter(|_| prioritized) {
+        warnings.push(kept(item));
+    }
     let revision = NewRevision {
         head,
         base,
@@ -209,6 +225,8 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
             backend,
             target,
             revision,
+            priority,
+            note,
         })?,
     };
     git.pin(&project.name, &item.pin_ref(), &item.revision.head)?;
@@ -218,6 +236,14 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         new_revision: true,
         warnings,
     })
+}
+
+fn kept(item: &Item) -> String {
+    let priority = item.priority.map_or("no priority", Priority::as_str);
+    format!(
+        "--priority and --note set only a new item's; {} keeps {priority}, which mg prioritize changes",
+        item.id
+    )
 }
 
 fn warnings(guide: Option<&str>, files: &[super::FileStat]) -> Vec<String> {

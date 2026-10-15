@@ -10,6 +10,7 @@ mod git;
 mod id;
 mod inbox;
 mod item_diff;
+mod priority;
 mod publish;
 mod state;
 mod store;
@@ -25,6 +26,7 @@ pub use git::{ChangedFile, FileStat, ItemGit, Pushed, valid_commit};
 pub use id::{IdError, ItemId};
 pub use inbox::{Inbox, inbox};
 pub use item_diff::{Compare, DiffedFile, ItemDiff, item_diff};
+pub use priority::{Prioritize, Priority, prioritize};
 pub use state::ItemState;
 pub use store::{ItemStore, NewItem, NewRevision};
 pub use submit::{Submit, Submitted, submit};
@@ -44,6 +46,10 @@ pub struct Item {
     /// The newest revision.
     pub revision: Revision,
     pub created_at: String,
+    /// None sorts after p3 (§10).
+    pub priority: Option<Priority>,
+    /// Why it has its priority, for the operator.
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

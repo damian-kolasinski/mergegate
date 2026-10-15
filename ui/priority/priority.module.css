@@ -1,0 +1,85 @@
+.badge {
+  flex: none;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgb(0 0 0 / 20%);
+}
+
+/* Centered over whichever screen opened it: the inbox has no header to
+   hang it from. */
+.panel {
+  position: fixed;
+  top: 20vh;
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(420px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+  transform: translateX(-50%);
+}
+
+.choices {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.choice {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-primary);
+  font: var(--type-label3);
+  letter-spacing: var(--tracking-label);
+  cursor: pointer;
+}
+
+.choice:hover:enabled {
+  background: var(--background-subtle);
+}
+
+/* The chosen one takes its badge's fill. */
+.choice[aria-checked="true"] {
+  border-color: transparent;
+  color: var(--text-on-fill);
+}
+
+.choice[aria-checked="true"][data-tone="error"] {
+  background: var(--background-error);
+}
+
+.choice[aria-checked="true"][data-tone="warning"] {
+  background: var(--background-warning);
+}
+
+.choice[aria-checked="true"][data-tone="brand"] {
+  background: var(--background-brand);
+}
+
+.choice[aria-checked="true"][data-tone="neutral"],
+.choice[aria-checked="true"][data-tone="none"] {
+  background: var(--background-secondary);
+  color: var(--text-primary);
+}
+
+.choice:disabled {
+  cursor: default;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

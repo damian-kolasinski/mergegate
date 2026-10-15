@@ -127,6 +127,8 @@ fn stores_each_files_triage_and_counts_only_reviewed_files() {
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
             },
+            priority: None,
+            note: None,
         })
         .unwrap();
     assert_eq!(store.revision_files(&item.id, 1).unwrap(), files);
@@ -178,6 +180,8 @@ fn insert(store: &mut Store, branch: &str) -> ItemId {
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
             },
+            priority: None,
+            note: None,
         })
         .unwrap()
         .id

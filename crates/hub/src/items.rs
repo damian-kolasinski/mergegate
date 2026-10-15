@@ -17,7 +17,7 @@ use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{merge, projects, rules};
+use crate::{merge, priority, projects, rules};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -38,6 +38,8 @@ async fn submit(
         worktree: request.worktree,
         wake: request.wake,
         guide: request.guide,
+        priority: request.priority.map(priority::from_api),
+        note: request.note,
     };
     let app = state.clone();
     let (moved, submitted) = state
@@ -142,6 +144,8 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
         },
         link: link(&item.backend),
         created_at: item.created_at.clone(),
+        priority: item.priority.map(priority::to_api),
+        note: item.note.clone(),
     }
 }
 
@@ -181,6 +185,8 @@ fn inbox_entry(
             revision: changed.revision,
             files: changed.files,
         }),
+        priority: item.priority.map(priority::to_api),
+        note: item.note.clone(),
     }
 }
 

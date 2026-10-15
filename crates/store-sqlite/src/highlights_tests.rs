@@ -152,6 +152,8 @@ fn prunes_the_blobs_of_a_closed_item_no_open_item_has() {
         backend: ItemBackend::Local,
         target: "main".into(),
         revision: revision(files),
+        priority: None,
+        note: None,
     };
     // r2 of a changes r1's, replayed to `old`, to `new`.
     let since_r1 = |files, old: &str, new: &str| NewRevision {

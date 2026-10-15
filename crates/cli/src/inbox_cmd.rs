@@ -4,6 +4,7 @@ use api::item::{Inbox, InboxItem};
 
 use crate::client::Client;
 use crate::output::{CliError, Outcome};
+use crate::prioritize_cmd::name;
 use crate::submit_cmd::files;
 
 pub fn run() -> Result<Outcome, CliError> {
@@ -54,8 +55,18 @@ fn line(i: &InboxItem) -> String {
     } else {
         format!("{} of {} to review", i.review_files, files(i.files))
     };
-    format!(
-        "  {} r{}  {}  ({}{link} · {files}, +{} -{})",
+    let priority = match i.priority {
+        Some(priority) => format!(" {}", name(priority)),
+        None => String::new(),
+    };
+    let mut out = format!(
+        "  {}{priority} r{}  {}  ({}{link} · {files}, +{} -{})",
         i.id, i.revision, i.title, i.branch, i.additions, i.deletions
-    )
+    );
+    if let Some(note) = &i.note {
+        // One line, so a note written over several stays under its item.
+        let note = note.split_whitespace().collect::<Vec<_>>().join(" ");
+        out.push_str(&format!("\n      {note}"));
+    }
+    out
 }

@@ -19,7 +19,7 @@ use crate::highlight::{
 use crate::interdiff::{InterdiffFile, InterdiffGit, InterdiffStore, Replay};
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
-    NewRevision, Pushed, Revision, Submit, submit,
+    NewRevision, Priority, Pushed, Revision, Submit, submit,
 };
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
@@ -676,6 +676,8 @@ impl FakeStore {
                 worktree: None,
                 wake: None,
                 guide: None,
+                priority: None,
+                note: None,
             };
             submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
         }
@@ -895,6 +897,8 @@ impl ItemStore for FakeStore {
             target: item.target,
             created_at: revision.submitted_at.clone(),
             revision,
+            priority: item.priority,
+            note: item.note,
         };
         self.items.push(item.clone());
         Ok(item)
@@ -932,6 +936,17 @@ impl ItemStore for FakeStore {
             Some(guide) => self.guides.insert(key, guide.into()),
             None => self.guides.remove(&key),
         };
+        Ok(())
+    }
+    fn set_priority(
+        &mut self,
+        id: &ItemId,
+        priority: Option<Priority>,
+        note: Option<&str>,
+    ) -> Result<(), StoreError> {
+        let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
+        item.priority = priority;
+        item.note = note.map(Into::into);
         Ok(())
     }
 }
@@ -1668,6 +1683,20 @@ impl FeedbackStore for FakeStore {
         Ok(self.events(id, 0)?.last().map_or(0, |e| e.cursor))
     }
 
+    fn logged_since(&self, cursor: u64) -> Result<Vec<ItemId>, StoreError> {
+        let mut ids: Vec<ItemId> = Vec::new();
+        for (id, _) in self.events.iter().filter(|(_, e)| e.cursor > cursor) {
+            if !ids.contains(id) {
+                ids.push(id.clone());
+            }
+        }
+        Ok(ids)
+    }
+
+    fn newest_cursor(&self) -> Result<u64, StoreError> {
+        Ok(self.events.last().map_or(0, |(_, e)| e.cursor))
+    }
+
     fn delivered(&self, id: &ItemId) -> Result<u64, StoreError> {
         Ok(self.delivered.get(id).copied().unwrap_or(0))
     }
@@ -2242,6 +2271,8 @@ pub(crate) fn submit_login(store: &mut FakeStore, git: &FakeGit, head: u8) -> It
         worktree: None,
         wake: None,
         guide: None,
+        priority: None,
+        note: None,
     };
     submit(store, git, &FakeGithub::default(), request)
         .unwrap()

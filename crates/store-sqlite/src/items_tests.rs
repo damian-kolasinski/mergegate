@@ -70,6 +70,8 @@ fn new_item(project: &str, branch: &str) -> NewItem {
         backend: ItemBackend::Local,
         target: "main".into(),
         revision: revision('a'),
+        priority: None,
+        note: None,
     }
 }
 
@@ -258,4 +260,32 @@ fn keeps_each_revisions_guide() {
     assert_eq!(store.guide(&id, 1).unwrap(), None);
     assert_eq!(store.guide(&id, 2).unwrap().as_deref(), Some("r2's"));
     assert_eq!(store.guide(&id, 3).unwrap(), None);
+}
+
+#[test]
+fn keeps_an_items_priority_and_note() {
+    let (_dir, mut store) = store();
+    let item = store
+        .insert_item(NewItem {
+            priority: Some(Priority::P1),
+            note: Some("blocks the release".into()),
+            ..new_item("app", "a")
+        })
+        .unwrap();
+    assert_eq!(
+        (item.priority, item.note.as_deref()),
+        (Some(Priority::P1), Some("blocks the release"))
+    );
+    let other = store.insert_item(new_item("web", "a")).unwrap();
+    assert_eq!((other.priority, other.note.as_deref()), (None, None));
+
+    store
+        .set_priority(&item.id, Some(Priority::P0), None)
+        .unwrap();
+    let item = store.item(&item.id).unwrap().unwrap();
+    assert_eq!((item.priority, item.note), (Some(Priority::P0), None));
+    store.set_priority(&item.id, None, Some("later")).unwrap();
+    let item = store.item(&item.id).unwrap().unwrap();
+    assert_eq!((item.priority, item.note.as_deref()), (None, Some("later")));
+    assert_eq!(store.item(&other.id).unwrap().unwrap().note, None);
 }

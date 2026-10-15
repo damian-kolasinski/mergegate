@@ -19,6 +19,18 @@ pub struct Feedback {
     pub cursor: u64,
 }
 
+/// `GET /api/events`: every item's events after `since`, which
+/// `mg events --follow` streams. Without `since`, none and the newest cursor,
+/// to start from now. With `wait` (seconds), the hub holds the request until
+/// there is one or the time is up. It acknowledges nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Log {
+    /// Oldest first.
+    pub events: Vec<Event>,
+    /// Where the next read starts.
+    pub cursor: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
     pub cursor: u64,

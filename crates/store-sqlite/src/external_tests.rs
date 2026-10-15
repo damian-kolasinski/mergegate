@@ -39,6 +39,8 @@ fn store() -> (tempfile::TempDir, Store) {
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
             },
+            priority: None,
+            note: None,
         })
         .unwrap();
     (dir, store)

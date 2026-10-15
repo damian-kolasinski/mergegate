@@ -37,6 +37,8 @@ fn store() -> (tempfile::TempDir, Store) {
                 backend: ItemBackend::Local,
                 target: "main".into(),
                 revision: revision(),
+                priority: None,
+                note: None,
             })
             .unwrap();
     }

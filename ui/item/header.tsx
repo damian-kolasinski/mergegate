@@ -1,7 +1,9 @@
 import { type JSX, Show } from "solid-js";
 import type { Item } from "../api/Item";
 import type { ItemState } from "../api/ItemState";
+import type { Priority } from "../api/Priority";
 import { Badge, ExternalLink, Meta, Mono, type Tone } from "../design-system";
+import { PriorityBadge } from "../priority/priority";
 import { Counts } from "./counts";
 import styles from "./header.module.css";
 
@@ -9,6 +11,9 @@ import styles from "./header.module.css";
 export function ItemHeader(props: {
   item: Item;
   state: ItemState;
+  /** The item's, or what the operator just set. */
+  priority: Priority | null;
+  note: string | null;
   viewed: number;
   files: number;
   /** A viewed mark the hub refused. */
@@ -22,6 +27,7 @@ export function ItemHeader(props: {
       <h1 class={styles.title}>{props.item.title}</h1>
       <Badge tone="brand">r{props.item.revision.number}</Badge>
       <Badge tone={stateTone[props.state]}>{stateLabel[props.state]}</Badge>
+      <PriorityBadge priority={props.priority} note={props.note} />
       <Meta>
         <Mono>{props.item.branch}</Mono> → <Mono>{props.item.target}</Mono>
       </Meta>
