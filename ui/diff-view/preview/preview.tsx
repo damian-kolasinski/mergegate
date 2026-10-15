@@ -4,6 +4,7 @@ import { useModalKeys } from "../../app/keys";
 import { Button } from "../../design-system";
 import { ImageCompare } from "./image-compare";
 import { previewOf } from "./kind";
+import { MarkdownView } from "./markdown-view";
 import styles from "./preview.module.css";
 
 /**
@@ -44,6 +45,9 @@ export function PreviewDialog(props: {
           <Switch>
             <Match when={previewOf(props.file) === "image"}>
               <ImageCompare file={props.file} blobUrl={props.blobUrl} />
+            </Match>
+            <Match when={previewOf(props.file) === "markdown"}>
+              <MarkdownView file={props.file} blobUrl={props.blobUrl} />
             </Match>
           </Switch>
         </div>
