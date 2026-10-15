@@ -226,3 +226,28 @@ fn the_intent_is_the_text_before_the_files() {
     assert_eq!(Guide::intent(prose), "Only prose.\n\n# Notes");
     assert_eq!(Guide::intent("## Files\n- `a.rs`\n"), "");
 }
+
+#[test]
+fn warns_when_the_intent_names_the_review() {
+    let comments = [CommentId(2), CommentId(17)];
+    let warning = |text: &str| Guide::review_warning(text, &comments, 3);
+    assert_eq!(
+        warning("r2 adds the tests asked for in c_2, and `c_17`'s check.\n").as_deref(),
+        Some(
+            "the guide's intent names `r2`, `c_2`, `c_17` from the review, but it becomes \
+             the commit message when the item merges: describe the change as a whole"
+        )
+    );
+    assert!(warning("Since r3, retries.").is_some());
+    for quiet in [
+        // Comments the item doesn't have, revisions it hasn't reached, and
+        // words that only look like them.
+        "Answers c_3 and c_02, as r4 will.",
+        "Stores blobs in R2, r02 or r2d2, and sets `r2` in asm.",
+        "```\nr1 = load()\n```\n",
+        // The list doesn't land in the commit.
+        "Adds tests.\n\n## Files\n- `a.rs` — for c_2, in r2\n",
+    ] {
+        assert_eq!(warning(quiet), None, "{quiet}");
+    }
+}
