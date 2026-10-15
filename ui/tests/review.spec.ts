@@ -120,6 +120,27 @@ test("f6 j, k, ] and [ move the line cursor", async ({ page, hub }) => {
   await expect(cursor).toHaveText("bye");
 });
 
+test("f6 j walks a realigned change in the order it shows", async ({
+  page,
+  hub,
+}) => {
+  // The view lines the removed call up with its edit, after the two added
+  // lines, rather than next to the first added one.
+  const app = hub.project("app");
+  app.seed({ "call.rs": "keep\nfoo(1, 2)\nkeep2\n" });
+  app.submit("work", "Edit a call", {
+    "call.rs": "keep\nbar\nbaz\nfoo(1, 3)\nkeep2\n",
+  });
+  await page.goto(`${hub.url}#/items/app%231`);
+  await expect(page.getByText("foo(1, 3)", { exact: true })).toBeVisible();
+
+  const cursor = page.locator("[data-line][data-selected-line]");
+  for (const text of ["keep", "bar", "baz", "foo(1, 2)", "foo(1, 3)"]) {
+    await page.keyboard.press("j");
+    await expect(cursor).toHaveText(text);
+  }
+});
+
 test("f6 a gap between hunks expands", async ({ page, hub }) => {
   submitChange(hub);
   await page.goto(`${hub.url}#/items/app%231`);
