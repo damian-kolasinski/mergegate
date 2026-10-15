@@ -11,7 +11,7 @@ export function Conversation(props: {
   comments: Comments;
   open: boolean;
   onToggle: () => void;
-  /** Called once a comment of the diff's revision shows under its line. */
+  /** Called once a comment the diff has shows under its line. */
   onShow: () => void;
   ref: (button: HTMLButtonElement) => void;
 }) {
@@ -36,12 +36,12 @@ export function Conversation(props: {
 
 /**
  * Every comment on the item as `path:line @rN` with where the agent left it.
- * The diff shows only its own revision's on lines it has, so the rest are
- * answered here.
+ * The diff shows those whose lines it has, its own revision's or ones that
+ * followed their lines to it, so the rest are answered here.
  */
 function ConversationList(props: {
   comments: Comments;
-  /** Called once a comment of the diff's revision shows under its line. */
+  /** Called once a comment the diff has shows under its line. */
   onShow: () => void;
 }) {
   return (
@@ -115,8 +115,8 @@ function Entry(props: {
           </span>
         </Show>
       </header>
-      {/* The diff holds the thread of its own revision's comments, and an
-          editor open in two places would split what's typed. */}
+      {/* The diff holds the thread of the comments it shows, and an editor
+          open in two places would split what's typed. */}
       <Show
         when={!inDiff()}
         fallback={

@@ -1,9 +1,10 @@
 use super::*;
-use crate::fake::{FakeBackend, FakeGit, FakeStore, commit};
+use crate::fake::{FakeBackend, FakeGit, FakeStore, commit, remapped};
 use crate::feedback::{EventKind, Notice, NoticeKind, Source};
 use crate::git::GitError;
 use crate::merge::Landing;
 use crate::project::{Backend, ProjectName};
+use crate::review::{ReviewError, Side, WriteDraft, write_draft};
 
 fn id(id: &str) -> ItemId {
     ItemId::parse(id).unwrap()
@@ -164,6 +165,33 @@ fn only_the_newest_revision_of_an_open_item_merges() {
     assert!(matches!(none, MergeError::NoItem(_)), "{none:?}");
     assert!(backend.landed().is_empty());
     assert!(store.reviews().is_empty());
+}
+
+#[test]
+fn a_draft_that_cant_move_holds_the_approval() {
+    let (mut store, git) = remapped(false);
+    let draft = WriteDraft {
+        id: id("app#1"),
+        revision: 1,
+        path: "src/changed.rs".into(),
+        side: Side::New,
+        start_line: 2,
+        line: 2,
+        body: "Why?".into(),
+    };
+    let draft = write_draft(&mut store, &git, draft).unwrap();
+    let backend = FakeBackend::new(Backend::Local);
+    let held = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();
+    let MergeError::Review(ReviewError::Unplaced { drafts, .. }) = held else {
+        panic!("{held:?}");
+    };
+    assert_eq!(drafts, [draft.id]);
+    assert!(backend.landed().is_empty());
+    assert!(store.reviews().is_empty());
+    assert_eq!(
+        store.item(&id("app#1")).unwrap().unwrap().state,
+        ItemState::NeedsReview
+    );
 }
 
 #[test]

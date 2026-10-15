@@ -11,6 +11,8 @@ import type { Sent } from "./sent";
  */
 export function useSync(
   item: string,
+  /** The revision on screen, which earlier revisions' threads are placed onto. */
+  revision: number,
   slices: {
     sent: Sent;
     drafts: Drafts;
@@ -22,7 +24,7 @@ export function useSync(
   const refresh = () => {
     const ask = ++asked;
     getJson<Conversation>(
-      `/api/items/${encodeURIComponent(item)}/conversation`,
+      `/api/items/${encodeURIComponent(item)}/conversation?onto=${revision}`,
     ).then(
       (latest) => {
         // An older answer mustn't replace a newer one.

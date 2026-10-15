@@ -24,6 +24,14 @@ export function ReviewBar(props: {
   /** Files not marked viewed, which the confirm step warns about. */
   unviewed: number;
   drafts: number;
+  /**
+   * Drafts from earlier revisions whose lines changed: the review waits until
+   * each is re-placed or deleted.
+   */
+  unplaced: number;
+  /** The draft whose new lines the operator is picking in the diff. */
+  placing: string | undefined;
+  onStopPlacing: () => void;
   /** Draft replies on sent comments. */
   replies: number;
   /** A comment being written, which the review would go out without. */
@@ -95,8 +103,11 @@ export function ReviewBar(props: {
       }, failed)
       .finally(() => setSending(false));
   };
+  // What would go out without what's held: an open comment, or drafts that
+  // can't move to this revision.
+  const held = () => sending() || props.holding || props.unplaced > 0;
   const confirm = () => {
-    if (!sending() && !props.holding && !props.behind) setConfirming(true);
+    if (!held() && !props.behind) setConfirming(true);
   };
 
   useKeys({ r: () => field?.focus(), a: confirm });
@@ -149,10 +160,26 @@ export function ReviewBar(props: {
         <Show when={props.holding}>
           <Meta>Save or cancel the open comment first</Meta>
         </Show>
-        <Button
-          disabled={sending() || empty() || props.holding}
-          onClick={() => submit("comment")}
+        <Show
+          when={props.placing}
+          fallback={
+            <Show when={props.unplaced}>
+              <Meta tone="removed">
+                {plural(props.unplaced, "draft")} can't move to r
+                {props.revision}: re-place or delete{" "}
+                {props.unplaced === 1 ? "it" : "them"}
+              </Meta>
+            </Show>
+          }
         >
+          {(placing) => (
+            <>
+              <Meta>Pick the lines for {placing()} in the diff</Meta>
+              <Button onClick={() => props.onStopPlacing()}>Cancel</Button>
+            </>
+          )}
+        </Show>
+        <Button disabled={held() || empty()} onClick={() => submit("comment")}>
           Comment
         </Button>
         <Show
@@ -160,14 +187,14 @@ export function ReviewBar(props: {
           fallback={
             <>
               <Button
-                disabled={sending() || empty() || props.holding}
+                disabled={held() || empty()}
                 onClick={() => submit("changes_requested")}
               >
                 Request changes
               </Button>
               <Button
                 variant="solid"
-                disabled={sending() || props.holding || props.behind}
+                disabled={held() || props.behind}
                 onClick={confirm}
               >
                 Approve & merge

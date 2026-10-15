@@ -1,7 +1,9 @@
 use mergegate_core::feedback::{EventKind, FeedbackStore};
 use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
-use mergegate_core::review::{CommentId, NewComment, NewReview, Side, Verdict};
+use mergegate_core::review::{
+    Anchor, CommentId, MovedDraft, NewComment, NewReview, ReviewStore, Side, Verdict,
+};
 
 use super::*;
 
@@ -56,6 +58,7 @@ fn review(item: &str, revision: u32, summary: &str) -> NewReview {
         revision,
         verdict: Verdict::ChangesRequested,
         summary: summary.into(),
+        moved: Vec::new(),
     }
 }
 
@@ -197,4 +200,74 @@ fn a_review_sends_only_its_items_drafts() {
     );
     assert_eq!(store.comments(&id("app#1")).unwrap(), written.comments);
     assert_eq!(store.comments(&other).unwrap(), [elsewhere]);
+}
+
+#[test]
+fn drafts_move_onto_the_revision_their_review_is_on() {
+    let (_dir, mut store) = store();
+    let moved = store.insert_draft(draft(1, "Moved")).unwrap();
+    let stays = store.insert_draft(draft(2, "Stays")).unwrap();
+    let written = store
+        .insert_review(
+            NewReview {
+                moved: vec![MovedDraft {
+                    comment: moved.id,
+                    revision: 2,
+                    start_line: 5,
+                    line: 6,
+                }],
+                ..review("app#1", 2, "")
+            },
+            ItemState::ChangesRequested,
+        )
+        .unwrap();
+    let sent: Vec<_> = written
+        .comments
+        .iter()
+        .map(|c| {
+            let anchor = c.anchor.as_ref().unwrap();
+            (
+                c.id,
+                c.revision,
+                anchor.start_line,
+                anchor.line,
+                anchor.quote.as_str(),
+            )
+        })
+        .collect();
+    // Its lines didn't change, so neither does the quote.
+    assert_eq!(
+        sent,
+        [
+            (moved.id, 2, 5, 6, "fn login() {\n}"),
+            (stays.id, 2, 2, 3, "fn login() {\n}"),
+        ]
+    );
+}
+
+#[test]
+fn a_draft_is_re_placed_until_a_review_sends_it() {
+    let (_dir, mut store) = store();
+    let app = id("app#1");
+    let first = store.insert_draft(draft(1, "First")).unwrap();
+    let anchor = Anchor {
+        path: "src/logout.rs".into(),
+        side: Side::New,
+        start_line: 7,
+        line: 7,
+        quote: "fn logout() {".into(),
+    };
+    store.set_draft_anchor(first.id, 2, &anchor).unwrap();
+    let placed = store.comment(first.id).unwrap().unwrap();
+    assert_eq!((placed.revision, placed.anchor), (2, Some(anchor.clone())));
+    assert_eq!(placed.body, "First");
+
+    store
+        .insert_review(review("app#1", 2, ""), ItemState::ChangesRequested)
+        .unwrap();
+    let sent = store.comments(&app).unwrap();
+    store
+        .set_draft_anchor(first.id, 1, &Anchor { line: 9, ..anchor })
+        .unwrap();
+    assert_eq!(store.comments(&app).unwrap(), sent);
 }

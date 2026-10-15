@@ -6,7 +6,11 @@ import type { Review as SentReview } from "../api/Review";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { inboxHref } from "../app/router";
-import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
+import {
+  DiffView,
+  type DiffViewControl,
+  type Span,
+} from "../diff-view/diff-view";
 import { Empty } from "../design-system";
 import { useComments } from "./comments/comments";
 import { ComparePicker } from "./compare";
@@ -226,6 +230,8 @@ function Review(props: {
         view?.showLine(spot);
       },
       showAll: () => setTalking(true),
+      hideAll: () => void hideAll(),
+      onScreen: onOwnSide,
     },
   );
   /** Closes the list, unless that would hide what's typed in it. */
@@ -267,8 +273,14 @@ function Review(props: {
   const comment = () => {
     const line = nav.cursor();
     if (line && reviewable(state()) && onOwnSide(line)) {
-      comments.drafts.start({ ...line, start: line.line });
+      pick({ ...line, start: line.line });
     }
+  };
+
+  /** Lines picked in the diff: for a new comment, or a draft re-placed. */
+  const pick = (span: Span) => {
+    if (comments.drafts.placing()) comments.drafts.place(span);
+    else comments.drafts.start(span);
   };
 
   // An open comment takes the keys: the editor focuses a few frames after
@@ -280,6 +292,7 @@ function Review(props: {
     // Never leaves an open comment behind.
     Escape: () => {
       if (comments.editor.open()) comments.editor.escape();
+      else if (comments.drafts.placing()) comments.drafts.stopPlacing();
       else if (abandoning()) setAbandoning(false);
       // Focus was likely in the list, which takes it along when it closes.
       else if (talking()) {
@@ -410,12 +423,10 @@ function Review(props: {
             onFile={nav.scrolledTo}
             onRow={nav.clicked}
             commentable={reviewable(state())}
-            notes={comments.threads.spots().filter(onOwnSide)}
+            notes={comments.threads.spots()}
             note={(spot) => <Thread comments={comments} spot={spot} />}
             onComment={(span) => {
-              if (reviewable(state()) && onOwnSide(span)) {
-                comments.drafts.start(span);
-              }
+              if (reviewable(state()) && onOwnSide(span)) pick(span);
             }}
             control={(control) => {
               view = control;
@@ -431,6 +442,9 @@ function Review(props: {
           behind={props.newest !== undefined}
           unviewed={own().filter((file) => !done().has(file.path)).length}
           drafts={comments.drafts.list().length}
+          unplaced={comments.drafts.flagged().length}
+          placing={comments.drafts.placing()?.id}
+          onStopPlacing={comments.drafts.stopPlacing}
           replies={comments.replyDrafts.list().length}
           holding={comments.editor.holding()}
           summary={props.summary}

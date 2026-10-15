@@ -93,6 +93,8 @@ The `local` backend's push into the operator's repo is the exception. The receiv
 
 **Interdiff after the base moved.** If the target advanced between r1 and r2, a raw r1→r2 diff includes upstream changes. The hub replays r1 onto r2's base (`git merge-tree --write-tree --merge-base=<r1 base> <r2 base> <r1 head>`) and diffs that tree against r2's head, so only the item's own changes show; with an unmoved base it diffs head against head. A file the replay conflicts on shows its whole own diff in r2. Each replayed tree is pinned under the item's refs until the item closes, and interdiff file diffs share the blob-pair cache.
 
+**Comments are placed on read.** Opening an item, and rereading its conversation onto the revision on screen (`?onto=`), diffs each commented file between the comment's revision and that one, reusing the blob-pair cache, and maps the comment's lines through the hunks. Nothing is stored, so a comment written on an old revision or ingested late needs no write path of its own. It's the one exception to request paths only reading, kept because it's cheap: in `open_item_budget` (release build), an item with 60 comments over twenty 300-line files on a rebased revision opens in 2.0 ms against 0.4 ms without comments, about 80 µs a file, and about 190 µs a file at 3,000 lines. Submitting or approving moves the drafts that can move, and a draft is re-placed by rewriting its anchor.
+
 ## 6. Syntax highlighting and language packs
 
 The hub parses the full old and new blob with tree-sitter, in a background task woken by submits and `mg lang add`: it highlights the blobs of every open item's newest revision that lack spans for an installed grammar, so the submit request doesn't wait on it and a file opened before then shows plain until the next load. It stores per-line token spans (`[start, len, class]`, columns in UTF-16 units as the browser counts them) in SQLite keyed by blob, grammar and a version covering every installed pack's archive digest and mg's span format, since injections reach across packs: adding, removing or reinstalling any pack highlights open items again and drops the stale rows. Spans are pruned with the diffs when an item closes. The same parse feeds structural triage signals (§7).
@@ -134,7 +136,7 @@ With releases (roadmap row 18a):
 | Backend | `github` / `local`: open/update/merge, external comment sync, polling | `Backend` |
 | Diff engine | Merge-base diffs, interdiffs (replayed onto the newest base), viewed-state carry-over | in `core`, over `Git` |
 | Stacks | Parent links, own-diff base, `parent.*` events, landing order, retargeting | in `core`, over `Git` and `Backend` |
-| Comment anchoring | Re-map drafts and old comments onto new revisions; flag unmappable ones | in `core` |
+| Comment anchoring | Place earlier revisions' comments onto the one on screen (moved, changed, outdated); move drafts with a review, holding it for flagged ones | in `core`, over `Git` |
 | File triage | Pipeline: guards → rules (only stage that can hide) → rankers (agent guide, structural heuristics, judge) | `FileRanker` |
 | Inbox prioritization | Explicit priority → conflict pressure and stacked children → age → optional judge | `ItemRanker` |
 | Judge | Provider for both rankers | `Judge` |
@@ -162,7 +164,7 @@ No MCP server. The CLI works in every harness, while MCP tool schemas cost conte
 | `mg` cold start (`mg --version`) | < 10 ms |
 | `mg inbox --json` | < 30 ms |
 | UI first paint | < 100 ms |
-| Open item (precomputed) | < 50 ms |
+| Open item (diffs precomputed, comments placed) | < 50 ms |
 | Switch file / keyboard action | < 16 ms |
 | Scroll a 5k-line diff | 60 fps (virtualized; p95 frame < 25 ms in `ui/tests/review.spec.ts`) |
 

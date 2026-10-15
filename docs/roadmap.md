@@ -41,7 +41,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | # | PR | Delivers | Flows | Faked | After |
 |---|---|---|---|---|---|
 | 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with interdiffs (`interdiff_files`) | F7, F12 | — | 10 |
-| 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions; until then a draft on an older revision shows only in the Conversation list | F7, F13 | — | 10 |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
 | 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | — |

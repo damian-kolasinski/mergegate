@@ -29,7 +29,7 @@ fn review(store: &mut FakeStore, summary: &str, comments: &[&str]) {
         verdict: Verdict::ChangesRequested,
         summary: summary.into(),
     };
-    submit(store, review).unwrap();
+    submit(store, &FakeGit::default(), review).unwrap();
 }
 
 #[test]

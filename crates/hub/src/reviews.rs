@@ -40,7 +40,7 @@ async fn submit(
         summary: request.summary,
     };
     let review = state
-        .blocking(move |store, _| review::submit(store, request))
+        .blocking(move |store, git| review::submit(store, git, request))
         .await
         .map_err(failure)?;
     state.events.logged();
@@ -78,6 +78,8 @@ pub(crate) fn failure(e: ReviewError) -> Failure {
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::Empty => (S::BAD_REQUEST, "empty_review", None),
         E::Approval => (S::BAD_REQUEST, "invalid_verdict", None),
+        E::Unplaced { .. } => (S::CONFLICT, "drafts_unplaced", None),
+        E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };
     if status.is_server_error() {

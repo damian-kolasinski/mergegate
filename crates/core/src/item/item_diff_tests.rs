@@ -153,6 +153,7 @@ fn request_changes(store: &mut FakeStore, revision: u32) {
         revision,
         verdict: Verdict::ChangesRequested,
         summary: String::new(),
+        moved: Vec::new(),
     };
     store
         .insert_review(review, ItemState::ChangesRequested)

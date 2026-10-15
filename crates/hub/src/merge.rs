@@ -16,7 +16,7 @@ use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{items, projects};
+use crate::{items, projects, reviews};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -139,10 +139,11 @@ fn failure(e: MergeError) -> Failure {
         E::Project(e) => return projects::failure(e),
         E::Item(e) => return items::failure(e),
         E::Store(e) => return items::failure(e.into()),
+        E::Review(e) => return reviews::failure(e),
         e => e,
     };
     let (status, code, hint) = match &e {
-        E::Project(_) | E::Item(_) | E::Store(_) => unreachable!("answered above"),
+        E::Project(_) | E::Item(_) | E::Store(_) | E::Review(_) => unreachable!("answered above"),
         E::NoItem(_) => (S::NOT_FOUND, "item_not_found", Some("mg inbox".to_owned())),
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::Merging(_) => (S::CONFLICT, "item_merging", None),

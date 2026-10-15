@@ -9,7 +9,10 @@ use axum::http::StatusCode;
 use axum::routing::{post, put};
 use axum::{Json, Router};
 use mergegate_core::item::ItemId;
-use mergegate_core::review::{self, Comment, CommentId, DraftError, Side, WriteDraft};
+use mergegate_core::remap::Placement;
+use mergegate_core::review::{
+    self, Comment, CommentId, DraftError, Lines, MoveDraft, Side, WriteDraft,
+};
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -19,6 +22,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/items/{id}/drafts", post(write))
         .route("/api/items/{id}/drafts/{comment}", put(edit).delete(delete))
+        .route("/api/items/{id}/drafts/{comment}/anchor", put(place))
 }
 
 async fn write(
@@ -32,10 +36,7 @@ async fn write(
         id: item_id(&id)?,
         revision: request.revision,
         path: request.path,
-        side: match request.side {
-            api::review::Side::Old => Side::Old,
-            api::review::Side::New => Side::New,
-        },
+        side: side(request.side),
         start_line: request.start_line,
         line: request.line,
         body: request.body,
@@ -45,6 +46,40 @@ async fn write(
         .await
         .map_err(failure)?;
     Ok((StatusCode::CREATED, Json(to_api(&draft))))
+}
+
+/// Re-places a draft whose lines changed since its revision, or moves one
+/// anywhere else the operator picks.
+async fn place(
+    State(state): State<Arc<AppState>>,
+    path: Result<Path<(String, String)>, PathRejection>,
+    request: Result<Json<api::review::MoveDraft>, JsonRejection>,
+) -> Result<Json<api::review::Comment>, Failure> {
+    let Path((id, comment)) = path?;
+    let Json(request) = request?;
+    let request = MoveDraft {
+        id: item_id(&id)?,
+        comment: comment_id(&comment)?,
+        lines: Lines {
+            revision: request.revision,
+            path: request.path,
+            side: side(request.side),
+            start_line: request.start_line,
+            line: request.line,
+        },
+    };
+    let draft = state
+        .blocking(move |store, git| review::move_draft(store, git, request))
+        .await
+        .map_err(failure)?;
+    Ok(Json(to_api(&draft)))
+}
+
+fn side(side: api::review::Side) -> Side {
+    match side {
+        api::review::Side::Old => Side::Old,
+        api::review::Side::New => Side::New,
+    }
 }
 
 async fn edit(
@@ -128,5 +163,25 @@ pub(crate) fn to_api(comment: &Comment) -> api::review::Comment {
         body: comment.body.clone(),
         quote: anchor.map(|a| a.quote.clone()),
         external: external::to_api(comment),
+        placement: None,
+    }
+}
+
+/// A comment as the item screen shows it on a later revision.
+pub(crate) fn placed_to_api(
+    comment: &Comment,
+    placement: Option<&Placement>,
+) -> api::review::Comment {
+    api::review::Comment {
+        placement: placement.map(|placement| match *placement {
+            Placement::Moved { start_line, line } => {
+                api::review::Placement::Moved { start_line, line }
+            }
+            Placement::Changed { start_line, line } => {
+                api::review::Placement::Changed { start_line, line }
+            }
+            Placement::Outdated => api::review::Placement::Outdated,
+        }),
+        ..to_api(comment)
     }
 }

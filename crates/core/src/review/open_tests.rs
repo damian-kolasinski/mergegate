@@ -98,6 +98,7 @@ fn a_comment_is_open_until_its_agent_settles_it() {
             newest,
             comments: vec![comment(1, Some(9))],
             replies: replies(thread),
+            placements: Default::default(),
         };
         let threads = open_threads(&conversation);
         assert_eq!(!threads.is_empty(), open, "{thread:?} at r{newest}");
@@ -113,6 +114,7 @@ fn drafts_are_not_threads() {
         newest: 1,
         comments: vec![comment(1, None), comment(2, Some(9))],
         replies: Vec::new(),
+        placements: Default::default(),
     };
     let ids: Vec<_> = open_threads(&conversation)
         .into_iter()
@@ -142,6 +144,7 @@ fn held_external_comments_are_not_threads_yet() {
             newest: 1,
             comments: vec![external(pending)],
             replies: Vec::new(),
+            placements: Default::default(),
         };
         assert_eq!(open_threads(&conversation).len(), threads, "{pending}");
     }

@@ -66,7 +66,7 @@ fn a_conflict_blocks_through_later_comments_but_not_a_later_approval() {
         verdict: Verdict::Comment,
         summary: "Rebase onto main.".into(),
     };
-    submit(&mut store, comment).unwrap();
+    submit(&mut store, &FakeGit::default(), comment).unwrap();
     assert_eq!(blocked_now(&store), Some(expected));
 
     // Approving the same revision again, which still conflicts on the
@@ -96,6 +96,7 @@ fn a_merge_cut_short_before_it_logged_anything_is_held() {
         revision: 1,
         verdict: Verdict::Approved,
         summary: String::new(),
+        moved: Vec::new(),
     };
     store.insert_review(review, ItemState::Merging).unwrap();
     assert!(matches!(blocked_now(&store), Some(Blocked::Held { .. })));

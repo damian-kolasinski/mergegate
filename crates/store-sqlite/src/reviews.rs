@@ -2,7 +2,8 @@
 
 use mergegate_core::item::{ItemId, ItemState};
 use mergegate_core::review::{
-    Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore, Verdict,
+    Anchor, Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
+    Verdict,
 };
 use mergegate_core::store::StoreError;
 use rusqlite::{Connection, params};
@@ -47,7 +48,7 @@ impl ReviewStore for Store {
             params![item_id, review.revision, id],
         )
         .map_err(StoreError::new)?;
-        comments::attach(&tx, item_id, id)?;
+        comments::attach(&tx, item_id, id, &review.moved)?;
         replies::attach(&tx, item_id, id)?;
         let sent = comments::of_item(&tx, &review.item, Some(id as u64))?;
         let answers = replies::of_item(&tx, &review.item, Some(id as u64))?;
@@ -89,6 +90,15 @@ impl ReviewStore for Store {
 
     fn set_draft_body(&mut self, id: CommentId, body: &str) -> Result<(), StoreError> {
         comments::set_body(&self.conn, id, body)
+    }
+
+    fn set_draft_anchor(
+        &mut self,
+        id: CommentId,
+        revision: u32,
+        anchor: &Anchor,
+    ) -> Result<(), StoreError> {
+        comments::set_anchor(&self.conn, id, revision, anchor)
     }
 
     fn delete_draft(&mut self, id: CommentId) -> Result<(), StoreError> {

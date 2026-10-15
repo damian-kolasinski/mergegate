@@ -1,8 +1,8 @@
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, For, Match, Show, Switch } from "solid-js";
 import type { Comment } from "../../api/Comment";
 import type { Spot } from "../../diff-view/diff-view";
 import { Badge, Meta } from "../../design-system";
-import { linesOf, sameSpot, spotOf } from "./anchor";
+import { linesOf, linesOn, sameSpot, spotOf } from "./anchor";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
 import { Editor } from "./editor";
@@ -13,7 +13,8 @@ import styles from "./thread.module.css";
 
 /**
  * Every comment, sent and draft, on every revision. The diff shows the shown
- * revision's under their last line, and the new one being written.
+ * revision's under their last line, the earlier ones' the hub placed onto it
+ * under the last of the lines theirs became, and the new one being written.
  */
 export function useThreads(
   revision: number,
@@ -22,18 +23,22 @@ export function useThreads(
     drafts: () => Comment[];
     composing: () => Spot | undefined;
   },
+  /** Lines of a side the diff on screen has, as an interdiff has no base. */
+  onScreen: (spot: Spot) => boolean,
 ) {
   const all = createMemo(() =>
     [...lists.sent(), ...lists.drafts()].sort(
       (a, b) => numberOf(a) - numberOf(b),
     ),
   );
-  const inDiff = (comment: Comment) =>
-    comment.revision === revision && spotOf(comment) !== undefined;
+  const inDiff = (comment: Comment) => {
+    const spot = spotOf(comment, revision);
+    return spot !== undefined && onScreen(spot);
+  };
   const shown = createMemo(() => all().filter(inDiff));
   /** The lines that hold a thread, for the diff to make room under. */
   const spots = createMemo(() => {
-    const spots = shown().flatMap((comment) => spotOf(comment) ?? []);
+    const spots = shown().flatMap((comment) => spotOf(comment, revision) ?? []);
     const composing = lists.composing();
     if (composing) spots.push(composing);
     return spots;
@@ -46,7 +51,7 @@ export function useThreads(
     spots,
     at: (spot: Spot) =>
       shown().filter((comment) => {
-        const at = spotOf(comment);
+        const at = spotOf(comment, revision);
         return at !== undefined && sameSpot(at, spot);
       }),
   };
@@ -107,11 +112,10 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
           >
             {(external) => <ExternalMeta external={external()} />}
           </Show>
-          <Show when={props.comment.start_line}>
-            {(start) => (
-              <Meta>{linesOf(start(), props.comment.line ?? start())}</Meta>
-            )}
+          <Show when={linesOn(props.comment, props.comments.revision)}>
+            {(lines) => <Meta>{linesOf(lines().start, lines().line)}</Meta>}
           </Show>
+          <Placed comment={props.comment} revision={props.comments.revision} />
           <DraftActions comments={props.comments} comment={props.comment} />
           <RejectionActions comments={props.comments} comment={props.comment} />
           <ReplyButton comments={props.comments} comment={props.comment} />
@@ -127,6 +131,31 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
           )}
         </Show>
       </article>
+    </Show>
+  );
+}
+
+/**
+ * How a comment from an earlier revision sits on the one on screen: on the
+ * same lines, on what replaced them, or nowhere its diff shows.
+ */
+function Placed(props: { comment: Comment; revision: number }) {
+  const from = () => props.comment.revision;
+  return (
+    <Show when={from() < props.revision && props.comment.placement}>
+      {(placement) => (
+        <Switch>
+          <Match when={placement().kind === "moved"}>
+            <Meta>from r{from()}</Meta>
+          </Match>
+          <Match when={placement().kind === "changed"}>
+            <Badge tone="warning">Changed since r{from()}</Badge>
+          </Match>
+          <Match when={placement().kind === "outdated"}>
+            <Badge>Outdated</Badge>
+          </Match>
+        </Switch>
+      )}
     </Show>
   );
 }

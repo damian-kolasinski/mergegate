@@ -6,7 +6,7 @@ use mergegate_core::external::External;
 use mergegate_core::github::PullCommentKind;
 use mergegate_core::item::ItemId;
 use mergegate_core::project::ProjectName;
-use mergegate_core::review::{Anchor, Comment, CommentId, NewComment, Side};
+use mergegate_core::review::{Anchor, Comment, CommentId, MovedDraft, NewComment, Side};
 use mergegate_core::store::StoreError;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -116,8 +116,31 @@ pub(crate) fn on_item(conn: &Connection, item: &ItemId, id: i64) -> Result<Comme
     row.into_comment(item)
 }
 
-/// Sends `item_id`'s drafts with the review.
-pub(crate) fn attach(conn: &Connection, item_id: i64, review: i64) -> Result<(), StoreError> {
+/// Sends `item_id`'s drafts with the review, the `moved` ones on their new
+/// lines.
+pub(crate) fn attach(
+    conn: &Connection,
+    item_id: i64,
+    review: i64,
+    moved: &[MovedDraft],
+) -> Result<(), StoreError> {
+    let mut place = conn
+        .prepare_cached(
+            "UPDATE comments SET revision = ?3, start_line = ?4, line = ?5
+             WHERE id = ?1 AND item_id = ?2 AND source = 'operator' AND review_id IS NULL",
+        )
+        .map_err(StoreError::new)?;
+    for draft in moved {
+        place
+            .execute(params![
+                draft.comment.0 as i64,
+                item_id,
+                draft.revision,
+                draft.start_line,
+                draft.line
+            ])
+            .map_err(StoreError::new)?;
+    }
     conn.execute(
         "UPDATE comments SET review_id = ?2
          WHERE item_id = ?1 AND source = 'operator' AND review_id IS NULL",
@@ -132,6 +155,30 @@ pub(crate) fn set_body(conn: &Connection, id: CommentId, body: &str) -> Result<(
         "UPDATE comments SET body = ?2
          WHERE id = ?1 AND source = 'operator' AND review_id IS NULL",
         params![id.0 as i64, body],
+    )
+    .map_err(StoreError::new)?;
+    Ok(())
+}
+
+pub(crate) fn set_anchor(
+    conn: &Connection,
+    id: CommentId,
+    revision: u32,
+    anchor: &Anchor,
+) -> Result<(), StoreError> {
+    conn.execute(
+        "UPDATE comments SET revision = ?2, path = ?3, side = ?4, start_line = ?5, line = ?6,
+                             quote = ?7
+         WHERE id = ?1 AND source = 'operator' AND review_id IS NULL",
+        params![
+            id.0 as i64,
+            revision,
+            anchor.path,
+            anchor.side.as_str(),
+            anchor.start_line,
+            anchor.line,
+            anchor.quote
+        ],
     )
     .map_err(StoreError::new)?;
     Ok(())
