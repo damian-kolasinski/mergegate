@@ -483,6 +483,7 @@ pub(crate) struct FakeStore {
     items: Vec<Item>,
     files: BTreeMap<(ItemId, u32), Vec<FileStat>>,
     revisions: BTreeMap<(ItemId, u32), Revision>,
+    guides: BTreeMap<(ItemId, u32), String>,
     diffs: BTreeMap<BlobPair, FileDiff>,
     /// By blob, grammar and version.
     highlights: BTreeMap<(String, String, String), Highlights>,
@@ -554,6 +555,7 @@ impl FakeStore {
                 title: None,
                 worktree: None,
                 wake: None,
+                guide: None,
             };
             submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
         }
@@ -611,6 +613,9 @@ impl FakeStore {
     fn revision(&mut self, id: &ItemId, number: u32, revision: NewRevision) -> Revision {
         self.files
             .insert((id.clone(), number), revision.files.clone());
+        if let Some(guide) = revision.guide {
+            self.guides.insert((id.clone(), number), guide);
+        }
         let revision = Revision {
             number,
             stat: DiffStat::of(&revision.files),
@@ -772,6 +777,24 @@ impl ItemStore for FakeStore {
         item.state = state;
         item.revision = revision;
         Ok(item.clone())
+    }
+
+    fn guide(&self, id: &ItemId, revision: u32) -> Result<Option<String>, StoreError> {
+        Ok(self.guides.get(&(id.clone(), revision)).cloned())
+    }
+
+    fn set_guide(
+        &mut self,
+        id: &ItemId,
+        revision: u32,
+        guide: Option<&str>,
+    ) -> Result<(), StoreError> {
+        let key = (id.clone(), revision);
+        match guide {
+            Some(guide) => self.guides.insert(key, guide.into()),
+            None => self.guides.remove(&key),
+        };
+        Ok(())
     }
 }
 

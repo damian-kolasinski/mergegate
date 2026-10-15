@@ -123,6 +123,7 @@ fn stores_each_files_triage_and_counts_only_reviewed_files() {
                 head: "a".repeat(40),
                 base: "0".repeat(40),
                 files: files.clone(),
+                guide: None,
             },
         })
         .unwrap();
@@ -171,6 +172,7 @@ fn insert(store: &mut Store, branch: &str) -> ItemId {
                 head: "a".repeat(40),
                 base: "0".repeat(40),
                 files: vec![file("Cargo.lock", 4, Triage::default())],
+                guide: None,
             },
         })
         .unwrap()

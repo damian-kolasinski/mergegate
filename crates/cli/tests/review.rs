@@ -98,6 +98,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "tier": "review",
                 "rule": null,
                 "why": null,
+                "reason": null,
             },
             {
                 "path": "gone.txt",
@@ -118,6 +119,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "tier": "review",
                 "rule": null,
                 "why": null,
+                "reason": null,
             },
             {
                 "path": "logo.bin",
@@ -134,6 +136,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "tier": "review",
                 "rule": null,
                 "why": null,
+                "reason": null,
             },
             {
                 "path": "src/new.rs",
@@ -156,6 +159,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "tier": "review",
                 "rule": null,
                 "why": null,
+                "reason": null,
             },
         ])
     );

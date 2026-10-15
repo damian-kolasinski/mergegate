@@ -38,6 +38,7 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
         title: None,
         worktree: None,
         wake: None,
+        guide: None,
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     (store, git)
@@ -109,4 +110,24 @@ fn a_merged_item_is_diffed_again_and_not_cached() {
     assert_eq!(diff.files, open.files);
     assert!(git.blobs_read().len() > read_at_submit);
     assert!(store.diffs().is_empty());
+}
+
+#[test]
+fn the_guide_orders_the_files_and_gives_reasons() {
+    let mut store = submitted();
+    let guide = "Adds login.\n\n## Files\n- `src/login.rs` — the new form\n";
+    store.set_guide(&id("app#1"), 1, Some(guide)).unwrap();
+    let diff = item_diff(&store, &FakeGit::default(), &id("app#1"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(diff.guide.as_deref(), Some(guide));
+    let files: Vec<_> = diff
+        .files
+        .iter()
+        .map(|f| (f.file.path.as_str(), f.reason.as_deref()))
+        .collect();
+    assert_eq!(
+        files,
+        [("src/login.rs", Some("the new form")), ("README.md", None)]
+    );
 }

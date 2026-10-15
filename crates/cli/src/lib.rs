@@ -85,6 +85,11 @@ enum Command {
         /// JPEG, GIF, WebP, MP4 or WebM, up to 100 MB; repeat for more
         #[arg(long, value_name = "FILE")]
         attach: Vec<PathBuf>,
+        /// Markdown for the operator, read from FILE or `-` for stdin: what
+        /// the change is for, and a `## Files` list of `` - `path` — reason ``
+        /// bullets in the order to review them [default: the last one]
+        #[arg(long, value_name = "FILE")]
+        guide: Option<PathBuf>,
     },
     /// Add screenshots or recordings to the item's newest revision
     Attach {
@@ -182,7 +187,8 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
             title,
             wake,
             attach,
-        } => submit_cmd::run(title, wake, attach),
+            guide,
+        } => submit_cmd::run(title, wake, attach, guide),
         Command::Attach { item, files } => attach_cmd::run(item, files),
         Command::Wait {
             item,

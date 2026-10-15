@@ -39,6 +39,7 @@ fn two_items() -> (FakeStore, FakeGit) {
             title: None,
             worktree: None,
             wake: None,
+            guide: None,
         };
         submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }
@@ -123,6 +124,7 @@ fn drops_its_pins_and_the_diffs_and_spans_no_open_item_uses() {
         title: None,
         worktree: None,
         wake: None,
+        guide: None,
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     assert_eq!(store.diffs().len(), 3);
@@ -265,6 +267,7 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
         title: None,
         worktree: None,
         wake: None,
+        guide: None,
     };
     submit(&mut store, &git, &github, request).unwrap();
     // The item still closes on the repository it was opened on.

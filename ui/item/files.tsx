@@ -98,10 +98,17 @@ function FileEntry(props: {
         <span class={styles.path} title={props.file.path}>
           <Mono>{props.file.path}</Mono>
         </span>
+        <Show when={props.file.reason}>
+          {(reason) => (
+            <span class={styles.why} title={reason()}>
+              <Meta>{reason()}</Meta>
+            </span>
+          )}
+        </Show>
         <Show when={props.file.why}>
           {(why) => (
             <span class={styles.why} title={why()}>
-              <Meta>{reason(props.file, why())}</Meta>
+              <Meta>{tier(props.file, why())}</Meta>
             </span>
           )}
         </Show>
@@ -115,7 +122,7 @@ function FileEntry(props: {
 }
 
 /** Why the file is where it is, as in "trusted by R3: `*.lock` — lockfile". */
-function reason(file: File, why: string): string {
+function tier(file: File, why: string): string {
   if (!file.rule) return `kept in review: ${why}`;
   return `${file.tier === "trusted" ? "trusted" : "reviewed"} by ${file.rule}: ${why}`;
 }

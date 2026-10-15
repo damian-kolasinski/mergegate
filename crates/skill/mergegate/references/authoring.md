@@ -5,10 +5,26 @@
 `mg submit` runs in your clone, on your branch, with your work committed. It pushes the branch to the hub and opens an item for it, or adds a revision when the branch already has an open item. It refuses a detached HEAD and the project's target branch.
 
 - `--title` names the item; it defaults to the first commit's subject. Make it a summary the operator can scan in a queue.
-- A submit at the same commit as the last revision adds no revision, but still records the worktree and any `--wake`.
+- A submit at the same commit as the last revision adds no revision, but still records the worktree, any `--guide` and any `--wake`.
+- `--guide FILE` (or `-` for stdin) sends a guide for the review: see below.
 - `--wake CMD` leaves a command for the hub to run when the item has events from the operator you haven't read: see [waiting.md](waiting.md).
 
 The operator reviews the newest revision. Each revision is the whole branch against the target, so amend, rebase or add commits as you like before submitting again.
+
+## The guide
+
+A guide tells the operator what the change is for and where to start. It is Markdown: a few lines on the intent, then a `## Files` list with one bullet per file worth reading, in the order to read them:
+
+```markdown
+Splits parsing out of main, so the CLI can reuse it.
+
+## Files
+
+- `src/parser.rs` — the new parser, start here
+- `src/main.rs` — now only calls it
+```
+
+The operator sees the whole guide as plain text above the diff, and the files to review in its order, each with its reason; files it leaves out follow in path order. A new revision submitted without `--guide` keeps the last guide, so send a new one when the change moves; `--guide /dev/null` removes it. `mg submit` prints a `warning:` line (`warnings` in `--json`) for each thing it can't place, such as a file the revision doesn't change or one the operator's rules trust: fix the guide and submit it again.
 
 ## Showing the change
 

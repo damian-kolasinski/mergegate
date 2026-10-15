@@ -5,6 +5,7 @@ mod classify;
 mod edit;
 mod file;
 mod git;
+mod guide;
 mod loosens;
 mod preview;
 mod propose;
@@ -16,6 +17,7 @@ pub use classify::{GITATTRIBUTES, classify, triage_files};
 pub use edit::{HeldEdit, decide_edit};
 pub use file::{Place, RulesFile, RulesFileError, RulesText};
 pub use git::TriageGit;
+pub use guide::{Guide, GuideFile};
 pub use loosens::loosens;
 pub use preview::{Hidden, MERGED, Preview, preview};
 pub use propose::{

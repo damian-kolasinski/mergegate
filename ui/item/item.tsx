@@ -14,6 +14,7 @@ import { Thread } from "./comments/thread";
 import { FileList } from "./files";
 import { Abandon } from "./abandon";
 import { Demo } from "./demo/demo";
+import { Intent } from "./intent";
 import { ItemHeader } from "./header";
 import { MergeBlocked } from "./merge-blocked";
 import styles from "./item.module.css";
@@ -263,6 +264,9 @@ function Review(props: {
             />
           </Show>
         </ItemHeader>
+        <Show when={props.diff.guide}>
+          {(guide) => <Intent guide={guide()} />}
+        </Show>
         <Show when={props.demo}>
           {(demo) => (
             <Demo demo={demo()} revision={props.diff.item.revision.number} />

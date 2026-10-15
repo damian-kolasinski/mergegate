@@ -106,6 +106,7 @@ fn revision(files: Vec<FileStat>) -> NewRevision {
         head: "a".repeat(40),
         base: "0".repeat(40),
         files,
+        guide: None,
     }
 }
 

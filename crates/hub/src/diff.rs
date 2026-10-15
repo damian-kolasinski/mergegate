@@ -75,6 +75,7 @@ async fn show(
         blocked,
         demo: demo.map(attachments::demo_to_api),
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
+        guide: diff.guide,
         conversation: conversation::to_api(&diff.conversation),
     }))
 }
@@ -121,6 +122,7 @@ fn file_to_api(
             viewed,
             generated,
             triage,
+            reason,
         },
         spans,
     ): (DiffedFile, FileHighlights),
@@ -158,6 +160,7 @@ fn file_to_api(
         tier: rules::tier_to_api(triage.tier),
         rule,
         why,
+        reason,
     }
 }
 

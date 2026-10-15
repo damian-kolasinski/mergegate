@@ -12,6 +12,7 @@ fn store() -> (tempfile::TempDir, Store) {
         head: "a".repeat(40),
         base: "0".repeat(40),
         files: Vec::new(),
+        guide: None,
     };
     for name in ["app", "web"] {
         let name = ProjectName::parse(name).unwrap();

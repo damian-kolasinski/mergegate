@@ -16,8 +16,11 @@ pub struct ItemDiff {
     pub blocked: Option<Blocked>,
     /// Null when no revision has attachments.
     pub demo: Option<Demo>,
-    /// In path order.
+    /// The files to review in the guide's order, the rest of them in path
+    /// order, then the trusted ones in path order.
     pub files: Vec<File>,
+    /// The agent's review guide, Markdown as it sent it.
+    pub guide: Option<String>,
     #[serde(flatten)]
     pub conversation: Conversation,
 }
@@ -55,6 +58,8 @@ pub struct File {
     /// Why the file is in its tier: the rule's matchers and reason when it
     /// matched, or the guard's. Null when nothing matched.
     pub why: Option<String>,
+    /// Why the guide says to review the file; null for a trusted one.
+    pub reason: Option<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

@@ -36,6 +36,7 @@ async fn submit(
         title: request.title,
         worktree: request.worktree,
         wake: request.wake,
+        guide: request.guide,
     };
     let app = state.clone();
     let (moved, submitted) = state
@@ -77,6 +78,7 @@ async fn submit(
         Json(api::item::Submitted {
             item: to_api(&submitted.item),
             new_revision: submitted.new_revision,
+            warnings: submitted.warnings,
         }),
     ))
 }

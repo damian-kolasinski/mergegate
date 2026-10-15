@@ -31,6 +31,7 @@ fn open_item(store: &mut FakeStore, branch: &str, target: &str) -> ItemId {
             head: commit(2),
             base: commit(1),
             files: Vec::new(),
+            guide: None,
         },
     };
     store.insert_item(item).unwrap().id
@@ -306,6 +307,7 @@ fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
             head: commit(2),
             base: commit(1),
             files: Vec::new(),
+            guide: None,
         },
     };
     store.insert_item(item).unwrap().id
