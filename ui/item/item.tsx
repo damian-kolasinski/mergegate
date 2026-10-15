@@ -661,7 +661,7 @@ function Review(props: {
           pullRequest={pullRequest(props.diff.item)}
           conflictsWith={props.diff.conflicts_with}
           blocked={props.diff.blocked?.kind}
-          behind={props.newest !== undefined}
+          newest={props.newest}
           unviewed={own().filter((file) => !done().has(file.path)).length}
           changed={props.diff.changed_since}
           drafts={comments.drafts.list().length}
