@@ -4,7 +4,7 @@ import type { Inbox } from "../api/Inbox";
 import type { InboxItem } from "../api/InboxItem";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
-import { itemHref, rulesHref } from "../app/router";
+import { go, itemHref, rulesHref } from "../app/router";
 import { PriorityBadge, PriorityPicker } from "../priority/priority";
 import {
   Badge,
@@ -67,7 +67,7 @@ export function InboxScreen() {
     if (next) setSelectedId(next.id);
   };
   const open = (id = selected()) => {
-    if (id !== undefined) location.hash = itemHref(id);
+    if (id !== undefined) go(itemHref(id));
   };
   // The item `p` opened the priority picker on.
   const [picking, setPicking] = createSignal<InboxItem>();

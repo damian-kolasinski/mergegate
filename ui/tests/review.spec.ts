@@ -2,7 +2,7 @@
 // column, walk it with `n/p`, `j/k` and `]/[`, expand the gaps between hunks.
 
 import { chmodSync, mkdirSync, symlinkSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { expect, git, type Hub, test } from "./hub";
 import { clickToFrame, pressToFrame, report } from "./timing";
 
@@ -309,27 +309,39 @@ test("a large item opens and answers keys within budget", async ({
   report(info, "mark viewed (v)", keys.v, 33);
 });
 
+/** A pack built by `langs/build.mjs`, as highlight.spec.ts installs. */
+const jsonPack = resolve(
+  import.meta.dirname,
+  "../../crates/highlight/tests/fixtures/json-0.24.8.tar.gz",
+);
+
+/** A JSON object of `count` entries, one a line after the opening brace. */
+const json = (count: number, entry: (n: number) => string) =>
+  `{\n${lines(count, entry)}  "end": 0\n}\n`;
+
 // tech-stack.md §9: the largest file the hub keeps hunks for opens within
-// 100 ms, as an item of many files does.
+// 100 ms, as an item of many files does, highlighted by an installed pack.
 test("a single large file opens within budget", async ({ page, hub }, info) => {
+  hub.mg(["lang", "add", "--from", jsonPack]);
   const big = hub.project("big");
   // 18k changed lines, near the 20k past which a file is too large to show.
   const size = 9000;
-  big.seed({ "src/big.rs": lines(size, (n) => `    let old_${n} = ${n};`) });
+  big.seed({ "big.json": json(size, (n) => `  "old_${n}": ${n},`) });
   const items = 5;
   for (let item = 1; item <= items; item++) {
     big.submit(`big-${item}`, `Rewrite ${item}`, {
-      "src/big.rs": lines(size, (n) => `    let new_${item}_${n} = ${n};`),
+      "big.json": json(size, (n) => `  "new_${item}_${n}": ${n},`),
     });
   }
   await page.goto(hub.url);
   const inbox = page.getByRole("region", { name: "Needs you" });
   await expect(inbox.getByRole("listitem")).toHaveCount(items);
 
-  const diffShown = { selector: "[data-line]", read: "found" } as const;
+  // Timed to the hub's spans painted, not to a plain render before them.
+  const highlighted = { selector: "[data-tok]", read: "found" } as const;
   const opened: number[] = [];
   for (let item = 0; item < items; item++) {
-    opened.push(await pressToFrame(page, "Enter", diffShown));
+    opened.push(await pressToFrame(page, "Enter", highlighted));
     await page.keyboard.press("Escape");
     await expect(inbox).toBeVisible();
     await page.keyboard.press("j");
@@ -341,21 +353,23 @@ test("a single large file opens within budget", async ({ page, hub }, info) => {
 // 50 ms, the file's blobs and their spans fetched from the hub included.
 // Every file's gaps are long and its rows virtualized as the 5k-line diff's.
 test("a gap expands within budget", async ({ page, hub }, info) => {
+  hub.mg(["lang", "add", "--from", jsonPack]);
   const files: Record<string, string> = {};
   const changed: Record<string, string> = {};
   const count = 10;
   for (let file = 1; file <= count; file++) {
-    const path = `src/gap_${file}.rs`;
-    const line = (n: number) => `    let value_${n} = compute(${file}, ${n});`;
-    files[path] = lines(2000, line);
-    changed[path] = lines(2000, (n) =>
-      n === 100 || n === 1900 ? `    let changed_${n} = 0;` : line(n),
+    const path = `gap_${file}.json`;
+    const entry = (n: number) => `  "value_${n}": ${file * n},`;
+    files[path] = json(2000, entry);
+    changed[path] = json(2000, (n) =>
+      n === 100 || n === 1900 ? `  "changed_${n}": 0,` : entry(n),
     );
   }
   const app = hub.project("app");
   app.seed(files);
-  app.submit("gaps", "Change two lines a file", changed);
+  app.submit("gaps", "Change two entries a file", changed);
   await page.goto(`${hub.url}#/items/app%231`);
+  await expect(page.locator("[data-tok]").first()).toBeVisible();
 
   // The gap between each file's hunks, expanded by the step its buttons
   // show, 20 lines. Every one is the first its file expands, so each

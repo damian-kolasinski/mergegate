@@ -1,6 +1,13 @@
-import { type FileDiffMetadata, processFile } from "@pierre/diffs";
+import {
+  type ChangeContent,
+  type ContextContent,
+  cleanLastNewline,
+  type FileDiffMetadata,
+  type Hunk as PierreHunk,
+} from "@pierre/diffs";
 import type { File } from "../api/File";
 import type { Hunk } from "../api/Hunk";
+import { realign } from "./realign";
 
 /**
  * CodeView's model of `file`, parsed from the hunks the hub computed so the
@@ -59,31 +66,133 @@ export function rowsOf(file: File): Row[] {
   return rows;
 }
 
+/**
+ * Builds what `processFile` would parse from the hunks' patch, without
+ * writing and reparsing it: for a near-cap file that round trip, which
+ * copies every line through a TextEncoder, was a fifth of opening it.
+ * Partial, so line indices run on across hunks and the lines between them
+ * aren't held.
+ */
 function parse(hunks: readonly Hunk[]): FileDiffMetadata {
-  // `processFile` rejects a patch without hunks: a binary file, a mode
-  // change, a pure rename.
-  if (!hunks.length) {
-    return {
-      name: "",
-      type: "change",
-      hunks: [],
-      splitLineCount: 0,
-      unifiedLineCount: 0,
-      isPartial: true,
-      deletionLines: [],
-      additionLines: [],
-    };
-  }
-  // It reads everything before the first `@@ ` as the file's header, where
-  // `/dev/null` names leave `name` and `prevName` unset.
-  let patch = "--- /dev/null\n+++ /dev/null\n";
+  const diff: FileDiffMetadata = {
+    name: "",
+    type: "change",
+    hunks: [],
+    splitLineCount: 0,
+    unifiedLineCount: 0,
+    isPartial: true,
+    deletionLines: [],
+    additionLines: [],
+  };
+  const { deletionLines, additionLines } = diff;
+  let lastHunkEnd = 0;
   for (const hunk of hunks) {
-    patch += `@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@\n`;
-    for (const line of hunk.lines) patch += `${line}\n`;
+    const spec: PierreHunk = {
+      collapsedBefore: Math.max(
+        startBoundary(hunk.new_start, hunk.new_lines) - lastHunkEnd,
+        0,
+      ),
+      splitLineCount: 0,
+      splitLineStart: 0,
+      unifiedLineCount: 0,
+      unifiedLineStart: 0,
+      additionCount: hunk.new_lines,
+      additionStart: hunk.new_start,
+      additionLines: 0,
+      deletionCount: hunk.old_lines,
+      deletionStart: hunk.old_start,
+      deletionLines: 0,
+      deletionLineIndex: deletionLines.length,
+      additionLineIndex: additionLines.length,
+      hunkContent: [],
+      hunkSpecs: `@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@\n`,
+      noEOFCRAdditions: false,
+      noEOFCRDeletions: false,
+    };
+    let block: ContextContent | ChangeContent | undefined;
+    let last: "context" | "deletion" | "addition" | undefined;
+    for (const raw of hunk.lines) {
+      const prefix = raw[0];
+      if (prefix === "\\") {
+        if (!block) continue;
+        if (block.type === "context") {
+          spec.noEOFCRAdditions = true;
+          spec.noEOFCRDeletions = true;
+        } else if (last === "deletion") spec.noEOFCRDeletions = true;
+        else if (last === "addition") spec.noEOFCRAdditions = true;
+        if (last !== "deletion") dropNewline(additionLines);
+        if (last !== "addition") dropNewline(deletionLines);
+        continue;
+      }
+      const line = `${raw.slice(1)}\n`;
+      if (prefix === " ") {
+        if (block?.type !== "context") {
+          block = {
+            type: "context",
+            lines: 0,
+            additionLineIndex: additionLines.length,
+            deletionLineIndex: deletionLines.length,
+          };
+          spec.hunkContent.push(block);
+        }
+        block.lines++;
+        deletionLines.push(line);
+        additionLines.push(line);
+        last = "context";
+        continue;
+      }
+      if (block?.type !== "change") {
+        block = {
+          type: "change",
+          additions: 0,
+          deletions: 0,
+          additionLineIndex: additionLines.length,
+          deletionLineIndex: deletionLines.length,
+        };
+        spec.hunkContent.push(block);
+      }
+      if (prefix === "+") {
+        block.additions++;
+        spec.additionLines++;
+        additionLines.push(line);
+        last = "addition";
+      } else {
+        block.deletions++;
+        spec.deletionLines++;
+        deletionLines.push(line);
+        last = "deletion";
+      }
+    }
+    for (const content of spec.hunkContent) {
+      if (content.type === "context") {
+        spec.splitLineCount += content.lines;
+        spec.unifiedLineCount += content.lines;
+      } else {
+        spec.splitLineCount += Math.max(content.additions, content.deletions);
+        spec.unifiedLineCount += content.additions + content.deletions;
+      }
+    }
+    spec.splitLineStart = diff.splitLineCount + spec.collapsedBefore;
+    spec.unifiedLineStart = diff.unifiedLineCount + spec.collapsedBefore;
+    diff.splitLineCount += spec.collapsedBefore + spec.splitLineCount;
+    diff.unifiedLineCount += spec.collapsedBefore + spec.unifiedLineCount;
+    diff.hunks.push(spec);
+    lastHunkEnd =
+      startBoundary(hunk.new_start, hunk.new_lines) + hunk.new_lines;
   }
-  const diff = processFile(patch, { throwOnError: true });
-  if (!diff) throw new Error("no diff parsed");
+  realign(diff);
   return diff;
+}
+
+/** Where a hunk's side starts, 0-based; an empty side sits after `start`. */
+function startBoundary(start: number, count: number) {
+  return count === 0 ? start : start - 1;
+}
+
+/** For a `\ No newline at end of file` after the last line pushed. */
+function dropNewline(lines: string[]) {
+  const last = lines.length - 1;
+  if (last >= 0) lines[last] = cleanLastNewline(lines[last] ?? "");
 }
 
 function hunksOf(file: File): readonly Hunk[] {

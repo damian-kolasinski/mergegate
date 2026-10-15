@@ -156,47 +156,53 @@ function paintLines(
  * token, a word diff's mark), so those keep their look.
  */
 function paintLine(line: Element, spans: readonly Span[]) {
-  let offset = 0;
-  let next = 0;
-  const walk = (element: Element) => {
-    const children: Node[] = [];
-    for (const child of element.children) {
-      if (child.type === "element") walk(child);
-      if (child.type !== "text") {
-        children.push(child);
-        continue;
-      }
-      const text = child.value;
-      const end = offset + text.length;
-      let at = offset;
-      while (at < end) {
-        let span = spans[next];
-        while (span && spanEnd(span) <= at) span = spans[++next];
-        if (!span || span[0] > at) {
-          const to = Math.min(span?.[0] ?? end, end);
-          children.push({
-            type: "text",
-            value: text.slice(at - offset, to - offset),
-          });
-          at = to;
-          continue;
-        }
-        const to = Math.min(spanEnd(span), end);
+  walk(line, { spans, offset: 0, next: 0 });
+}
+
+/** Where `paintLine` is in the line's text and in its spans. */
+type Cursor = { spans: readonly Span[]; offset: number; next: number };
+
+// A function of its own rather than a closure per line: a near-cap file
+// paints 18k lines in the frame that opens it.
+function walk(element: Element, cursor: Cursor) {
+  const { spans } = cursor;
+  const children: Node[] = [];
+  for (const child of element.children) {
+    if (child.type === "element") walk(child, cursor);
+    if (child.type !== "text") {
+      children.push(child);
+      continue;
+    }
+    const text = child.value;
+    const offset = cursor.offset;
+    const end = offset + text.length;
+    let at = offset;
+    while (at < end) {
+      let span = spans[cursor.next];
+      while (span && spanEnd(span) <= at) span = spans[++cursor.next];
+      if (!span || span[0] > at) {
+        const to = Math.min(span?.[0] ?? end, end);
         children.push({
-          type: "element",
-          tagName: "span",
-          properties: { "data-tok": span[2] },
-          children: [
-            { type: "text", value: text.slice(at - offset, to - offset) },
-          ],
+          type: "text",
+          value: text.slice(at - offset, to - offset),
         });
         at = to;
+        continue;
       }
-      offset = end;
+      const to = Math.min(spanEnd(span), end);
+      children.push({
+        type: "element",
+        tagName: "span",
+        properties: { "data-tok": span[2] },
+        children: [
+          { type: "text", value: text.slice(at - offset, to - offset) },
+        ],
+      });
+      at = to;
     }
-    element.children = children;
-  };
-  walk(line);
+    cursor.offset = end;
+  }
+  element.children = children;
 }
 
 function spanEnd(span: Span): number {
