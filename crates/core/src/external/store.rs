@@ -11,9 +11,15 @@ pub trait ExternalStore {
     /// next batch.
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError>;
 
-    /// Replaces an external comment's body, and has it wait for the next
-    /// batch again.
-    fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError>;
+    /// Replaces an external comment's body, which GitHub dates `dated`, and
+    /// has it wait for the next batch again.
+    fn edit_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError>;
 
     /// Withdraws held comment `id`, which GitHub no longer has. One no batch
     /// carried and no one answered is deleted, with the operator's draft
@@ -49,8 +55,8 @@ pub struct NewExternal {
     pub bot: bool,
     pub url: String,
     pub path: Option<String>,
-    /// When it was posted, by GitHub's clock.
-    pub created: u64,
+    /// When it was posted or last edited, by GitHub's clock.
+    pub dated: u64,
 }
 
 /// An item's held comments.
@@ -62,11 +68,10 @@ pub struct Held {
     pub last: u64,
     /// When the item's newest revision was submitted.
     pub pushed: u64,
-    /// Who posted a comment since then by GitHub's clock, held or not, as
-    /// GitHub spells them: an expected reviewer may run as a plain user
-    /// account rather than an app, so this isn't limited to bots. When the
-    /// hub saw it doesn't count, as a review of the revision before may reach
-    /// the hub only after the push, and neither does an edit, as a bot that
-    /// keeps one summary comment may edit it when it starts a review.
+    /// Who posted or edited a comment since then by GitHub's clock, held or
+    /// not, as GitHub spells them: an expected reviewer may run as a plain
+    /// user account rather than an app, so this isn't limited to bots. When
+    /// the hub saw it doesn't count, as a review of the revision before may
+    /// reach the hub only after the push.
     pub heard: Vec<String>,
 }

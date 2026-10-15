@@ -41,7 +41,7 @@ fn reads_an_inline_comment_on_the_old_side() {
                 start_line: None,
                 line: None,
             }),
-            created: 1_767_323_045_000,
+            dated: 1_767_323_045_000,
         }
     );
 }
@@ -103,10 +103,26 @@ fn a_review_is_dated_by_its_submission_and_an_undated_comment_by_the_epoch() {
         "submitted_at": "2026-01-02T03:04:05Z",
     });
     let review = comment(PullCommentKind::Review, &review).unwrap().unwrap();
-    assert_eq!(review.created, 1_767_323_045_000);
+    assert_eq!(review.dated, 1_767_323_045_000);
     let issue = json!({ "id": 1, "html_url": "x", "body": "Hi", "user": { "login": "ana" } });
     let issue = comment(PullCommentKind::IssueComment, &issue)
         .unwrap()
         .unwrap();
-    assert_eq!(issue.created, 0);
+    assert_eq!(issue.dated, 0);
+}
+
+#[test]
+fn a_comment_is_dated_by_its_last_edit() {
+    let edited = json!({
+        "id": 1,
+        "user": { "login": "codex[bot]", "type": "Bot" },
+        "html_url": "https://github.com/acme/app/pull/1#issuecomment-1",
+        "body": "Reviewed",
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:05:05Z",
+    });
+    let edited = comment(PullCommentKind::IssueComment, &edited)
+        .unwrap()
+        .unwrap();
+    assert_eq!(edited.dated, 1_767_323_105_000);
 }

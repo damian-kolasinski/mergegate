@@ -45,7 +45,7 @@ impl ExternalStore for Store {
         tx.execute(
             "INSERT INTO external_comments
                  (comment_id, item_id, kind, github_id, login, bot, url, path, seen_at,
-                  pending_at, posted_at)
+                  pending_at, dated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)",
             params![
                 id,
@@ -57,7 +57,7 @@ impl ExternalStore for Store {
                 comment.url,
                 comment.path,
                 now as i64,
-                comment.created as i64,
+                comment.dated as i64,
             ],
         )
         .map_err(StoreError::new)?;
@@ -66,7 +66,13 @@ impl ExternalStore for Store {
         Ok(inserted)
     }
 
-    fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError> {
+    fn edit_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
         tx.execute(
             "UPDATE comments SET body = ?2 WHERE id = ?1 AND source = 'external'",
@@ -74,9 +80,11 @@ impl ExternalStore for Store {
         )
         .map_err(StoreError::new)?;
         tx.execute(
-            "UPDATE external_comments SET seen_at = ?2, pending_at = coalesce(pending_at, ?2)
+            "UPDATE external_comments
+             SET seen_at = ?2, pending_at = coalesce(pending_at, ?2),
+                 dated_at = max(dated_at, ?3)
              WHERE comment_id = ?1",
-            params![id.0 as i64, now as i64],
+            params![id.0 as i64, now as i64, dated as i64],
         )
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)
@@ -139,7 +147,7 @@ impl ExternalStore for Store {
         let (Some(first), Some(last)) = (first, last) else {
             return Ok(None);
         };
-        // The submit's stamp is this machine's clock and `posted_at` GitHub's,
+        // The submit's stamp is this machine's clock and `dated_at` GitHub's,
         // which agree as far as NTP keeps them: far closer than the time a bot
         // takes to review a push.
         let pushed: i64 = self
@@ -162,7 +170,7 @@ impl ExternalStore for Store {
             .conn
             .prepare_cached(&format!(
                 "SELECT login FROM external_comments
-                 WHERE item_id = ({ITEM}) AND posted_at >= ?3
+                 WHERE item_id = ({ITEM}) AND dated_at >= ?3
                  GROUP BY login ORDER BY min(comment_id)"
             ))
             .map_err(StoreError::new)?;

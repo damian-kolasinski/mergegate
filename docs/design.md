@@ -210,9 +210,9 @@ mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     --for operator: only an event from the operator ends the wait, which then returns every
     unacknowledged event with it, so acknowledging never skips one. --timeout 0 waits until an event.
     External comments come in batches, not a trickle: the hub holds an item's GitHub comments until
-    they have been quiet for 60s and every bot in the project's `bots` has posted a comment GitHub
-    dates at or after the newest push (or 20 minutes have passed since it), and sends them 20
-    minutes after the first regardless. An edit to an older comment doesn't count as posting.
+    they have been quiet for 60s and every bot in the project's `bots` has posted or edited a
+    comment GitHub dates at or after the newest push (or 20 minutes have passed since it), and
+    sends them 20 minutes after the first regardless.
     A read that returns other events takes the held comments with it.
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
@@ -278,7 +278,7 @@ External comments share the operator's comment IDs, so the agent answers them wi
 
 A comment deleted on GitHub while the hub still holds it is withdrawn, but only once GitHub, asked for that comment by itself, answers 404: lists come a page at a time by offset, so one read while an earlier comment is deleted can skip a comment that's still there. One no batch carried and no one answered goes, with the operator's draft replies on it; one the agent already got stays as the agent got it, draft replies included, and only its held edit is dropped. A comment deleted after it went out stays as it is.
 
-An expected bot has reviewed the newest push once it posted a comment that GitHub dates (a review by its submission) at or after the push. When the hub first saw it doesn't matter, so a bot's review of the revision before, read late, doesn't count, and neither does an edit to an older comment. A bot that only ever edits one summary comment therefore holds every batch until the 20-minute cap; until this rule, the hub counted when it saw a comment or an edit of one, so such a bot counted once it edited after the push.
+An expected bot has reviewed the newest push once GitHub dates a comment of its at or after the push: a comment by when it was posted or last edited, so a bot that keeps one summary comment counts once it edits it, and a review by its submission. When the hub saw the comment or the edit doesn't matter, so a bot's review of the revision before, read late, doesn't count.
 
 ### 6.4 Push
 

@@ -15,7 +15,7 @@ fn issue(github_id: u64, login: &str, body: &str) -> PullComment {
         url: format!("https://github.com/o/app/pull/1#issuecomment-{github_id}"),
         body: body.into(),
         lines: None,
-        created: 0,
+        dated: 0,
     }
 }
 

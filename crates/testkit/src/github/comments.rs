@@ -27,6 +27,9 @@ pub struct Comment {
     /// When it was posted, in Unix seconds: GitHub dates comments to the
     /// second.
     pub created_at: u64,
+    /// When it was last edited, or posted if never; a review keeps the time
+    /// it was submitted, as GitHub doesn't date a review's edit.
+    pub updated_at: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,12 +124,17 @@ pub(super) fn add(
         bot: comment.bot,
         body: comment.body,
         inline,
-        created_at: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
+        created_at: secs(),
+        updated_at: secs(),
     });
     id
+}
+
+fn secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 /// `GET .../pulls/{n}/comments`, `.../issues/{n}/comments` or
@@ -225,6 +233,7 @@ fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {
         "type": if comment.bot { "Bot" } else { "User" },
     });
     let created = stamp(comment.created_at);
+    let updated = stamp(comment.updated_at);
     match (&comment.kind, &comment.inline) {
         (CommentKind::Inline, Some(inline)) => {
             // GitHub carries the lines to the head while it's the commit
@@ -244,7 +253,7 @@ fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {
                 "start_line": if current { inline.start_line } else { None },
                 "line": current.then_some(inline.line),
                 "created_at": created,
-                "updated_at": created,
+                "updated_at": updated,
             })
         }
         (CommentKind::Review, _) => json!({
@@ -261,7 +270,7 @@ fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {
             "html_url": format!("{page}#issuecomment-{}", comment.id),
             "body": comment.body,
             "created_at": created,
-            "updated_at": created,
+            "updated_at": updated,
         }),
     }
 }
@@ -312,6 +321,7 @@ pub(super) fn edit(state: &mut State, id: u64, body: &str) -> bool {
     match state.comments.iter_mut().find(|c| c.id == id) {
         Some(comment) => {
             comment.body = body.into();
+            comment.updated_at = secs();
             true
         }
         None => false,

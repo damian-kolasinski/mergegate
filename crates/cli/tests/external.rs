@@ -440,6 +440,44 @@ fn f5_an_expected_bots_comment_from_before_the_newest_push_doesnt_count() {
     assert_eq!(comments.as_array().unwrap().len(), 3, "{feedback}");
 }
 
+#[test]
+fn an_expected_bot_editing_its_comment_after_the_newest_push_counts() {
+    let github = FakeGithub::start();
+    let (env, repo) = submitted(&github, [NEVER, "200", NEVER]);
+    env.mg(&["--json", "project", "set", "app", "bots", "codex"])
+        .assert_code(0);
+    let summary = github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("codex[bot]", "Reviewing r1."),
+    );
+    repo.commit_files("Add a test", &[("src/login_test.rs", "\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    env.mg(&["hub", "stop"]).assert_code(0);
+    env.mg_with_env(
+        &["--json", "hub", "start", "--port", "0"],
+        &[("MG_GITHUB_POLL_MS", "100")],
+    )
+    .assert_code(0);
+    until(&env, "the poller never saw it", |c| {
+        c.as_array().unwrap().len() == 1
+    });
+    // Also takes the edit below past the push's second, the finest date
+    // GitHub gives.
+    env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
+        .assert_code(75);
+
+    // A bot that keeps one summary comment edits it when it reviews a push.
+    github.edit_comment(summary, "r2 looks fine.");
+    let feedback = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
+        .assert_code(0)
+        .json();
+    let comments = &feedback["events"][0]["comments"];
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{feedback}");
+    assert_eq!(comments[0]["body"], "r2 looks fine.", "{feedback}");
+}
+
 /// Waits out `polls` more reads of the pull request's conversation.
 fn polled(github: &FakeGithub, polls: usize) {
     let reads = || {

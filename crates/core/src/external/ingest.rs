@@ -91,7 +91,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
         match known.get(&(comment.kind, comment.id)) {
             Some((_, body, _)) if *body == comment.body => {}
             Some((known, _, _)) => {
-                store.edit_external(*known, &comment.body, now)?;
+                store.edit_external(*known, &comment.body, comment.dated, now)?;
                 ingested.edited += 1;
             }
             None => {
@@ -110,7 +110,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
                     bot: comment.bot,
                     url: comment.url,
                     path: comment.lines.map(|lines| lines.path),
-                    created: comment.created,
+                    dated: comment.dated,
                 };
                 store.insert_external(new, now)?;
                 ingested.new += 1;

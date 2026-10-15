@@ -81,8 +81,8 @@ fn comment(store: &mut FakeStore, github_id: u64, login: &str, now: u64) {
     posted(store, github_id, login, now, now);
 }
 
-/// A comment GitHub dates `created` that the hub sees at `now`.
-fn posted(store: &mut FakeStore, github_id: u64, login: &str, created: u64, now: u64) {
+/// A comment GitHub dates `dated` that the hub sees at `now`.
+fn posted(store: &mut FakeStore, github_id: u64, login: &str, dated: u64, now: u64) {
     let new = NewExternal {
         item: id(),
         revision: 1,
@@ -94,7 +94,7 @@ fn posted(store: &mut FakeStore, github_id: u64, login: &str, created: u64, now:
         bot: login.ends_with("[bot]"),
         url: String::new(),
         path: None,
-        created,
+        dated,
     };
     store.insert_external(new, now).unwrap();
 }
@@ -162,12 +162,41 @@ fn a_bot_counts_by_when_github_dates_its_comment_not_when_the_hub_saw_it() {
 }
 
 #[test]
+fn a_bot_editing_an_older_comment_after_the_push_counts() {
+    let mut store = FakeStore::with_item(1);
+    expecting(&mut store, &["codex"]);
+    let pushed = FakeStore::millis(&store.item(&id()).unwrap().unwrap().revision.submitted_at);
+    // A bot that keeps one summary comment edits it when it reviews a push.
+    posted(&mut store, 1, "codex[bot]", pushed - 1_000, pushed + 10);
+    let summary = store.comments(&id()).unwrap()[0].id;
+    // An edit GitHub dates before the push, though seen after it, doesn't.
+    store
+        .edit_external(summary, "Reviewing", pushed - 500, pushed + 20)
+        .unwrap();
+    assert_eq!(
+        release_due(&mut store, &id(), pushed + 500, TIMING).unwrap(),
+        None
+    );
+
+    store
+        .edit_external(summary, "Reviewed", pushed + 600, pushed + 600)
+        .unwrap();
+    assert!(
+        release_due(&mut store, &id(), pushed + 660, TIMING)
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
 fn a_comment_carried_again_is_edited() {
     let mut store = FakeStore::with_item(1);
     comment(&mut store, 1, "alice", 0);
     release(&mut store, &id()).unwrap().unwrap();
     let carried = store.comments(&id()).unwrap()[0].id;
-    store.edit_external(carried, "Changed my mind", 5).unwrap();
+    store
+        .edit_external(carried, "Changed my mind", 5, 5)
+        .unwrap();
 
     let event = release(&mut store, &id()).unwrap().unwrap();
     let EventKind::ExternalComments(batch) = event.kind else {

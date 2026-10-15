@@ -171,13 +171,17 @@ fn comment(kind: PullCommentKind, value: &Value) -> Result<Option<PullComment>, 
         // A time GitHub left out or spelled otherwise reads as the epoch:
         // the comment never counts as posted since a push, which holds a
         // batch until its cap at worst, where failing would hold every
-        // comment on the pull request.
-        created: value[match kind {
-            PullCommentKind::Review => "submitted_at",
-            PullCommentKind::ReviewComment | PullCommentKind::IssueComment => "created_at",
-        }]
-        .as_str()
-        .and_then(millis)
+        // comment on the pull request. A review can't be edited after it is
+        // submitted, short of its body, which GitHub doesn't date.
+        dated: match kind {
+            PullCommentKind::Review => &["submitted_at"][..],
+            PullCommentKind::ReviewComment | PullCommentKind::IssueComment => {
+                &["created_at", "updated_at"]
+            }
+        }
+        .iter()
+        .filter_map(|field| value[*field].as_str().and_then(millis))
+        .max()
         .unwrap_or(0),
     }))
 }

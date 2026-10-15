@@ -10,7 +10,7 @@ fn issue(id: u64, body: &str) -> PullComment {
         url: String::new(),
         body: body.into(),
         lines: None,
-        created: 0,
+        dated: 0,
     }
 }
 

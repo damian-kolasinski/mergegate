@@ -170,7 +170,7 @@ fn a_batch_of_external_comments_wakes_the_agent() {
         bot: false,
         url: "https://github.com/acme/app/pull/1#c1".into(),
         path: None,
-        created: 1,
+        dated: 1,
     };
     store.insert_external(comment, 1).unwrap();
     // A held comment doesn't wake it; the batch does.
