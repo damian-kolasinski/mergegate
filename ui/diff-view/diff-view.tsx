@@ -27,7 +27,7 @@ import {
 } from "./highlight";
 import { isLfsPointer } from "./lfs";
 import { isSubmodule, modeNote } from "./mode";
-import { type Row, toFileDiff } from "./patch";
+import { type Row, shows, toFileDiff } from "./patch";
 import { previewLabel, previewOf } from "./preview/kind";
 import { PreviewDialog } from "./preview/preview";
 import previewStyles from "./preview/preview.module.css";
@@ -114,12 +114,11 @@ export function DiffView(props: {
       const start =
         (range.side ?? side) === side ? Math.min(range.start, range.end) : 0;
       const line = Math.max(range.start, range.end);
-      props.onComment({
-        path: context.item.id,
-        side,
-        line,
-        start: start || line,
-      });
+      const span = { path: context.item.id, side, line, start: start || line };
+      // The `+` is hidden on lines an expanded gap shows, but a drag from a
+      // hunk can still end on one.
+      const file = byPath.get(span.path);
+      if (file && shows(file, span)) props.onComment(span);
     },
     renderAnnotation: (note, context) => {
       if (!("side" in note)) return undefined;
@@ -546,9 +545,11 @@ async function text(url: string): Promise<string> {
 }
 
 // The header's counts read `+3 −1` as everywhere else on the page, and a
-// long reason gives way to the file's name.
+// long reason gives way to the file's name. Lines an expanded gap shows
+// aren't part of the change, and the hub takes no comment on them.
 const headerCSS = `
 [data-additions-count] { order: -1; }
+[data-line-type="context-expanded"] [data-gutter-utility-slot] { display: none; }
 .mg-header-note {
   max-width: 56ch;
   overflow: hidden;
