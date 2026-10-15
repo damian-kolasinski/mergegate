@@ -1,11 +1,21 @@
 import { createResource, Match, Show, Switch } from "solid-js";
 import type { File } from "../../api/File";
 import { Meta } from "../../design-system";
+import { dimensions } from "./dimensions";
 import { type PixelDiff, pixelDiff } from "./pixels";
 import styles from "./preview.module.css";
 
-/** Past this many pixels a side is shown but not compared. */
+/**
+ * A side's decoded pixels take four bytes each, and the tab holds both
+ * sides and their diff at once, so past these a side isn't decoded at all.
+ */
+const MAX_BYTES = 64 * 1024 * 1024;
+const MAX_PIXELS = 16_000_000;
+/** Past this many pixels both sides are shown but not compared. */
 const MAX_COMPARED = 16_000_000;
+
+/** Why a side isn't shown, said to the operator as it is. */
+class Refused extends Error {}
 
 type Sides = {
   before?: ImageData;
@@ -25,7 +35,7 @@ export function ImageCompare(props: {
   return (
     <Switch fallback={<Meta>Loading…</Meta>}>
       <Match when={sides.error as unknown}>
-        <Meta>Can't show this image: the browser can't decode it.</Meta>
+        <Meta>Can't show this image: {refusal(sides.error)}.</Meta>
       </Match>
       <Match when={sides()}>
         {(loaded) => (
@@ -90,13 +100,18 @@ function changedNote(diff: PixelDiff): string {
   return `${diff.changed} of ${diff.total} pixels changed (${share}%)`;
 }
 
+function refusal(error: unknown): string {
+  if (error instanceof Refused) return error.message;
+  return "the browser can't decode it";
+}
+
 async function load(
   file: File,
   blobUrl: (id: string) => string,
 ): Promise<Sides> {
   const [before, after] = await Promise.all([
-    file.old_blob ? decode(blobUrl(file.old_blob)) : undefined,
-    file.new_blob ? decode(blobUrl(file.new_blob)) : undefined,
+    file.old_blob ? decode("Before", blobUrl(file.old_blob)) : undefined,
+    file.new_blob ? decode("After", blobUrl(file.new_blob)) : undefined,
   ]);
   const sides: Sides = {};
   if (before) sides.before = before;
@@ -115,16 +130,36 @@ async function load(
 
 /**
  * Decoded from the bytes rather than shown from a URL: the hub serves blobs
- * untyped, and the page's policy allows no `blob:` images.
+ * untyped, and the page's policy allows no `blob:` images. The size comes
+ * from the header first, so a small file claiming a huge image is refused
+ * before the browser allocates its pixels.
  */
-async function decode(url: string): Promise<ImageData> {
+async function decode(side: string, url: string): Promise<ImageData> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} answered ${response.status}`);
-  const bitmap = await createImageBitmap(await response.blob());
+  const length = Number(response.headers.get("content-length"));
+  if (length > MAX_BYTES) throw tooManyBytes(side, length);
+  const blob = await response.blob();
+  if (blob.size > MAX_BYTES) throw tooManyBytes(side, blob.size);
+  const size = dimensions(new Uint8Array(await blob.arrayBuffer()));
+  if (!size) throw new Refused(`${side} has no PNG, JPEG, GIF or WebP header`);
+  if (size.width * size.height > MAX_PIXELS) {
+    throw new Refused(
+      `${side} is ${size.width} × ${size.height} pixels, past the ${MAX_PIXELS / 1_000_000}-megapixel limit`,
+    );
+  }
+  const bitmap = await createImageBitmap(blob);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const context = canvas.getContext("2d");
   if (!context) throw new Error("no 2D canvas");
   context.drawImage(bitmap, 0, 0);
   bitmap.close();
   return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function tooManyBytes(side: string, bytes: number): Refused {
+  const mb = (n: number) => Math.round(n / (1024 * 1024));
+  return new Refused(
+    `${side} is ${mb(bytes)} MB, past the ${mb(MAX_BYTES)} MB limit`,
+  );
 }
