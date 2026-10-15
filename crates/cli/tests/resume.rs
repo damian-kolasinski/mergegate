@@ -93,9 +93,20 @@ fn f14_resume_prints_the_item_its_last_review_and_the_open_comments() {
         )
     );
     assert!(skill.starts_with("# mergegate\n"), "{skill}");
-    // The files the skill links come with it.
+    // The references for working on an item come with it; the rest are only
+    // named, as every pickup pays for them.
+    for path in ["references/authoring.md", "references/waiting.md"] {
+        assert!(skill.contains(&format!("\n--- {path} ---\n")), "{skill}");
+    }
     assert!(
-        skill.contains("\n--- references/waiting.md ---\n"),
+        !skill.contains("\n--- references/setup.md ---\n"),
+        "{skill}"
+    );
+    assert!(
+        skill.trim_end().ends_with(
+            "\n--- Left out here: references/setup.md, references/operator.md; \
+             `mg skill install` writes the whole skill ---"
+        ),
         "{skill}"
     );
 }
@@ -130,7 +141,34 @@ fn f14_a_closed_item_leaves_nothing_to_answer() {
         .unwrap();
     assert!(!head.contains("Wake:"), "{head}");
     assert!(!head.contains("c_2"), "{head}");
-    assert!(head.ends_with("The item is closed. Run `mg feedback app#1` to read how it ended, then clean up as agreed with the operator.\n"), "{head}");
+    let worktree = repo.root().canonicalize().unwrap();
+    let line = format!(
+        "- Worktree: {} (submitted from there)\n",
+        worktree.display()
+    );
+    assert!(head.contains(&line), "{head}");
+    // The replay repeats the cleanup, which may have run, and the branch
+    // name may be newer work's by now.
+    let next = format!(
+        "The item is closed. Run `mg feedback app#1 --since 0` to read how it ended. Clean up \
+         as agreed with the operator only if feature still points at r1's head, {}: otherwise \
+         it is done, or the name is newer work's.\n",
+        &repo.rev("feature")[..12]
+    );
+    assert!(head.ends_with(&next), "{head}");
+
+    // A wait that already delivered the end leaves the replay to show it.
+    env.mg(&["wait", "app#1"]).assert_code(0);
+    let replay = env
+        .mg(&["feedback", "app#1", "--since", "0"])
+        .assert_code(0);
+    assert!(
+        replay
+            .stdout
+            .contains("item.abandoned app#1 r1: its agent abandoned it"),
+        "{}",
+        replay.stdout
+    );
 }
 
 #[test]

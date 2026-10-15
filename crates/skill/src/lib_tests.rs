@@ -3,6 +3,24 @@ use std::path::Path;
 use super::*;
 
 #[test]
+fn inlines_the_files_asked_for_and_names_the_rest() {
+    let text = inlined(&["references/waiting.md"]);
+    assert!(text.starts_with("# mergegate\n"), "{text}");
+    assert!(text.contains("\n\n--- references/waiting.md ---\n\n# Waiting"));
+    assert!(!text.contains("--- references/setup.md ---"));
+    assert!(text.ends_with(
+        "\n\n--- Left out here: references/setup.md, references/authoring.md, \
+         references/operator.md; `mg skill install` writes the whole skill ---"
+    ));
+}
+
+#[test]
+fn inlining_everything_leaves_nothing_out() {
+    let all: Vec<_> = FILES[1..].iter().map(|(path, _)| *path).collect();
+    assert!(!inlined(&all).contains("Left out"));
+}
+
+#[test]
 fn lists_every_file_in_the_folder() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(NAME);
     let mut on_disk = Vec::new();

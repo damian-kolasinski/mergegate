@@ -7,7 +7,7 @@ use clap::ValueEnum;
 use api::feedback::{Event, Feedback, Source};
 
 use crate::client::Client;
-use crate::feedback_cmd::{closed, deliver, describe, read};
+use crate::feedback_cmd::{closed, read, report};
 use crate::output::{CliError, Outcome, exit};
 
 /// Which events end the wait.
@@ -56,20 +56,10 @@ pub fn run(
         };
         let feedback = read(&client, &item, since, Some((wait.min(REQUEST), query)))?;
         // Closing an item logs an event, so the agent reads who closed it
-        // and why with whatever came before.
-        if let Some(state) = closed(feedback.state) {
-            let mut text = String::new();
-            if !feedback.events.is_empty() {
-                text = describe(&feedback) + "\n\n";
-            }
-            text.push_str(&format!("{} is {state}", feedback.item));
-            return Ok(deliver(client, &feedback, since, text).exit(exit::ITEM_CLOSED));
-        }
-        // The hub also answers at its deadline, with events that may not be
-        // the ones this waits for.
-        if wake.by(&feedback.events) {
-            let text = describe(&feedback);
-            return Ok(deliver(client, &feedback, since, text));
+        // and why with whatever came before. The hub also answers at its
+        // deadline, with events that may not be the ones this waits for.
+        if closed(feedback.state).is_some() || wake.by(&feedback.events) {
+            return Ok(report(client, &feedback, since));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             let text = format!("no feedback on {} yet; call mg wait again", feedback.item);

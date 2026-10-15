@@ -10,6 +10,12 @@ No model is involved while mergegate waits: `mg wait` is one blocking command, a
 
 `mg wait` returns once the item has events you haven't read, prints them and marks them delivered. It exits 75 when the timeout passes with none; run it again. `--for operator` ends the wait only on an event from the operator, still returning everything new with it; without it, comments from GitHub end the wait too.
 
+A merge or an abandon ends the wait too. Events still exit 0, even when one of them closed the item, so read them all: an `approved` review and the `item.merged` with its cleanup can come in one wait. Only once nothing new is left does a wait on a closed item exit 3, printing that it is merged or abandoned. `mg feedback` exits the same way.
+
+## Cursors
+
+Each event has a cursor, and the last line of the output names the newest one, as in `cursor 12 (mg wait --since 12 continues after it)`. Cursors count every item's events on the hub, so one item's cursors skip numbers: app#3's may be 4, 9 and 12. `--since N` returns the item's events after cursor N, never N itself: `mg feedback app#3 --since 0` replays them all, and `--since 12` only what comes after 12. A read with `--since` marks nothing delivered, so the next plain `mg wait` still returns what you haven't read.
+
 ## Being woken
 
 `mg submit --wake CMD` leaves a command with the hub. When the item has events from the operator or from GitHub you haven't read, the hub runs `sh -c CMD` in the worktree you submitted from, with `{item}` in CMD replaced by the item's ID and these set:

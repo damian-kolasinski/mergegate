@@ -214,10 +214,10 @@ fn f7_the_operators_replies_go_out_with_the_next_review() {
     let text = env.mg(&["feedback", "app#1"]).assert_code(0);
     assert_eq!(
         text.stdout.trim(),
-        "[2] app#1 r1: the operator commented\n\n  \
+        "[2] review.submitted app#1 r1: the operator commented\n\n  \
          c_2 src/login.rs:1\n    > fn login() {}\n    Check the password.\n\n  \
          reply to c_1\n    Both, please.\n\n\
-         cursor 2 (mg wait --since 2 replays from here)"
+         cursor 2 (mg wait --since 2 continues after it)"
     );
     let shown = item(&env);
     assert_eq!(shown["draft_replies"], json!([]));

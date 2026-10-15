@@ -102,8 +102,32 @@ pub enum EventBody {
     CommentOverride { comment: Box<Comment>, reply: Reply },
     /// The approved revision landed on the target as `commit`. A squash
     /// leaves `branch` unmerged to git, so deleting it takes `git branch -D`.
+    /// `commands` is the default cleanup, for an agent that agreed no other
+    /// with the operator: it leaves the worktree on the updated target. A
+    /// hub older than it sends none.
     #[serde(rename = "item.merged")]
-    ItemMerged { commit: String, branch: String },
+    ItemMerged {
+        commit: String,
+        branch: String,
+        #[serde(default)]
+        commands: Vec<String>,
+    },
+}
+
+impl EventBody {
+    /// The `type` it is serialized under.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::ReviewSubmitted { .. } => "review.submitted",
+            Self::ItemAbandoned { .. } => "item.abandoned",
+            Self::MergeHeld { .. } => "merge.held",
+            Self::MergeCancelled {} => "merge.cancelled",
+            Self::MergeConflict { .. } => "merge.conflict",
+            Self::ExternalComments { .. } => "external.comments",
+            Self::CommentOverride { .. } => "comment.override",
+            Self::ItemMerged { .. } => "item.merged",
+        }
+    }
 }
 
 /// Which events end a wait; `for` on the feedback route.
@@ -127,3 +151,7 @@ pub struct Acknowledged {
     /// The item's delivered cursor now, which an older `cursor` doesn't move.
     pub delivered: u64,
 }
+
+#[cfg(test)]
+#[path = "feedback_tests.rs"]
+mod tests;

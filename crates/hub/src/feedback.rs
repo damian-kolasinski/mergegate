@@ -191,9 +191,16 @@ pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedb
                     format!("git rebase mergegate/{target}"),
                 ],
             },
+            // Detaching in place would leave the worktree on the pre-squash
+            // commit, behind the target the item just landed on.
             NoticeKind::Merged { commit } => api::feedback::EventBody::ItemMerged {
                 commit,
                 branch: item.branch.clone(),
+                commands: vec![
+                    "git fetch mergegate".to_owned(),
+                    format!("git switch --detach mergegate/{target}"),
+                    format!("git branch -D {}", item.branch),
+                ],
             },
         },
         EventKind::ExternalComments(batch) => external::batch_to_api(&batch),

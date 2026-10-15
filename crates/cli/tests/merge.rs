@@ -94,17 +94,25 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     assert_eq!(shown["blocked"], Value::Null);
     assert_eq!(shown["files"][0]["path"], "src/login.rs");
 
-    let wait = env.mg(&["wait", "app#1"]).assert_code(3);
+    // Events exit 0 though the item closed, so the approval and the cleanup
+    // aren't read as "closed, nothing new".
+    let wait = env.mg(&["wait", "app#1"]).assert_code(0);
     assert_eq!(
         wait.stdout.trim(),
         format!(
-            "[1] app#1 r1: the operator approved\n  Ship it.\n\n\
-             [2] app#1 r1: the operator merged it as {commit}\n\n  \
+            "[1] review.submitted app#1 r1: the operator approved\n  Ship it.\n\n\
+             [2] item.merged app#1 r1: the operator merged it as {commit}\n\n  \
              Clean up feature as agreed with the operator; by default:\n    \
-             git switch --detach\n    git branch -D feature\n\n\
-             cursor 2 (mg wait --since 2 replays from here)\n\napp#1 is merged"
+             git fetch mergegate\n    git switch --detach mergegate/main\n    \
+             git branch -D feature\n\n\
+             cursor 2 (mg wait --since 2 continues after it)\n\napp#1 is merged"
         )
     );
+    // Only once nothing is left does a read say it's closed.
+    let again = env.mg(&["wait", "app#1"]).assert_code(3);
+    assert_eq!(again.stdout.trim(), "app#1 is merged");
+    let again = env.mg(&["feedback", "app#1"]).assert_code(3);
+    assert_eq!(again.stdout.trim(), "app#1 is merged");
     // The squash leaves the branch unmerged to git, so the event names it.
     let replay = env
         .mg(&["--json", "feedback", "app#1", "--since", "1"])
@@ -112,6 +120,14 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
         .json();
     assert_eq!(replay["events"][0]["type"], "item.merged");
     assert_eq!(replay["events"][0]["branch"], "feature");
+    assert_eq!(
+        replay["events"][0]["commands"],
+        json!([
+            "git fetch mergegate",
+            "git switch --detach mergegate/main",
+            "git branch -D feature",
+        ])
+    );
     let mut inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     let closed = inbox["closed"].take();
     assert_eq!(closed[0]["id"], "app#1");
@@ -126,9 +142,22 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
 fn f8_a_merged_items_branch_name_is_free_for_branches_under_it() {
     let (env, repo) = submitted();
     assert_eq!(approve(&env, 1, "Ship it.").status, 200);
-    // The cleanup the merge event asks for, then new work.
-    repo.git(["switch", "--quiet", "--detach", "main"]);
-    repo.git(["branch", "-D", "feature"]);
+    // The cleanup the merge event asks for, which leaves the clone on the
+    // squash commit, then new work.
+    let merged = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    let merged = &merged["events"][1];
+    assert_eq!(merged["type"], "item.merged");
+    for command in merged["commands"].as_array().unwrap() {
+        let args: Vec<_> = command.as_str().unwrap().split(' ').collect();
+        assert_eq!(args[0], "git");
+        repo.git(&args[1..]);
+    }
+    assert_eq!(repo.rev("HEAD"), repo.rev("main"));
+    assert_eq!(repo.rev("HEAD"), merged["commit"].as_str().unwrap());
+    assert!(repo.git(["branch", "--list", "feature"]).is_empty());
     repo.git(["switch", "--quiet", "-c", "feature/followup"]);
     repo.commit_files("Follow up", &[("src/more.rs", "fn more() {}\n")]);
     let next = env.mg_at(repo.root(), &["--json", "submit"]).json();
@@ -187,9 +216,9 @@ fn f9_a_conflict_sends_the_item_back_to_rebase() {
     assert_eq!(
         text.stdout.trim(),
         format!(
-            "[2] app#1 r1: merging conflicts with the target at {}\n  src/login.rs\n\n  \
+            "[2] merge.conflict app#1 r1: merging conflicts with the target at {}\n  src/login.rs\n\n  \
              Rebase and submit again:\n    git fetch mergegate\n    git rebase mergegate/main\n\n\
-             cursor 2 (mg wait --since 2 replays from here)",
+             cursor 2 (mg wait --since 2 continues after it)",
             &target[..12]
         )
     );
@@ -265,8 +294,8 @@ fn f8_cancelling_a_held_merge_puts_the_item_back_in_review() {
         .assert_code(0);
     assert_eq!(
         text.stdout.trim(),
-        "[3] app#1 r1: the operator cancelled the held merge; it needs review again\n\n\
-         cursor 3 (mg wait --since 3 replays from here)"
+        "[3] merge.cancelled app#1 r1: the operator cancelled the held merge; it needs review again\n\n\
+         cursor 3 (mg wait --since 3 continues after it)"
     );
 
     let again = send(&env, "DELETE", "/api/items/app%231/merge", &json!({}));
