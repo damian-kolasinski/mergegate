@@ -7,7 +7,9 @@ use crate::merge::Blocked;
 use crate::review::Conversation;
 use crate::rules::Tier;
 
-/// `GET /api/items/{id}`: the item with its newest revision's files.
+/// `GET /api/items/{id}?since=`: the item with its newest revision's files.
+/// `since` is a revision number or `all`; without it, the files are shown
+/// since the last reviewed revision when there's an interdiff from it.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDiff {
@@ -16,6 +18,13 @@ pub struct ItemDiff {
     pub blocked: Option<Blocked>,
     /// Null when no revision has attachments.
     pub demo: Option<Demo>,
+    /// The revision `files` show the changes since; null for all changes.
+    pub since: Option<u32>,
+    /// The newest revision the operator submitted a review on.
+    pub last_reviewed: Option<u32>,
+    /// The earlier revisions `since` may name, ascending; none once the item
+    /// is closed.
+    pub interdiffs: Vec<u32>,
     /// The files to review in the guide's order, the rest of them in path
     /// order, then the trusted ones in path order.
     pub files: Vec<File>,
@@ -60,6 +69,25 @@ pub struct File {
     pub why: Option<String>,
     /// Why the guide says to review the file; null for a trusted one.
     pub reason: Option<String>,
+    /// How the file changed since `since`; null when showing all changes.
+    /// Blobs, counts and content are the interdiff's for `changed` and
+    /// `dropped` files, the revision's own otherwise.
+    pub interdiff: Option<Interdiff>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Interdiff {
+    /// Changed again since.
+    Changed,
+    /// As it was then, though the base may have moved.
+    Unchanged,
+    /// Its earlier change conflicts with the target's moves, so this shows
+    /// its whole diff.
+    Unseparated,
+    /// Changed then, not any more: the diff restores the base's version.
+    Dropped,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

@@ -398,6 +398,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - Order: explicit priority (set by the operator agent or the operator) → conflict pressure (merging this unblocks others) → age.
 - When rules trust some files, the file count shows the ones left to review next to the total ("9 of 14 files"). That is the real cost of the item.
 - A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
+- An item the operator reviewed on an earlier revision shows how many of its files changed since then ("2 changed since r1").
 - Keyboard-first: `j/k` move, `enter` open, `p` set priority.
 
 ### 9.2 Review screen
@@ -428,7 +429,9 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 ```
 
 - **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A viewed file collapses to its header and counts toward the viewed total.
-- **Revision selector** defaults to "since last review": you see the interdiff only. A file that hasn't changed since you marked it viewed stays viewed.
+- **Revision selector** offers *All changes* (against the merge-base) and *Since rK* for each earlier revision, defaulting to since the last revision you reviewed, or all changes when that is the newest or there's none. A closed item shows all changes only.
+- **Since rK shows the interdiff only,** over a moved target: rK is replayed onto the newest revision's base and diffed against the newest, so what the target changed meanwhile drops out. A file the replay conflicts on can't be told apart from the target's changes, so it shows its whole own diff, marked as such. Files unchanged since rK fold away under the file list and can still be marked viewed; a file rK changed that the newest no longer does shows as *dropped*. The old side is a replay no revision has, so only the new side takes comments. Interdiffs from every earlier revision are computed when a revision is submitted, so switching is a read.
+- **Viewed marks follow a file while it's unchanged:** marking or unmarking it on rK applies to every later revision where it hasn't changed since rK, then and when a later revision arrives.
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can agree, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. Sync GitHub refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
 - **Intent panel** under the header, above the demo: the agent's guide as plain text, as written, folding away. Each file to review carries the guide's reason for it, and each trusted one the rule that hid it ("trusted by R3: `glob` — reason").
@@ -437,7 +440,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **Approve & merge** asks first, showing how many files are still unviewed without blocking on them; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge shows the upstream's reason under the header with Retry and Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.
 - **Replies thread under each comment:** the agent's, with their status (addressed in rN, rejected, question), and yours, drafted like comments and sent with the next review. "Addressed in rN" is the first revision submitted after the reply. Replies show as they arrive: the UI's stream carries `item.changed` pings and the screen rereads the item's conversation, as it does on reconnect.
 - **Conversation list** in the header: every comment as `path:line @rN` with its latest status and replies. A comment shows inline only on the revision it was written on until it is re-mapped, so older ones are answered here.
-- **New revision mid-review:** a banner appears. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
+- **New revision mid-review:** a banner says "rN submitted" and offers to show changes since the revision on screen. Nothing moves until you switch: comments and Request changes still go to the revision on screen, and Approve waits for the newest. Drafts stay anchored to the old revision and are re-mapped to the new lines on submit, or flagged when they can't be re-mapped.
 - Keyboard: `n/p` file, `]/[` hunk, `j/k` line, `v` viewed (and on to the next file), `Escape` closes the open editor, then the Conversation list, then goes back to the inbox, `c` comment on the line, `r` the review's summary, `a` approve.
 
 ## 10. Prioritization

@@ -64,6 +64,21 @@ impl ReviewStore for Store {
         })
     }
 
+    fn last_reviewed(&self, id: &ItemId) -> Result<Option<u32>, StoreError> {
+        self.conn
+            .prepare_cached(
+                "SELECT max(r.revision) FROM reviews r
+                 JOIN items i ON i.id = r.item_id
+                 JOIN projects p ON p.id = i.project_id
+                 WHERE p.name = ?1 AND i.number = ?2",
+            )
+            .map_err(StoreError::new)?
+            .query_row(params![id.project().as_str(), id.number() as i64], |row| {
+                row.get(0)
+            })
+            .map_err(StoreError::new)
+    }
+
     fn insert_draft(&mut self, comment: NewComment) -> Result<Comment, StoreError> {
         comments::insert(&self.conn, comment)
     }

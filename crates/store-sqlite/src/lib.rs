@@ -8,6 +8,7 @@ mod diffs;
 mod external;
 mod feedback;
 mod highlights;
+mod interdiffs;
 mod items;
 mod migrate;
 mod projects;

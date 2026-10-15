@@ -9,5 +9,6 @@ export { Empty } from "./empty";
 export { ExternalLink } from "./external-link";
 export { Row } from "./row";
 export { Section } from "./section";
+export { Select } from "./select";
 export { Meta, Mono } from "./text";
 export { TextArea } from "./text-area";

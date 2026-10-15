@@ -19,6 +19,8 @@ export function ReviewBar(props: {
   item: string;
   revision: number;
   target: string;
+  /** A newer revision was submitted: only it can be approved. */
+  behind: boolean;
   /** Files not marked viewed, which the confirm step warns about. */
   unviewed: number;
   drafts: number;
@@ -26,10 +28,14 @@ export function ReviewBar(props: {
   replies: number;
   /** A comment being written, which the review would go out without. */
   holding: boolean;
+  /** What's typed as the review's summary, which outlives the bar. */
+  summary: string;
+  onSummary: (summary: string) => void;
   onSubmitted: (review: Review) => void;
   onMerged: (merge: Merge) => void;
 }) {
-  const [summary, setSummary] = createSignal("");
+  const summary = () => props.summary;
+  const setSummary = (summary: string) => props.onSummary(summary);
   const [sending, setSending] = createSignal(false);
   const [status, setStatus] = createSignal<{ text: string; failed: boolean }>();
   const [confirming, setConfirming] = createSignal(false);
@@ -90,7 +96,7 @@ export function ReviewBar(props: {
       .finally(() => setSending(false));
   };
   const confirm = () => {
-    if (!sending() && !props.holding) setConfirming(true);
+    if (!sending() && !props.holding && !props.behind) setConfirming(true);
   };
 
   useKeys({ r: () => field?.focus(), a: confirm });
@@ -161,7 +167,7 @@ export function ReviewBar(props: {
               </Button>
               <Button
                 variant="solid"
-                disabled={sending() || props.holding}
+                disabled={sending() || props.holding || props.behind}
                 onClick={confirm}
               >
                 Approve & merge

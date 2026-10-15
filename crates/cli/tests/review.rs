@@ -99,6 +99,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "rule": null,
                 "why": null,
                 "reason": null,
+                "interdiff": null,
             },
             {
                 "path": "gone.txt",
@@ -120,6 +121,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "rule": null,
                 "why": null,
                 "reason": null,
+                "interdiff": null,
             },
             {
                 "path": "logo.bin",
@@ -137,6 +139,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "rule": null,
                 "why": null,
                 "reason": null,
+                "interdiff": null,
             },
             {
                 "path": "src/new.rs",
@@ -160,6 +163,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "rule": null,
                 "why": null,
                 "reason": null,
+                "interdiff": null,
             },
         ])
     );

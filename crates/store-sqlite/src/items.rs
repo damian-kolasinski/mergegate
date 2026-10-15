@@ -9,9 +9,9 @@ use mergegate_core::project::{Backend, ProjectName};
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 
-use crate::Store;
 use crate::projects::backend_named;
 use crate::rules::{columns, read_triage};
+use crate::{Store, interdiffs, viewed};
 
 /// An item with its newest revision. Callers add a `WHERE` and `ORDER BY`.
 const SELECT: &str = "
@@ -320,7 +320,8 @@ fn insert_revision(
         ])
         .map_err(StoreError::new)?;
     }
-    Ok(())
+    interdiffs::insert(tx, item_id, number, &revision.interdiffs)?;
+    viewed::insert(tx, item_id, number, &revision.viewed)
 }
 
 /// A row, or the reason it doesn't hold a valid item; see `projects::read`.

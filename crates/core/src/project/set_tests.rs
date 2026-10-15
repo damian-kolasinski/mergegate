@@ -32,6 +32,8 @@ fn open_item(store: &mut FakeStore, branch: &str, target: &str) -> ItemId {
             base: commit(1),
             files: Vec::new(),
             guide: None,
+            interdiffs: Vec::new(),
+            viewed: Vec::new(),
         },
     };
     store.insert_item(item).unwrap().id
@@ -308,6 +310,8 @@ fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
             base: commit(1),
             files: Vec::new(),
             guide: None,
+            interdiffs: Vec::new(),
+            viewed: Vec::new(),
         },
     };
     store.insert_item(item).unwrap().id

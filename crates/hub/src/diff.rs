@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use axum::extract::rejection::PathRejection;
-use axum::extract::{Path, State};
+use axum::extract::rejection::{PathRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, X_CONTENT_TYPE_OPTIONS};
 use axum::response::IntoResponse;
@@ -14,8 +14,10 @@ use axum::{Json, Router};
 use mergegate_core::attachment;
 use mergegate_core::diff::{self, Content, LineKind};
 use mergegate_core::highlight::{self, FileHighlights, Highlighter, Span};
-use mergegate_core::item::{self, DiffedFile, ItemId};
+use mergegate_core::interdiff::Change;
+use mergegate_core::item::{self, Compare, DiffedFile, ItemId};
 use mergegate_core::triage::TriagedBy;
+use serde::Deserialize;
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -27,20 +29,40 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
         .route("/api/projects/{name}/blobs/{id}", get(blob))
 }
 
+#[derive(Deserialize)]
+struct ShowQuery {
+    /// A revision number or `all`.
+    since: Option<String>,
+}
+
 async fn show(
     State(state): State<Arc<AppState>>,
     id: Result<Path<String>, PathRejection>,
+    query: Result<Query<ShowQuery>, QueryRejection>,
 ) -> Result<Json<api::diff::ItemDiff>, Failure> {
     let Path(id) = id?;
+    let Query(query) = query?;
     let id = ItemId::parse(&id)
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))?;
+    let compare = match query.since.as_deref() {
+        None => Compare::Default,
+        Some("all") => Compare::All,
+        Some(since) => since.parse().map(Compare::Since).map_err(|_| {
+            Failure::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_since",
+                format!("since is a revision number or all, not {since:?}"),
+                None,
+            )
+        })?,
+    };
     let found = {
         let id = id.clone();
         let installed = state.languages.installed();
         let known = Arc::clone(&state);
         state
             .blocking(move |store, git| {
-                let Some(diff) = item::item_diff(store, git, &id)? else {
+                let Some(diff) = item::item_diff(store, git, &id, compare)? else {
                     return Ok(None);
                 };
                 let blocked = merge::blocked(store, &diff.item)?;
@@ -74,6 +96,9 @@ async fn show(
         item: items::to_api(&diff.item),
         blocked,
         demo: demo.map(attachments::demo_to_api),
+        since: diff.since,
+        last_reviewed: diff.last_reviewed,
+        interdiffs: diff.interdiffs,
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         guide: diff.guide,
         conversation: conversation::to_api(&diff.conversation),
@@ -123,6 +148,7 @@ fn file_to_api(
             generated,
             triage,
             reason,
+            change,
         },
         spans,
     ): (DiffedFile, FileHighlights),
@@ -161,6 +187,12 @@ fn file_to_api(
         rule,
         why,
         reason,
+        interdiff: change.map(|change| match change {
+            Change::Changed => api::diff::Interdiff::Changed,
+            Change::Unchanged => api::diff::Interdiff::Unchanged,
+            Change::Unseparated => api::diff::Interdiff::Unseparated,
+            Change::Dropped => api::diff::Interdiff::Dropped,
+        }),
     }
 }
 

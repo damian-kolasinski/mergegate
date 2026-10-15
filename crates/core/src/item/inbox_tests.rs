@@ -16,6 +16,8 @@ fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
             base: "0".repeat(40),
             files: Vec::new(),
             guide: None,
+            interdiffs: Vec::new(),
+            viewed: Vec::new(),
         },
     };
     store.insert_item(item).unwrap().id

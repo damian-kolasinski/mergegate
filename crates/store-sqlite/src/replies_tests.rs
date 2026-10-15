@@ -35,6 +35,8 @@ fn store() -> (tempfile::TempDir, Store) {
                     base: "0".repeat(40),
                     files: Vec::new(),
                     guide: None,
+                    interdiffs: Vec::new(),
+                    viewed: Vec::new(),
                 },
             })
             .unwrap();

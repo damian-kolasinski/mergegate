@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::{FakeGit, FakeHighlighter, FakeStore, commit, installed};
+use crate::fake::{FakeGit, FakeHighlighter, FakeStore, commit, installed, rebased, submit_login};
 use crate::highlight::{Span, Tag};
 use crate::item::{ItemId, ItemState};
 use crate::project::ProjectName;
@@ -23,6 +23,37 @@ fn lists_both_sides_of_each_file_an_installed_grammar_covers() {
         [(login.as_str(), "rs", "rs@1"), (r2.as_str(), "rs", "rs@1")]
     );
     assert!(pending.iter().all(|p| p.project.to_string() == "app"));
+}
+
+#[test]
+fn lists_the_blobs_only_an_interdiff_shows() {
+    // r2 rebases onto a main that moved, so lib.rs's old side since r1 is r1's
+    // lib.rs replayed there, and db.rs's is r1's own.
+    let (mut store, git) = rebased();
+    submit_login(&mut store, &git, 2);
+    let item = submit_login(&mut store, &git, 4);
+    let interdiff = store.interdiff(&item.id, 1, 2).unwrap().unwrap();
+    let own: BTreeSet<String> = store
+        .revision_files(&item.id, 2)
+        .unwrap()
+        .into_iter()
+        .flat_map(|f| [f.file.old_blob, f.file.new_blob])
+        .flatten()
+        .collect();
+    let only: Vec<&String> = interdiff
+        .iter()
+        .filter(|f| f.stat.file.path.ends_with(".rs"))
+        .flat_map(|f| [&f.stat.file.old_blob, &f.stat.file.new_blob])
+        .flatten()
+        .filter(|blob| !own.contains(*blob))
+        .collect();
+    assert!(!only.is_empty());
+
+    let pending = pending(&mut store, &installed(&[("rs", "1")])).unwrap();
+    let listed: BTreeSet<&String> = pending.iter().map(|p| &p.blob).collect();
+    for blob in only {
+        assert!(listed.contains(blob), "{blob} in {pending:?}");
+    }
 }
 
 #[test]

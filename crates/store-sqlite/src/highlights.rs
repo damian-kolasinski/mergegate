@@ -87,25 +87,37 @@ impl HighlightStore for Store {
     }
 
     fn prune_highlights(&mut self, id: &ItemId) -> Result<(), StoreError> {
-        // As prune_diffs: every revision of `id`, against every revision of
-        // the open items other than `id`.
+        // As prune_diffs: every revision and interdiff of `id`, against every
+        // one of the open items other than `id`.
         self.conn
             .prepare_cached(
                 "WITH closing AS (
                      SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
                      WHERE p.name = ?1 AND i.number = ?2
                  ),
-                 open_files AS (
-                     SELECT f.old_blob, f.new_blob
-                     FROM revision_files f JOIN items i ON i.id = f.item_id
+                 kept AS (
+                     SELECT i.id FROM items i
                      WHERE i.id <> (SELECT id FROM closing)
                          AND i.state IN ('needs_review', 'changes_requested', 'merging')
+                 ),
+                 open_files AS (
+                     SELECT old_blob, new_blob FROM revision_files
+                     WHERE item_id IN kept
+                     UNION ALL
+                     SELECT old_blob, new_blob FROM interdiff_files
+                     WHERE item_id IN kept
                  )
                  DELETE FROM highlights WHERE blob IN (
                      SELECT old_blob FROM revision_files
                      WHERE item_id = (SELECT id FROM closing) AND old_blob IS NOT NULL
                      UNION
                      SELECT new_blob FROM revision_files
+                     WHERE item_id = (SELECT id FROM closing) AND new_blob IS NOT NULL
+                     UNION
+                     SELECT old_blob FROM interdiff_files
+                     WHERE item_id = (SELECT id FROM closing) AND old_blob IS NOT NULL
+                     UNION
+                     SELECT new_blob FROM interdiff_files
                      WHERE item_id = (SELECT id FROM closing) AND new_blob IS NOT NULL
                      EXCEPT
                      SELECT old_blob FROM open_files

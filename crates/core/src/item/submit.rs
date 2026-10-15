@@ -10,8 +10,10 @@ use crate::agent::{self, AgentStore};
 use crate::diff::{DiffGit, DiffStore};
 use crate::git::Upstream;
 use crate::github::Github;
+use crate::interdiff::{InterdiffGit, Recorded, record};
 use crate::project::{Backend, ProjectError, ProjectStore, find};
 use crate::triage::{Guide, RulesStore, TriageGit, triage_files};
+use crate::viewed::ViewedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submit {
@@ -39,16 +41,16 @@ pub struct Submitted {
 
 /// The branch must already be pushed to staging at `request.head`. The
 /// target is fetched fresh first, so the merge-base is current. Every file's
-/// diff is cached and the file triaged by the applied rules before the
-/// revision is recorded. A submit at the open item's head still records its
-/// worktree, wake and guide.
+/// diff, and the interdiff from each earlier revision, is cached and the file
+/// triaged by the applied rules before the revision is recorded. A submit at
+/// the open item's head still records its worktree, wake and guide.
 ///
 /// A `github` item is published before it's recorded: its branch pushed and
 /// its pull request opened or retitled. If GitHub fails, the submit fails
 /// and nothing is recorded.
-pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>(
+pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore + RulesStore>(
     store: &mut S,
-    git: &(impl ItemGit + DiffGit + TriageGit),
+    git: &(impl ItemGit + DiffGit + InterdiffGit + TriageGit),
     github: &impl Github,
     request: Submit,
 ) -> Result<Submitted, ItemError> {
@@ -152,6 +154,10 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>
     }
     let rules = store.applied_rules(&project.name)?;
     triage_files(store, &rules, &mut files)?;
+    let Recorded { interdiffs, viewed } = match &existing {
+        Some(item) => record(store, git, item, &head, &base, &files)?,
+        None => Recorded::default(),
+    };
     let title = match (title.as_deref().map(str::trim), &existing) {
         (Some(title), _) if !title.is_empty() => title.to_owned(),
         (_, Some(item)) => item.title.clone(),
@@ -190,6 +196,8 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>
         base,
         files,
         guide,
+        interdiffs,
+        viewed,
     };
     let item = match existing {
         Some(item) => store.add_revision(&item.id, &title, ItemState::NeedsReview, revision)?,

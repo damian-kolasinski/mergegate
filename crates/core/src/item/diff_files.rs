@@ -12,7 +12,7 @@ const BATCH: usize = 64;
 
 /// Counts each file's lines, leaving it untriaged, diffing and caching the blob pairs the cache
 /// doesn't have yet.
-pub(super) fn diff_files(
+pub(crate) fn diff_files(
     store: &mut impl DiffStore,
     git: &impl DiffGit,
     project: &ProjectName,

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use mergegate_core::item::ItemId;
 use mergegate_core::store::StoreError;
 use mergegate_core::viewed::ViewedStore;
-use rusqlite::params;
+use rusqlite::{Transaction, params};
 
 use crate::Store;
 
@@ -57,6 +57,26 @@ impl ViewedStore for Store {
             .map_err(StoreError::new)?;
         Ok(())
     }
+}
+
+/// Marks `paths` viewed on a revision as it's written: the marks carried over
+/// from an earlier revision.
+pub(crate) fn insert(
+    tx: &Transaction,
+    item_id: i64,
+    revision: i64,
+    paths: &[String],
+) -> Result<(), StoreError> {
+    let mut stmt = tx
+        .prepare_cached(
+            "INSERT OR IGNORE INTO viewed (item_id, revision, path) VALUES (?1, ?2, ?3)",
+        )
+        .map_err(StoreError::new)?;
+    for path in paths {
+        stmt.execute(params![item_id, revision, path])
+            .map_err(StoreError::new)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

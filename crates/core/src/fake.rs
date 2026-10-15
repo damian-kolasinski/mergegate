@@ -15,6 +15,7 @@ use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
 use crate::highlight::{
     Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, Span, Tag,
 };
+use crate::interdiff::{InterdiffFile, InterdiffGit, InterdiffStore, Replay};
 use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
     NewRevision, Pushed, Revision, Submit, submit,
@@ -41,6 +42,9 @@ struct Commit {
     parent: Option<String>,
     subject: String,
     files: Vec<String>,
+    /// What the commit writes to each of `files` it gives content for, empty
+    /// for a deleted file. Others get a line added: the commit's ID.
+    contents: BTreeMap<String, String>,
 }
 
 pub(crate) struct FakeGit {
@@ -60,6 +64,8 @@ pub(crate) struct FakeGit {
     synced: RefCell<Vec<(String, PathBuf, String)>>,
     fetched: RefCell<Vec<(String, String)>>,
     pins: RefCell<BTreeMap<String, String>>,
+    /// Trees `replay` wrote, by ID: each path's blob.
+    trees: RefCell<BTreeMap<String, BTreeMap<String, String>>>,
     blobs_read: RefCell<Vec<String>>,
     /// Paths `linguist-generated` in every tree.
     generated: BTreeSet<String>,
@@ -80,6 +86,7 @@ impl Default for FakeGit {
             synced: RefCell::default(),
             fetched: RefCell::default(),
             pins: RefCell::default(),
+            trees: RefCell::default(),
             blobs_read: RefCell::default(),
             generated: BTreeSet::new(),
         }
@@ -154,6 +161,30 @@ impl FakeGit {
             parent: parent.map(Into::into),
             subject: subject.into(),
             files: files.iter().map(|f| (*f).into()).collect(),
+            contents: BTreeMap::new(),
+        };
+        self.commits.insert(id.into(), commit);
+        self
+    }
+
+    /// Adds commit `id` on top of `parent`, writing each file's content; an
+    /// empty one deletes the file. Two commits writing the same content leave
+    /// the same blob, as a rebase does.
+    pub fn write(
+        mut self,
+        id: &str,
+        parent: Option<&str>,
+        subject: &str,
+        files: &[(&str, &str)],
+    ) -> Self {
+        let commit = Commit {
+            parent: parent.map(Into::into),
+            subject: subject.into(),
+            files: files.iter().map(|(f, _)| (*f).into()).collect(),
+            contents: files
+                .iter()
+                .map(|(f, c)| ((*f).into(), (*c).into()))
+                .collect(),
         };
         self.commits.insert(id.into(), commit);
         self
@@ -228,19 +259,46 @@ impl FakeGit {
         history
     }
 
-    /// `path`'s blob at `commit`, empty if it doesn't exist there. A blob's
-    /// ID is its content.
+    /// `path`'s blob at `commit` or a replayed tree, empty if it doesn't
+    /// exist there. A blob's ID is its content.
     fn blob(&self, commit: &str, path: &str) -> String {
-        self.history(commit)
+        if let Some(tree) = self.trees.borrow().get(commit) {
+            return tree.get(path).cloned().unwrap_or_default();
+        }
+        let history = self.history(commit);
+        let touching: Vec<&String> = history
             .iter()
-            .rev()
             .filter(|id| {
                 self.commits
                     .get(*id)
                     .is_some_and(|c| c.files.iter().any(|f| f == path))
             })
-            .map(|id| format!("{id}\n"))
+            .collect();
+        if let Some(content) = touching
+            .first()
+            .and_then(|id| self.commits[*id].contents.get(path))
+        {
+            return content.clone();
+        }
+        touching.iter().rev().map(|id| format!("{id}\n")).collect()
+    }
+
+    /// Every path that exists at `commit` or in a replayed tree.
+    fn paths(&self, commit: &str) -> BTreeSet<String> {
+        if let Some(tree) = self.trees.borrow().get(commit) {
+            return tree.keys().cloned().collect();
+        }
+        self.history(commit)
+            .iter()
+            .filter_map(|id| self.commits.get(id))
+            .flat_map(|c| c.files.iter().cloned())
+            .filter(|path| !self.blob(commit, path).is_empty())
             .collect()
+    }
+
+    /// Every tree `replay` wrote, by ID.
+    pub fn trees(&self) -> BTreeMap<String, BTreeMap<String, String>> {
+        self.trees.borrow().clone()
     }
 
     /// Newest first.
@@ -378,19 +436,18 @@ impl ItemGit for FakeGit {
         base: &str,
         head: &str,
     ) -> Result<Vec<ChangedFile>, GitError> {
-        let paths: BTreeSet<&String> = self
-            .range(base, head)
-            .iter()
-            .flat_map(|id| &self.commits[id].files)
-            .collect();
-        let blob = |commit, path| Some(self.blob(commit, path)).filter(|b| !b.is_empty());
+        let blob =
+            |commit: &str, path: &str| Some(self.blob(commit, path)).filter(|b| !b.is_empty());
+        let mut paths = self.paths(base);
+        paths.extend(self.paths(head));
         Ok(paths
             .into_iter()
+            .filter(|path| blob(base, path) != blob(head, path))
             .map(|path| ChangedFile {
-                path: path.clone(),
+                old_blob: blob(base, &path),
+                new_blob: blob(head, &path),
                 old_path: None,
-                old_blob: blob(base, path),
-                new_blob: blob(head, path),
+                path,
             })
             .collect())
     }
@@ -420,6 +477,49 @@ impl ItemGit for FakeGit {
         }
         self.pins.borrow_mut().retain(|r, _| !r.starts_with(prefix));
         Ok(())
+    }
+}
+
+impl InterdiffGit for FakeGit {
+    /// Takes each path from `head` where only it moved since `base`, from
+    /// `onto` where only `onto` did, and conflicts where both moved apart.
+    fn replay(
+        &self,
+        _project: &ProjectName,
+        base: &str,
+        onto: &str,
+        head: &str,
+    ) -> Result<Replay, GitError> {
+        let mut paths = self.paths(base);
+        paths.extend(self.paths(onto));
+        paths.extend(self.paths(head));
+        let mut tree = BTreeMap::new();
+        let mut conflicts = Vec::new();
+        for path in paths {
+            let (b, o, h) = (
+                self.blob(base, &path),
+                self.blob(onto, &path),
+                self.blob(head, &path),
+            );
+            let blob = if b == h || o == h {
+                o
+            } else if b == o {
+                h
+            } else {
+                conflicts.push(path.clone());
+                format!("<<<<<<<\n{o}=======\n{h}>>>>>>>\n")
+            };
+            if !blob.is_empty() {
+                tree.insert(path, blob);
+            }
+        }
+        let mut trees = self.trees.borrow_mut();
+        let id = format!("{:040x}", 0xeeee_0000_usize + trees.len());
+        trees.insert(id.clone(), tree);
+        Ok(Replay {
+            tree: id,
+            conflicts,
+        })
     }
 }
 
@@ -484,6 +584,8 @@ pub(crate) struct FakeStore {
     files: BTreeMap<(ItemId, u32), Vec<FileStat>>,
     revisions: BTreeMap<(ItemId, u32), Revision>,
     guides: BTreeMap<(ItemId, u32), String>,
+    /// By item, from and to revision.
+    interdiffs: BTreeMap<(ItemId, u32, u32), Vec<InterdiffFile>>,
     diffs: BTreeMap<BlobPair, FileDiff>,
     /// By blob, grammar and version.
     highlights: BTreeMap<(String, String, String), Highlights>,
@@ -601,10 +703,16 @@ impl FakeStore {
 
     /// Blobs of every revision of the items `keep` picks.
     fn blobs_of(&self, keep: impl Fn(&ItemId) -> bool) -> BTreeSet<String> {
+        let interdiffs = self
+            .interdiffs
+            .iter()
+            .filter(|((item, ..), _)| keep(item))
+            .flat_map(|(_, files)| files.iter().map(|f| &f.stat));
         self.files
             .iter()
             .filter(|((item, _), _)| keep(item))
             .flat_map(|(_, files)| files)
+            .chain(interdiffs)
             .flat_map(|f| [f.file.old_blob.clone(), f.file.new_blob.clone()])
             .flatten()
             .collect()
@@ -615,6 +723,13 @@ impl FakeStore {
             .insert((id.clone(), number), revision.files.clone());
         if let Some(guide) = revision.guide {
             self.guides.insert((id.clone(), number), guide);
+        }
+        for interdiff in revision.interdiffs {
+            self.interdiffs
+                .insert((id.clone(), interdiff.from, number), interdiff.files);
+        }
+        for path in revision.viewed {
+            self.viewed.insert((id.clone(), number, path));
         }
         let revision = Revision {
             number,
@@ -651,6 +766,11 @@ impl FakeStore {
         };
         self.events.push((id.clone(), event.clone()));
         event
+    }
+
+    /// What an item submitted before interdiffs were recorded has.
+    pub fn forget_interdiffs(&mut self) {
+        self.interdiffs.clear();
     }
 }
 
@@ -1031,9 +1151,12 @@ impl DiffStore for FakeStore {
     }
 
     fn prune_diffs(&mut self, id: &ItemId) -> Result<(), StoreError> {
-        let pairs = |items: &mut dyn Iterator<Item = &(ItemId, u32)>| -> BTreeSet<BlobPair> {
-            items
-                .flat_map(|key| &self.files[key])
+        let pairs = |of: &dyn Fn(&ItemId) -> bool| -> BTreeSet<BlobPair> {
+            let files = self.files.iter().filter(|((item, _), _)| of(item));
+            let interdiffs = self.interdiffs.iter().filter(|((item, ..), _)| of(item));
+            files
+                .flat_map(|(_, files)| files.iter())
+                .chain(interdiffs.flat_map(|(_, files)| files.iter().map(|f| &f.stat)))
                 .map(|f| (f.file.old_blob.clone(), f.file.new_blob.clone()))
                 .collect()
         };
@@ -1043,8 +1166,8 @@ impl DiffStore for FakeStore {
             .filter(|i| i.state.is_open())
             .map(|i| &i.id)
             .collect();
-        let kept = pairs(&mut self.files.keys().filter(|(item, _)| open.contains(item)));
-        let closing = pairs(&mut self.files.keys().filter(|(item, _)| item == id));
+        let kept = pairs(&|item| open.contains(item));
+        let closing = pairs(&|item| item == id);
         self.diffs
             .retain(|pair, _| !closing.contains(pair) || kept.contains(pair));
         Ok(())
@@ -1199,6 +1322,26 @@ impl Highlighter for FakeHighlighter {
     }
 }
 
+impl InterdiffStore for FakeStore {
+    fn interdiff(
+        &self,
+        id: &ItemId,
+        from: u32,
+        to: u32,
+    ) -> Result<Option<Vec<InterdiffFile>>, StoreError> {
+        Ok(self.interdiffs.get(&(id.clone(), from, to)).cloned())
+    }
+
+    fn interdiffs_to(&self, id: &ItemId, to: u32) -> Result<Vec<u32>, StoreError> {
+        Ok(self
+            .interdiffs
+            .keys()
+            .filter(|(item, _, t)| item == id && *t == to)
+            .map(|(_, from, _)| *from)
+            .collect())
+    }
+}
+
 impl ViewedStore for FakeStore {
     fn viewed(&self, id: &ItemId, revision: u32) -> Result<BTreeSet<String>, StoreError> {
         Ok(self
@@ -1335,6 +1478,15 @@ impl ReviewStore for FakeStore {
         };
         self.events.push((review.item.clone(), event));
         Ok(review)
+    }
+
+    fn last_reviewed(&self, id: &ItemId) -> Result<Option<u32>, StoreError> {
+        Ok(self
+            .reviews
+            .iter()
+            .filter(|r| r.item == *id)
+            .map(|r| r.revision)
+            .max())
     }
 
     fn insert_draft(&mut self, comment: NewComment) -> Result<Comment, StoreError> {
@@ -1930,4 +2082,98 @@ impl Github for FakeGithub {
             .map(|(_, _, c)| c.clone())
             .collect())
     }
+}
+
+/// `app`, targeting main, with `login` revised over a moved base and nothing
+/// submitted yet: r1 is c2 on c1, main moves on to c3, r2 is c4 rebased onto
+/// c3, and r3 is c5 on top of r2. `submit_login` submits each.
+///
+/// | file         | c1 main | c2 r1     | c3 main  | c4 r2      | c5 r3   |
+/// |--------------|---------|-----------|----------|------------|---------|
+/// | README.md    | readme  |           | readme 2 |            |         |
+/// | src/api.rs   |         | api       |          | (dropped)  |         |
+/// | src/db.rs    | db      | db r1     | db 2     | db r2      |         |
+/// | src/lib.rs   | lib     | lib login |          | lib login2 |         |
+/// | src/login.rs |         | login     |          | login      |         |
+/// | src/token.rs |         |           |          | token      | token 2 |
+pub(crate) fn rebased() -> (FakeStore, FakeGit) {
+    let mut store = FakeStore::default();
+    store
+        .insert_project(&Project {
+            name: ProjectName::parse("app").unwrap(),
+            backend: Backend::Local,
+            target: "main".into(),
+            upstream: "/src/app".into(),
+            github: None,
+            bots: Vec::new(),
+        })
+        .unwrap();
+    let git = FakeGit::default()
+        .write(
+            &commit(1),
+            None,
+            "Initial",
+            &[
+                ("README.md", "readme"),
+                ("src/lib.rs", "lib"),
+                ("src/db.rs", "db"),
+            ],
+        )
+        .write(
+            &commit(2),
+            Some(&commit(1)),
+            "Add login",
+            &[
+                ("src/lib.rs", "lib login"),
+                ("src/login.rs", "login"),
+                ("src/api.rs", "api"),
+                ("src/db.rs", "db r1"),
+            ],
+        )
+        .write(
+            &commit(3),
+            Some(&commit(1)),
+            "Upstream",
+            &[("README.md", "readme 2"), ("src/db.rs", "db 2")],
+        )
+        .write(
+            &commit(4),
+            Some(&commit(3)),
+            "Add login",
+            &[
+                ("src/lib.rs", "lib login2"),
+                ("src/login.rs", "login"),
+                ("src/db.rs", "db r2"),
+                ("src/token.rs", "token"),
+            ],
+        )
+        .write(
+            &commit(5),
+            Some(&commit(4)),
+            "Fix token",
+            &[("src/token.rs", "token 2")],
+        )
+        .upstream("/src/app", "main", &commit(1));
+    (store, git)
+}
+
+/// Submits `login` at `head`, moving main to c3 first when the head builds
+/// on it, as in `rebased`.
+pub(crate) fn submit_login(store: &mut FakeStore, git: &FakeGit, head: u8) -> Item {
+    if head >= 4 {
+        git.push_upstream("/src/app", "main", &commit(3));
+    }
+    git.push("app", "login", &commit(head));
+    let request = Submit {
+        project: "app".into(),
+        branch: "login".into(),
+        head: commit(head),
+        title: None,
+        worktree: None,
+        wake: None,
+        guide: None,
+    };
+    submit(store, git, &FakeGithub::default(), request)
+        .unwrap()
+        .item
 }

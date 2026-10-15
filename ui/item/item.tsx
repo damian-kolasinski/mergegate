@@ -9,6 +9,7 @@ import { inboxHref } from "../app/router";
 import { DiffView, type DiffViewControl } from "../diff-view/diff-view";
 import { Empty } from "../design-system";
 import { useComments } from "./comments/comments";
+import { ComparePicker } from "./compare";
 import { Conversation } from "./conversation";
 import { Thread } from "./comments/thread";
 import { FileList } from "./files";
@@ -17,6 +18,7 @@ import { Demo } from "./demo/demo";
 import { Intent } from "./intent";
 import { ItemHeader } from "./header";
 import { MergeBlocked } from "./merge-blocked";
+import { NewerRevision } from "./newer-revision";
 import styles from "./item.module.css";
 import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
@@ -24,8 +26,9 @@ import { SyncGithub } from "./sync-github";
 import { useViewed } from "./viewed";
 
 /**
- * An item's newest revision against its merge-base: every file in one
- * scrolling column, the file list beside it following the scroll.
+ * An item's newest revision against its merge-base or an earlier revision:
+ * every file in one scrolling column, the file list beside it following the
+ * scroll.
  */
 export function ItemScreen(props: { id: string }) {
   const [diff, setDiff] = createSignal<ItemDiff>();
@@ -33,54 +36,102 @@ export function ItemScreen(props: { id: string }) {
   // submits, and a strip that waited for a reopen would miss it.
   const [demo, setDemo] = createSignal<DemoData | null>(null);
   const [failure, setFailure] = createSignal<string>();
+  // A revision submitted after the one on screen.
+  const [newest, setNewest] = createSignal<number>();
+  // The review bar's summary, kept here so switching to a newer revision
+  // doesn't lose what's typed.
+  const [summary, setSummary] = createSignal("");
+  // The review starts over on a new revision and on what's left of a closed
+  // item; comparing against something else only changes the files shown.
+  const shownKey = createMemo(() => {
+    const shown = diff();
+    return shown && `${shown.item.revision.number} ${closed(shown.item.state)}`;
+  });
   // main.tsx keys the route, so the id is fixed for the screen's life.
   const id = untrack(() => props.id);
-  const fetchDiff = () =>
-    getJson<ItemDiff>(`/api/items/${encodeURIComponent(id)}`);
+  // What the operator picked to compare against: `all` or a revision. Until
+  // they pick, the hub chooses.
+  let since: string | undefined;
+  const fetchDiff = (compare = since) =>
+    getJson<ItemDiff>(
+      `/api/items/${encodeURIComponent(id)}` +
+        (compare ? `?since=${encodeURIComponent(compare)}` : ""),
+    );
+  const failed = (error: unknown) =>
+    setFailure(error instanceof Error ? error.message : String(error));
   const show = (next: ItemDiff) => {
     setDiff(next);
     setDemo(next.demo);
   };
-  void fetchDiff().then(show, (error: unknown) =>
-    setFailure(error instanceof Error ? error.message : String(error)),
-  );
+  void fetchDiff().then(show, failed);
   // A closed item's diffs are gone, so its review gives way to what's left.
-  // Other changes, a new revision among them, wait for the operator to
-  // reopen the item rather than move the diff under them; the operator's own
-  // merge actions `replace` it, since the revision stays and only what's
-  // sent and blocked moves.
+  // A new revision waits for the operator to switch to it rather than move
+  // the diff under them; the operator's own merge actions `replace` it,
+  // since the revision stays and only what's sent and blocked moves.
   const reload = (replace = false) => {
-    void fetchDiff().then(
-      (next) => {
-        const shown = diff()?.item.state;
-        if (replace || (closed(next.item.state) && !(shown && closed(shown)))) {
-          show(next);
-        } else if (next.item.revision.number === diff()?.item.revision.number) {
-          setDemo(next.demo);
-        }
-      },
-      (error: unknown) =>
-        setFailure(error instanceof Error ? error.message : String(error)),
-    );
+    void fetchDiff().then((next) => {
+      const shown = diff();
+      if (
+        replace ||
+        (closed(next.item.state) && !(shown && closed(shown.item.state)))
+      ) {
+        show(next);
+        setNewest(undefined);
+      } else if (
+        shown &&
+        next.item.revision.number > shown.item.revision.number
+      ) {
+        setNewest(next.item.revision.number);
+      } else if (next.item.revision.number === shown?.item.revision.number) {
+        setDemo(next.demo);
+      }
+    }, failed);
+  };
+  /** Shows the newest revision against `compare`: `all` or a revision. */
+  const compare = (compare: string) => {
+    since = compare;
+    void fetchDiff().then((next) => {
+      show(next);
+      setNewest(undefined);
+    }, failed);
   };
   onHubEvent("item.changed", (event) => {
     if (!event || event.item === id) reload();
+  });
+  // The hub highlights in the background, and again as packs come and go;
+  // the diff on screen then brings its new spans.
+  onHubEvent("highlights.changed", () => {
+    const shown = untrack(diff);
+    if (!shown) return;
+    void fetchDiff(shown.since === null ? "all" : String(shown.since)).then(
+      (next) => {
+        // Unless the operator compared otherwise meanwhile, or the hub
+        // answered with a newer revision.
+        const same = next.item.revision.number === shown.item.revision.number;
+        if (diff() === shown && same) setDiff(next);
+      },
+      () => undefined,
+    );
   });
 
   return (
     <section class={styles.screen} aria-label={props.id}>
       <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
-      {/* Keyed: the diff only changes when the item closes, and the review
-          starts over on what is left. */}
-      <Show when={diff()} keyed fallback={<Leave />}>
-        {(current) => (
-          <Review
-            diff={current}
-            demo={demo()}
-            onClosed={() => reload()}
-            onMerge={() => reload(true)}
-          />
-        )}
+      <Show when={shownKey()} keyed fallback={<Leave />}>
+        <Show when={diff()}>
+          {(current) => (
+            <Review
+              diff={current()}
+              demo={demo()}
+              newest={newest()}
+              summary={summary()}
+              onSummary={setSummary}
+              onCompare={compare}
+              onClosed={() => reload()}
+              onMerge={() => reload(true)}
+            />
+          )}
+        </Show>
       </Show>
     </section>
   );
@@ -99,6 +150,11 @@ function leave() {
 function Review(props: {
   diff: ItemDiff;
   demo: DemoData | null;
+  /** A revision newer than the one on screen. */
+  newest: number | undefined;
+  summary: string;
+  onSummary: (summary: string) => void;
+  onCompare: (since: string) => void;
   onClosed: () => void;
   onMerge: () => void;
 }) {
@@ -112,26 +168,23 @@ function Review(props: {
   let toggle: HTMLButtonElement | undefined;
   let view: DiffViewControl | undefined;
   const viewed = useViewed(() => props.diff);
-  // The hub highlights in the background, and again as packs come and go;
-  // the same revision's files then bring their new spans. The screen keys
-  // the review by its diff, so the item is fixed for its life.
-  const [files, setFiles] = createSignal(untrack(() => props.diff.files));
-  const item = untrack(() => props.diff.item);
-  onHubEvent("highlights.changed", () => {
-    const revision = item.revision.number;
-    void getJson<ItemDiff>(`/api/items/${encodeURIComponent(item.id)}`).then(
-      (next) => {
-        if (next.item.revision.number === revision) setFiles(next.files);
-      },
-      () => undefined,
-    );
-  });
+  // Since an earlier revision, files unchanged since then are left out of
+  // the diff, and dropped ones are in it but not the revision's own.
+  const changed = createMemo(() =>
+    props.diff.files.filter((file) => file.interdiff !== "unchanged"),
+  );
+  const unchanged = createMemo(() =>
+    props.diff.files.filter((file) => file.interdiff === "unchanged"),
+  );
+  const own = createMemo(() =>
+    props.diff.files.filter((file) => file.interdiff !== "dropped"),
+  );
   // Trusted files stay out of the diff until the operator opens their group.
   const review = createMemo(() =>
-    files().filter((file) => file.tier === "review"),
+    changed().filter((file) => file.tier === "review"),
   );
   const trusted = createMemo(() =>
-    files().filter((file) => file.tier === "trusted"),
+    changed().filter((file) => file.tier === "trusted"),
   );
   const [showTrusted, setShowTrusted] = createSignal(false);
   const shown = createMemo(() =>
@@ -143,9 +196,18 @@ function Review(props: {
     () =>
       new Set([
         ...viewed.paths(),
-        ...trusted().map((file) => file.path),
+        ...own()
+          .filter((file) => file.tier === "trusted")
+          .map((file) => file.path),
       ]) as ReadonlySet<string>,
   );
+  // The old side of an interdiff is the earlier revision replayed onto the
+  // newest's base, which no revision has, so only the new side takes
+  // comments, and a dropped file isn't the newest's to comment on.
+  const onOwnSide = (spot: { path: string; side: string }) =>
+    props.diff.since === null ||
+    (spot.side === "additions" &&
+      own().some((file) => file.path === spot.path));
   const nav = useNavigation({
     files: shown,
     viewed: viewed.paths,
@@ -191,6 +253,11 @@ function Review(props: {
   const toggleViewed = () => {
     const file = nav.currentFile();
     if (!file || file.tier === "trusted") return;
+    // The newest revision doesn't change a dropped file, so it has no mark.
+    if (file.interdiff === "dropped") {
+      nav.stepFile(1);
+      return;
+    }
     const value = !viewed.paths().has(file.path);
     viewed.mark(file.path, value);
     if (value && file !== shown().at(-1)) nav.stepFile(1);
@@ -199,7 +266,7 @@ function Review(props: {
   /** `c` comments on the cursor's line. */
   const comment = () => {
     const line = nav.cursor();
-    if (line && reviewable(state())) {
+    if (line && reviewable(state()) && onOwnSide(line)) {
       comments.drafts.start({ ...line, start: line.line });
     }
   };
@@ -236,9 +303,15 @@ function Review(props: {
           item={props.diff.item}
           state={state()}
           viewed={done().size}
-          files={props.diff.files.length}
+          files={own().length}
           failure={viewed.failure()}
         >
+          <ComparePicker
+            since={props.diff.since}
+            interdiffs={props.diff.interdiffs}
+            holding={comments.editor.holding()}
+            onChange={props.onCompare}
+          />
           <Conversation
             comments={comments}
             open={talking()}
@@ -282,6 +355,18 @@ function Review(props: {
             />
           )}
         </Show>
+        <Show when={props.newest}>
+          {(newest) => (
+            <NewerRevision
+              newest={newest()}
+              shown={props.diff.item.revision.number}
+              holding={comments.editor.holding()}
+              onSwitch={() =>
+                props.onCompare(String(props.diff.item.revision.number))
+              }
+            />
+          )}
+        </Show>
       </div>
       <FileList
         project={project()}
@@ -295,6 +380,8 @@ function Review(props: {
           const last = review().at(-1);
           if (leaving && last) nav.showFile(last.path);
         }}
+        unchanged={unchanged()}
+        since={props.diff.since}
         viewed={viewed.paths()}
         current={nav.current()}
         onShow={nav.showFile}
@@ -305,9 +392,13 @@ function Review(props: {
           when={shown().length}
           fallback={
             <Empty>
-              {props.diff.files.length
-                ? "Every file in this revision is trusted."
-                : "This revision changes no files."}
+              {props.diff.since === null
+                ? props.diff.files.length
+                  ? "Every file in this revision is trusted."
+                  : "This revision changes no files."
+                : changed().length
+                  ? `Every file changed since r${props.diff.since} is trusted.`
+                  : `Nothing changed since r${props.diff.since}.`}
             </Empty>
           }
         >
@@ -319,10 +410,12 @@ function Review(props: {
             onFile={nav.scrolledTo}
             onRow={nav.clicked}
             commentable={reviewable(state())}
-            notes={comments.threads.spots()}
+            notes={comments.threads.spots().filter(onOwnSide)}
             note={(spot) => <Thread comments={comments} spot={spot} />}
             onComment={(span) => {
-              if (reviewable(state())) comments.drafts.start(span);
+              if (reviewable(state()) && onOwnSide(span)) {
+                comments.drafts.start(span);
+              }
             }}
             control={(control) => {
               view = control;
@@ -335,12 +428,13 @@ function Review(props: {
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
           target={props.diff.item.target}
-          unviewed={
-            props.diff.files.filter((file) => !done().has(file.path)).length
-          }
+          behind={props.newest !== undefined}
+          unviewed={own().filter((file) => !done().has(file.path)).length}
           drafts={comments.drafts.list().length}
           replies={comments.replyDrafts.list().length}
           holding={comments.editor.holding()}
+          summary={props.summary}
+          onSummary={props.onSummary}
           onSubmitted={reviewed}
           onMerged={props.onMerge}
         />

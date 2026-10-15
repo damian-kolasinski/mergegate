@@ -1,4 +1,5 @@
 use mergegate_core::diff::compute;
+use mergegate_core::interdiff::{Change, InterdiffFile, NewInterdiff};
 use mergegate_core::item::{
     ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
 };
@@ -107,6 +108,8 @@ fn revision(files: Vec<FileStat>) -> NewRevision {
         base: "0".repeat(40),
         files,
         guide: None,
+        interdiffs: Vec::new(),
+        viewed: Vec::new(),
     }
 }
 
@@ -132,16 +135,36 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
         target: "main".into(),
         revision: revision(files),
     };
-    // app#1 has `a`, then `b` and `c`; app#2 (open) has `b`; app#3 (merged) `c`.
+    // app#1 has `a`, then `b` and `c` with `d` and `e` in its interdiff;
+    // app#2 (open) has `b`, then `e` in its interdiff; app#3 (merged) `c`.
     let one = store
         .insert_item(item("one", vec![changed(Some("x"), "a")]))
         .unwrap();
     let files = vec![changed(None, "b"), changed(Some("x"), "c")];
+    let interdiff = |from, files: Vec<FileStat>| NewRevision {
+        interdiffs: vec![NewInterdiff {
+            from,
+            files: files
+                .into_iter()
+                .map(|stat| InterdiffFile {
+                    stat,
+                    change: Change::Changed,
+                })
+                .collect(),
+        }],
+        ..revision(Vec::new())
+    };
+    let mut second = interdiff(1, vec![changed(Some("y"), "d"), changed(Some("y"), "e")]);
+    second.files = files;
     store
-        .add_revision(&one.id, "one", ItemState::NeedsReview, revision(files))
+        .add_revision(&one.id, "one", ItemState::NeedsReview, second)
         .unwrap();
-    store
+    let two = store
         .insert_item(item("two", vec![changed(None, "b")]))
+        .unwrap();
+    let second = interdiff(1, vec![changed(Some("y"), "e")]);
+    store
+        .add_revision(&two.id, "two", ItemState::NeedsReview, second)
         .unwrap();
     let three = store
         .insert_item(item("three", vec![changed(Some("x"), "c")]))
@@ -150,7 +173,15 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
         .conn
         .execute("UPDATE items SET state = 'merged' WHERE number = 3", [])
         .unwrap();
-    for (old, new) in [(Some("x"), "a"), (None, "b"), (Some("x"), "c"), (None, "z")] {
+    let pairs = [
+        (Some("x"), "a"),
+        (None, "b"),
+        (Some("x"), "c"),
+        (Some("y"), "d"),
+        (Some("y"), "e"),
+        (None, "z"),
+    ];
+    for (old, new) in pairs {
         store
             .insert_diff(old, Some(new), &FileDiff::binary())
             .unwrap();
@@ -163,6 +194,8 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
     assert!(!kept(&store, Some("x"), "a"));
     assert!(kept(&store, None, "b"));
     assert!(!kept(&store, Some("x"), "c"));
+    assert!(!kept(&store, Some("y"), "d"));
+    assert!(kept(&store, Some("y"), "e"));
     assert!(kept(&store, None, "z"), "not any item's");
     store.prune_diffs(&three.id).unwrap();
     store.prune_diffs(&ItemId::parse("app#9").unwrap()).unwrap();

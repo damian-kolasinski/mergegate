@@ -179,6 +179,15 @@ function Entry(props: {
           <Badge tone="brand">▶ demo</Badge>
         </span>
       </Show>
+      <Show when={props.item.changed_since}>
+        {(changed) => (
+          <span class={styles.flag}>
+            <Meta>
+              {changed().files} changed since r{changed().revision}
+            </Meta>
+          </span>
+        )}
+      </Show>
       <Show when={props.item.blocked}>
         {(blocked) => (
           <span class={styles.flag} title={why(blocked())}>

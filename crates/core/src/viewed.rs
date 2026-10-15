@@ -1,8 +1,9 @@
 //! Viewed marks: the files the reviewer is done with. A mark holds for the
-//! revision it was made on.
+//! revision it was made on, and every later one the file is unchanged in.
 
 use std::collections::BTreeSet;
 
+use crate::interdiff::{Change, InterdiffStore};
 use crate::item::{ItemId, ItemStore};
 use crate::store::StoreError;
 
@@ -45,8 +46,12 @@ pub enum ViewedError {
     Store(#[from] StoreError),
 }
 
-/// Marks or unmarks one of the files `mark.revision` changes.
-pub fn mark<S: ItemStore + ViewedStore>(store: &mut S, mark: Mark) -> Result<(), ViewedError> {
+/// Marks or unmarks one of the files `mark.revision` changes, and the same
+/// file in each later revision that changes it as `mark.revision` does.
+pub fn mark<S: ItemStore + ViewedStore + InterdiffStore>(
+    store: &mut S,
+    mark: Mark,
+) -> Result<(), ViewedError> {
     let Mark {
         id,
         revision,
@@ -67,6 +72,16 @@ pub fn mark<S: ItemStore + ViewedStore>(store: &mut S, mark: Mark) -> Result<(),
         return Err(ViewedError::NoFile { id, revision, path });
     }
     store.set_viewed(&id, revision, &path, viewed)?;
+    for later in revision + 1..=item.revision.number {
+        let unchanged = store
+            .interdiff(&id, revision, later)?
+            .unwrap_or_default()
+            .iter()
+            .any(|f| f.stat.file.path == path && f.change == Change::Unchanged);
+        if unchanged {
+            store.set_viewed(&id, later, &path, viewed)?;
+        }
+    }
     Ok(())
 }
 

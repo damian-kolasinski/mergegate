@@ -1,4 +1,5 @@
 use super::{FileStat, Item, ItemBackend, ItemId, ItemState, Revision};
+use crate::interdiff::NewInterdiff;
 use crate::project::ProjectName;
 use crate::store::StoreError;
 
@@ -24,6 +25,8 @@ pub trait ItemStore {
     /// Numbers the item next in its project.
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError>;
 
+    /// Records the revision with its interdiffs and carried viewed marks, all
+    /// or nothing.
     fn add_revision(
         &mut self,
         id: &ItemId,
@@ -60,4 +63,8 @@ pub struct NewRevision {
     pub base: String,
     pub files: Vec<FileStat>,
     pub guide: Option<String>,
+    /// From each earlier revision; none for an item's first.
+    pub interdiffs: Vec<NewInterdiff>,
+    /// Files that start out viewed.
+    pub viewed: Vec<String>,
 }

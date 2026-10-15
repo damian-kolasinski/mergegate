@@ -56,6 +56,8 @@ fn revision(head: char) -> NewRevision {
             },
         ],
         guide: None,
+        interdiffs: Vec::new(),
+        viewed: Vec::new(),
     }
 }
 
@@ -205,6 +207,20 @@ fn adds_revisions_with_their_files() {
     assert_eq!(changed(1), revision('a').files);
     assert_eq!(changed(2), revision('b').files);
     assert!(changed(3).is_empty());
+
+    let revisions = store.revisions(&item.id).unwrap();
+    let heads: Vec<(u32, String)> = revisions
+        .iter()
+        .map(|r| (r.number, r.head.clone()))
+        .collect();
+    assert_eq!(heads, [(1, "a".repeat(40)), (2, "b".repeat(40))]);
+    assert_eq!(revisions[1], item.revision);
+    assert!(
+        store
+            .revisions(&ItemId::parse("app#9").unwrap())
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

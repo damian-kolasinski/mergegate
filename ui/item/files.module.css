@@ -4,6 +4,7 @@
 }
 
 .viewed {
+  width: 13px;
   flex: none;
   align-self: center;
   margin: 0;
@@ -62,4 +63,18 @@
 
 .chevron {
   width: 1ch;
+}
+
+/* Not in the diff, so not a row the cursor or `n/p` visits. */
+.unchanged > summary {
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+
+.still {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-inactive);
 }

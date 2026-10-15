@@ -14,6 +14,8 @@ fn store() -> (tempfile::TempDir, Store) {
         base: "0".repeat(40),
         files: Vec::new(),
         guide: None,
+        interdiffs: Vec::new(),
+        viewed: Vec::new(),
     };
     let name = ProjectName::parse("app").unwrap();
     store
@@ -76,6 +78,21 @@ fn a_review_moves_the_item_and_logs_one_event() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, EventKind::ReviewSubmitted(written));
     assert_eq!(store.last_cursor(&app).unwrap(), events[0].cursor);
+}
+
+#[test]
+fn the_last_reviewed_revision_is_the_newest_with_a_review() {
+    let (_dir, mut store) = store();
+    let app = id("app#1");
+    assert_eq!(store.last_reviewed(&app).unwrap(), None);
+    store
+        .insert_review(review("app#1", 2, ""), ItemState::ChangesRequested)
+        .unwrap();
+    store
+        .insert_review(review("app#1", 1, ""), ItemState::ChangesRequested)
+        .unwrap();
+    assert_eq!(store.last_reviewed(&app).unwrap(), Some(2));
+    assert_eq!(store.last_reviewed(&id("app#9")).unwrap(), None);
 }
 
 fn draft(revision: u32, body: &str) -> NewComment {
@@ -157,6 +174,8 @@ fn a_review_sends_only_its_items_drafts() {
                 base: "0".repeat(40),
                 files: Vec::new(),
                 guide: None,
+                interdiffs: Vec::new(),
+                viewed: Vec::new(),
             },
         })
         .unwrap();
