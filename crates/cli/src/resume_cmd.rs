@@ -124,11 +124,21 @@ fn next(resume: &Resume) -> String {
     let id = &resume.item.id;
     match resume.item.state {
         // A wait may have delivered the closing events already, so a plain
-        // `mg feedback` could print nothing new.
-        ItemState::Merged | ItemState::Abandoned => format!(
-            "The item is closed. Run `mg feedback {id} --since 0` to read how it ended, then \
-             clean up as agreed with the operator."
-        ),
+        // `mg feedback` could print nothing new. The replay repeats the
+        // cleanup even when it ran, and a closed item's branch name is free
+        // for new work, so the head tells the two apart.
+        ItemState::Merged | ItemState::Abandoned => {
+            let item = &resume.item;
+            let head = &item.revision.head;
+            format!(
+                "The item is closed. Run `mg feedback {id} --since 0` to read how it ended. \
+                 Clean up as agreed with the operator only if {} still points at r{}'s head, \
+                 {}: otherwise it is done, or the name is newer work's.",
+                item.branch,
+                item.revision.number,
+                &head[..head.len().min(12)],
+            )
+        }
         state => {
             let mut steps = vec![format!(
                 "run `mg feedback {id}` for the events the last session didn't read"

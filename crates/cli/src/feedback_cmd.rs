@@ -62,12 +62,7 @@ pub(crate) fn read(
 }
 
 /// Prints `feedback`, then acknowledges its events unless they are a replay.
-pub(crate) fn deliver(
-    client: Client,
-    feedback: &Feedback,
-    since: Option<u64>,
-    text: String,
-) -> Outcome {
+fn deliver(client: Client, feedback: &Feedback, since: Option<u64>, text: String) -> Outcome {
     let outcome = Outcome::done(feedback, text);
     // A replay may start past the delivered cursor, and acknowledging it
     // would skip the events before `since` that were never printed.
@@ -92,7 +87,7 @@ pub(crate) fn closed(state: ItemState) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn describe(feedback: &Feedback) -> String {
+fn describe(feedback: &Feedback) -> String {
     let mut out: Vec<String> = feedback.events.iter().map(event).collect();
     out.push(format!(
         "cursor {} (mg wait --since {} continues after it)",
@@ -107,7 +102,7 @@ pub(crate) fn event(event: &Event) -> String {
     let head = format!(
         "[{}] {} {} r{}:",
         event.cursor,
-        kind(&event.body),
+        event.body.kind(),
         event.item,
         event.revision
     );
@@ -201,29 +196,18 @@ pub(crate) fn event(event: &Event) -> String {
             branch,
             commands,
         } => {
-            let mut out = format!(
-                "{head} the operator merged it as {commit}\n\n  \
-                 Clean up {branch} as agreed with the operator; by default:"
-            );
+            let mut out = format!("{head} the operator merged it as {commit}");
+            // A hub older than the cleanup commands sends none.
+            if !commands.is_empty() {
+                out.push_str(&format!(
+                    "\n\n  Clean up {branch} as agreed with the operator; by default:"
+                ));
+            }
             for command in commands {
                 out.push_str(&format!("\n    {command}"));
             }
             out
         }
-    }
-}
-
-/// The event's `type` in `--json`.
-fn kind(body: &EventBody) -> &'static str {
-    match body {
-        EventBody::ReviewSubmitted { .. } => "review.submitted",
-        EventBody::ItemAbandoned { .. } => "item.abandoned",
-        EventBody::MergeHeld { .. } => "merge.held",
-        EventBody::MergeCancelled {} => "merge.cancelled",
-        EventBody::MergeConflict { .. } => "merge.conflict",
-        EventBody::ExternalComments { .. } => "external.comments",
-        EventBody::CommentOverride { .. } => "comment.override",
-        EventBody::ItemMerged { .. } => "item.merged",
     }
 }
 

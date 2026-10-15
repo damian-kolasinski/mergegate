@@ -9,8 +9,8 @@ fn inlines_the_files_asked_for_and_names_the_rest() {
     assert!(text.contains("\n\n--- references/waiting.md ---\n\n# Waiting"));
     assert!(!text.contains("--- references/setup.md ---"));
     assert!(text.ends_with(
-        "\n\n--- Left out here, in the installed skill: references/setup.md, \
-         references/authoring.md, references/operator.md ---"
+        "\n\n--- Left out here: references/setup.md, references/authoring.md, \
+         references/operator.md; `mg skill install` writes the whole skill ---"
     ));
 }
 

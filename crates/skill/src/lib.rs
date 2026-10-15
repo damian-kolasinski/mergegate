@@ -41,7 +41,7 @@ pub fn inlined(paths: &[&str]) -> String {
     }
     if !left.is_empty() {
         out.push_str(&format!(
-            "\n\n--- Left out here, in the installed skill: {} ---",
+            "\n\n--- Left out here: {}; `mg skill install` writes the whole skill ---",
             left.join(", ")
         ));
     }

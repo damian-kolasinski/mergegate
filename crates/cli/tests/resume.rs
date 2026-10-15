@@ -104,8 +104,8 @@ fn f14_resume_prints_the_item_its_last_review_and_the_open_comments() {
     );
     assert!(
         skill.trim_end().ends_with(
-            "\n--- Left out here, in the installed skill: references/setup.md, \
-             references/operator.md ---"
+            "\n--- Left out here: references/setup.md, references/operator.md; \
+             `mg skill install` writes the whole skill ---"
         ),
         "{skill}"
     );
@@ -147,7 +147,15 @@ fn f14_a_closed_item_leaves_nothing_to_answer() {
         worktree.display()
     );
     assert!(head.contains(&line), "{head}");
-    assert!(head.ends_with("The item is closed. Run `mg feedback app#1 --since 0` to read how it ended, then clean up as agreed with the operator.\n"), "{head}");
+    // The replay repeats the cleanup, which may have run, and the branch
+    // name may be newer work's by now.
+    let next = format!(
+        "The item is closed. Run `mg feedback app#1 --since 0` to read how it ended. Clean up \
+         as agreed with the operator only if feature still points at r1's head, {}: otherwise \
+         it is done, or the name is newer work's.\n",
+        &repo.rev("feature")[..12]
+    );
+    assert!(head.ends_with(&next), "{head}");
 
     // A wait that already delivered the end leaves the replay to show it.
     env.mg(&["wait", "app#1"]).assert_code(0);

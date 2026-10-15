@@ -247,7 +247,8 @@ mg prioritize <item> --priority p0|p1|p2|p3|none [--note "blocks auth refactor, 
 mg events [--since CURSOR] [--follow] [--json]         Hub-wide event log (merged, abandoned, …)
                                                        so the operator agent can dispatch dependent work.
                                                        Acknowledges nothing; --follow streams one JSON
-                                                       object per line, from now or --since.
+                                                       object per line, from now or --since. Text heads
+                                                       each event with its cursor and type, as wait does.
 mg rules list | propose ... | show <id>                See §7.3.
 ```
 
