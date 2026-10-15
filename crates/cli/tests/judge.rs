@@ -424,6 +424,7 @@ fn f12_a_command_judges_from_the_projects_repo() {
         &json!({
             "path": "Cargo.lock", "old_path": null, "change": "added",
             "additions": 2, "deletions": 0, "tier": "trusted", "generated": false,
+            "old_mode": null, "new_mode": "100644",
             "diff": "@@ -0,0 +1,2 @@\n+a\n+b\n",
         })
     );

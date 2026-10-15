@@ -1,6 +1,6 @@
 use super::*;
 use crate::fake::{FakeStore, commit};
-use crate::item::ItemState;
+use crate::item::{FileMode, ItemState};
 use crate::judge::Provider;
 use crate::triage::{RulesStore, Tier, Triage};
 
@@ -88,6 +88,13 @@ fn requests_the_whole_change() {
     assert_eq!(
         (login.path.as_str(), login.change, login.tier),
         ("src/login.rs", Change::Added, Tier::Review)
+    );
+    assert_eq!(
+        [readme, login].map(|f| (f.old_mode, f.new_mode)),
+        [
+            (Some(FileMode::Regular), Some(FileMode::Regular)),
+            (None, Some(FileMode::Regular)),
+        ]
     );
     let blob = commit(2);
     assert_eq!(

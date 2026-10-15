@@ -1,6 +1,7 @@
 //! The JSON a judge command reads and writes. It's the command's contract,
 //! documented in design §7.4: fields are only ever added.
 
+use mergegate_core::item::FileMode;
 use mergegate_core::judge::{JudgeError, Request, Verdict};
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +24,10 @@ struct InputFile<'a> {
     /// `review`, or `trusted` when a rule marked it safe to skip.
     tier: &'static str,
     generated: bool,
+    /// Git's mode before and after, as `100755`; null where the file
+    /// doesn't exist or the hub recorded none.
+    old_mode: Option<&'static str>,
+    new_mode: Option<&'static str>,
     /// Unified hunks; null when the change isn't text or is too large.
     diff: Option<&'a str>,
 }
@@ -44,6 +49,8 @@ pub(crate) fn input(request: &Request) -> Input<'_> {
                 deletions: f.deletions,
                 tier: f.tier.as_str(),
                 generated: f.generated,
+                old_mode: f.old_mode.map(FileMode::as_str),
+                new_mode: f.new_mode.map(FileMode::as_str),
                 diff: f.diff.as_deref(),
             })
             .collect(),

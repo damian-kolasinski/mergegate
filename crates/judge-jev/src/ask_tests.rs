@@ -1,4 +1,4 @@
-use mergegate_core::item::ItemId;
+use mergegate_core::item::{FileMode, ItemId};
 use mergegate_core::judge::{Change, RequestFile};
 
 use super::*;
@@ -12,6 +12,8 @@ fn request() -> Request {
         deletions: Some(1),
         tier,
         generated: false,
+        old_mode: Some(FileMode::Regular),
+        new_mode: Some(FileMode::Regular),
         diff: Some("@@ -1,1 +1,1 @@\n-a\n+b\n".into()),
     };
     Request {

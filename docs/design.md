@@ -353,7 +353,7 @@ Matchers (v1): path glob (`*` stays within a directory), change kind (added / de
 
 ### 7.4 Judge providers
 
-Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
+Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated, modes) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
 
 | Provider | Notes |
 |---|---|
@@ -367,6 +367,7 @@ The command reads the change as JSON on stdin and prints its verdicts on stdout.
 stdin:  {"item": "app#42", "revision": 2, "title": "…", "guide": "…" | null,
          "files": [{"path", "old_path", "change": "added|deleted|renamed|modified",
                     "additions", "deletions", "tier": "review|trusted", "generated",
+                    "old_mode", "new_mode": "100644|100755|120000|160000" | null,
                     "diff": "unified hunks" | null}]}
 stdout: {"files": [{"path", "importance": 1-100, "reason"?: "one line", "promote"?: 0-1}]}
 ```
