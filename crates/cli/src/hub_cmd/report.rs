@@ -3,6 +3,7 @@
 use hub::Home;
 use serde::Serialize;
 
+use super::probe::live_pid;
 use super::service::{self, Installed};
 use crate::output::{CliError, exit};
 
@@ -80,17 +81,20 @@ pub(super) fn exited(printed: &[u8], home: &Home) -> CliError {
 }
 
 pub(super) fn unresponsive(home: &Home) -> CliError {
-    let hint = match home.read_info() {
-        Some(info) => format!("kill {}, then mg hub start", info.pid),
-        None => format!(
-            "stop the process holding {}/hub.lock",
-            home.root().display()
+    let message = "a hub process holds the data directory but doesn't answer";
+    // Without a hub.json naming a live process, the hub never got as far as
+    // answering: it may be starting still, and its pid is unknown.
+    let (message, hint) = match live_pid(home) {
+        Some(pid) => (message.to_owned(), format!("kill {pid}, then mg hub start")),
+        None => (
+            format!("{message}; it may still be starting"),
+            format!(
+                "mg hub status; if it stays unresponsive, stop the process holding {}/hub.lock",
+                home.root().display()
+            ),
         ),
     };
-    CliError::new(
-        "hub_unresponsive",
-        "a hub process holds the data directory but doesn't answer",
-    )
-    .hint(hint)
-    .exit(exit::UNAVAILABLE)
+    CliError::new("hub_unresponsive", message)
+        .hint(hint)
+        .exit(exit::UNAVAILABLE)
 }

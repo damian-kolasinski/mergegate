@@ -11,7 +11,7 @@ use mergegate_core::attachment::{self, MAX_SIZE, Media, SNIFF_LEN};
 use serde::Serialize;
 
 use crate::client::{self, Client};
-use crate::output::{CliError, Outcome};
+use crate::output::{CliError, Outcome, exit};
 
 /// A file checked before anything is sent, so a wrong one stops a submit
 /// before it pushes.
@@ -129,20 +129,39 @@ pub(crate) fn upload(
     Ok(attachments)
 }
 
-/// Names what went before `error` and what's left to send, since attaching
-/// a file again would show it twice.
+/// Names what went before `error`, since attaching a file again would show
+/// it twice, and what's left to send: as the command that sends it when
+/// sending again may work, and in the message otherwise, so a refusal such
+/// as a closed item keeps the hub's hint.
 fn unsent(mut error: CliError, item: &str, sent: &[Attachment], rest: &[Checked]) -> CliError {
+    let paths: Vec<String> = rest.iter().map(|f| f.path.display().to_string()).collect();
+    let retry = transient(&error);
+    let mut notes = Vec::new();
     if !sent.is_empty() {
         let names: Vec<&str> = sent.iter().map(|a| a.name.as_str()).collect();
-        error.body.message = format!(
-            "{} ({} attached before it)",
-            error.body.message,
-            names.join(", ")
-        );
+        notes.push(format!("{} attached before it", names.join(", ")));
     }
-    let paths: Vec<String> = rest.iter().map(|f| f.path.display().to_string()).collect();
-    error.body.hint = Some(format!("mg attach {item} {}", paths.join(" ")));
+    // A lone file the error is about needs no naming twice.
+    if !retry && (!sent.is_empty() || paths.len() > 1) {
+        notes.push(format!("{} not sent", paths.join(", ")));
+    }
+    if !notes.is_empty() {
+        error.body.message = format!("{} ({})", error.body.message, notes.join("; "));
+    }
+    if retry {
+        error.body.hint = Some(format!("mg attach {item} {}", paths.join(" ")));
+    }
     error
+}
+
+/// The upload failed on the way or in the hub's storage, not because the
+/// hub refused the item or the file, nor because this mg can't read it.
+fn transient(error: &CliError) -> bool {
+    error.exit == exit::UNAVAILABLE
+        || matches!(
+            error.body.code.as_str(),
+            "upload_failed" | "store_failed" | "unexpected_reply"
+        )
 }
 
 pub(crate) fn describe(item: &str, attachments: &[Attachment]) -> String {

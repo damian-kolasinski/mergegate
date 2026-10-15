@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::error::ErrorKind;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use hub::Home;
 
 use output::{CliError, EXIT_CODES_HELP, Outcome, exit};
@@ -214,7 +214,10 @@ pub fn main() -> ExitCode {
     let json_env = std::env::var_os(JSON_ENV).is_some_and(|v| v == "1");
     let cli = match Cli::try_parse_from(&args) {
         Ok(cli) => cli,
-        Err(e) => return usage(e, json_env || args.iter().any(|a| a == "--json")),
+        Err(e) => {
+            let json = json_env || args.iter().any(|a| a == "--json");
+            return usage(e, json, &args);
+        }
     };
     let json = cli.json || json_env;
     output::emit(json, dispatch(cli.command, json))
@@ -276,25 +279,22 @@ fn home() -> Result<Home, CliError> {
 
 /// clap exits with 2 on usage errors, which the contract reserves for
 /// `needs_decision`; usage errors exit with 64 instead.
-fn usage(e: clap::Error, json: bool) -> ExitCode {
+fn usage(e: clap::Error, json: bool, args: &[OsString]) -> ExitCode {
     match e.kind() {
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
             let _ = e.print();
             ExitCode::from(exit::OK)
         }
         _ if json => {
-            let rendered = e.render().to_string();
             let message = match e.kind() {
                 // clap renders help here, not an error line.
-                ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => "a subcommand is required",
-                _ => rendered
-                    .lines()
-                    .next()
-                    .unwrap_or_default()
-                    .trim_start_matches("error: "),
+                ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+                    "a subcommand is required".to_owned()
+                }
+                _ => error_line(&e.render().to_string()),
             };
             let err = CliError::new("usage", message)
-                .hint("mg --help")
+                .hint(format!("{} --help", command_path(args)))
                 .exit(exit::USAGE);
             output::emit(true, Err(err))
         }
@@ -303,6 +303,48 @@ fn usage(e: clap::Error, json: bool) -> ExitCode {
             ExitCode::from(exit::USAGE)
         }
     }
+}
+
+/// The error clap rendered, on one line. Some errors continue on indented
+/// lines before the first blank one, such as the missing arguments after
+/// "the following required arguments were not provided:"; tips and usage
+/// come after the blank line.
+fn error_line(rendered: &str) -> String {
+    let mut lines = rendered.lines();
+    let mut line = lines
+        .next()
+        .unwrap_or_default()
+        .trim_start_matches("error: ")
+        .to_owned();
+    let more: Vec<&str> = lines
+        .take_while(|l| !l.trim().is_empty())
+        .map(str::trim)
+        .collect();
+    if !more.is_empty() {
+        line.push(' ');
+        line.push_str(&more.join(", "));
+    }
+    line
+}
+
+/// `mg` and the subcommands `args` name, so the hint points at the help of
+/// the command that was misused.
+fn command_path(args: &[OsString]) -> String {
+    let mut path = String::from("mg");
+    let mut command = Cli::command();
+    for arg in args.iter().skip(1) {
+        let Some(arg) = arg.to_str() else { break };
+        if arg.starts_with('-') {
+            continue;
+        }
+        let Some(sub) = command.find_subcommand(arg).cloned() else {
+            break;
+        };
+        path.push(' ');
+        path.push_str(sub.get_name());
+        command = sub;
+    }
+    path
 }
 
 #[cfg(test)]
