@@ -58,6 +58,12 @@ export function RulesScreen(props: { project: string }) {
 
   return (
     <div class={styles.screen} role="region" aria-label={`${project} rules`}>
+      <header class={styles.header}>
+        <h1 class={styles.title}>{project} rules</h1>
+        <Meta>
+          Each project has its own; these sort {project}'s items only.
+        </Meta>
+      </header>
       <Show when={failure()}>{(text) => <Empty>{text()}</Empty>}</Show>
       <Show when={rules()}>
         {(current) => (

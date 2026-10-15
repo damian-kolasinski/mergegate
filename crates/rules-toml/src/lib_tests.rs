@@ -181,3 +181,20 @@ fn writes_the_file_creating_its_folder() {
     assert_eq!(read.text, FILE);
     assert_eq!(read.rules.len(), 1);
 }
+
+#[test]
+fn writes_a_location_under_home_with_a_tilde() {
+    let path = Path::new("/home/op/.mergegate/projects/app/rules.toml");
+    assert_eq!(
+        tilde(path, Some(Path::new("/home/op"))),
+        "~/.mergegate/projects/app/rules.toml"
+    );
+    assert_eq!(
+        tilde(path, Some(Path::new("/home/other"))),
+        "/home/op/.mergegate/projects/app/rules.toml"
+    );
+    assert_eq!(
+        tilde(path, None),
+        "/home/op/.mergegate/projects/app/rules.toml"
+    );
+}

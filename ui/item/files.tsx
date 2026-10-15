@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import type { File } from "../api/File";
+import { rulesHref } from "../app/router";
 import { Meta, Mono, Row } from "../design-system";
 import { Counts } from "./counts";
 import styles from "./files.module.css";
@@ -9,6 +10,8 @@ import styles from "./files.module.css";
  * review, then the trusted ones folded into a group of their own.
  */
 export function FileList(props: {
+  /** Whose rules sorted the files, linked from the trusted group. */
+  project: string;
   files: File[];
   trusted: File[];
   /** Whether the trusted group is open, and its files in the diff. */
@@ -40,21 +43,26 @@ export function FileList(props: {
     <nav class={styles.files} aria-label="Files">
       <ul>{entries(props.files)}</ul>
       <Show when={props.trusted.length}>
-        <button
-          type="button"
-          class={styles.group}
-          aria-expanded={props.expanded}
-          onClick={(event) => {
-            props.onExpand(!props.expanded);
-            // A focused button would take Enter from the shortcuts.
-            event.currentTarget.blur();
-          }}
-        >
-          <span class={styles.chevron} aria-hidden="true">
-            {props.expanded ? "▾" : "▸"}
-          </span>
-          Trusted ({props.trusted.length})
-        </button>
+        <div class={styles.group}>
+          <button
+            type="button"
+            class={styles.toggle}
+            aria-expanded={props.expanded}
+            onClick={(event) => {
+              props.onExpand(!props.expanded);
+              // A focused button would take Enter from the shortcuts.
+              event.currentTarget.blur();
+            }}
+          >
+            <span class={styles.chevron} aria-hidden="true">
+              {props.expanded ? "▾" : "▸"}
+            </span>
+            Trusted ({props.trusted.length})
+          </button>
+          <a class={styles.rules} href={rulesHref(props.project)}>
+            {props.project} rules
+          </a>
+        </div>
         <Show when={props.expanded}>
           <ul aria-label="Trusted files">{entries(props.trusted)}</ul>
         </Show>

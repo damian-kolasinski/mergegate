@@ -1,7 +1,7 @@
 //! The operator's rules file, `rules.toml` in each project's folder: one
 //! `[[rule]]` table per rule, first match wins.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use mergegate_core::project::ProjectName;
 use mergegate_core::triage::{
@@ -58,7 +58,16 @@ impl RulesFile for RulesToml {
     }
 
     fn location(&self, project: &ProjectName) -> String {
-        self.path(project).display().to_string()
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        tilde(&self.path(project), home.as_deref())
+    }
+}
+
+/// `path` with the home folder written `~`, as the operator would type it.
+fn tilde(path: &Path, home: Option<&Path>) -> String {
+    match home.and_then(|home| path.strip_prefix(home).ok()) {
+        Some(rest) => Path::new("~").join(rest).display().to_string(),
+        None => path.display().to_string(),
     }
 }
 

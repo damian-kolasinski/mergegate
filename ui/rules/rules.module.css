@@ -2,6 +2,21 @@
   padding-bottom: var(--space-6);
 }
 
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  font: var(--type-h4);
+  letter-spacing: var(--tracking-heading);
+  color: var(--text-primary);
+}
+
 .error {
   margin: var(--space-3) var(--space-4);
   padding: var(--space-2) var(--space-3);

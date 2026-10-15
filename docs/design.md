@@ -329,6 +329,7 @@ mg rules propose --tier review  --path '**/*View.swift' --diff-matches 'Navigati
 
 - **Tightening** (anything toward `review`) applies immediately.
 - **Loosening** (anything toward `trusted`) waits for operator approval: an inbox badge, one-click approve with a preview of which past files it would have hidden.
+- **The rules screen is per project,** titled "app rules", and the review screen's Trusted group links to it, so the applied rules are a click away even with nothing waiting. There are no hub-wide rules.
 
 Matchers (v1): path glob, change kind (added / deleted / renamed / generated), changed-line count, diff-content regex. Rules are ordered and each carries a reason that shows in the UI.
 
