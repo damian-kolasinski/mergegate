@@ -125,6 +125,7 @@ fn external_comments_are_sent_from_the_start_and_wait_for_a_batch() {
                 revision: 1,
                 verdict: Verdict::Comment,
                 summary: "Looks fine".into(),
+                moved: Vec::new(),
             },
             ItemState::NeedsReview,
         )
@@ -268,6 +269,7 @@ fn an_override_goes_out_at_once_and_isnt_a_draft() {
                 revision: 1,
                 verdict: Verdict::Comment,
                 summary: "".into(),
+                moved: Vec::new(),
             },
             ItemState::NeedsReview,
         )
@@ -286,6 +288,7 @@ fn the_table_keeps_comments_well_formed() {
                 revision: 1,
                 verdict: Verdict::Comment,
                 summary: "".into(),
+                moved: Vec::new(),
             },
             ItemState::NeedsReview,
         )

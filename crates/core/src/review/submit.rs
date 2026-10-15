@@ -1,6 +1,10 @@
 //! Submitting a review: the end of F6, and F7's first step.
 
-use super::{Comment, NewReview, Reply, Review, ReviewError, ReviewStore, Verdict, reviewable};
+use super::{
+    Comment, NewReview, Reply, Review, ReviewError, ReviewStore, Verdict, move_drafts, reviewable,
+};
+use crate::diff::{DiffGit, DiffStore};
+use crate::interdiff::InterdiffStore;
 use crate::item::{ItemId, ItemState, ItemStore};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,9 +17,12 @@ pub struct SubmitReview {
 
 /// Request changes sends the item back to its agent; Comment leaves it where
 /// it is. Either way the agent gets the review, with every draft and draft
-/// reply on the item, as an event. Drafts keep the revision they were written on.
-pub fn submit<S: ItemStore + ReviewStore>(
+/// reply on the item, as an event. Drafts from earlier revisions go on the
+/// review's revision when their lines didn't change; one from a later
+/// revision keeps its own.
+pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
     store: &mut S,
+    git: &impl DiffGit,
     request: SubmitReview,
 ) -> Result<Review, ReviewError> {
     let SubmitReview {
@@ -47,11 +54,13 @@ pub fn submit<S: ItemStore + ReviewStore>(
         Verdict::ChangesRequested => ItemState::ChangesRequested,
         Verdict::Comment | Verdict::Approved => item.state,
     };
+    let moved = move_drafts(store, git, &id, revision)?;
     let review = NewReview {
         item: id,
         revision,
         verdict,
         summary,
+        moved,
     };
     Ok(store.insert_review(review, state)?)
 }

@@ -27,6 +27,10 @@ export function useComments(
     reveal: (spot: Spot) => void;
     /** Opens the Conversation list, which holds the comments the diff doesn't. */
     showAll: () => void;
+    /** Closes the list, so the diff's lines can be picked. */
+    hideAll: () => void;
+    /** Lines of a side the diff on screen has, as an interdiff has no base. */
+    onScreen: (spot: Spot) => boolean;
   },
 ) {
   const revision = diff.item.revision.number;
@@ -36,7 +40,7 @@ export function useComments(
   const show = (id: string) => {
     const comment = threads.all().find((comment) => comment.id === id);
     if (!comment) return;
-    const spot = threads.inDiff(comment) && spotOf(comment);
+    const spot = threads.inDiff(comment) && spotOf(comment, revision);
     if (spot) options.reveal(spot);
     else options.showAll();
   };
@@ -54,7 +58,12 @@ export function useComments(
     isSent: sent.has,
     isAnswered: replies.has,
   });
-  const refresh = useSync(diff.item.id, { sent, drafts, replies, replyDrafts });
+  const refresh = useSync(diff.item.id, revision, {
+    sent,
+    drafts,
+    replies,
+    replyDrafts,
+  });
   const external = useExternal({
     editor,
     reviewable: options.reviewable,
@@ -62,11 +71,15 @@ export function useComments(
     sent,
     replies,
   });
-  const threads = useThreads(revision, {
-    sent: sent.list,
-    drafts: drafts.list,
-    composing: drafts.composing,
-  });
+  const threads = useThreads(
+    revision,
+    {
+      sent: sent.list,
+      drafts: drafts.list,
+      composing: drafts.composing,
+    },
+    options.onScreen,
+  );
   return {
     /** The revision the diff shows. */
     revision,
@@ -82,12 +95,12 @@ export function useComments(
       const id = editor.open()?.comment;
       const comment = threads.all().find((comment) => comment.id === id);
       return (
-        editor.dirty() && comment !== undefined && comment.revision !== revision
+        editor.dirty() && comment !== undefined && !threads.inDiff(comment)
       );
     },
     /** Scrolls to a comment the diff shows. */
     show(comment: Comment) {
-      const spot = spotOf(comment);
+      const spot = spotOf(comment, revision);
       if (spot) options.reveal(spot);
     },
     /** The comment's thread, oldest first, the operator's drafts included. */

@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::FakeStore;
+use crate::fake::{FakeGit, FakeStore};
 use crate::item::ItemState;
 use crate::review::{SubmitReview, Verdict, submit};
 
@@ -14,7 +14,7 @@ fn review(store: &mut FakeStore, summary: &str) -> u64 {
         verdict: Verdict::ChangesRequested,
         summary: summary.into(),
     };
-    submit(store, request).unwrap();
+    submit(store, &FakeGit::default(), request).unwrap();
     store.last_cursor(&id("app#1")).unwrap()
 }
 

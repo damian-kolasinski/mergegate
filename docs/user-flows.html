@@ -721,7 +721,7 @@ flowchart TD
         <div class="who"><span>Operator</span><span>Hub</span><span>Authoring agent</span></div>
         <div class="bounds">
           <div class="bound"><span class="k">Starts when</span>The agent submits while you have draft comments open.</div>
-          <div class="bound end"><span class="k">Ends when</span>Your review is submitted against the latest revision.</div>
+          <div class="bound end"><span class="k">Ends when</span>Your review is submitted against the revision on screen.</div>
         </div>
         <div class="diagram"><pre class="mermaid">
 sequenceDiagram
@@ -733,16 +733,19 @@ sequenceDiagram
   AA->>Hub: mg submit r2 after fixing a bot comment
   Hub-->>Op: banner "r2 available"
   alt keep going on r1
-    Op->>Hub: finish reviewing r1
+    Op->>Hub: finish reviewing r1 and submit
+    Hub-->>AA: review delivered against r1
   else switch now
     Op->>Hub: open the r1 to r2 changes
+    Hub-->>Op: threads and drafts at their r2 lines, the rest outdated
+    opt a draft's lines changed or went
+      Hub-->>Op: flag it and hold the review
+      Op->>Hub: keep it, re-place it or drop it
+    end
+    Op->>Hub: submit review
+    Hub->>Hub: move drafts to their r2 lines
+    Hub-->>AA: review delivered against r2
   end
-  Op->>Hub: submit review
-  Hub->>Hub: move drafts to matching lines in r2
-  opt a draft has no matching line
-    Hub-->>Op: flag it so you can re-place or drop it
-  end
-  Hub-->>AA: review delivered against r2
         </pre></div>
       </section>
 

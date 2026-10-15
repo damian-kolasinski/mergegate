@@ -1,5 +1,4 @@
 use super::*;
-use crate::diff::Hunk;
 use crate::fake::{FakeGit, FakeStore, commit};
 use crate::item::ItemState;
 use crate::review::{SubmitReview, Verdict, submit};
@@ -38,26 +37,6 @@ fn a_draft_quotes_the_lines_it_is_on() {
     assert_eq!(old.id, CommentId(2));
     assert_eq!(old.anchor.as_ref().unwrap().quote, commit(1));
     assert_eq!(store.comments(&id("app#1")).unwrap(), [range, old]);
-}
-
-#[test]
-fn a_draft_is_on_lines_one_hunk_shows() {
-    let hunk = |old_start, old_lines, new_start, new_lines| Hunk {
-        old_start,
-        old_lines,
-        new_start,
-        new_lines,
-        lines: Vec::new(),
-    };
-    let hunks = [hunk(1, 4, 1, 5), hunk(20, 0, 21, 2)];
-    assert!(shown(&hunks, Side::New, 1, 5));
-    assert!(shown(&hunks, Side::Old, 2, 4));
-    assert!(shown(&hunks, Side::New, 21, 22));
-    // Between the hunks, across them, and on a side a hunk has no lines of.
-    assert!(!shown(&hunks, Side::New, 6, 6));
-    assert!(!shown(&hunks, Side::New, 5, 21));
-    assert!(!shown(&hunks, Side::Old, 20, 20));
-    assert!(!shown(&hunks, Side::New, 3, 2));
 }
 
 #[test]
@@ -174,9 +153,46 @@ fn drafts_change_until_a_review_sends_them() {
         verdict: Verdict::Comment,
         summary: String::new(),
     };
-    submit(&mut store, request).unwrap();
+    submit(&mut store, &FakeGit::default(), request).unwrap();
     let sent = edit_draft(&mut store, &id("app#1"), first.id, "Later.".into()).unwrap_err();
     assert_eq!(sent.to_string(), "c_1 was sent, so it can't change");
     let sent = delete_draft(&mut store, &id("app#1"), first.id).unwrap_err();
     assert_eq!(sent.to_string(), "c_1 was sent, so it can't change");
+    let sent = move_draft(&mut store, &git, moving(first.id, 2, 2)).unwrap_err();
+    assert_eq!(sent.to_string(), "c_1 was sent, so it can't change");
+}
+
+fn moving(comment: CommentId, start_line: u32, line: u32) -> MoveDraft {
+    MoveDraft {
+        id: id("app#1"),
+        comment,
+        lines: Lines {
+            revision: 1,
+            path: "README.md".into(),
+            side: Side::New,
+            start_line,
+            line,
+        },
+    }
+}
+
+#[test]
+fn a_draft_moves_only_onto_lines_a_new_one_could_go_on() {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let draft = write_draft(&mut store, &git, on("README.md", Side::New, 1, 1)).unwrap();
+    let refused = move_draft(&mut store, &git, moving(draft.id, 2, 3)).unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "the diff of README.md shows no lines 2-3 on the new side"
+    );
+    assert_eq!(
+        store.comments(&id("app#1")).unwrap(),
+        std::slice::from_ref(&draft)
+    );
+
+    let moved = move_draft(&mut store, &git, moving(draft.id, 2, 2)).unwrap();
+    assert_eq!((moved.id, moved.body.as_str()), (draft.id, "Why this?"));
+    assert_eq!(moved.anchor.as_ref().unwrap().line, 2);
+    assert_eq!(store.comments(&id("app#1")).unwrap(), [moved]);
 }

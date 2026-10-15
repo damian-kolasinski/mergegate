@@ -1620,6 +1620,13 @@ impl ReviewStore for FakeStore {
         let mut comments = Vec::new();
         for comment in &mut self.comments {
             if comment.item == review.item && comment.is_draft() {
+                if let Some(moved) = review.moved.iter().find(|m| m.comment == comment.id)
+                    && let Some(anchor) = &mut comment.anchor
+                {
+                    comment.revision = moved.revision;
+                    anchor.start_line = moved.start_line;
+                    anchor.line = moved.line;
+                }
                 comment.review = Some(id);
                 comments.push(comment.clone());
             }
@@ -1699,6 +1706,23 @@ impl ReviewStore for FakeStore {
             .find(|c| c.id == id && c.is_draft())
         {
             draft.body = body.into();
+        }
+        Ok(())
+    }
+
+    fn set_draft_anchor(
+        &mut self,
+        id: CommentId,
+        revision: u32,
+        anchor: &Anchor,
+    ) -> Result<(), StoreError> {
+        if let Some(draft) = self
+            .comments
+            .iter_mut()
+            .find(|c| c.id == id && c.is_draft())
+        {
+            draft.revision = revision;
+            draft.anchor = Some(anchor.clone());
         }
         Ok(())
     }
@@ -2340,6 +2364,99 @@ pub(crate) fn rebased() -> (FakeStore, FakeGit) {
             &[("src/token.rs", "token 2")],
         )
         .upstream("/src/app", "main", &commit(1));
+    (store, git)
+}
+
+/// A file whose lines are `words`.
+pub(crate) fn lines(words: &str) -> String {
+    words.split(' ').map(|word| format!("{word}\n")).collect()
+}
+
+/// `app#1` with two revisions, for re-mapping. The base has `src/*.rs` with
+/// lines `a` to `j`; r1 (c2) changes each one's line 2 to `B`, and
+/// README.md. r2 (c3) then adds a line above B in moved.rs, changes B in
+/// changed.rs, deletes it in gone.rs, and in hidden.rs puts it back and
+/// changes line 10; README.md is as on the base again. When `rebase`, main
+/// first moves to c4, adding `k` to moved.rs, and r2 is c5 on it.
+pub(crate) fn remapped(rebase: bool) -> (FakeStore, FakeGit) {
+    let mut store = FakeStore::default();
+    store
+        .insert_project(&Project {
+            name: ProjectName::parse("app").unwrap(),
+            backend: Backend::Local,
+            target: "main".into(),
+            upstream: "/src/app".into(),
+            github: None,
+            bots: Vec::new(),
+        })
+        .unwrap();
+    let base = lines("a b c d e f g h i j");
+    let r1 = lines("a B c d e f g h i j");
+    let moved = if rebase {
+        lines("x a B c d e f g h i j k")
+    } else {
+        lines("x a B c d e f g h i j")
+    };
+    let r2 = [
+        ("README.md", "readme\n".to_owned()),
+        ("src/moved.rs", moved),
+        ("src/changed.rs", lines("a B2 c d e f g h i j")),
+        ("src/gone.rs", lines("a c d e f g h i j")),
+        ("src/hidden.rs", lines("a b c d e f g h i J")),
+    ];
+    let r2: Vec<(&str, &str)> = r2.iter().map(|(p, c)| (*p, c.as_str())).collect();
+    let (head, parent) = if rebase { (5, 4) } else { (3, 2) };
+    let git = FakeGit::default()
+        .write(
+            &commit(1),
+            None,
+            "Initial",
+            &[
+                ("README.md", "readme\n"),
+                ("src/moved.rs", &base),
+                ("src/changed.rs", &base),
+                ("src/gone.rs", &base),
+                ("src/hidden.rs", &base),
+            ],
+        )
+        .write(
+            &commit(2),
+            Some(&commit(1)),
+            "Change B",
+            &[
+                ("README.md", "readme r1\n"),
+                ("src/moved.rs", &r1),
+                ("src/changed.rs", &r1),
+                ("src/gone.rs", &r1),
+                ("src/hidden.rs", &r1),
+            ],
+        )
+        .write(
+            &commit(4),
+            Some(&commit(1)),
+            "Upstream",
+            &[("src/moved.rs", &lines("a b c d e f g h i j k"))],
+        )
+        .write(&commit(head), Some(&commit(parent)), "Change B again", &r2)
+        .upstream("/src/app", "main", &commit(1));
+    for head in [2, head] {
+        if head == 5 {
+            git.push_upstream("/src/app", "main", &commit(4));
+        }
+        git.push("app", "login", &commit(head));
+        let request = Submit {
+            project: "app".into(),
+            branch: "login".into(),
+            head: commit(head),
+            title: None,
+            worktree: None,
+            wake: None,
+            guide: None,
+            priority: None,
+            note: None,
+        };
+        submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
+    }
     (store, git)
 }
 

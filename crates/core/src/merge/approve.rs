@@ -2,12 +2,13 @@
 
 use super::land::{land, through};
 use super::{Merge, MergeBackend, MergeError};
-use crate::diff::DiffStore;
+use crate::diff::{DiffGit, DiffStore};
 use crate::feedback::FeedbackStore;
 use crate::highlight::HighlightStore;
+use crate::interdiff::InterdiffStore;
 use crate::item::{ItemGit, ItemId, ItemState, ItemStore};
 use crate::project::ProjectStore;
-use crate::review::{NewReview, ReviewStore, Verdict};
+use crate::review::{NewReview, ReviewStore, Verdict, move_drafts};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Approve {
@@ -20,12 +21,19 @@ pub struct Approve {
 
 /// Sends the item's drafts to its agent as an `approved` review, moving it
 /// to Merging, then lands it. The review is recorded first, so the agent
-/// learns of the approval even if the merge never finishes.
+/// learns of the approval even if the merge never finishes. Drafts move to
+/// the revision as a submitted review's do.
 pub fn approve<
-    S: ProjectStore + ItemStore + ReviewStore + DiffStore + HighlightStore + FeedbackStore,
+    S: ProjectStore
+        + ItemStore
+        + ReviewStore
+        + DiffStore
+        + InterdiffStore
+        + HighlightStore
+        + FeedbackStore,
 >(
     store: &mut S,
-    git: &impl ItemGit,
+    git: &(impl ItemGit + DiffGit),
     backends: &[&dyn MergeBackend],
     request: Approve,
 ) -> Result<Merge, MergeError> {
@@ -50,11 +58,13 @@ pub fn approve<
         });
     }
     let backend = through(&item, backends)?;
+    let moved = move_drafts(store, git, &id, revision)?;
     let review = NewReview {
         item: id.clone(),
         revision,
         verdict: Verdict::Approved,
         summary: summary.trim().to_owned(),
+        moved,
     };
     store.insert_review(review, ItemState::Merging)?;
     let item = store.item(&id)?.ok_or(MergeError::NoItem(id))?;

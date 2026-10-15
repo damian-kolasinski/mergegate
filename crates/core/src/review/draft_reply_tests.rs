@@ -24,7 +24,7 @@ fn reviewed() -> FakeStore {
         body: "Why?".into(),
     };
     write_draft(&mut store, &git, draft()).unwrap();
-    submit(&mut store, review("")).unwrap();
+    submit(&mut store, &FakeGit::default(), review("")).unwrap();
     write_draft(&mut store, &git, draft()).unwrap();
     store
 }
@@ -72,7 +72,7 @@ fn the_next_review_sends_the_draft_replies() {
     let draft = write_draft_reply(&mut store, CommentId(1), "Both.".into()).unwrap();
 
     // A draft reply is enough to send a review, with the draft comment too.
-    let sent = submit(&mut store, review("")).unwrap();
+    let sent = submit(&mut store, &FakeGit::default(), review("")).unwrap();
     assert_eq!(sent.replies.len(), 1);
     assert_eq!(sent.replies[0].id, draft.id);
     assert_eq!(sent.replies[0].review, Some(sent.id));
@@ -93,7 +93,9 @@ fn the_next_review_sends_the_draft_replies() {
     let err = delete_draft_reply(&mut store, CommentId(1), draft.id).unwrap_err();
     assert!(matches!(err, DraftReplyError::Sent(r) if r == draft.id));
     assert_eq!(
-        submit(&mut store, review("")).unwrap_err().to_string(),
+        submit(&mut store, &FakeGit::default(), review(""))
+            .unwrap_err()
+            .to_string(),
         "a review needs a summary, a comment or a reply"
     );
 }
