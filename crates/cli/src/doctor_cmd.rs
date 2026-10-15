@@ -60,6 +60,7 @@ pub fn run() -> Result<Outcome, CliError> {
     }
     checks.push(skill::check(
         &home.root().join("skill").join(::skill::NAME),
+        &skill::loaded(),
         ::skill::FILES,
     ));
     if let Ok((running, client, _)) = &connected {

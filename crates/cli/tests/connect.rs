@@ -272,7 +272,18 @@ fn f2_a_clone_from_the_hub_finds_its_project() {
 
     let clone = repo.sibling("from-hub");
     let url = format!("{}/git/app", net.url);
-    testkit::git(parent, ["clone", "--quiet", &url, clone.to_str().unwrap()]);
+    // Named as the docs say, so no origin pushes to the hub.
+    testkit::git(
+        parent,
+        [
+            "clone",
+            "--quiet",
+            "--origin",
+            "mergegate",
+            &url,
+            clone.to_str().unwrap(),
+        ],
+    );
     let init = net
         .worker
         .mg_at(&clone, &["--json", "init"])

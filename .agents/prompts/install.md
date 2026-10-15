@@ -32,7 +32,7 @@ Agents on another machine of the tailnet submit to the stable hub.
 1. On the hub's machine, run `mg hub set listen tailnet`.
 2. On the other machine, install the same `mg` as the hub's: a connected `mg` refuses a hub with another API version. With a release, install it with mise as above. Without one, build the same commit, or copy the hub machine's binary when both share an OS and architecture: `scp "$(command -v mg)" HOST:.local/bin/mg`. Check `command -v mg` there as in Stable step 4, in the login shell agents run in.
 3. There, run `mg connect HUB` with the hub machine's tailnet name, then `mg skill install` and link the skill as in Stable step 7.
-4. Run `mg doctor` there. Register projects only on the hub's machine; clone them there from GitHub, or from the hub (`git clone http://HUB:7800/git/<project>`), and `mg init` finds the project from the clone's remote.
+4. Run `mg doctor` there. Register projects only on the hub's machine; clone them there from GitHub, or from the hub as its `mergegate` remote (`git clone --origin mergegate http://HUB:7800/git/<project>`), so no `origin` pushes to the hub, and `mg init` finds the project from the clone's remote.
 
 After upgrading the hub, install the same `mg` on each other machine again and rerun `mg skill install` there.
 

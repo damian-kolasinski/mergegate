@@ -7,6 +7,9 @@ use tempfile::TempDir;
 /// One isolated mergegate installation. Dropping it stops its hub.
 pub struct Env {
     home: TempDir,
+    /// `HOME` for every `mg`, so nothing reads the user's own, such as the
+    /// skills their agents load.
+    user: TempDir,
     mg: PathBuf,
     /// Set for every `mg`, and so for the hub it starts.
     vars: Vec<(String, String)>,
@@ -42,6 +45,10 @@ impl Env {
                 .prefix("mg-home-")
                 .tempdir()
                 .expect("create MERGEGATE_HOME"),
+            user: tempfile::Builder::new()
+                .prefix("mg-user-")
+                .tempdir()
+                .expect("create HOME"),
             mg: mg.into(),
             vars: Vec::new(),
         }
@@ -93,6 +100,7 @@ impl Env {
         let mut cmd = Command::new(&self.mg);
         cmd.args(args)
             .env("MERGEGATE_HOME", self.home())
+            .env("HOME", self.user.path())
             .env_remove("MG_JSON")
             .env_remove("MG_UI_DIR")
             .env_remove("MG_LANGUAGES_INDEX")

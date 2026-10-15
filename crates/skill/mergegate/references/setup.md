@@ -48,7 +48,7 @@ By default the guide's list leads the order of the files to review, and the judg
 
 Every clone or worktree you work in needs `mg init` once. It adds a `mergegate` remote pointing at the project: the one whose repo the clone is, or else the one a remote of the clone points at, by its GitHub repository, its URL on the hub, or (on the hub's machine) its repo's path. `--project NAME` picks the project when none of those settle it.
 
-On another machine, clone the project from GitHub, or from the hub when it has no GitHub repository: `git clone http://mac-mini:7800/git/<project>`.
+On another machine, clone the project from GitHub, or from the hub when it has no GitHub repository, naming that remote `mergegate` so that only `mg submit` pushes to it: `git clone --origin mergegate http://mac-mini:7800/git/<project>`.
 
 ## Checking
 
@@ -58,4 +58,4 @@ If `mg` answers with a usage line offering the options `-nR`, or opens an editor
 
 ## This skill
 
-`mg skill install` writes this skill, matching the installed `mg`, to `$MERGEGATE_HOME/skill/mergegate` (or `--dir PATH` to write it to `PATH/mergegate`) and prints where. Copy or link the folder to wherever you load skills from. Rerun it after `mg` is upgraded; it replaces the folder.
+`mg skill install` writes this skill, matching the installed `mg`, to `$MERGEGATE_HOME/skill/mergegate` (or `--dir PATH` to write it to `PATH/mergegate`) and prints where. Copy or link the folder to wherever you load skills from. Rerun it after `mg` is upgraded; it replaces the folder. `mg doctor` also checks the copies in `~/.claude/skills` and `~/.codex/skills`, so a copy instead of a link shows when it falls behind.
