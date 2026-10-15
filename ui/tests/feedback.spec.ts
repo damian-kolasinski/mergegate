@@ -9,6 +9,7 @@ function submitChange(hub: Hub) {
   app.submit("work", "Add login", {
     "login.rs": "fn login(password: &str) {}\n",
   });
+  return app;
 }
 
 type Feedback = {
@@ -64,6 +65,31 @@ test("f6 comment leaves the item with the operator", async ({ page, hub }) => {
   await expect(page.getByText("Needs review")).toBeVisible();
   const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
   expect(feedback.events).toMatchObject([{ verdict: "comment" }]);
+});
+
+test("f6 a newer revision takes request changes away, not comments", async ({
+  page,
+  hub,
+}) => {
+  const app = submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  app.revise("Log in", { "login.rs": "fn login(password: String) {}\n" });
+  const banner = screen.getByRole("region", { name: "Newer revision" });
+  await expect(banner.getByText("r2 submitted")).toBeVisible();
+
+  // The hub turns away changes requested on code the agent already replaced.
+  const review = screen.getByRole("form", { name: "Review" });
+  await review
+    .getByRole("textbox", { name: "Review summary" })
+    .fill("Reject an empty password.");
+  const request = review.getByRole("button", { name: "Request changes" });
+  await expect(request).toBeDisabled();
+  await expect(request).toHaveAttribute("title", "Show r2 to request changes");
+  await review.getByRole("button", { name: "Send comments" }).click();
+  await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
 });
 
 test("f6 the way on after a review reaches every item that needs the operator", async ({
