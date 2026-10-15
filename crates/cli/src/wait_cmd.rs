@@ -59,7 +59,7 @@ pub fn run(
         // and why with whatever came before. The hub also answers at its
         // deadline, with events that may not be the ones this waits for.
         if closed(feedback.state).is_some() || wake.by(&feedback.events) {
-            return Ok(report(client, &feedback, since));
+            return Ok(report(client, &feedback, since, "wait"));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             let text = format!("no feedback on {} yet; call mg wait again", feedback.item);

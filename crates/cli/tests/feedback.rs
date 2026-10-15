@@ -133,7 +133,7 @@ fn f7_feedback_prints_the_review_and_how_to_replay_it() {
     assert_eq!(
         run.stdout.trim(),
         "[1] review.submitted app#1 r1: the operator requested changes\n  Handle the empty password.\n\n\
-         cursor 1 (mg wait --since 1 continues after it)"
+         cursor 1 (mg feedback app#1 --since 1 continues after it)"
     );
 }
 
@@ -290,7 +290,7 @@ fn f6_drafts_reach_the_agent_with_the_lines_they_are_on() {
         text.stdout.trim(),
         "[1] review.submitted app#1 r1: the operator requested changes\n\n  \
          c_1 src/login.rs:1\n    > fn login() {}\n    Check the password.\n\n\
-         cursor 1 (mg wait --since 1 continues after it)"
+         cursor 1 (mg feedback app#1 --since 1 continues after it)"
     );
 }
 

@@ -14,7 +14,9 @@ A merge or an abandon ends the wait too. Events still exit 0, even when one of t
 
 ## Cursors
 
-Each event has a cursor, and the last line of the output names the newest one, as in `cursor 12 (mg wait --since 12 continues after it)`. Cursors count every item's events on the hub, so one item's cursors skip numbers: app#3's may be 4, 9 and 12. `--since N` returns the item's events after cursor N, never N itself: `mg feedback app#3 --since 0` replays them all, and `--since 12` only what comes after 12. A read with `--since` marks nothing delivered, so the next plain `mg wait` still returns what you haven't read.
+Each event has a cursor, and the last line of the output names the newest one and the command that reads on after it: `cursor 12 (mg wait app#3 --since 12 continues after it)` from `mg wait`, `mg feedback app#3 --since 12` from `mg feedback`. When the events closed the item nothing comes after them, so the line is only `cursor 12`. Cursors count every item's events on the hub, so one item's cursors skip numbers: app#3's may be 4, 9 and 12. `--since N` returns the item's events after cursor N, never N itself: `mg feedback app#3 --since 0` replays them all, and `--since 12` only what comes after 12. A read with `--since` marks nothing delivered, so the next plain `mg wait` still returns what you haven't read.
+
+The events are what you have to act on: the operator's reviews and overrides, comments from GitHub, what happened to the merge, and the item closing, by your own `mg abandon` too. Your submits and replies are not events and get no cursor, so a replay shows how the review went from the operator's side, without your half; `mg resume app#3` shows the comments still waiting on you with your replies to them.
 
 ## Being woken
 
