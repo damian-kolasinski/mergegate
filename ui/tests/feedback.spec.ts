@@ -1,7 +1,7 @@
 // F6's last step: the operator's review goes to the agent, which reads it
 // with `mg feedback` (F7).
 
-import { expect, type Hub, test } from "./hub";
+import { expect, git, type Hub, test } from "./hub";
 
 function submitChange(hub: Hub) {
   const app = hub.project("app");
@@ -130,4 +130,30 @@ test("f6 the way on after a review reaches every item that needs the operator", 
     await page.keyboard.press("Enter");
   }
   await expect(page).toHaveURL(/#\/items\/app%233/);
+});
+
+test("f6 an item revised after a review comes next again", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("a", "First", { "a.txt": "a\n" });
+  app.submit("b", "Second", { "b.txt": "b\n" });
+  app.submit("c", "Third", { "c.txt": "c\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const review = page.getByRole("form", { name: "Review" });
+  const next = review.getByRole("link", { name: /^Next:/ });
+  await review.getByRole("textbox", { name: "Review summary" }).fill("Hm.");
+  await review.getByRole("button", { name: "Send comments" }).click();
+  await expect(next).toContainText("app#2");
+
+  // The agent answers with r2, which puts app#1 first in line again.
+  git(app.dir, "switch", "--quiet", "a");
+  app.revise("First, again", { "a.txt": "a2\n" });
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/items\/app%232/);
+  await review.getByRole("textbox", { name: "Review summary" }).fill("Hm.");
+  await review.getByRole("button", { name: "Send comments" }).click();
+  await expect(next).toContainText("app#1");
 });
