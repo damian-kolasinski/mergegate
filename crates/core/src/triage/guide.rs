@@ -43,8 +43,8 @@ impl Guide {
             if fenced {
                 continue;
             }
-            if let Some(title) = heading(trimmed) {
-                in_files = trimmed.starts_with("## ") && title.eq_ignore_ascii_case("files");
+            if heading(trimmed).is_some() {
+                in_files = files_heading(trimmed);
                 guide.listed |= in_files;
                 open = None;
                 continue;
@@ -104,6 +104,23 @@ impl Guide {
             });
         }
         guide
+    }
+
+    /// What `text` says before its `## Files` list, trimmed: the change's
+    /// intent, without the walk through its files. All of it without a list.
+    pub fn intent(text: &str) -> &str {
+        let mut fenced = false;
+        let mut at = 0;
+        for line in text.split_inclusive('\n') {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                fenced = !fenced;
+            } else if !fenced && files_heading(trimmed) {
+                return text[..at].trim();
+            }
+            at += line.len();
+        }
+        text.trim()
     }
 
     /// Where the guide puts `path` among the files to review.
@@ -188,6 +205,12 @@ fn indent(line: &str) -> usize {
             '\t' => column + 4 - column % 4,
             _ => column + 1,
         })
+}
+
+/// Whether `line`, its indent trimmed, opens the list of files.
+fn files_heading(line: &str) -> bool {
+    line.starts_with("## ")
+        && heading(line).is_some_and(|title| title.eq_ignore_ascii_case("files"))
 }
 
 /// The title of an ATX heading, as in `## Files`.

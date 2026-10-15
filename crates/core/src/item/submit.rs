@@ -2,7 +2,7 @@
 
 use super::diff_files::diff_files;
 use super::priority::note_of;
-use super::publish::{Revision, publish};
+use super::publish::{Revision, describe, description, publish};
 use super::{
     Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, Priority,
     valid_branch, valid_commit,
@@ -53,8 +53,8 @@ pub struct Submitted {
 /// the open item's head still records its worktree, wake, guide and title.
 ///
 /// A `github` item is published before it's recorded: its branch pushed and
-/// its pull request opened or retitled. If GitHub fails, the submit fails
-/// and nothing is recorded.
+/// its pull request opened or updated, described by the item's ID and guide.
+/// If GitHub fails, the submit fails and nothing is recorded.
 pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore + RulesStore>(
     store: &mut S,
     git: &(impl ItemGit + DiffGit + InterdiffGit + TriageGit),
@@ -94,26 +94,32 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         // Pinning again repairs a submit that failed after recording.
         git.pin(&project.name, &item.pin_ref(), &head)?;
         let mut item = item.clone();
+        let number = item.revision.number;
         let retitle = title
             .as_deref()
             .map(str::trim)
             .filter(|title| !title.is_empty() && *title != item.title);
+        let described = store.guide(&item.id, number)?;
+        let reguide = guide.as_ref().filter(|guide| **guide != described);
+        // GitHub first, as for a new revision, so a failure records nothing.
+        if let ItemBackend::Github { repo, pull } = &item.backend
+            && (retitle.is_some() || reguide.is_some())
+        {
+            let title = retitle.unwrap_or(&item.title);
+            let body = reguide.map(|guide| description(&item.id, guide.as_deref()));
+            describe(github, repo, pull.number, title, body.as_deref())?;
+        }
         if let Some(title) = retitle {
-            // GitHub first, as for a new revision, so a failure records nothing.
-            if let ItemBackend::Github { repo, pull } = &item.backend {
-                github.retitle_pull(repo, pull.number, title)?;
-            }
             store.set_title(&item.id, title)?;
             item.title = title.to_owned();
         }
         agent::record(store, &item.id, worktree, wake)?;
-        let number = item.revision.number;
         let guide = match guide {
             Some(guide) => {
                 store.set_guide(&item.id, number, guide.as_deref())?;
                 guide
             }
-            None => store.guide(&item.id, number)?,
+            None => described,
         };
         let files = store.revision_files(&item.id, number)?;
         let mut warnings = warnings(guide.as_deref(), &files);
@@ -192,29 +198,35 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
             .filter(|subject| !subject.trim().is_empty())
             .unwrap_or_else(|| branch.clone()),
     };
+    let described = match &existing {
+        Some(item) => store.guide(&item.id, item.revision.number)?,
+        None => None,
+    };
+    let guide = guide.unwrap_or_else(|| described.clone());
     let backend = match (&upstream, github_repo) {
         (Upstream::Remote(remote), Some(repo)) => {
+            let id = match &existing {
+                Some(item) => item.id.clone(),
+                None => store.next_id(&project.name)?,
+            };
             let pull = publish(
                 git,
                 github,
                 &project.name,
                 (&repo, remote),
-                existing.as_ref(),
+                existing.as_ref().map(|item| (item, described.as_deref())),
                 Revision {
+                    id: &id,
                     branch: &branch,
                     head: &head,
                     target: &target,
                     title: &title,
+                    guide: guide.as_deref(),
                 },
             )?;
             ItemBackend::Github { repo, pull }
         }
         _ => ItemBackend::Local,
-    };
-    let guide = match (guide, &existing) {
-        (Some(guide), _) => guide,
-        (None, Some(item)) => store.guide(&item.id, item.revision.number)?,
-        (None, None) => None,
     };
     let mut warnings = warnings(guide.as_deref(), &files);
     if let Some(item) = existing.as_ref().filter(|_| prioritized) {

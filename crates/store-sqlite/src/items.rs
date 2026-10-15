@@ -38,7 +38,7 @@ const SELECT: &str = concat!(
            ",
     review_files!(),
     ",
-           i.priority, i.note
+           i.priority, i.note, i.closed_at
     FROM items i
     JOIN projects p ON p.id = i.project_id
     JOIN revisions r ON r.item_id = i.id
@@ -203,16 +203,14 @@ impl ItemStore for Store {
         rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
+    fn next_id(&self, project: &ProjectName) -> Result<ItemId, StoreError> {
+        let (_, number) = next_number(&self.conn, project)?;
+        Ok(ItemId::new(project.clone(), number as u64))
+    }
+
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
-        let (project_id, number): (i64, i64) = tx
-            .query_row(
-                "SELECT p.id, (SELECT coalesce(max(number), 0) + 1 FROM items WHERE project_id = p.id)
-                 FROM projects p WHERE p.name = ?1",
-                [item.project.as_str()],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(StoreError::new)?;
+        let (project_id, number) = next_number(&tx, &item.project)?;
         let now: String = tx
             .query_row(&format!("SELECT {NOW}"), [], |row| row.get(0))
             .map_err(StoreError::new)?;
@@ -351,6 +349,20 @@ impl Store {
     }
 }
 
+/// The project's row ID, and the number its next item takes.
+fn next_number(
+    conn: &rusqlite::Connection,
+    project: &ProjectName,
+) -> Result<(i64, i64), StoreError> {
+    conn.query_row(
+        "SELECT p.id, (SELECT coalesce(max(number), 0) + 1 FROM items WHERE project_id = p.id)
+         FROM projects p WHERE p.name = ?1",
+        [project.as_str()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .map_err(StoreError::new)
+}
+
 fn insert_revision(
     tx: &Transaction,
     item_id: i64,
@@ -435,6 +447,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
     let pull_url: Option<String> = row.get(17)?;
     let priority: Option<String> = row.get(19)?;
     let note: Option<String> = row.get(20)?;
+    let closed_at: Option<String> = row.get(21)?;
     let pull = pull_number.zip(pull_url).map(|(number, url)| Pull {
         number: number as u64,
         url,
@@ -474,6 +487,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             target,
             revision,
             created_at,
+            closed_at,
             priority,
             note,
         })

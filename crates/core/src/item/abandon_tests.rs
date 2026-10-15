@@ -77,6 +77,10 @@ fn closes_the_item_and_tells_its_agent_who_and_why() {
     .unwrap();
     assert_eq!(item.state, ItemState::Abandoned);
     assert_eq!(store.item(&id("app#1")).unwrap().unwrap(), item);
+    assert!(
+        item.updated_at() > item.revision.submitted_at.as_str(),
+        "{item:?}"
+    );
     let [event] = &events(&store, "app#1")[..] else {
         panic!("{:?}", events(&store, "app#1"));
     };

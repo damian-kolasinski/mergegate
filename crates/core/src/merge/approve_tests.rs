@@ -45,6 +45,8 @@ fn records_the_approval_then_closes_the_item_as_merged() {
 
     assert_eq!(merge.item.state, ItemState::Merged);
     assert_eq!(merge.landing, Landing::Merged { commit: commit(9) });
+    assert!(merge.item.closed_at.is_some());
+    assert!(merge.item.updated_at() > merge.item.revision.submitted_at.as_str());
     assert_eq!(
         backend.landed(),
         [("app#1".to_owned(), "Add login (app#1)".to_owned())]
@@ -61,6 +63,28 @@ fn records_the_approval_then_closes_the_item_as_merged() {
             EventKind::ReviewSubmitted(review.clone()),
             notice(1, merged)
         ]
+    );
+}
+
+#[test]
+fn the_commit_says_what_the_guide_says_the_change_is_for() {
+    let mut store = FakeStore::with_item(1);
+    let guide = "Signs users in.\n\nWith a password.\n\n## Files\n- `src/login.rs` — the form\n";
+    store.set_guide(&id("app#1"), 1, Some(guide)).unwrap();
+    let backend = FakeBackend::new(Backend::Local);
+    approve(
+        &mut store,
+        &FakeGit::default(),
+        &[&backend],
+        approving(1, ""),
+    )
+    .unwrap();
+    assert_eq!(
+        backend.landed(),
+        [(
+            "app#1".to_owned(),
+            "Add login (app#1)\n\nSigns users in.\n\nWith a password.".to_owned()
+        )]
     );
 }
 
