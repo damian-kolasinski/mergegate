@@ -7,6 +7,8 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use mergegate_core::doctor::{Check, CheckStatus};
+use mergegate_core::highlight::{Highlighter, PackSource};
+use mergegate_core::project::ProjectStore;
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -17,8 +19,19 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 }
 
 async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::Report>, Failure> {
+    let languages = Arc::clone(&state);
     let checks = state
-        .blocking_github(|store, git, github| mergegate_core::doctor::checks(store, git, github))
+        .blocking_github(move |store, git, github| {
+            let mut checks = mergegate_core::doctor::checks(store, git, github)?;
+            checks.extend(mergegate_core::doctor::languages(
+                git,
+                &store.projects()?,
+                &languages.known_packs,
+                &languages.languages.installed(),
+                languages.releases.releases(),
+            ));
+            Ok::<_, mergegate_core::store::StoreError>(checks)
+        })
         .await
         .map_err(|e| {
             tracing::error!("{e}");

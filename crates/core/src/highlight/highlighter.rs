@@ -31,6 +31,14 @@ pub enum LangError {
     Taken { grammar: String, pack: String },
     #[error("no language pack named {0} is installed")]
     NotInstalled(String),
+    #[error(
+        "this mg was built without the index of its release, so it downloads no language packs"
+    )]
+    NoReleases,
+    #[error("no language pack named {0} is released with this mg")]
+    NotReleased(String),
+    #[error("downloading the {name} language pack failed: {reason}")]
+    Download { name: String, reason: String },
     /// Reading or writing the installed packs failed.
     #[error(transparent)]
     Failed(Box<dyn std::error::Error + Send + Sync>),

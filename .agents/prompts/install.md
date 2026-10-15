@@ -11,10 +11,10 @@ Set up two installations of mergegate that never share state:
 2. Install it with mise: `mise use -g packslip:damian-kolasinski/mergegate`. mise checks the release's packslip signature before it installs `mg`. If `mise backends ls` doesn't list `packslip`, run `mise self-update` first. Check that `command -v mg` resolves into mise and that no `mg` from an earlier source install shadows it; `cargo uninstall mg` removes one from `~/.cargo/bin`.
 3. If there is no release yet, build from `main` instead: `MG_REQUIRE_UI=1 cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --branch main mg`. The build needs pnpm and Node 22 for the UI; `MG_REQUIRE_UI=1` makes it fail rather than install an `mg` without one.
 4. Start the hub: `mg hub start`. Its data lives in `~/.mergegate`.
-5. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer.
+5. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer. `mg project add` offers to download the language packs the repo's files use.
 6. Run `mg doctor` and fix what it reports.
 
-To upgrade, run `mise up packslip:damian-kolasinski/mergegate`, then `mg hub stop` and `mg hub start`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
+To upgrade, run `mise up packslip:damian-kolasinski/mergegate`, then `mg hub stop`, `mg hub start` and `mg lang update`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
 
 Prefer fixing forward to rolling back: a rollback loses review state written since the upgrade. If you must roll back:
 1. Run `mg hub stop`.
@@ -30,6 +30,8 @@ Prefer fixing forward to rolling back: a rollback loses review state written sin
 3. Run the dev hub in the foreground on its own port: `target/debug/mg hub start --foreground --port 7801`.
 4. Try changes on a scratch clone, never on this checkout: `mg init` there would replace the stable hub's `mergegate` remote.
 5. For UI work, run `pnpm --dir ui watch` and start the dev hub with `MG_UI_DIR="$PWD/ui/dist"`. It then serves the UI from disk, so a reload shows each rebuild without rebuilding `mg`.
+
+A dev build can't download language packs by name. Build them with `node langs/build.mjs --out langs/dist` and install them with `target/debug/mg lang add --from langs/dist`.
 
 `.mg-dev/` is ignored by git. Delete it to start from an empty hub.
 

@@ -2089,6 +2089,7 @@ dependencies = [
  "mergegate-core",
  "mergegate-git",
  "mergegate-highlight",
+ "mergegate-lang-release",
  "mergegate-rules-toml",
  "mergegate-store-sqlite",
  "serde",
@@ -2098,6 +2099,19 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "mergegate-lang-release"
+version = "0.1.0"
+dependencies = [
+ "mergegate-core",
+ "mergegate-testkit",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ureq",
 ]
 
 [[package]]
@@ -2148,6 +2162,7 @@ dependencies = [
  "mergegate-testkit",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "ureq",
 ]

@@ -30,8 +30,8 @@ Taken by the agent:
 
 ## Stack
 
-1. `18a-distribution-1-releases`: release workflow, packs as release assets, install.md, this brief. In review.
-2. `18a-distribution-2-lang-download`: `mg lang add <name>`, `--available`, `--detect`, `update`, detection in `mg project add`, pack checks in `mg doctor`. Planned.
+1. `18a-distribution-1-releases`: release workflow, packs as release assets, install.md, this brief. Merged.
+2. `18a-distribution-2-lang-download`: `mg lang add <name>`, `--available`, `--detect`, `update`, detection in `mg project add`, pack checks in `mg doctor`, the index baked into release builds. In review.
 3. `18a-distribution-3-service`: service units, the rest of `mg doctor`, docs; drops `## Stage` from AGENTS.md, this brief and the roadmap row. Planned.
 
 ## Open

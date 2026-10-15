@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+use super::languages::{self, Chosen, Languages};
 use super::target::{Target, choose};
 use super::{Backend, Project, ProjectError, ProjectName, ProjectStore, fetch_from};
 use crate::decision::{Decision, DecisionOption};
@@ -16,11 +17,16 @@ pub struct AddProject {
     pub target: Option<String>,
     /// `owner/name` on GitHub, when the remotes don't settle it.
     pub github: Option<String>,
+    pub languages: Languages,
 }
 
 #[derive(Debug)]
 pub enum Added {
-    Project(Project),
+    /// Registered; the caller installs `languages`, the packs it asked for.
+    Project {
+        project: Project,
+        languages: Vec<String>,
+    },
     /// Nothing was registered; re-run with the decision's flag set.
     Decide(Decision),
 }
@@ -77,6 +83,10 @@ pub fn add(
         Target::Chosen(target) => target,
         Target::Decide(decision) => return Ok(Added::Decide(decision)),
     };
+    let languages = match languages::choose(git, &repo.root, &target, &request.languages)? {
+        Chosen::Install(names) => names,
+        Chosen::Decide(decision) => return Ok(Added::Decide(decision)),
+    };
 
     if backend == Backend::Github
         && let Some(github_repo) = &github_repo
@@ -94,7 +104,7 @@ pub fn add(
     let upstream = fetch_from(&project, backend, github)?;
     git.sync_staging(&project.name, &upstream, &project.target)?;
     store.insert_project(&project)?;
-    Ok(Added::Project(project))
+    Ok(Added::Project { project, languages })
 }
 
 pub(super) fn parse_github(value: &str) -> Result<GithubRepo, ProjectError> {

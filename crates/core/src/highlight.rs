@@ -2,16 +2,24 @@
 //! are computed for open items' files in the background, cached per blob and
 //! grammar, and read with an item's diff (tech-stack §6).
 
+mod detect;
 mod file;
 mod grammar;
 mod highlighter;
 mod pass;
+mod released;
+mod source;
 mod store;
 
+use std::collections::BTreeMap;
+
+pub use detect::{Detected, detect};
 pub use file::{FileHighlights, blob_highlights, file_highlights, hunk_spans};
 pub use grammar::grammar_for;
 pub use highlighter::{Highlighter, LangError};
 pub use pass::{MAX_BYTES, Pending, compute, pending};
+pub use released::{available, install, outdated, resolve};
+pub use source::{PackSource, Release};
 pub use store::HighlightStore;
 
 /// The installed packs, read together with the version the spans cache keys
@@ -23,6 +31,9 @@ pub struct Installed {
     /// By name.
     pub packs: Vec<Pack>,
     pub version: String,
+    /// The SHA-256, hex, of the archive each pack was installed from, by
+    /// pack name.
+    pub digests: BTreeMap<String, String>,
 }
 
 /// An installed language pack, or one mg knows how to install.

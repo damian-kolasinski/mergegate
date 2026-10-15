@@ -24,4 +24,5 @@ tempfile = "3.27.0"
 ureq = { version = "3.4.2", default-features = false, features = ["json"] }
 
 [dev-dependencies]
+sha2 = "0.10.9"
 testkit.workspace = true

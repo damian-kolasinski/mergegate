@@ -162,12 +162,12 @@ mg hub devices | allow <device> | deny <device>         Tailscale devices allowe
 mg hub token create                                      Fallback auth for non-Tailscale networks
 
 mg project add [PATH] [--name NAME] [--backend github|local] [--github OWNER/REPO]
-               [--target BRANCH]                         PATH in a linked worktree registers its main repo
+               [--target BRANCH] [--languages LIST|none]  PATH in a linked worktree registers its main repo
 mg project set <project> <key> <value>                   backend, target, upstream, github, bots, …
 mg project show [<project>]                              Default: the project at the current directory
 mg judge set none|jev|anthropic|openai-compatible|command [provider options]
 mg lang list [--available]                               Syntax highlighting language packs (hub only)
-mg lang add <name>... | --detect [<project>] | --from FILE
+mg lang add <name>... | --detect [<project>] | --from PATH
 mg lang remove <name> | update
 
 mg connect <hub>                                         On a worker: point the CLI at a hub

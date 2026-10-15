@@ -102,6 +102,9 @@ pub trait Git {
 
     /// What `git --version` prints.
     fn version(&self) -> Result<String, GitError>;
+
+    /// The paths of every file on `branch` of the repo at `repo`.
+    fn files(&self, repo: &Path, branch: &str) -> Result<Vec<String>, GitError>;
 }
 
 /// `(major, minor)` from `git --version` output such as

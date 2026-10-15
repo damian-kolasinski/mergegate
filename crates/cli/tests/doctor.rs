@@ -60,7 +60,8 @@ fn a_fresh_hub_passes_with_a_warning_until_a_project_is_added() {
             ("hub", "ok"),
             ("ui", "ok"),
             ("git", "ok"),
-            ("projects", "warn")
+            ("projects", "warn"),
+            ("languages", "ok")
         ])
     );
     assert_eq!(doctor["checks"][3]["fix"], "mg project add PATH");
@@ -81,7 +82,8 @@ fn a_lost_staging_repo_fails_until_its_fix_runs() {
             ("hub", "ok"),
             ("ui", "ok"),
             ("git", "ok"),
-            ("project app", "fail")
+            ("project app", "fail"),
+            ("languages", "ok")
         ])
     );
     let fix = doctor["checks"][3]["fix"].as_str().unwrap();

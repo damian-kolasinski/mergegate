@@ -16,15 +16,14 @@ axum = { version = "0.8.9", default-features = false, features = ["http1", "toki
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 git.workspace = true
 highlight.workspace = true
+lang-release.workspace = true
 mergegate-core.workspace = true
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 rules-toml.workspace = true
 store-sqlite.workspace = true
+tempfile = "3.27.0"
 thiserror = "2.0.21"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "signal", "macros", "sync", "time", "process", "io-util", "fs"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "std"] }
-
-[dev-dependencies]
-tempfile = "3.27.0"

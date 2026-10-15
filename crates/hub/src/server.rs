@@ -11,6 +11,7 @@ use tokio::sync::Notify;
 use backend_github::GithubClient;
 use git::HubGit;
 use highlight::Languages;
+use lang_release::Releases;
 use mergegate_core::highlight::Pack;
 use rules_toml::RulesToml;
 use store_sqlite::Store;
@@ -35,6 +36,8 @@ pub(crate) struct AppState {
     pub languages: Arc<Languages>,
     /// The packs mg can name for a file no installed pack highlights.
     pub known_packs: Vec<Pack>,
+    /// The packs released with this mg, which it downloads by name.
+    pub releases: Arc<Releases>,
     /// Wakes the background highlight pass; a wake while it runs makes it
     /// run once more.
     pub highlight: Notify,
@@ -119,6 +122,10 @@ pub(crate) async fn serve(
     for warning in warnings {
         tracing::warn!("{warning}");
     }
+    let releases = Releases::from_env().unwrap_or_else(|e| {
+        tracing::warn!("{e}; language packs install only from files");
+        Releases::none()
+    });
     let state = Arc::new(AppState {
         health: api::hub::Health {
             version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -135,6 +142,7 @@ pub(crate) async fn serve(
         pulling: tokio::sync::Mutex::new(()),
         languages: Arc::new(languages),
         known_packs: highlight::known(),
+        releases: Arc::new(releases),
         highlight: Notify::new(),
         prune: Notify::new(),
         rules: rules::RulesFiles::new(RulesToml::new(home.projects())),

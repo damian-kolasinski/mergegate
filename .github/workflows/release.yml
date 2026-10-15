@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - crates/lang-release/**
       - langs/**
 
 concurrency:
@@ -68,7 +69,9 @@ jobs:
           if-no-files-found: error
 
   build:
-    needs: version
+    # Each mg downloads the packs released with it, checked against the
+    # index baked into it.
+    needs: [version, langs]
     strategy:
       fail-fast: false
       matrix:
@@ -87,13 +90,14 @@ jobs:
     env:
       # A release without the UI would be useless.
       MG_REQUIRE_UI: 1
+      MG_LANGUAGES_INDEX: ${{ github.workspace }}/langs/dist/languages.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: rustup toolchain install && rustup target add ${{ matrix.target }}
-      # A tag builds from scratch: whatever another run cached could end up
-      # in a signed binary.
+      # A tag builds from scratch, here and in the pnpm store below: whatever
+      # another run cached could end up in a signed binary.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: github.ref_type != 'tag'
         with:
@@ -104,8 +108,12 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: pnpm
+          cache: ${{ github.ref_type != 'tag' && 'pnpm' || '' }}
           cache-dependency-path: ui/pnpm-lock.yaml
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: languages
+          path: langs/dist
       - run: cargo build --release --locked -p mg --target ${{ matrix.target }}
       - name: Package
         # mg sits at the archive root, where packslip and mise look for it.

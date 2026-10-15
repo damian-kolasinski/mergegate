@@ -111,20 +111,21 @@ Grammars load through tree-sitter's WASM store (wasmtime), the same mechanism Ze
 
 Storage: packs are stored in `~/.mergegate/languages/<name>/<version>/`; adding a pack replaces its other versions.
 
+Each release ships the packs built by the same run as release assets, with `languages.json` listing each pack's name, version, file and sha256. The build bakes that index into `mg` (`MG_LANGUAGES_INDEX`), so a binary pins the digests it accepts and packslip's signature covers them. The hub downloads `releases/download/v<its version>/<file>`, at most 64 MB, and installs nothing whose digest differs; a pack ABI change ships as a new mg version. A build without the index (dev, tests) downloads nothing and installs only `--from`; tests point `MG_LANGUAGES_INDEX` and `MG_LANGUAGES_URL` at a local server.
+
+Detection counts the target branch's files per released pack. `mg project add` asks `--languages <list>|none` when they use packs that aren't installed, defaulting to all of them, and installs them after registering; a failed download is a warning, not a failed add. `mg doctor` warns about packs whose archive isn't the one this mg was released with, and about projects whose files use packs that aren't installed.
+
 ```
-mg lang list                            Installed languages
+mg lang list [--available]              Installed languages, or the released ones
+mg lang add <name>...                   Download released packs
+mg lang add --detect [<project>]        Download the packs a project's files use
 mg lang add --from PATH                 Install a pack file, or a directory of them
+mg lang update                          Download again packs not from this mg's release
 mg lang remove <name>
 ```
 
 - A file whose language isn't installed renders as plain text, with a hint naming the pack ("No swift language pack").
 - Adding a language highlights open items in the background, and open reviews repaint without reloading. Removing one drops its cache entries.
-
-With releases (roadmap row 18):
-- packs become GitHub release assets of the mergegate repo, so there's no hosted infrastructure, and each `mg` version pins the index URL and the checksums it accepts;
-- `mg lang add <name>...`, `mg lang add --detect [<project>]`, `mg lang list --available`, and `mg lang update` to refresh packs to versions compatible with this `mg`;
-- `mg project add` scans the repo's file extensions and returns detected languages in its `needs_decision`, defaulting to installing them;
-- `mg doctor` flags packs whose ABI no longer matches after an `mg` upgrade.
 
 ## 7. Slices
 

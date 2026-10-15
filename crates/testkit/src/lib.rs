@@ -8,11 +8,13 @@
 //! [`FakeGithub`] stands in for GitHub.
 
 mod env;
+mod files;
 mod github;
 mod http;
 mod repo;
 
 pub use env::{Env, Run};
+pub use files::StaticFiles;
 pub use github::{
     Comment as GithubComment, CommentKind as GithubCommentKind, FakeGithub, Inline as GithubInline,
     NewComment as GithubNewComment, Pull as GithubPull, PullState as GithubPullState,

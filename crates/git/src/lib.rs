@@ -4,6 +4,7 @@
 
 mod command;
 mod diff;
+mod files;
 mod http;
 mod inspect;
 mod interdiff;
@@ -60,5 +61,9 @@ impl Git for HubGit {
 
     fn version(&self) -> Result<String, GitError> {
         command::run(&self.home, "running git --version", ["--version"])
+    }
+
+    fn files(&self, repo: &Path, branch: &str) -> Result<Vec<String>, GitError> {
+        files::files(repo, branch)
     }
 }

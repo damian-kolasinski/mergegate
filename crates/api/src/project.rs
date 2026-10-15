@@ -43,8 +43,7 @@ pub struct Projects {
     pub projects: Vec<Project>,
 }
 
-/// `POST /api/projects`. Answers with the registered [`Project`] or with a
-/// `needs_decision`.
+/// `POST /api/projects`. Answers with [`Added`] or with a `needs_decision`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddProject {
     /// Absolute path inside the repo to register, on the hub's machine.
@@ -58,6 +57,23 @@ pub struct AddProject {
     /// `owner/repo` on GitHub; implies the github backend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github: Option<String>,
+    /// The language packs to install from mg's release, empty for none.
+    /// Unset asks when the repo uses packs that aren't installed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub languages: Option<Vec<String>>,
+}
+
+/// What `POST /api/projects` registered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Added {
+    #[serde(flatten)]
+    pub project: Project,
+    /// The language packs installed with it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub languages: Vec<crate::lang::Pack>,
+    /// What went wrong after it was registered, as installing its packs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// `PATCH /api/projects/{name}`: changes one setting. Answers with the
