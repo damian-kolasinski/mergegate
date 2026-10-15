@@ -172,7 +172,7 @@ mg lang remove <name> | update
 
 mg connect <hub>                                         On a worker: point the CLI at a hub
 mg init                                                  In any clone: add the `mergegate` remote
-mg doctor                                                Check hub, service, auth, skill, remote, GitHub access
+mg doctor                                                Check hub, service, auth, language packs, skill, remote, GitHub access
 mg skill install [--dir PATH]                            Write the agent skill and print where (§11)
 ```
 
