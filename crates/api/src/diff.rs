@@ -45,6 +45,11 @@ pub struct File {
     /// are commits.
     pub old_blob: Option<String>,
     pub new_blob: Option<String>,
+    /// Git's mode before and after, null on the side where the file doesn't
+    /// exist and on both for a file recorded before the hub kept modes. A
+    /// mode can change with no line changing.
+    pub old_mode: Option<Mode>,
+    pub new_mode: Option<Mode>,
     /// Null when the change isn't text.
     pub additions: Option<u64>,
     pub deletions: Option<u64>,
@@ -85,6 +90,21 @@ pub struct File {
     /// Why the heuristics ranked the file as they did, as in `ranked low:
     /// lockfile`.
     pub hint: Option<String>,
+}
+
+/// A file's git mode, as git prints it.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Mode {
+    #[serde(rename = "100644")]
+    Regular,
+    #[serde(rename = "100755")]
+    Executable,
+    #[serde(rename = "120000")]
+    Symlink,
+    /// Its blob is a commit of another repository.
+    #[serde(rename = "160000")]
+    Submodule,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

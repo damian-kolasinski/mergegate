@@ -1,5 +1,5 @@
 use mergegate_core::github::{GithubRepo, Pull};
-use mergegate_core::item::{ChangedFile, FileStat};
+use mergegate_core::item::{ChangedFile, FileMode, FileStat};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 
 use super::*;
@@ -36,6 +36,8 @@ fn revision(head: char) -> NewRevision {
                     old_path: Some("src/old.rs".into()),
                     old_blob: Some("1".repeat(40)),
                     new_blob: Some(head.to_string().repeat(40)),
+                    old_mode: Some(FileMode::Regular),
+                    new_mode: Some(FileMode::Executable),
                 },
                 additions: Some(5),
                 deletions: Some(2),
@@ -48,6 +50,8 @@ fn revision(head: char) -> NewRevision {
                     old_path: None,
                     old_blob: None,
                     new_blob: Some("2".repeat(40)),
+                    old_mode: None,
+                    new_mode: Some(FileMode::Regular),
                 },
                 additions: None,
                 deletions: None,
@@ -177,6 +181,29 @@ fn lists_a_projects_last_merged_items_newest_first() {
 }
 
 #[test]
+fn lists_every_projects_closed_items_oldest_first() {
+    let (_dir, mut store) = store();
+    let a = store.insert_item(new_item("app", "a")).unwrap().id;
+    store.insert_item(new_item("app", "b")).unwrap();
+    let web = store.insert_item(new_item("web", "a")).unwrap().id;
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged' WHERE branch = 'a'", [])
+        .unwrap();
+    store
+        .conn
+        .execute("UPDATE items SET state = 'abandoned' WHERE id = 1", [])
+        .unwrap();
+    let closed: Vec<_> = store
+        .closed_items()
+        .unwrap()
+        .into_iter()
+        .map(|i| i.id)
+        .collect();
+    assert_eq!(closed, [a, web]);
+}
+
+#[test]
 fn adds_revisions_with_their_files() {
     let (_dir, mut store) = store();
     let first = store.insert_item(new_item("app", "a")).unwrap();
@@ -260,6 +287,16 @@ fn keeps_each_revisions_guide() {
     assert_eq!(store.guide(&id, 1).unwrap(), None);
     assert_eq!(store.guide(&id, 2).unwrap().as_deref(), Some("r2's"));
     assert_eq!(store.guide(&id, 3).unwrap(), None);
+}
+
+#[test]
+fn retitles_one_item() {
+    let (_dir, mut store) = store();
+    let item = store.insert_item(new_item("app", "a")).unwrap();
+    let other = store.insert_item(new_item("web", "a")).unwrap();
+    store.set_title(&item.id, "Login page").unwrap();
+    assert_eq!(store.item(&item.id).unwrap().unwrap().title, "Login page");
+    assert_eq!(store.item(&other.id).unwrap().unwrap().title, other.title);
 }
 
 #[test]

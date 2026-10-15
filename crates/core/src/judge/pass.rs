@@ -75,6 +75,8 @@ pub fn request<S: ItemStore + DiffStore>(
             deletions: stat.deletions,
             tier: stat.triage.tier,
             generated: stat.generated,
+            old_mode: stat.file.old_mode,
+            new_mode: stat.file.new_mode,
             diff: diff.and_then(|d| unified(&d.content)),
         });
     }

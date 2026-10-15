@@ -91,6 +91,7 @@ fn taken_id<S: RulesStore>(
     applied: &Rules,
     held: Option<&HeldEdit>,
 ) -> Result<Option<String>, StoreError> {
+    // None when the largest ID was used, which leaves every one taken.
     let next = store.next_rule_id(project)?;
     let known = |id| {
         applied.rules().any(|r| r.id == id)
@@ -98,8 +99,14 @@ fn taken_id<S: RulesStore>(
     };
     Ok(rules
         .rules()
-        .find(|rule| rule.id < next && !known(rule.id))
-        .map(|rule| format!("{} is taken by an earlier rule; use {next}", rule.id)))
+        .find(|rule| next.is_none_or(|next| rule.id < next) && !known(rule.id))
+        .map(|rule| match next {
+            Some(next) => format!("{} is taken by an earlier rule; use {next}", rule.id),
+            None => format!(
+                "{} is taken by an earlier rule, and no rule ID is left",
+                rule.id
+            ),
+        }))
 }
 
 /// Every revision of an open item, not just the newest: an older one is

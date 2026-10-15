@@ -17,6 +17,7 @@ fn reads_an_inline_comment_on_the_old_side() {
         "commit_id": "b",
         "start_line": null,
         "line": null,
+        "created_at": "2026-01-02T03:04:05Z",
     });
     let comment = comment(PullCommentKind::ReviewComment, &value)
         .unwrap()
@@ -40,6 +41,7 @@ fn reads_an_inline_comment_on_the_old_side() {
                 start_line: None,
                 line: None,
             }),
+            dated: 1_767_323_045_000,
         }
     );
 }
@@ -70,4 +72,57 @@ fn a_comment_without_an_id_is_an_error() {
     let value = json!({ "html_url": "x", "body": "Hi", "user": { "login": "ana" } });
     let err = comment(PullCommentKind::IssueComment, &value).unwrap_err();
     assert_eq!(err.to_string(), "GitHub sent a comment without id");
+}
+
+#[test]
+fn reads_github_s_times_to_the_millisecond() {
+    for (stamp, expected) in [
+        ("1970-01-01T00:00:00Z", Some(0)),
+        ("2026-01-02T03:04:05Z", Some(1_767_323_045_000)),
+        ("2024-02-29T23:59:59.25Z", Some(1_709_251_199_250)),
+        ("2000-03-01T00:00:00Z", Some(951_868_800_000)),
+        ("2026-01-02T03:04:05+00:00", None),
+        ("2026-13-02T03:04:05Z", None),
+        ("2026-1-02T03:04:05Z", None),
+        ("2026-01-02 03:04:05Z", None),
+        ("1969-12-31T23:59:59Z", None),
+        ("", None),
+    ] {
+        assert_eq!(millis(stamp), expected, "{stamp}");
+    }
+}
+
+#[test]
+fn a_review_is_dated_by_its_submission_and_an_undated_comment_by_the_epoch() {
+    let review = json!({
+        "id": 9,
+        "user": { "login": "ana", "type": "User" },
+        "html_url": "https://github.com/acme/app/pull/1#pullrequestreview-9",
+        "body": "Close",
+        "state": "COMMENTED",
+        "submitted_at": "2026-01-02T03:04:05Z",
+    });
+    let review = comment(PullCommentKind::Review, &review).unwrap().unwrap();
+    assert_eq!(review.dated, 1_767_323_045_000);
+    let issue = json!({ "id": 1, "html_url": "x", "body": "Hi", "user": { "login": "ana" } });
+    let issue = comment(PullCommentKind::IssueComment, &issue)
+        .unwrap()
+        .unwrap();
+    assert_eq!(issue.dated, 0);
+}
+
+#[test]
+fn a_comment_is_dated_by_its_last_edit() {
+    let edited = json!({
+        "id": 1,
+        "user": { "login": "codex[bot]", "type": "Bot" },
+        "html_url": "https://github.com/acme/app/pull/1#issuecomment-1",
+        "body": "Reviewed",
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:05:05Z",
+    });
+    let edited = comment(PullCommentKind::IssueComment, &edited)
+        .unwrap()
+        .unwrap();
+    assert_eq!(edited.dated, 1_767_323_105_000);
 }

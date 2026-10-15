@@ -223,6 +223,29 @@ fn f3_wait_wakes_when_the_operator_submits() {
 }
 
 #[test]
+fn f7_a_cursor_past_the_items_events_reads_from_its_newest() {
+    let (env, _repo) = submitted();
+    review(&env, "comment", "First look.");
+    let past = env
+        .mg(&["--json", "feedback", "app#1", "--since", "99"])
+        .assert_code(0)
+        .json();
+    assert_eq!((&past["events"], &past["cursor"]), (&json!([]), &json!(1)));
+
+    // Events logged while it waits come after the item's newest, not 99.
+    let run = std::thread::scope(|scope| {
+        let waiting =
+            scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--since", "99", "--timeout", "5"]));
+        std::thread::sleep(Duration::from_millis(500));
+        review(&env, "changes_requested", "Wake up.");
+        waiting.join().unwrap()
+    });
+    let woken = run.assert_code(0).json();
+    assert_eq!(woken["events"][0]["summary"], "Wake up.");
+    assert_eq!(woken["cursor"], 2);
+}
+
+#[test]
 fn f3_stopping_the_hub_ends_a_pending_wait() {
     let (env, _repo) = submitted();
     let started = Instant::now();

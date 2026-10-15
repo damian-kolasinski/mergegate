@@ -45,8 +45,8 @@ impl ExternalStore for Store {
         tx.execute(
             "INSERT INTO external_comments
                  (comment_id, item_id, kind, github_id, login, bot, url, path, seen_at,
-                  pending_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+                  pending_at, dated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)",
             params![
                 id,
                 item_id,
@@ -57,6 +57,7 @@ impl ExternalStore for Store {
                 comment.url,
                 comment.path,
                 now as i64,
+                comment.dated as i64,
             ],
         )
         .map_err(StoreError::new)?;
@@ -65,7 +66,13 @@ impl ExternalStore for Store {
         Ok(inserted)
     }
 
-    fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError> {
+    fn edit_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
         tx.execute(
             "UPDATE comments SET body = ?2 WHERE id = ?1 AND source = 'external'",
@@ -73,11 +80,54 @@ impl ExternalStore for Store {
         )
         .map_err(StoreError::new)?;
         tx.execute(
-            "UPDATE external_comments SET seen_at = ?2, pending_at = coalesce(pending_at, ?2)
+            "UPDATE external_comments
+             SET seen_at = ?2, pending_at = coalesce(pending_at, ?2),
+                 dated_at = max(dated_at, ?3)
              WHERE comment_id = ?1",
-            params![id.0 as i64, now as i64],
+            params![id.0 as i64, now as i64, dated as i64],
         )
         .map_err(StoreError::new)?;
+        tx.commit().map_err(StoreError::new)
+    }
+
+    fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        let tx = self.conn.transaction().map_err(StoreError::new)?;
+        let id = id.0 as i64;
+        // A sent reply is in the agent's hands, or in a review's event, either
+        // way referring to the comment.
+        let kept: bool = tx
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM event_comments WHERE comment_id = ?1)
+                     OR EXISTS (SELECT 1 FROM replies WHERE comment_id = ?1
+                                AND (author = 'agent' OR review_id IS NOT NULL
+                                     OR override = 1))",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::new)?;
+        if kept {
+            tx.execute(
+                "UPDATE comments
+                 SET body = coalesce((SELECT body FROM event_comments WHERE comment_id = ?1
+                                      ORDER BY cursor DESC LIMIT 1), body)
+                 WHERE id = ?1 AND source = 'external'",
+                params![id],
+            )
+            .map_err(StoreError::new)?;
+            tx.execute(
+                "UPDATE external_comments SET pending_at = NULL WHERE comment_id = ?1",
+                params![id],
+            )
+            .map_err(StoreError::new)?;
+        } else {
+            for sql in [
+                "DELETE FROM replies WHERE comment_id = ?1",
+                "DELETE FROM external_comments WHERE comment_id = ?1",
+                "DELETE FROM comments WHERE id = ?1 AND source = 'external'",
+            ] {
+                tx.execute(sql, params![id]).map_err(StoreError::new)?;
+            }
+        }
         tx.commit().map_err(StoreError::new)
     }
 
@@ -97,8 +147,9 @@ impl ExternalStore for Store {
         let (Some(first), Some(last)) = (first, last) else {
             return Ok(None);
         };
-        // The submit's stamp is the store's clock and `seen_at` the hub's,
-        // which is the same machine's.
+        // The submit's stamp is this machine's clock and `dated_at` GitHub's,
+        // which agree as far as NTP keeps them: far closer than the time a bot
+        // takes to review a push.
         let pushed: i64 = self
             .conn
             .query_row(
@@ -111,11 +162,15 @@ impl ExternalStore for Store {
                 |row| row.get(0),
             )
             .map_err(StoreError::new)?;
+        // GitHub drops the fraction of a second, so a comment counted came at
+        // or after the push. One in the push's second but after it counts as
+        // before: the batch waits for the bot's next comment or the cap, which
+        // is the side to err on, and no bot reviews a push that fast.
         let mut stmt = self
             .conn
             .prepare_cached(&format!(
                 "SELECT login FROM external_comments
-                 WHERE item_id = ({ITEM}) AND seen_at >= ?3
+                 WHERE item_id = ({ITEM}) AND dated_at >= ?3
                  GROUP BY login ORDER BY min(comment_id)"
             ))
             .map_err(StoreError::new)?;

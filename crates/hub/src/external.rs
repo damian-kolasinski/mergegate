@@ -104,17 +104,22 @@ async fn pull(state: &Arc<AppState>, id: &ItemId, fresh: bool) -> Result<Ingeste
                     .item(&id)?
                     .ok_or_else(|| ReviewError::NoItem(id.clone()))?;
                 let pull = external::pull_of(&item).map(|(repo, number)| (repo.clone(), number));
-                pull.ok_or(ExternalError::NotGithub(id))
+                let (repo, number) = pull.ok_or_else(|| ExternalError::NotGithub(id.clone()))?;
+                Ok::<_, ExternalError>((repo, number, external::held_keys(store, &id)?))
             })
             .await?
     };
-    let (repo, number) = pull;
-    let found = state
-        .github(move |github| external::fetch(github, &repo, number, fresh))
+    let (repo, number, held) = pull;
+    let (found, gone) = state
+        .github(move |github| {
+            let mut found = external::fetch(github, &repo, number, fresh)?;
+            let gone = external::confirm_gone(github, &repo, number, &held, &mut found)?;
+            Ok::<_, ExternalError>((found, gone))
+        })
         .await?;
     let id = id.clone();
     state
-        .blocking(move |store, git| external::ingest(store, git, &id, found, now()))
+        .blocking(move |store, git| external::ingest(store, git, &id, found, &gone, now()))
         .await
 }
 

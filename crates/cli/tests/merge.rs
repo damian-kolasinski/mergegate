@@ -120,6 +120,19 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
 }
 
 #[test]
+fn f8_a_merged_items_branch_name_is_free_for_branches_under_it() {
+    let (env, repo) = submitted();
+    assert_eq!(approve(&env, 1, "Ship it.").status, 200);
+    // The cleanup the merge event asks for, then new work.
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "feature"]);
+    repo.git(["switch", "--quiet", "-c", "feature/followup"]);
+    repo.commit_files("Follow up", &[("src/more.rs", "fn more() {}\n")]);
+    let next = env.mg_at(repo.root(), &["--json", "submit"]).json();
+    assert_eq!(next["item"]["id"], "app#2", "{next}");
+}
+
+#[test]
 fn f9_a_conflict_sends_the_item_back_to_rebase() {
     let (env, repo) = submitted();
     commit_on_main(
@@ -142,6 +155,12 @@ fn f9_a_conflict_sends_the_item_back_to_rebase() {
     assert_eq!(item(&env)["blocked"], conflict);
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(inbox["with_agents"][0]["blocked"], conflict);
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    let blocked = format!(
+        "\n      conflicts with the target at {}: src/login.rs\n",
+        &target[..12]
+    );
+    assert!(text.contains(&blocked), "{text}");
 
     let feedback = env.mg(&["--json", "wait", "app#1"]).assert_code(0).json();
     assert_eq!(feedback["state"], "changes_requested");
@@ -201,6 +220,10 @@ fn f8_a_dirty_checkout_of_the_target_holds_the_merge_until_retried() {
     );
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(inbox["merging"][0]["blocked"]["kind"], "held");
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    // On one line under the item, however many git's reason takes.
+    let held = reason.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(text.contains(&format!("\n      held: {held}")), "{text}");
 
     // Held is still the operator's to act on, so the agent's wait for them
     // keeps waiting; a plain wait shows it.
@@ -256,6 +279,15 @@ fn f8_only_the_newest_revision_of_an_open_item_is_approved() {
     let stale = approve(&env, 1, "");
     assert_eq!(stale.status, 409, "{}", stale.body);
     assert_eq!(json_of(&stale)["error"]["code"], "stale_revision");
+    for missing in [0, 3] {
+        let reply = approve(&env, missing, "");
+        assert_eq!(reply.status, 404, "{}", reply.body);
+        assert_eq!(
+            json_of(&reply)["error"]["message"],
+            format!("app#1 has no revision {missing}")
+        );
+        assert_eq!(json_of(&reply)["error"]["code"], "revision_not_found");
+    }
 
     // The reviews route doesn't merge.
     let body = json!({ "revision": 2, "verdict": "approved" });

@@ -1,3 +1,4 @@
+use super::FileMode;
 use crate::git::{GitError, Remote, Upstream};
 use crate::project::ProjectName;
 use crate::triage::Triage;
@@ -30,6 +31,11 @@ pub trait ItemGit {
     ) -> Result<Pushed, GitError>;
 
     fn branch_head(&self, project: &ProjectName, branch: &str) -> Result<Option<String>, GitError>;
+
+    /// Deletes staging's `branch` if it is still at `head`, checked and
+    /// deleted as one step. A branch that's gone or moved on, as a worker's
+    /// push moves it, is left as it is.
+    fn drop_branch(&self, project: &ProjectName, branch: &str, head: &str) -> Result<(), GitError>;
 
     /// `head` is a commit and `target` a branch.
     fn merge_base(
@@ -80,6 +86,12 @@ pub struct ChangedFile {
     /// exist. A submodule's are commits.
     pub old_blob: Option<String>,
     pub new_blob: Option<String>,
+    /// Modes before and after, none on the side where the file doesn't
+    /// exist, and on both for a revision recorded before modes were kept.
+    /// They're the file's, not the blobs': a diff cached by blob pair
+    /// doesn't show them.
+    pub old_mode: Option<FileMode>,
+    pub new_mode: Option<FileMode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -8,8 +8,9 @@ use crate::highlight::HighlightStore;
 use crate::store::StoreError;
 
 /// Moves `item` to `state`, a closed one, with `notice` for its agent, then
-/// drops its revision pins and the cached diffs and spans no open item
-/// still uses.
+/// drops its revision pins and the cached diffs and spans no open item still
+/// uses. Its branch is left to [`super::drop_branch`], which the caller runs
+/// and whose failure it reports.
 /// Its file list and line counts stay. A merged item keeps its newest
 /// revision's pin: a squash that auto-merged a file the target also changed
 /// leaves the item's own blob out of the target's history, and its diff is

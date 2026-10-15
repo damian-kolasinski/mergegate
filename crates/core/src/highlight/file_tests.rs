@@ -2,6 +2,7 @@ use super::*;
 use crate::diff::Line;
 use crate::fake::{FakeStore, installed, pack};
 use crate::highlight::Tag;
+use crate::item::FileMode;
 
 fn line(kind: LineKind) -> Line {
     Line {
@@ -33,6 +34,8 @@ fn file(path: &str) -> ChangedFile {
         old_path: None,
         old_blob: Some("old".into()),
         new_blob: Some("new".into()),
+        old_mode: Some(FileMode::Regular),
+        new_mode: Some(FileMode::Regular),
     }
 }
 

@@ -13,6 +13,8 @@ pub enum MergeError {
     Merging(ItemId),
     #[error("{0} has no merge to retry or cancel")]
     NotMerging(ItemId),
+    #[error("{id} has no revision {revision}")]
+    NoRevision { id: ItemId, revision: u32 },
     #[error("{id} r{revision} isn't its newest revision; r{newest} is")]
     Stale {
         id: ItemId,

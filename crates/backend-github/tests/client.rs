@@ -230,6 +230,10 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
     let issue = github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?"));
     let review = github.comment("acme/app", 1, GithubNewComment::review("ana", "Close"));
 
+    let dated = |id| {
+        let comment = github.comments().into_iter().find(|c| c.id == id);
+        comment.unwrap().updated_at * 1_000
+    };
     let comments = client.pull_comments(&acme(), 1, false).unwrap();
     let page = format!("{}/acme/app/pull/1", github.web_url());
     let expected = vec![
@@ -250,6 +254,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
                 start_line: None,
                 line: Some(1),
             }),
+            dated: dated(inline),
         },
         PullComment {
             kind: PullCommentKind::IssueComment,
@@ -259,6 +264,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
             url: format!("{page}#issuecomment-{issue}"),
             body: "Why?".into(),
             lines: None,
+            dated: dated(issue),
         },
         PullComment {
             kind: PullCommentKind::Review,
@@ -268,6 +274,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
             url: format!("{page}#pullrequestreview-{review}"),
             body: "Close".into(),
             lines: None,
+            dated: dated(review),
         },
     ];
     assert_eq!(comments, expected);
@@ -327,6 +334,39 @@ fn follows_the_pages_of_a_long_list() {
     let again = bodies(client.pull_comments(&acme(), 1, false).unwrap());
     assert_eq!(again, ["0", "1", "2", "3", "Last"]);
     assert_eq!(github.not_modified(), 2);
+}
+
+#[test]
+fn reads_one_comment_a_list_left_out_and_none_once_deleted() {
+    let (github, client, _repo) = with_pull();
+    let inline = GithubNewComment::inline("codex[bot]", "Leaks", "login.rs", None, 1);
+    let ids = [
+        github.comment("acme/app", 1, inline),
+        github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?")),
+        github.comment("acme/app", 1, GithubNewComment::review("ana", "Close")),
+    ];
+    let listed = client.pull_comments(&acme(), 1, true).unwrap();
+    for id in ids {
+        github.unlist_comment(id);
+    }
+    assert_eq!(client.pull_comments(&acme(), 1, true).unwrap(), []);
+    for comment in &listed {
+        let one = client.pull_comment(&acme(), 1, comment.kind, comment.id);
+        assert_eq!(one.unwrap().as_ref(), Some(comment));
+    }
+
+    github.delete_comment(ids[1]);
+    let gone = client.pull_comment(&acme(), 1, PullCommentKind::IssueComment, ids[1]);
+    assert_eq!(gone.unwrap(), None);
+    // A review asked for on another pull request isn't there.
+    let elsewhere = client.pull_comment(&acme(), 2, PullCommentKind::Review, ids[2]);
+    assert_eq!(elsewhere.unwrap(), None);
+
+    github.log_out();
+    let err = client
+        .pull_comment(&acme(), 1, PullCommentKind::ReviewComment, ids[0])
+        .unwrap_err();
+    assert!(matches!(err, GithubError::NotLoggedIn(_)), "{err:?}");
 }
 
 #[test]

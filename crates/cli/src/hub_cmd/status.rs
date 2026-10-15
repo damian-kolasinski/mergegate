@@ -1,6 +1,6 @@
 use hub::Home;
 
-use super::probe::probe;
+use super::probe::{live_pid, probe};
 use super::report::HubStatus;
 use crate::output::{CliError, Outcome};
 
@@ -29,10 +29,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
     let unresponsive = home.is_locked();
     let status = HubStatus {
         unresponsive,
-        pid: home
-            .read_info()
-            .map(|info| info.pid)
-            .filter(|_| unresponsive),
+        pid: live_pid(home).filter(|_| unresponsive),
         connected: connected.clone(),
         ..HubStatus::new(home)
     };

@@ -165,3 +165,38 @@ test("an open comment keeps what's typed in it", async ({ page, hub }) => {
     review.getByRole("button", { name: "Request changes" }),
   ).toBeEnabled();
 });
+
+test("a file marked viewed stays open while a comment is written on it", async ({
+  page,
+  hub,
+}) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const diff = page.getByRole("region", { name: "Diff" });
+  await expect(diff.getByText("fn login(password: &str) {}")).toBeVisible();
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  const editor = page.getByRole("textbox", {
+    name: "Comment on login.rs line 1",
+  });
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("Half a thought");
+  await page
+    .getByRole("navigation", { name: "Files" })
+    .getByLabel("Viewed login.rs")
+    .check();
+  await expect(page.getByText("1/2 viewed")).toBeVisible();
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveValue("Half a thought");
+
+  // Saved, the file collapses with its comment.
+  await editor.focus();
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(editor).toHaveCount(0);
+  await expect(diff.getByText("fn login(password: &str) {}")).toHaveCount(0);
+  const review = page.getByRole("form", { name: "Review" });
+  await expect(
+    review.getByRole("button", { name: "Request changes" }),
+  ).toBeEnabled();
+});

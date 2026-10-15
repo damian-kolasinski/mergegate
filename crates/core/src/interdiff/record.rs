@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use super::{Change, InterdiffFile, InterdiffGit, NewInterdiff};
 use crate::diff::{DiffGit, DiffStore};
-use crate::item::{FileStat, Item, ItemError, ItemGit, ItemStore, diff_files};
+use crate::item::{ChangedFile, FileStat, Item, ItemError, ItemGit, ItemStore, diff_files};
 use crate::viewed::ViewedStore;
 
 /// What a new revision records besides its own files.
@@ -46,6 +46,7 @@ pub(crate) fn record<S: ItemStore + DiffStore + ViewedStore>(
         let changed = git
             .changed_files(project, &from, head)?
             .into_iter()
+            .flat_map(|file| unpaired(file, files))
             .filter(|file| !conflicts.contains(&file.path))
             .collect();
         let mut changed: BTreeMap<String, FileStat> = diff_files(store, git, project, changed)?
@@ -100,6 +101,38 @@ pub(crate) fn record<S: ItemStore + DiffStore + ViewedStore>(
         }
     }
     Ok(Recorded { interdiffs, viewed })
+}
+
+/// `file`, split into a deletion and an addition when it renames away from
+/// one of the new revision's own files. Files are matched by path, so that
+/// own file would match nothing and read as unchanged since the earlier
+/// revision. A rename from any other path, like one of a file the item added,
+/// stays whole so it still reads as a move.
+fn unpaired(file: ChangedFile, own: &[FileStat]) -> Vec<ChangedFile> {
+    let Some(old_path) = file.old_path.clone() else {
+        return vec![file];
+    };
+    if !own.iter().any(|o| o.file.path == old_path) {
+        return vec![file];
+    }
+    vec![
+        ChangedFile {
+            path: old_path,
+            old_path: None,
+            old_blob: file.old_blob,
+            new_blob: None,
+            old_mode: file.old_mode,
+            new_mode: None,
+        },
+        ChangedFile {
+            path: file.path,
+            old_path: None,
+            old_blob: None,
+            new_blob: file.new_blob,
+            old_mode: None,
+            new_mode: file.new_mode,
+        },
+    ]
 }
 
 #[cfg(test)]

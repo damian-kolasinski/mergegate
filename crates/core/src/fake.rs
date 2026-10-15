@@ -13,15 +13,15 @@ use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
-use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
+use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind};
 use crate::highlight::{
     Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, PackSource,
     Release, Span, Tag,
 };
 use crate::interdiff::{InterdiffFile, InterdiffGit, InterdiffStore, Replay};
 use crate::item::{
-    ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
-    NewRevision, Priority, Pushed, Revision, Submit, submit,
+    ChangedFile, DiffStat, FileMode, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore,
+    NewItem, NewRevision, Priority, Pushed, Revision, Submit, submit,
 };
 use crate::judge::{JudgeSetting, JudgeStore, Verdict};
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
@@ -49,6 +49,9 @@ struct Commit {
     /// What the commit writes to each of `files` it gives content for, empty
     /// for a deleted file. Others get a line added: the commit's ID.
     contents: BTreeMap<String, String>,
+    /// The modes the commit sets, which a file keeps until another sets it.
+    /// A file no commit sets one for is `Regular`.
+    modes: BTreeMap<String, FileMode>,
 }
 
 pub(crate) struct FakeGit {
@@ -56,6 +59,7 @@ pub(crate) struct FakeGit {
     version: Option<String>,
     fail_sync: bool,
     fail_unpin: bool,
+    fail_drop: bool,
     /// The paths every trial merge conflicts on, if it does.
     conflicts: Option<Vec<String>>,
     /// The paths two commits conflict on, by the pair in order; any other
@@ -75,6 +79,8 @@ pub(crate) struct FakeGit {
     pins: RefCell<BTreeMap<String, String>>,
     /// Trees `replay` wrote, by ID: each path's blob.
     trees: RefCell<BTreeMap<String, BTreeMap<String, String>>>,
+    /// Each replayed tree's modes, by the same ID.
+    tree_modes: RefCell<BTreeMap<String, BTreeMap<String, FileMode>>>,
     blobs_read: RefCell<Vec<String>>,
     /// Paths `linguist-generated` in every tree.
     generated: BTreeSet<String>,
@@ -89,6 +95,7 @@ impl Default for FakeGit {
             version: Some("git version 2.50.1".into()),
             fail_sync: false,
             fail_unpin: false,
+            fail_drop: false,
             conflicts: None,
             between: RefCell::default(),
             merged: RefCell::default(),
@@ -100,6 +107,7 @@ impl Default for FakeGit {
             fetched: RefCell::default(),
             pins: RefCell::default(),
             trees: RefCell::default(),
+            tree_modes: RefCell::default(),
             blobs_read: RefCell::default(),
             generated: BTreeSet::new(),
             files: BTreeMap::new(),
@@ -165,6 +173,11 @@ impl FakeGit {
         self
     }
 
+    pub fn failing_drop(mut self) -> Self {
+        self.fail_drop = true;
+        self
+    }
+
     pub fn generated(mut self, paths: &[&str]) -> Self {
         self.generated.extend(paths.iter().map(|p| (*p).to_owned()));
         self
@@ -183,6 +196,7 @@ impl FakeGit {
             subject: subject.into(),
             files: files.iter().map(|f| (*f).into()).collect(),
             contents: BTreeMap::new(),
+            modes: BTreeMap::new(),
         };
         self.commits.insert(id.into(), commit);
         self
@@ -206,6 +220,26 @@ impl FakeGit {
                 .iter()
                 .map(|(f, c)| ((*f).into(), (*c).into()))
                 .collect(),
+            modes: BTreeMap::new(),
+        };
+        self.commits.insert(id.into(), commit);
+        self
+    }
+
+    /// Adds commit `id` on top of `parent`, changing only each file's mode.
+    pub fn chmod(
+        mut self,
+        id: &str,
+        parent: Option<&str>,
+        subject: &str,
+        modes: &[(&str, FileMode)],
+    ) -> Self {
+        let commit = Commit {
+            parent: parent.map(Into::into),
+            subject: subject.into(),
+            files: Vec::new(),
+            contents: BTreeMap::new(),
+            modes: modes.iter().map(|(f, m)| ((*f).into(), *m)).collect(),
         };
         self.commits.insert(id.into(), commit);
         self
@@ -314,6 +348,22 @@ impl FakeGit {
             return content.clone();
         }
         touching.iter().rev().map(|id| format!("{id}\n")).collect()
+    }
+
+    /// `path`'s mode at `commit` or a replayed tree, none if it doesn't exist
+    /// there.
+    fn mode(&self, commit: &str, path: &str) -> Option<FileMode> {
+        if self.blob(commit, path).is_empty() {
+            return None;
+        }
+        if let Some(modes) = self.tree_modes.borrow().get(commit) {
+            return modes.get(path).copied();
+        }
+        let set = self
+            .history(commit)
+            .iter()
+            .find_map(|id| self.commits.get(id)?.modes.get(path).copied());
+        Some(set.unwrap_or(FileMode::Regular))
     }
 
     /// Every path that exists at `commit` or in a replayed tree.
@@ -454,6 +504,18 @@ impl ItemGit for FakeGit {
             .and_then(|branches| branches.get(branch).cloned()))
     }
 
+    fn drop_branch(&self, project: &ProjectName, branch: &str, head: &str) -> Result<(), GitError> {
+        if self.fail_drop {
+            return Err(GitError::Failed("update-ref failed".into()));
+        }
+        if let Some(branches) = self.staging.borrow_mut().get_mut(project.as_str())
+            && branches.get(branch).is_some_and(|found| found == head)
+        {
+            branches.remove(branch);
+        }
+        Ok(())
+    }
+
     fn merge_base(
         &self,
         project: &ProjectName,
@@ -482,12 +544,20 @@ impl ItemGit for FakeGit {
         paths.extend(self.paths(head));
         Ok(paths
             .into_iter()
-            .filter(|path| blob(base, path) != blob(head, path))
-            .map(|path| ChangedFile {
-                old_blob: blob(base, &path),
-                new_blob: blob(head, &path),
-                old_path: None,
-                path,
+            .filter(|path| {
+                blob(base, path) != blob(head, path)
+                    || self.mode(base, path) != self.mode(head, path)
+            })
+            .map(|path| {
+                let (old_blob, new_blob) = (blob(base, &path), blob(head, &path));
+                ChangedFile {
+                    old_mode: self.mode(base, &path),
+                    new_mode: self.mode(head, &path),
+                    old_blob,
+                    new_blob,
+                    old_path: None,
+                    path,
+                }
             })
             .collect())
     }
@@ -534,6 +604,7 @@ impl InterdiffGit for FakeGit {
         paths.extend(self.paths(onto));
         paths.extend(self.paths(head));
         let mut tree = BTreeMap::new();
+        let mut modes = BTreeMap::new();
         let mut conflicts = Vec::new();
         for path in paths {
             let (b, o, h) = (
@@ -549,13 +620,22 @@ impl InterdiffGit for FakeGit {
                 conflicts.push(path.clone());
                 format!("<<<<<<<\n{o}=======\n{h}>>>>>>>\n")
             };
+            // A mode merges as a blob does, the conflict taking `head`'s.
+            let (b, o, h) = (
+                self.mode(base, &path),
+                self.mode(onto, &path),
+                self.mode(head, &path),
+            );
+            let mode = if b == h || o == h { o } else { h };
             if !blob.is_empty() {
+                modes.insert(path.clone(), mode.unwrap_or(FileMode::Regular));
                 tree.insert(path, blob);
             }
         }
         let mut trees = self.trees.borrow_mut();
         let id = format!("{:040x}", 0xeeee_0000_usize + trees.len());
         trees.insert(id.clone(), tree);
+        self.tree_modes.borrow_mut().insert(id.clone(), modes);
         Ok(Replay {
             tree: id,
             conflicts,
@@ -697,6 +777,8 @@ pub(crate) struct FakeStore {
     external: BTreeMap<CommentId, (u64, Option<u64>)>,
     /// The external comments a batch carried.
     batched: BTreeSet<CommentId>,
+    /// When GitHub says each external comment was posted or last edited.
+    dated: BTreeMap<CommentId, u64>,
     rules: BTreeMap<ProjectName, Rules>,
     applied_text: BTreeMap<ProjectName, String>,
     /// The highest rule number each project used.
@@ -923,6 +1005,15 @@ impl ItemStore for FakeStore {
             .collect())
     }
 
+    fn closed_items(&self) -> Result<Vec<Item>, StoreError> {
+        Ok(self
+            .items
+            .iter()
+            .filter(|i| !i.state.is_open())
+            .cloned()
+            .collect())
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         Ok(self
             .open_items(Some(project))?
@@ -1015,6 +1106,13 @@ impl ItemStore for FakeStore {
         };
         Ok(())
     }
+
+    fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError> {
+        let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
+        item.title = title.into();
+        Ok(())
+    }
+
     fn set_priority(
         &mut self,
         id: &ItemId,
@@ -1052,10 +1150,9 @@ impl RulesStore for FakeStore {
         Ok(())
     }
 
-    fn next_rule_id(&self, project: &ProjectName) -> Result<RuleId, StoreError> {
-        Ok(RuleId::new(
-            self.last_rule.get(project).copied().unwrap_or(0) + 1,
-        ))
+    fn next_rule_id(&self, project: &ProjectName) -> Result<Option<RuleId>, StoreError> {
+        let last = self.last_rule.get(project).copied().unwrap_or(0);
+        Ok(last.checked_add(1).map(RuleId::new))
     }
 
     fn insert_proposal(
@@ -1902,6 +1999,7 @@ impl FeedbackStore for FakeStore {
 impl ExternalStore for FakeStore {
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError> {
         self.last_comment += 1;
+        let dated = comment.dated;
         let comment = Comment {
             id: CommentId(self.last_comment),
             item: comment.item,
@@ -1923,15 +2021,57 @@ impl ExternalStore for FakeStore {
         };
         self.comments.push(comment.clone());
         self.external.insert(comment.id, (now, Some(now)));
+        self.dated.insert(comment.id, dated);
         Ok(comment)
     }
 
-    fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError> {
+    fn edit_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        let known = self.dated.get_mut(&id).unwrap();
+        *known = (*known).max(dated);
         let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
         comment.body = body.into();
         comment.external.as_mut().unwrap().pending = true;
         let times = self.external.get_mut(&id).unwrap();
         *times = (now, Some(times.1.unwrap_or(now)));
+        Ok(())
+    }
+
+    fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        let answered = self
+            .replies
+            .iter()
+            .any(|r| r.comment == id && !r.is_draft());
+        if !self.batched.contains(&id) && !answered {
+            self.comments.retain(|c| c.id != id);
+            self.replies.retain(|r| r.comment != id);
+            self.external.remove(&id);
+            self.dated.remove(&id);
+            return Ok(());
+        }
+        let sent = self
+            .events
+            .iter()
+            .rev()
+            .find_map(|(_, event)| match &event.kind {
+                EventKind::ExternalComments(batch) => batch
+                    .comments
+                    .iter()
+                    .find(|d| d.comment.id == id)
+                    .map(|d| d.comment.body.clone()),
+                _ => None,
+            });
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        if let Some(body) = sent {
+            comment.body = body;
+        }
+        comment.external.as_mut().unwrap().pending = false;
+        self.external.get_mut(&id).unwrap().1 = None;
         Ok(())
     }
 
@@ -1945,7 +2085,7 @@ impl ExternalStore for FakeStore {
                 continue;
             };
             let (seen, pending) = self.external[&comment.id];
-            if external.bot && seen >= pushed && !heard.contains(&external.login) {
+            if self.dated[&comment.id] >= pushed && !heard.contains(&external.login) {
                 heard.push(external.login.clone());
             }
             if let Some(pending) = pending {
@@ -2109,6 +2249,8 @@ pub(crate) struct FakeGithub {
     deleted: RefCell<Vec<(GithubRepo, String)>>,
     /// Every pull request's, oldest first.
     comments: RefCell<Vec<(GithubRepo, u64, PullComment)>>,
+    unlisted: RefCell<BTreeSet<(PullCommentKind, u64)>>,
+    unanswered: RefCell<BTreeSet<(PullCommentKind, u64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2141,6 +2283,8 @@ impl Default for FakeGithub {
             pulls: RefCell::default(),
             deleted: RefCell::default(),
             comments: RefCell::default(),
+            unlisted: RefCell::default(),
+            unanswered: RefCell::default(),
         }
     }
 }
@@ -2186,6 +2330,17 @@ impl FakeGithub {
             Some((_, _, known)) => *known = comment,
             None => comments.push((repo, number, comment)),
         }
+    }
+
+    /// Lists leave the comment out though GitHub still has it, as one read
+    /// while an earlier comment is deleted can.
+    pub fn unlist(&self, kind: PullCommentKind, id: u64) {
+        self.unlisted.borrow_mut().insert((kind, id));
+    }
+
+    /// Asking for the comment by itself fails.
+    pub fn fail_asking_for(&self, kind: PullCommentKind, id: u64) {
+        self.unanswered.borrow_mut().insert((kind, id));
     }
 
     fn signed_in(&self) -> Result<(), GithubError> {
@@ -2354,9 +2509,30 @@ impl Github for FakeGithub {
             .comments
             .borrow()
             .iter()
-            .filter(|(r, n, _)| r == repo && *n == number)
+            .filter(|(r, n, c)| {
+                r == repo && *n == number && !self.unlisted.borrow().contains(&(c.kind, c.id))
+            })
             .map(|(_, _, c)| c.clone())
             .collect())
+    }
+
+    fn pull_comment(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        kind: PullCommentKind,
+        id: u64,
+    ) -> Result<Option<PullComment>, GithubError> {
+        self.signed_in()?;
+        if self.unanswered.borrow().contains(&(kind, id)) {
+            return Err(GithubError::Failed("GitHub is down".into()));
+        }
+        Ok(self
+            .comments
+            .borrow()
+            .iter()
+            .find(|(r, n, c)| r == repo && *n == number && c.kind == kind && c.id == id)
+            .map(|(_, _, c)| c.clone()))
     }
 }
 

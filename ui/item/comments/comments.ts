@@ -98,6 +98,16 @@ export function useComments(
         editor.dirty() && comment !== undefined && !threads.inDiff(comment)
       );
     },
+    /** The line the open editor is under in the diff, if it's there. */
+    writing: (): Spot | undefined => {
+      const composing = drafts.composing();
+      if (composing) return composing;
+      const id = editor.open()?.comment;
+      const comment = threads.all().find((comment) => comment.id === id);
+      return comment && threads.inDiff(comment)
+        ? spotOf(comment, revision)
+        : undefined;
+    },
     /** Scrolls to a comment the diff shows. */
     show(comment: Comment) {
       const spot = spotOf(comment, revision);

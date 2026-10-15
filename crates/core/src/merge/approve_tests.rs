@@ -148,6 +148,13 @@ fn only_the_newest_revision_of_an_open_item_merges() {
         ),
         "{stale:?}"
     );
+    for missing in [0, 3] {
+        let error = approve(&mut store, &git, &[&backend], approving(missing, "")).unwrap_err();
+        assert!(
+            matches!(error, MergeError::NoRevision { revision, .. } if revision == missing),
+            "{error:?}"
+        );
+    }
 
     store.set_state(&id("app#1"), ItemState::Merging);
     let merging = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();

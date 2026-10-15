@@ -6,6 +6,7 @@
 
 mod due;
 mod error;
+mod gone;
 mod ingest;
 mod on_read;
 mod rejection;
@@ -13,6 +14,7 @@ mod store;
 
 pub use due::{Timing, due, release, release_due};
 pub use error::ExternalError;
+pub use gone::{GithubKey, confirm_gone, held_keys};
 pub use ingest::{Ingested, fetch, ingest, pull_of};
 pub use on_read::release_on_read;
 pub use rejection::{agree, override_rejection};

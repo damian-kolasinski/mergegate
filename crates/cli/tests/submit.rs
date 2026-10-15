@@ -409,3 +409,66 @@ fn f4_submits_a_branch_a_tag_shares_its_name_with() {
         repo.rev("HEAD")
     );
 }
+
+#[test]
+fn f4_retitles_an_item_without_new_commits() {
+    let (env, repo) = hub_with_app();
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Feature", &[("f", "1\n")]);
+    submit(&env, repo.root());
+    let again = env
+        .mg_at(
+            repo.root(),
+            &["--json", "submit", "--title", " Login page "],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(again["new_revision"], false, "{again}");
+    assert_eq!(again["item"]["title"], "Login page");
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert_eq!(inbox["needs_you"][0]["title"], "Login page", "{inbox}");
+}
+
+#[test]
+fn f4_names_the_open_branch_a_new_one_nests_with() {
+    let (env, repo) = hub_with_app();
+    repo.git(["switch", "--quiet", "-c", "auth"]);
+    repo.commit_files("Auth", &[("auth.rs", "1\n")]);
+    assert_eq!(submit(&env, repo.root())["item"]["id"], "app#1");
+
+    // Git can't hold `auth/login` beside `auth`, so neither can the hub
+    // while app#1 is open.
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "auth"]);
+    repo.git(["switch", "--quiet", "-c", "auth/login"]);
+    repo.commit_files("Login", &[("login.rs", "1\n")]);
+    let under = submit(&env, repo.root());
+    assert_eq!(error_code(&under), "branch_nested", "{under}");
+    assert_eq!(
+        under["error"]["message"],
+        "the hub has a branch auth, so it can't take auth/login: one branch name can't nest in another"
+    );
+    assert_eq!(under["error"]["hint"], "git branch -m NAME");
+}
+
+#[test]
+fn f4_names_the_open_branch_a_new_one_nests_with_once_refs_are_packed() {
+    let (env, repo) = hub_with_app();
+    repo.git(["switch", "--quiet", "-c", "auth"]);
+    repo.commit_files("Auth", &[("auth.rs", "1\n")]);
+    assert_eq!(submit(&env, repo.root())["item"]["id"], "app#1");
+    // Receive-pack's `gc --auto` packs staging's refs, and git words the
+    // refusal differently for a packed one.
+    git(&staging(&env, "app"), ["pack-refs", "--all"]);
+
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "auth"]);
+    repo.git(["switch", "--quiet", "-c", "auth/login"]);
+    repo.commit_files("Login", &[("login.rs", "1\n")]);
+    let under = submit(&env, repo.root());
+    assert_eq!(error_code(&under), "branch_nested", "{under}");
+    assert_eq!(
+        under["error"]["message"],
+        "the hub has a branch auth, so it can't take auth/login: one branch name can't nest in another"
+    );
+}

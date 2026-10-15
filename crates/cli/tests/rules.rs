@@ -3,6 +3,7 @@
 //! inbox counts only the files left to review.
 
 use std::fs;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use testkit::{Env, Reply, TestRepo, http_reply};
@@ -284,6 +285,64 @@ fn f12_a_broken_rules_file_keeps_the_last_good_rules() {
     assert_eq!(triage(&env)[0]["rule"], "R2");
     let text = env.mg(&["rules", "list", "app"]).assert_code(0).stdout;
     assert!(text.contains("can't be used"), "{text}");
+}
+
+#[test]
+fn f12_the_largest_rule_id_only_stops_new_rules() {
+    let env = env();
+    let repo = project(&env);
+    let two = TestRepo::new("two");
+    env.mg_at(two.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    env.mg_at(two.root(), &["--json", "init"]).assert_code(0);
+    submit(&env, &two, &[("a.rs", "x\n")]);
+
+    // The hub numbers its next rule past the highest ID a file used, and
+    // this one leaves none.
+    write_rules(
+        &env,
+        "[[rule]]\nid = \"R4294967295\"\ntier = \"review\"\npath = \"src/**\"\nreason = \"x\"\n",
+    );
+    // Listing applies app's file, so each poll from here on syncs app, in
+    // name order ahead of two, with the largest ID already used.
+    let listed = env
+        .mg_at(repo.root(), &["--json", "rules", "list"])
+        .assert_code(0)
+        .json();
+    assert_eq!(listed["error"], Value::Null);
+    assert_eq!(listed["rules"][0]["id"], "R4294967295");
+    let rules = env.home().join("projects").join("two");
+    fs::create_dir_all(&rules).unwrap();
+    fs::write(
+        rules.join("rules.toml"),
+        "[[rule]]\nid = \"R1\"\ntier = \"review\"\npath = \"a.rs\"\nreason = \"watch me\"\n",
+    )
+    .unwrap();
+
+    // Read without syncing, so only the poll can have applied two's rule.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let diff = json_of(&get(&env, "/api/items/two%231"));
+        if diff["files"][0]["rule"] == "R1" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "two's rule never applied");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    // Submitting syncs app's file too.
+    submit(&env, &repo, &[("src/main.rs", "fn main() {}\n")]);
+    assert_eq!(triage(&env)[0]["rule"], "R4294967295");
+    let refused = env
+        .mg_at(
+            repo.root(),
+            &[
+                "--json", "rules", "propose", "--tier", "review", "--path", "a", "--reason", "a",
+            ],
+        )
+        .assert_code(1)
+        .json();
+    assert_eq!(refused["error"]["code"], "no_rule_id_left");
 }
 
 fn rules_file(env: &Env) -> String {

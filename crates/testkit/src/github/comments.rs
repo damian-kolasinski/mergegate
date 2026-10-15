@@ -4,6 +4,7 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
@@ -23,6 +24,12 @@ pub struct Comment {
     /// Where an inline comment is; the branch's head when it was posted
     /// fills in its commit.
     pub inline: Option<Inline>,
+    /// When it was posted, in Unix seconds: GitHub dates comments to the
+    /// second.
+    pub created_at: u64,
+    /// When it was last edited, or posted if never; a review keeps the time
+    /// it was submitted, as GitHub doesn't date a review's edit.
+    pub updated_at: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,8 +124,17 @@ pub(super) fn add(
         bot: comment.bot,
         body: comment.body,
         inline,
+        created_at: secs(),
+        updated_at: secs(),
     });
     id
+}
+
+fn secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 /// `GET .../pulls/{n}/comments`, `.../issues/{n}/comments` or
@@ -144,6 +160,7 @@ pub(super) fn list(
         .comments
         .iter()
         .filter(|c| c.repo == repo && c.pull == number && c.kind == kind)
+        .filter(|c| !state.unlisted.contains(&c.id))
         .map(|c| to_json(&shared.web, c, head.as_deref()))
         .collect();
     let per_page = request
@@ -185,12 +202,38 @@ pub(super) fn list(
     response
 }
 
+/// `GET .../pulls/comments/{id}`, `.../issues/comments/{id}` or
+/// `.../pulls/{n}/reviews/{id}`: one comment, listed or not.
+pub(super) fn one(
+    shared: &Shared,
+    state: &State,
+    repo: &str,
+    pull: Option<&str>,
+    kind: CommentKind,
+    id: &str,
+) -> Response {
+    let pull = pull.map(|n| n.parse::<u64>().unwrap_or(0));
+    let id = id.parse::<u64>().unwrap_or(0);
+    let found = state.comments.iter().find(|c| {
+        c.repo == repo && c.kind == kind && c.id == id && pull.is_none_or(|n| n == c.pull)
+    });
+    match found {
+        Some(comment) => {
+            let head = shared.pull_head(state, repo, comment.pull);
+            Response::json(200, &to_json(&shared.web, comment, head.as_deref()))
+        }
+        None => Response::json(404, &json!({ "message": "Not Found" })),
+    }
+}
+
 fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {
     let page = format!("{web}/{}/pull/{}", comment.repo, comment.pull);
     let user = json!({
         "login": comment.login,
         "type": if comment.bot { "Bot" } else { "User" },
     });
+    let created = stamp(comment.created_at);
+    let updated = stamp(comment.updated_at);
     match (&comment.kind, &comment.inline) {
         (CommentKind::Inline, Some(inline)) => {
             // GitHub carries the lines to the head while it's the commit
@@ -209,6 +252,8 @@ fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {
                 "commit_id": head.unwrap_or(&inline.commit),
                 "start_line": if current { inline.start_line } else { None },
                 "line": current.then_some(inline.line),
+                "created_at": created,
+                "updated_at": updated,
             })
         }
         (CommentKind::Review, _) => json!({
@@ -217,12 +262,15 @@ fn to_json(web: &str, comment: &Comment, head: Option<&str>) -> Value {
             "html_url": format!("{page}#pullrequestreview-{}", comment.id),
             "body": comment.body,
             "state": "COMMENTED",
+            "submitted_at": created,
         }),
         _ => json!({
             "id": comment.id,
             "user": user,
             "html_url": format!("{page}#issuecomment-{}", comment.id),
             "body": comment.body,
+            "created_at": created,
+            "updated_at": updated,
         }),
     }
 }
@@ -273,6 +321,7 @@ pub(super) fn edit(state: &mut State, id: u64, body: &str) -> bool {
     match state.comments.iter_mut().find(|c| c.id == id) {
         Some(comment) => {
             comment.body = body.into();
+            comment.updated_at = secs();
             true
         }
         None => false,
@@ -283,4 +332,25 @@ fn digest(text: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
     text.hash(&mut hasher);
     hasher.finish()
+}
+
+/// `secs` since the epoch as GitHub writes a time: `2026-01-02T03:04:05Z`.
+fn stamp(secs: u64) -> String {
+    // Howard Hinnant's civil_from_days, on days since 1970-01-01.
+    let z = secs / 86_400 + 719_468;
+    let era = z / 146_097;
+    let doe = z % 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + u64::from(month <= 2);
+    let time = secs % 86_400;
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        time / 3_600,
+        time / 60 % 60,
+        time % 60
+    )
 }

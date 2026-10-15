@@ -334,3 +334,193 @@ fn a_wait_for_the_operator_leaves_held_comments_held() {
         "a read the agent gets takes it: {feedback}"
     );
 }
+
+/// Polls the item's conversation until `done` holds for its comments.
+fn until(env: &Env, what: &str, done: impl Fn(&Value) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !done(&conversation(env)["comments"]) {
+        assert!(Instant::now() < deadline, "{what}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    let doomed = github.comment(ACME, 1, GithubNewComment::issue("alice", "Typo here."));
+    let kept = github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    until(&env, "the poller never saw them", |c| {
+        c.as_array().unwrap().len() == 2
+    });
+
+    github.delete_comment(doomed);
+    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
+    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 1 }));
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    let bodies: Vec<_> = feedback["events"][0]["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["body"].clone())
+        .collect();
+    assert_eq!(bodies, [json!("Needs a test.")], "{feedback}");
+    let comments = conversation(&env)["comments"].clone();
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
+
+    // One a batch carried stays, as the agent got it, with the operator's
+    // draft reply: its held edit is withdrawn with it.
+    let comment = id(&comments[0]).to_owned();
+    let drafted = post(
+        &env,
+        &format!("/api/comments/{comment}/drafts"),
+        &json!({ "body": "Which test?" }),
+    );
+    assert_eq!(drafted.status, 201, "{}", drafted.body);
+    github.edit_comment(kept, "Needs two tests.");
+    until(&env, "the poller never saw the edit", |c| {
+        c[0]["body"] == "Needs two tests."
+    });
+    github.delete_comment(kept);
+    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
+    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 0 }));
+    let shown = conversation(&env);
+    let comments = &shown["comments"];
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
+    assert_eq!(comments[0]["body"], "Needs a test.");
+    assert_eq!(comments[0]["external"]["pending"], false);
+    assert_eq!(shown["draft_replies"][0]["body"], "Which test?", "{shown}");
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["events"], json!([]), "{feedback}");
+}
+
+#[test]
+fn f5_an_expected_bots_comment_from_before_the_newest_push_doesnt_count() {
+    let github = FakeGithub::start();
+    let (env, repo) = submitted(&github, [NEVER, "200", NEVER]);
+    env.mg(&["--json", "project", "set", "app", "bots", "codex"])
+        .assert_code(0);
+    github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("codex[bot]", "r1 looks fine."),
+    );
+    github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    repo.commit_files("Add a test", &[("src/login_test.rs", "\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    // The hub first sees both comments after the push.
+    env.mg(&["hub", "stop"]).assert_code(0);
+    env.mg_with_env(
+        &["--json", "hub", "start", "--port", "0"],
+        &[("MG_GITHUB_POLL_MS", "100")],
+    )
+    .assert_code(0);
+    until(&env, "the poller never saw them", |c| {
+        c.as_array().unwrap().len() == 2
+    });
+    env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
+        .assert_code(75);
+
+    github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("codex[bot]", "r2 looks fine."),
+    );
+    let feedback = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
+        .assert_code(0)
+        .json();
+    let comments = &feedback["events"][0]["comments"];
+    assert_eq!(comments.as_array().unwrap().len(), 3, "{feedback}");
+}
+
+#[test]
+fn an_expected_bot_editing_its_comment_after_the_newest_push_counts() {
+    let github = FakeGithub::start();
+    let (env, repo) = submitted(&github, [NEVER, "200", NEVER]);
+    env.mg(&["--json", "project", "set", "app", "bots", "codex"])
+        .assert_code(0);
+    let summary = github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("codex[bot]", "Reviewing r1."),
+    );
+    repo.commit_files("Add a test", &[("src/login_test.rs", "\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    env.mg(&["hub", "stop"]).assert_code(0);
+    env.mg_with_env(
+        &["--json", "hub", "start", "--port", "0"],
+        &[("MG_GITHUB_POLL_MS", "100")],
+    )
+    .assert_code(0);
+    until(&env, "the poller never saw it", |c| {
+        c.as_array().unwrap().len() == 1
+    });
+    // Also takes the edit below past the push's second, the finest date
+    // GitHub gives.
+    env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
+        .assert_code(75);
+
+    // A bot that keeps one summary comment edits it when it reviews a push.
+    github.edit_comment(summary, "r2 looks fine.");
+    let feedback = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
+        .assert_code(0)
+        .json();
+    let comments = &feedback["events"][0]["comments"];
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{feedback}");
+    assert_eq!(comments[0]["body"], "r2 looks fine.", "{feedback}");
+}
+
+/// Waits out `polls` more reads of the pull request's conversation.
+fn polled(github: &FakeGithub, polls: usize) {
+    let reads = || {
+        let list = "GET /api/repos/acme/app/issues/1/comments";
+        github.requests().iter().filter(|r| *r == list).count()
+    };
+    let until = reads() + polls;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while reads() < until {
+        assert!(Instant::now() < deadline, "the poller stopped");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_held_comment_a_list_misses_stays_until_github_says_it_is_gone() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    let missed = github.comment(ACME, 1, GithubNewComment::issue("alice", "Typo here."));
+    until(&env, "the poller never saw it", |c| {
+        c.as_array().unwrap().len() == 1
+    });
+    let comment = id(&conversation(&env)["comments"][0]).to_owned();
+    let drafted = post(
+        &env,
+        &format!("/api/comments/{comment}/drafts"),
+        &json!({ "body": "Which one?" }),
+    );
+    assert_eq!(drafted.status, 201, "{}", drafted.body);
+
+    // A list read across a deletion skips it, but GitHub still has it.
+    github.unlist_comment(missed);
+    polled(&github, 3);
+    let shown = conversation(&env);
+    assert_eq!(shown["comments"][0]["id"], comment.as_str(), "{shown}");
+    assert_eq!(shown["comments"][0]["external"]["pending"], true);
+    assert_eq!(shown["draft_replies"][0]["body"], "Which one?", "{shown}");
+    let asked = format!("GET /api/repos/acme/app/issues/comments/{missed}");
+    assert!(github.requests().contains(&asked));
+
+    github.delete_comment(missed);
+    until(&env, "the poller never withdrew it", |c| {
+        c.as_array().unwrap().is_empty()
+    });
+    assert_eq!(conversation(&env)["draft_replies"], json!([]));
+}

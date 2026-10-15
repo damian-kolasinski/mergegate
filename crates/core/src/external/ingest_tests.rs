@@ -15,6 +15,7 @@ fn issue(github_id: u64, login: &str, body: &str) -> PullComment {
         url: format!("https://github.com/o/app/pull/1#issuecomment-{github_id}"),
         body: body.into(),
         lines: None,
+        dated: 0,
     }
 }
 
@@ -40,8 +41,23 @@ fn inline(github_id: u64, original_commit: &str, line: Option<u32>) -> PullComme
 fn an_inline_comment_sits_on_the_revision_it_was_written_on() {
     let mut store = FakeStore::with_item(2);
     let comments = vec![inline(7, &commit(2), Some(2))];
-    let ingested = ingest(&mut store, &FakeGit::default(), &id(), comments, 5_000).unwrap();
-    assert_eq!(ingested, Ingested { new: 1, edited: 0 });
+    let ingested = ingest(
+        &mut store,
+        &FakeGit::default(),
+        &id(),
+        comments,
+        &BTreeSet::new(),
+        5_000,
+    )
+    .unwrap();
+    assert_eq!(
+        ingested,
+        Ingested {
+            new: 1,
+            edited: 0,
+            withdrawn: 0
+        }
+    );
 
     let [comment] = &store.comments(&id()).unwrap()[..] else {
         panic!("one comment");
@@ -76,7 +92,15 @@ fn lines_github_carried_place_a_comment_written_on_a_commit_no_revision_has() {
     lines.commit = commit(3);
     lines.start_line = Some(1);
     lines.line = Some(2);
-    ingest(&mut store, &FakeGit::default(), &id(), vec![comment], 0).unwrap();
+    ingest(
+        &mut store,
+        &FakeGit::default(),
+        &id(),
+        vec![comment],
+        &BTreeSet::new(),
+        0,
+    )
+    .unwrap();
 
     let comment = &store.comments(&id()).unwrap()[0];
     assert_eq!(comment.revision, 2);
@@ -95,7 +119,15 @@ fn what_cant_be_placed_sits_on_the_item_as_a_whole() {
         inline(3, &commit(2), Some(9)),
         inline(4, "f00d", Some(1)),
     ];
-    ingest(&mut store, &FakeGit::default(), &id(), comments, 0).unwrap();
+    ingest(
+        &mut store,
+        &FakeGit::default(),
+        &id(),
+        comments,
+        &BTreeSet::new(),
+        0,
+    )
+    .unwrap();
 
     let comments = store.comments(&id()).unwrap();
     assert_eq!(comments.len(), 4);
@@ -122,15 +154,30 @@ fn an_edit_is_held_again_and_the_rest_is_known() {
     let mut store = FakeStore::with_item(1);
     let git = FakeGit::default();
     let first = vec![issue(1, "alice", "One"), issue(2, "bob", "Two")];
-    ingest(&mut store, &git, &id(), first.clone(), 1_000).unwrap();
+    ingest(
+        &mut store,
+        &git,
+        &id(),
+        first.clone(),
+        &BTreeSet::new(),
+        1_000,
+    )
+    .unwrap();
     store.release(&id(), 1).unwrap();
 
-    let again = ingest(&mut store, &git, &id(), first, 2_000).unwrap();
+    let again = ingest(&mut store, &git, &id(), first, &BTreeSet::new(), 2_000).unwrap();
     assert_eq!(again, Ingested::default());
 
     let edited = vec![issue(1, "alice", "One, edited"), issue(2, "bob", "Two")];
-    let ingested = ingest(&mut store, &git, &id(), edited, 3_000).unwrap();
-    assert_eq!(ingested, Ingested { new: 0, edited: 1 });
+    let ingested = ingest(&mut store, &git, &id(), edited, &BTreeSet::new(), 3_000).unwrap();
+    assert_eq!(
+        ingested,
+        Ingested {
+            new: 0,
+            edited: 1,
+            withdrawn: 0
+        }
+    );
     let comments = store.comments(&id()).unwrap();
     assert_eq!(comments[0].body, "One, edited");
     assert!(comments[0].external.as_ref().unwrap().pending);
@@ -139,11 +186,64 @@ fn an_edit_is_held_again_and_the_rest_is_known() {
 }
 
 #[test]
+fn a_held_comment_github_deleted_is_withdrawn() {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let first = vec![issue(1, "alice", "One"), issue(2, "bob", "Two")];
+    ingest(&mut store, &git, &id(), first, &BTreeSet::new(), 1_000).unwrap();
+    store.release(&id(), 1).unwrap();
+    let held = vec![
+        issue(1, "alice", "One, edited"),
+        issue(2, "bob", "Two"),
+        issue(3, "carol", "Three"),
+    ];
+    ingest(&mut store, &git, &id(), held, &BTreeSet::new(), 2_000).unwrap();
+    let all: BTreeSet<_> = (1..=3)
+        .map(|n| (PullCommentKind::IssueComment, n))
+        .collect();
+
+    // Missing from the list alone, they stay held.
+    let missed = ingest(&mut store, &git, &id(), Vec::new(), &BTreeSet::new(), 3_000).unwrap();
+    assert_eq!(missed, Ingested::default());
+    assert_eq!(store.held(&id()).unwrap().map(|h| h.first), Some(2_000));
+
+    let ingested = ingest(&mut store, &git, &id(), Vec::new(), &all, 3_000).unwrap();
+    assert_eq!(
+        ingested,
+        Ingested {
+            new: 0,
+            edited: 0,
+            withdrawn: 2
+        }
+    );
+    // The one no batch carried is gone; the others read as the agent got
+    // them.
+    let comments: Vec<_> = store
+        .comments(&id())
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.body, c.external.unwrap().pending))
+        .collect();
+    assert_eq!(comments, [("One".into(), false), ("Two".into(), false)]);
+    assert_eq!(store.held(&id()).unwrap(), None);
+    let again = ingest(&mut store, &git, &id(), Vec::new(), &all, 4_000).unwrap();
+    assert_eq!(again, Ingested::default());
+}
+
+#[test]
 fn a_closed_item_takes_no_more_comments() {
     let mut store = FakeStore::with_item(1);
     store.set_state(&id(), ItemState::Merged);
     let comments = vec![issue(1, "alice", "Late")];
-    let ingested = ingest(&mut store, &FakeGit::default(), &id(), comments, 0).unwrap();
+    let ingested = ingest(
+        &mut store,
+        &FakeGit::default(),
+        &id(),
+        comments,
+        &BTreeSet::new(),
+        0,
+    )
+    .unwrap();
     assert_eq!(ingested, Ingested::default());
     assert!(store.comments(&id()).unwrap().is_empty());
 }

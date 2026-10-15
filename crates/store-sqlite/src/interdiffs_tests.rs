@@ -1,4 +1,4 @@
-use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
+use mergegate_core::item::{FileMode, ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 use mergegate_core::viewed::ViewedStore;
 
@@ -57,6 +57,8 @@ fn file(path: &str, old: Option<&str>, change: Change) -> InterdiffFile {
                 old_path: None,
                 old_blob: old.map(Into::into),
                 new_blob: Some(format!("{path} new")),
+                old_mode: old.map(|_| FileMode::Regular),
+                new_mode: Some(FileMode::Executable),
             },
             additions: Some(1),
             deletions: old.map(|_| 1),

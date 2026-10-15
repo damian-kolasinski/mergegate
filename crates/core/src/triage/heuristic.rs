@@ -1,16 +1,24 @@
 //! Structural heuristics: a guess at how much a file needs the operator from
-//! its path and diff alone, so files rank sensibly with no guide and no judge.
-//! They only rank; a file's tier is the rules' alone.
+//! its path, modes and diff alone, so files rank sensibly with no guide and
+//! no judge. They only rank; a file's tier is the rules' alone.
 
 use std::sync::LazyLock;
 
 use regex::Regex;
 
 use crate::diff::{Content, LineKind};
+use crate::item::{ChangedFile, FileMode};
 
 /// Why the heuristics moved a file, the first that applies in this order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hint {
+    /// Becomes or stays a submodule, which pins another repository's code
+    /// the diff doesn't show.
+    Submodule,
+    /// Becomes or stays a symlink: its one line is where it points.
+    Symlink,
+    /// Changes the mode, as an exec bit, which no line shows.
+    Mode,
     Lockfile,
     Generated,
     Tests,
@@ -27,6 +35,9 @@ impl Hint {
     /// What the UI shows beside a file nothing else explains.
     pub fn describe(self) -> &'static str {
         match self {
+            Self::Submodule => "ranked high: submodule",
+            Self::Symlink => "ranked high: symlink",
+            Self::Mode => "ranked high: changes the file mode",
             Self::Lockfile => "ranked low: lockfile",
             Self::Generated => "ranked low: generated",
             Self::Tests => "ranked low: tests",
@@ -49,6 +60,7 @@ impl Hint {
             Self::Config => 10,
             Self::Signature => 20,
             Self::Migration => 30,
+            Self::Submodule | Self::Symlink | Self::Mode => 40,
         }
     }
 }
@@ -96,12 +108,19 @@ static DECLARATION: LazyLock<Regex> = LazyLock::new(|| {
 
 /// `content` is none when the diff isn't read, as once an item is abandoned.
 pub fn hint(
-    path: &str,
+    file: &ChangedFile,
     generated: bool,
     additions: Option<u64>,
     deletions: Option<u64>,
     content: Option<&Content>,
 ) -> Option<Hint> {
+    match (file.old_mode, file.new_mode) {
+        (_, Some(FileMode::Submodule)) => return Some(Hint::Submodule),
+        (_, Some(FileMode::Symlink)) => return Some(Hint::Symlink),
+        (Some(old), Some(new)) if old != new => return Some(Hint::Mode),
+        _ => {}
+    }
+    let path = file.path.as_str();
     let name = path.rsplit('/').next().unwrap_or(path);
     let dirs: Vec<&str> = path.split('/').rev().skip(1).collect();
     let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());

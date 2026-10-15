@@ -3,7 +3,7 @@
 
 mod ttl;
 
-pub use ttl::Ttl;
+pub use ttl::{Ttl, TtlError};
 
 use crate::store::StoreError;
 
@@ -99,10 +99,14 @@ pub fn set<S: SettingsStore>(
 }
 
 fn parse_ttl(value: &str) -> Result<Ttl, SettingsError> {
-    Ttl::parse(value).ok_or_else(|| SettingsError::InvalidValue {
+    Ttl::parse(value).map_err(|e| SettingsError::InvalidValue {
         key: ATTACHMENT_TTL,
         value: value.into(),
-        expected: "a duration such as 2d, 12h, 30m or 0s",
+        expected: match e {
+            TtlError::Malformed => "a duration such as 2d, 12h, 30m or 0s",
+            // Ttl::MAX as it prints, which a test holds this to.
+            TtlError::TooLong => "at most 3650d",
+        },
     })
 }
 

@@ -153,19 +153,36 @@ fn inserts_a_trusted_rule_last() {
     assert!(text.starts_with(FILE), "{text}");
     assert_eq!(parse(&text).unwrap()[1], rule(2, Tier::Trusted));
     for empty in ["", "# nothing yet\n"] {
-        let text = insert(empty, &rule(1, Tier::Review), Place::First).unwrap();
-        assert_eq!(parse(&text).unwrap(), [rule(1, Tier::Review)]);
-        assert!(text.starts_with(empty.trim_end()), "{text}");
+        for at in [Place::First, Place::Last] {
+            let text = insert(empty, &rule(1, Tier::Review), at).unwrap();
+            assert_eq!(parse(&text).unwrap(), [rule(1, Tier::Review)]);
+            assert!(text.starts_with(empty.trim_end()), "{text}");
+        }
     }
 }
 
 #[test]
 fn refuses_to_insert_where_it_would_change_other_rules() {
-    let inline = "rule = [{ id = \"R1\", tier = \"review\", path = \"a\", reason = \"b\" }]\n";
+    let inline =
+        "rule = [\n  { id = \"R1\", tier = \"review\", path = \"a\", reason = \"b\" },\n]\n";
     assert_eq!(parse(inline).unwrap().len(), 1);
-    let refused = insert(inline, &rule(2, Tier::Review), Place::First).unwrap_err();
+    for text in [inline, "rule = []\n"] {
+        for at in [Place::First, Place::Last] {
+            let refused = insert(text, &rule(2, Tier::Review), at).unwrap_err();
+            assert_eq!(
+                refused,
+                "couldn't add R2 to the file's `rule = [...]` list; write its rules as \
+                 [[rule]] tables instead",
+                "{text}"
+            );
+        }
+    }
+    // Tables under a quoted header aren't a `rule = [...]` list, though no
+    // `[[rule]]` line is found to put the new rule above.
+    let quoted = "[[\"rule\"]]\nid = \"R1\"\ntier = \"review\"\npath = \"a\"\nreason = \"b\"\n";
+    assert_eq!(parse(quoted).unwrap().len(), 1);
     assert_eq!(
-        refused,
+        insert(quoted, &rule(2, Tier::Review), Place::First).unwrap_err(),
         "couldn't add R2 to the file without changing its other rules"
     );
     let broken = insert("[[rule]\n", &rule(2, Tier::Review), Place::First);

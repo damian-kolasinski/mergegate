@@ -87,7 +87,7 @@ impl RulesStore for Store {
         tx.commit().map_err(StoreError::new)
     }
 
-    fn next_rule_id(&self, project: &ProjectName) -> Result<RuleId, StoreError> {
+    fn next_rule_id(&self, project: &ProjectName) -> Result<Option<RuleId>, StoreError> {
         let last: Option<u32> = self
             .conn
             .query_row(
@@ -98,7 +98,7 @@ impl RulesStore for Store {
             )
             .optional()
             .map_err(StoreError::new)?;
-        Ok(RuleId::new(last.unwrap_or(0) + 1))
+        Ok(last.unwrap_or(0).checked_add(1).map(RuleId::new))
     }
 
     fn insert_proposal(

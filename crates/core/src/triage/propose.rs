@@ -75,6 +75,9 @@ pub enum ChangeError {
     NotPending(RuleId, ProposalState),
     #[error("no edit to the rules file waits for the operator")]
     NoEdit,
+    /// A hand-added rule took the largest ID, and IDs aren't reused.
+    #[error("every rule ID up to {0} is used, so no rule can be added")]
+    NoIdLeft(RuleId),
     #[error(transparent)]
     Rule(#[from] RuleError),
     /// The hub only writes to a file it can parse, so the operator fixes it
@@ -108,7 +111,9 @@ pub fn propose<S: RulesStore + ItemStore + DiffStore>(
     // preview compares with the rules the file holds.
     let mut moved = synced(store, file, project)?;
     let rule = Rule {
-        id: store.next_rule_id(project)?,
+        id: store
+            .next_rule_id(project)?
+            .ok_or(ChangeError::NoIdLeft(RuleId::new(u32::MAX)))?,
         tier: rule.tier,
         path: rule.path,
         kind: rule.kind,

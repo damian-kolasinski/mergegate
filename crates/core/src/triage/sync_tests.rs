@@ -232,3 +232,18 @@ fn a_hand_added_rule_cant_take_a_retired_id() {
         Synced::Applied(_)
     ));
 }
+
+#[test]
+fn the_largest_id_leaves_no_next_one_and_still_syncs() {
+    let mut store = FakeStore::with_item(1);
+    let file = FakeRulesFile::default();
+    let last = rule(u32::MAX, Tier::Review, "src/**");
+    approved(&mut store, &file, &Rules::new(vec![last.clone()]).unwrap());
+    assert_eq!(sync(&mut store, &file, &app()).unwrap(), Synced::Unchanged);
+
+    file.edit([&last, &rule(5, Tier::Review, "docs/**")]);
+    assert_eq!(
+        sync(&mut store, &file, &app()).unwrap(),
+        Synced::Invalid("R5 is taken by an earlier rule, and no rule ID is left".into())
+    );
+}

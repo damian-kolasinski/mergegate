@@ -11,7 +11,7 @@ use rusqlite::{OptionalExtension, Row, Transaction, params};
 
 use crate::projects::backend_named;
 use crate::rules::{columns, read_triage};
-use crate::{Store, interdiffs, viewed};
+use crate::{Store, interdiffs, modes, viewed};
 
 /// The files to review in revision `r` of item `i`: those in the review
 /// tier, and the trusted ones the project's judge promotes.
@@ -74,6 +74,15 @@ impl ItemStore for Store {
         let rows = stmt
             .query_map(params![project.as_str(), limit], read)
             .map_err(StoreError::new)?;
+        rows.map(|row| row.map_err(StoreError::new)?).collect()
+    }
+
+    fn closed_items(&self) -> Result<Vec<Item>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("{SELECT} WHERE NOT {OPEN} ORDER BY i.id"))
+            .map_err(StoreError::new)?;
+        let rows = stmt.query_map([], read).map_err(StoreError::new)?;
         rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
@@ -140,7 +149,7 @@ impl ItemStore for Store {
             .conn
             .prepare_cached(
                 "SELECT f.path, f.old_path, f.old_blob, f.new_blob, f.additions, f.deletions,
-                        f.generated, f.tier, f.rule, f.guard, f.why
+                        f.generated, f.tier, f.rule, f.guard, f.why, f.old_mode, f.new_mode
                  FROM revision_files f
                  JOIN items i ON i.id = f.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -156,12 +165,18 @@ impl ItemStore for Store {
                         Ok(triage) => triage,
                         Err(e) => return Ok(Err(e)),
                     };
+                    let [old_mode, new_mode] = match modes::read(row, 11)? {
+                        Ok(modes) => modes,
+                        Err(e) => return Ok(Err(e)),
+                    };
                     Ok(Ok(FileStat {
                         file: ChangedFile {
                             path: row.get(0)?,
                             old_path: row.get(1)?,
                             old_blob: row.get(2)?,
                             new_blob: row.get(3)?,
+                            old_mode,
+                            new_mode,
                         },
                         additions: row.get::<_, Option<i64>>(4)?.map(|n| n as u64),
                         deletions: row.get::<_, Option<i64>>(5)?.map(|n| n as u64),
@@ -246,6 +261,17 @@ impl ItemStore for Store {
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)?;
         self.written(id)
+    }
+
+    fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE items SET title = ?3
+                 WHERE number = ?2 AND project_id = (SELECT id FROM projects WHERE name = ?1)",
+                params![id.project().as_str(), id.number() as i64, title],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
     }
 
     fn set_priority(
@@ -340,12 +366,13 @@ fn insert_revision(
         .prepare_cached(
             "INSERT INTO revision_files
                  (item_id, revision, position, path, old_path, old_blob, new_blob,
-                  additions, deletions, generated, tier, rule, guard, why)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                  additions, deletions, generated, tier, rule, guard, why, old_mode, new_mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         )
         .map_err(StoreError::new)?;
     for (position, file) in revision.files.iter().enumerate() {
         let [tier, rule, guard, why] = columns(&file.triage);
+        let [old_mode, new_mode] = modes::columns(&file.file);
         stmt.execute(params![
             item_id,
             number,
@@ -361,6 +388,8 @@ fn insert_revision(
             rule,
             guard,
             why,
+            old_mode,
+            new_mode,
         ])
         .map_err(StoreError::new)?;
     }

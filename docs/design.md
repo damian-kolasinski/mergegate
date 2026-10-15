@@ -130,7 +130,7 @@ Principles
 - **A merge cut short by a restart** leaves the item in *merging*, where Retry runs it again. If the push had landed, the merged tree equals the target's and the item closes as merged at the target commit.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
 - **Conflicts are detected early.** The hub test-merges every open item into its target on each submit, after each of its own merges, and by fetching every project's target each minute, so a target moved outside the hub is seen too. An item that no longer merges cleanly goes back to its agent with the same `merge.conflict` and moves to *changes requested*, before the operator gets to it; the operator's draft comments stay. Each revision hears of it at most once, and items in *merging* are left to their merge. The fetches and test-merges run without holding the hub up: each target is fetched aside, to `refs/mergegate/watch/<target>`, and staging's target only fast-forwards to it, so an agent told to rebase rebases onto where the target is. Open items of one project and target are also test-merged into each other: the inbox shows which ones conflict, and no agent hears of it, since only landing one makes it real for the other.
-- **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins (a merged item keeps its newest revision's) and deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history and that pin, which a squash needs when it auto-merged a file the target also changed; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
+- **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins (a merged item keeps its newest revision's) and its branch in staging, unless that moved past the newest revision or an open item holds it, so a branch named under it (`feat/next` after `feat`) can be pushed; the hub retries that for every closed item when it starts. It also deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history and that pin, which a squash needs when it auto-merged a file the target also changed; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
 
 ### 5.1 Stacked items
 
@@ -210,8 +210,9 @@ mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     --for operator: only an event from the operator ends the wait, which then returns every
     unacknowledged event with it, so acknowledging never skips one. --timeout 0 waits until an event.
     External comments come in batches, not a trickle: the hub holds an item's GitHub comments until
-    they have been quiet for 60s and every bot in the project's `bots` has posted since the newest
-    push (or 20 minutes have passed since it), and sends them 20 minutes after the first regardless.
+    they have been quiet for 60s and every bot in the project's `bots` has posted or edited a
+    comment GitHub dates at or after the newest push (or 20 minutes have passed since it), and
+    sends them 20 minutes after the first regardless.
     A read that returns other events takes the held comments with it.
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
@@ -273,7 +274,11 @@ The cursor is the event's position in the item's log, and comment IDs are hub-wi
 
 Event types: `review.submitted`, `external.comments` (each comment carries `external`: its author, whether a bot, its kind (`review_comment`, `issue_comment` or `review`) and its GitHub URL; one that can't be placed on a line has no anchor, and `edited` lists those an earlier batch carried with another body), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit and the branch, which git sees as unmerged), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (the operator overrode the agent's rejection of an external comment: the comment and the operator's reply, sent at once rather than with a review).
 
-External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. Deleted comments are ignored, as are the operator's own (the account `gh` signs in as).
+External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. The operator's own comments (the account `gh` signs in as) are ignored.
+
+A comment deleted on GitHub while the hub still holds it is withdrawn, but only once GitHub, asked for that comment by itself, answers 404: lists come a page at a time by offset, so one read while an earlier comment is deleted can skip a comment that's still there. One no batch carried and no one answered goes, with the operator's draft replies on it; one the agent already got stays as the agent got it, draft replies included, and only its held edit is dropped. A comment deleted after it went out stays as it is.
+
+An expected bot has reviewed the newest push once GitHub dates a comment of its at or after the push: a comment by when it was posted or last edited, so a bot that keeps one summary comment counts once it edits it, and a review by its submission. When the hub saw the comment or the edit doesn't matter, so a bot's review of the revision before, read late, doesn't count.
 
 ### 6.4 Push
 
@@ -327,7 +332,7 @@ The files to review are ordered:
 
 That is the default, `--order guide`. With `mg judge set … --order judge` the operator, or their agent, lets the judge lead instead: its scores order every file to review, a file it skipped again counting as 50, then the guide's list breaks ties, then the heuristics and path. Nothing is "raised by the judge" then, since the judge places every file; until it has scored the revision, the order is the guide's.
 
-The trusted files come last, in path order. The heuristics read only paths and the diff, with no parse: lockfiles, generated files, tests, docs and pure deletions sink; migrations, changed declarations (a function, type or export) and config rise. A file nothing else explains shows the heuristic's hint ("ranked low: tests"). Promotion and order are applied when the item is read, so a rule change re-sorts without a new judge call.
+The trusted files come last, in path order. The heuristics read only paths, modes and the diff, with no parse: lockfiles, generated files, tests, docs and pure deletions sink; migrations, changed declarations (a function, type or export), config, symlinks, submodules and mode changes rise. A file nothing else explains shows the heuristic's hint ("ranked low: tests"). Promotion and order are applied when the item is read, so a rule change re-sorts without a new judge call.
 
 The asymmetry matters: the authoring agent grades its own work, and the judge can be wrong. Hiding a file is therefore always the result of a rule the operator approved.
 
@@ -349,11 +354,11 @@ mg rules propose --tier review  --path '**/*View.swift' --diff-matches 'Navigati
 - **A hand edit that loosens waits too** (tech-stack §7): one that only adds `review` rules or removes `trusted` ones applies, anything else waits as one pending change that approve accepts and reject reverts in the file. An invalid file is ignored, and its error shows in the UI and `mg rules list`.
 - **The preview** runs once, when a change arrives, over the project's open items and its last 20 merged ones.
 
-Matchers (v1): path glob (`*` stays within a directory), change kind (added / deleted / renamed / generated / modified), changed-line count (added + removed), diff-content regex over the added and removed lines. A rule matches when all its matchers do. Generated means `linguist-generated` as the item's base tree sets it. A matcher that can't be sure, as with a rename's two paths or a binary diff, gives whichever answer keeps the file in `review`. Rules are ordered, each has an ID (`R<n>`, never reused) and a reason that shows in the UI. When the approved rules change, every open item is triaged again.
+Matchers (v1): path glob (`*` stays within a directory), change kind (added / deleted / renamed / generated / modified), changed-line count (added + removed), diff-content regex over the added and removed lines. A rule matches when all its matchers do. Generated means `linguist-generated` as the item's base tree sets it. A matcher that can't be sure, as with a rename's two paths or a binary diff, gives whichever answer keeps the file in `review`. So no `trusted` rule matches a file whose mode or type changed, a symlink or a submodule: no matcher reads what changed there. Rules are ordered, each has an ID (`R<n>`, never reused) and a reason that shows in the UI. When the approved rules change, every open item is triaged again.
 
 ### 7.4 Judge providers
 
-Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
+Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated, modes) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
 
 | Provider | Notes |
 |---|---|
@@ -367,6 +372,7 @@ The command reads the change as JSON on stdin and prints its verdicts on stdout.
 stdin:  {"item": "app#42", "revision": 2, "title": "…", "guide": "…" | null,
          "files": [{"path", "old_path", "change": "added|deleted|renamed|modified",
                     "additions", "deletions", "tier": "review|trusted", "generated",
+                    "old_mode", "new_mode": "100644|100755|120000|160000" | null,
                     "diff": "unified hunks" | null}]}
 stdout: {"files": [{"path", "importance": 1-100, "reason"?: "one line", "promote"?: 0-1}]}
 ```
@@ -447,7 +453,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A viewed file collapses to its header and counts toward the viewed total.
+- **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A file's header names what its lines can't show: a changed mode or type ("Made executable (mode 100644 → 100755)"), a symlink, a submodule's commits. A viewed file collapses to its header and counts toward the viewed total.
 - **Revision selector** offers *All changes* (against the merge-base) and *Since rK* for each earlier revision, defaulting to since the last revision you reviewed, or all changes when that is the newest or there's none. A closed item shows all changes only.
 - **Since rK shows the interdiff only,** over a moved target: rK is replayed onto the newest revision's base and diffed against the newest, so what the target changed meanwhile drops out. A file the replay conflicts on can't be told apart from the target's changes, so it shows its whole own diff, marked as such. Files unchanged since rK fold away under the file list and can still be marked viewed; a file rK changed that the newest no longer does shows as *dropped*. The old side is a replay no revision has, so only the new side takes comments. Interdiffs from every earlier revision are computed when a revision is submitted, so switching is a read.
 - **Viewed marks follow a file while it's unchanged:** marking or unmarking it on rK applies to every later revision where it hasn't changed since rK, then and when a later revision arrives.

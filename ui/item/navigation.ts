@@ -5,18 +5,18 @@ import { type Row as Line, rowsOf } from "../diff-view/patch";
 
 /**
  * Where the operator is in the diff: the current file, and the line cursor
- * that `j/k` walk over every file's lines as one list, a viewed file's
+ * that `j/k` walk over every file's lines as one list, a collapsed file's
  * hidden.
  */
 export function useNavigation(options: {
   files: () => File[];
-  viewed: () => ReadonlySet<string>;
+  collapsed: () => ReadonlySet<string>;
   view: () => DiffViewControl | undefined;
 }) {
   const lines = createMemo(() =>
     options
       .files()
-      .filter((file) => !options.viewed().has(file.path))
+      .filter((file) => !options.collapsed().has(file.path))
       .flatMap(rowsOf),
   );
   const order = createMemo(

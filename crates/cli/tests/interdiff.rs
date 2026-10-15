@@ -168,6 +168,8 @@ fn f7_shows_what_changed_since_the_last_review_over_a_moved_base() {
         inbox["needs_you"][0]["changed_since"],
         json!({ "revision": 1, "files": 2 })
     );
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    assert!(text.contains(" · 2 changed since r1)"), "{text}");
 }
 
 #[test]
@@ -273,4 +275,43 @@ fn f7_a_comment_goes_on_lines_the_interdiff_shows() {
     let reply = draft("old.rs", 1);
     assert_eq!(reply.status, 404, "{}", reply.body);
     assert_eq!(json_of(&reply)["error"]["code"], "file_not_found");
+}
+
+#[test]
+fn f7_a_file_moved_away_since_the_last_review_is_changed() {
+    let env = env();
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    let lines = |word: &str| -> String { (1..=20).map(|n| format!("{word} {n}\n")).collect() };
+    repo.commit_files("Base", &[("a.txt", &lines("line"))]);
+    env.mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    env.mg_at(repo.root(), &["--json", "init"]).assert_code(0);
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Rewrite", &[("a.txt", &lines("rewritten"))]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    mark(&env, 1, "a.txt", true);
+    // r2 moves r1's a.txt to b.txt: against the base that deletes a.txt and
+    // adds b.txt, though against r1 git sees a rename.
+    repo.git(["mv", "a.txt", "b.txt"]);
+    repo.git(["commit", "--quiet", "-m", "Move"]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+
+    let diff = get(&env, "/api/items/app%231?since=1");
+    let mut shown = files(&diff);
+    shown.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        shown,
+        [
+            file("a.txt", json!("changed"), false),
+            file("b.txt", json!("changed"), false),
+        ]
+    );
+    let a = diff["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["path"] == "a.txt")
+        .unwrap();
+    assert_eq!(a["deletions"], 20, "{a}");
 }

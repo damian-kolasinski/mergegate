@@ -13,7 +13,7 @@ use mergegate_core::item::{self, Abandon, ItemId};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{feedback, items};
+use crate::{branches, feedback, items};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/items/{id}/abandon", post(abandon))
@@ -34,7 +34,11 @@ async fn abandon(
         reason: request.reason,
     };
     let item = state
-        .blocking_github(move |store, git, github| item::abandon(store, git, github, request))
+        .blocking_github(move |store, git, github| {
+            let item = item::abandon(store, git, github, request)?;
+            branches::drop(store, git, &item.id);
+            Ok(item)
+        })
         .await
         .map_err(items::failure)?;
     state.events.logged();

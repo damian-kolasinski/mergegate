@@ -5,6 +5,7 @@
 
 use std::fmt::Write;
 
+use mergegate_core::item::FileMode;
 use mergegate_core::judge::{JudgeError, Request};
 use mergegate_core::triage::Tier;
 
@@ -84,11 +85,26 @@ fn summary(request: &Request) -> String {
         if let Some(old) = &file.old_path {
             let _ = write!(out, " from {old}");
         }
+        let kind = file.new_mode.or(file.old_mode);
         match (file.additions, file.deletions) {
             (Some(added), Some(removed)) => {
                 let _ = write!(out, ", +{added} -{removed}");
             }
+            _ if kind == Some(FileMode::Submodule) => {}
             _ => out.push_str(", binary"),
+        }
+        // A mode changes no line, and a symlink's one line reads as text.
+        if let (Some(old), Some(new)) = (file.old_mode, file.new_mode)
+            && old != new
+        {
+            let _ = write!(out, ", mode {} → {}", old.as_str(), new.as_str());
+        }
+        match kind {
+            Some(FileMode::Symlink) => out.push_str(", a symlink: its line is its target"),
+            Some(FileMode::Submodule) => {
+                out.push_str(", a submodule: its object is a commit of another repository");
+            }
+            _ => {}
         }
         if file.generated {
             out.push_str(", generated");

@@ -50,6 +50,9 @@ pub fn approve<
         ItemState::Merging => return Err(MergeError::Merging(id)),
         ItemState::Merged | ItemState::Abandoned => return Err(MergeError::Closed(id)),
     }
+    if revision == 0 || revision > item.revision.number {
+        return Err(MergeError::NoRevision { id, revision });
+    }
     if revision != item.revision.number {
         return Err(MergeError::Stale {
             id,

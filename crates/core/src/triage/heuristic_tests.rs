@@ -1,5 +1,22 @@
 use super::*;
 use crate::diff::{Hunk, Line};
+use crate::item::{ChangedFile, FileMode};
+
+/// A regular file modified at `path`.
+fn changed(path: &str) -> ChangedFile {
+    moded(path, Some(FileMode::Regular), Some(FileMode::Regular))
+}
+
+fn moded(path: &str, old: Option<FileMode>, new: Option<FileMode>) -> ChangedFile {
+    ChangedFile {
+        path: path.into(),
+        old_path: None,
+        old_blob: old.map(|_| "old".into()),
+        new_blob: new.map(|_| "new".into()),
+        old_mode: old,
+        new_mode: new,
+    }
+}
 
 fn text(lines: &[(LineKind, &str)]) -> Content {
     Content::Text(vec![Hunk {
@@ -48,7 +65,7 @@ fn hints_by_path() {
     ];
     for &(path, want) in cases {
         assert_eq!(
-            hint(path, false, Some(1), Some(0), Some(&body)),
+            hint(&changed(path), false, Some(1), Some(0), Some(&body)),
             want,
             "{path}"
         );
@@ -58,11 +75,11 @@ fn hints_by_path() {
 #[test]
 fn generated_files_sink_unless_they_are_lockfiles() {
     assert_eq!(
-        hint("src/api.ts", true, Some(1), Some(0), None),
+        hint(&changed("src/api.ts"), true, Some(1), Some(0), None),
         Some(Hint::Generated)
     );
     assert_eq!(
-        hint("Cargo.lock", true, Some(1), Some(0), None),
+        hint(&changed("Cargo.lock"), true, Some(1), Some(0), None),
         Some(Hint::Lockfile)
     );
 }
@@ -107,7 +124,13 @@ fn hints_by_diff() {
     ];
     for &(lines, want) in cases {
         assert_eq!(
-            hint("src/a.rs", false, Some(1), Some(1), Some(&text(lines))),
+            hint(
+                &changed("src/a.rs"),
+                false,
+                Some(1),
+                Some(1),
+                Some(&text(lines))
+            ),
             want,
             "{lines:?}"
         );
@@ -118,11 +141,46 @@ fn hints_by_diff() {
 fn a_change_that_only_deletes_sinks() {
     let removed = text(&[(LineKind::Removed, "pub fn old() {}")]);
     assert_eq!(
-        hint("src/a.rs", false, Some(0), Some(3), Some(&removed)),
+        hint(
+            &changed("src/a.rs"),
+            false,
+            Some(0),
+            Some(3),
+            Some(&removed)
+        ),
         Some(Hint::OnlyDeletes)
     );
     // A binary file has no counts to tell by.
-    assert_eq!(hint("logo.png", false, None, None, None), None);
+    assert_eq!(hint(&changed("logo.png"), false, None, None, None), None);
+}
+
+#[test]
+fn a_mode_the_lines_dont_show_rises_whatever_the_path() {
+    use FileMode::{Executable, Regular, Submodule, Symlink};
+    let line = text(&[(LineKind::Added, "/etc/passwd")]);
+    let cases = [
+        (Some(Regular), Some(Executable), Some(Hint::Mode)),
+        (Some(Executable), Some(Regular), Some(Hint::Mode)),
+        (Some(Symlink), Some(Regular), Some(Hint::Mode)),
+        (Some(Regular), Some(Symlink), Some(Hint::Symlink)),
+        (None, Some(Symlink), Some(Hint::Symlink)),
+        (Some(Symlink), Some(Symlink), Some(Hint::Symlink)),
+        (None, Some(Submodule), Some(Hint::Submodule)),
+        (Some(Submodule), Some(Submodule), Some(Hint::Submodule)),
+        // Adding an executable, or deleting a symlink, changes no mode.
+        (None, Some(Executable), Some(Hint::Docs)),
+        (Some(Symlink), None, Some(Hint::Docs)),
+        // Modes from before the hub kept them say nothing.
+        (None, None, Some(Hint::Docs)),
+    ];
+    for (old, new, want) in cases {
+        let file = moded("docs/README.md", old, new);
+        assert_eq!(
+            hint(&file, false, Some(1), Some(1), Some(&line)),
+            want,
+            "{old:?} -> {new:?}"
+        );
+    }
 }
 
 #[test]
@@ -134,7 +192,14 @@ fn sinks_weigh_less_than_rises() {
         Hint::Tests,
         Hint::OnlyDeletes,
     ];
-    let rises = [Hint::Config, Hint::Signature, Hint::Migration];
+    let rises = [
+        Hint::Config,
+        Hint::Signature,
+        Hint::Migration,
+        Hint::Mode,
+        Hint::Symlink,
+        Hint::Submodule,
+    ];
     assert!(sinks.iter().all(|h| h.weight() < 0));
     assert!(rises.iter().all(|h| h.weight() > 0));
 }
