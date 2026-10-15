@@ -17,11 +17,61 @@ pub(super) fn check() -> Option<Check> {
     // Canonical, so a `mergegate` linked to this file is this `mg`.
     let this = fs::canonicalize(std::env::current_exe().ok()?).ok()?;
     let path = std::env::var_os("PATH").unwrap_or_default();
+    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    let zdotdir = std::env::var_os("ZDOTDIR").map(PathBuf::from);
+    let profile = profile(
+        std::env::var_os("SHELL").as_deref(),
+        &home,
+        zdotdir.as_deref(),
+    );
     Some(judge(
         &this,
         first_on(&path).as_deref(),
         Path::new(MACOS_EDITOR),
+        &shown(&profile, &home),
     ))
+}
+
+/// The file a login shell of `shell` reads, where a PATH set stays set:
+/// macOS's `/etc/zprofile` runs `path_helper`, which puts `/usr/bin` back
+/// ahead of what `~/.zshenv` set, and agents' login shells don't read
+/// `~/.zshrc`.
+fn profile(shell: Option<&OsStr>, home: &Path, zdotdir: Option<&Path>) -> PathBuf {
+    let name = shell
+        .map(Path::new)
+        .and_then(Path::file_name)
+        .and_then(OsStr::to_str);
+    match name {
+        Some("zsh") => zdotdir.unwrap_or(home).join(".zprofile"),
+        // bash reads the first of these it finds, so a new
+        // `~/.bash_profile` would hide an existing `~/.profile`.
+        Some("bash") => [".bash_profile", ".bash_login"]
+            .map(|file| home.join(file))
+            .into_iter()
+            .find(|file| file.exists())
+            .unwrap_or_else(|| home.join(".profile")),
+        _ => home.join(".profile"),
+    }
+}
+
+/// `file` with `home` as `~`, as the operator would type it, quoted when
+/// the shell would split or expand it.
+fn shown(file: &Path, home: &Path) -> String {
+    let quoted = |path: &Path| {
+        let path = path.display().to_string();
+        let plain = path
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._/-".contains(c));
+        if plain {
+            path
+        } else {
+            format!("'{}'", path.replace('\'', r"'\''"))
+        }
+    };
+    match file.strip_prefix(home) {
+        Ok(rest) if !home.as_os_str().is_empty() => format!("~/{}", quoted(rest)),
+        _ => quoted(file),
+    }
 }
 
 /// The `mg` a shell runs: the first executable file of that name in `path`.
@@ -34,7 +84,7 @@ fn first_on(path: &OsStr) -> Option<PathBuf> {
         })
 }
 
-fn judge(this: &Path, found: Option<&Path>, editor: &Path) -> Check {
+fn judge(this: &Path, found: Option<&Path>, editor: &Path, profile: &str) -> Check {
     let shims = mise_shims(this);
     let ahead = shims
         .clone()
@@ -45,7 +95,10 @@ fn judge(this: &Path, found: Option<&Path>, editor: &Path) -> Check {
         message,
         fix: match status {
             CheckStatus::Ok => None,
-            _ => Some(format!("export PATH=\"{}:$PATH\"", ahead.display())),
+            _ => Some(format!(
+                "echo 'export PATH=\"{}:$PATH\"' >> {profile}",
+                ahead.display()
+            )),
         },
     };
     let this_shown = this.display();
@@ -55,7 +108,8 @@ fn judge(this: &Path, found: Option<&Path>, editor: &Path) -> Check {
             format!("no mg on PATH, so agents can't run this one ({this_shown})"),
         );
     };
-    if same_file(found, this) {
+    // A release ships `mergegate` as a copy of the `mg` beside it.
+    if same_file(found, this) || same_file(found, &this.with_file_name("mg")) {
         return check(
             CheckStatus::Ok,
             format!("mg on PATH is this one, {this_shown}"),
@@ -71,7 +125,7 @@ fn judge(this: &Path, found: Option<&Path>, editor: &Path) -> Check {
         return check(
             CheckStatus::Fail,
             format!(
-                "mg on PATH is {}, macOS's text editor, not this mg ({this_shown})",
+                "mg on PATH is {}, a text editor (Micro GNU Emacs), not this mg ({this_shown})",
                 found.display()
             ),
         );

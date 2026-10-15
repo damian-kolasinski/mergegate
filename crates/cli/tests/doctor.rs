@@ -136,13 +136,21 @@ fn another_mg_first_on_path_warns_with_the_folder_to_put_ahead() {
     )
     .unwrap();
     let path = format!("{}:/usr/bin:/bin", other.display());
-    let run = env.mg_with_env(&["--json", "doctor"], &[("PATH", &path)]);
+    let run = env.mg_with_env(
+        &["--json", "doctor"],
+        &[("PATH", &path), ("SHELL", "/bin/zsh")],
+    );
     let path_check = check(&run.json(), "path").clone();
     assert_eq!(path_check["status"], "warn");
     let mg = Path::new(env!("CARGO_BIN_EXE_mg"));
-    assert_eq!(
-        path_check["fix"],
-        format!("export PATH=\"{}:$PATH\"", mg.parent().unwrap().display())
+    let fix = path_check["fix"].as_str().unwrap();
+    let export = format!(
+        "echo 'export PATH=\"{}:$PATH\"' >> ",
+        mg.parent().unwrap().display()
+    );
+    assert!(
+        fix.starts_with(&export) && fix.ends_with(".zprofile"),
+        "{fix}"
     );
 }
 

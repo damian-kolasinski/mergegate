@@ -1,9 +1,17 @@
-/* The header's note and button, in CodeView's 44px header. */
+/* The header's note and buttons, in CodeView's 44px header. A grid, so the
+   note's column can give its whole width while the buttons keep theirs: the
+   header can shrink to the buttons and no further. */
 .header {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: auto;
   min-width: 0;
   align-items: center;
   gap: var(--space-2);
+}
+
+.header.noted {
+  grid-template-columns: minmax(0, auto);
 }
 
 /* Over the whole screen; a click outside the dialog closes it. */

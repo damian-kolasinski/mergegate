@@ -97,6 +97,43 @@ test("f11 a long reason gives way to the file's name in its header", async ({
   );
 });
 
+test("f11 a name cut short keeps the header's counts and box in it", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  const path = `src/${"deeply/nested/".repeat(8)}parser.rs`;
+  app.submit("parser", "Split out the parser", { [path]: "fn parse() {}\n" });
+  const guide = join(hub.root, "guide.md");
+  writeFileSync(
+    guide,
+    `Splits parsing out.\n\n## Files\n\n- \`${path}\` — ${"the new parser, ".repeat(20)}\n`,
+  );
+  hub.mg(["submit", "--guide", guide], app.dir);
+  await page.setViewportSize({ width: 900, height: 700 });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const header = page.locator("[data-diffs-header]").first();
+  const title = header.locator("[data-title]");
+  await expect(title).toHaveText(path);
+  expect(await title.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+    true,
+  );
+  const box = await header.boundingBox();
+  for (const inside of [
+    header.locator("[data-additions-count]"),
+    page.getByRole("region", { name: "Diff" }).getByLabel(`Viewed ${path}`),
+  ]) {
+    const shown = await inside.boundingBox();
+    expect(
+      box &&
+        shown &&
+        shown.x >= box.x &&
+        shown.x + shown.width <= box.x + box.width,
+    ).toBe(true);
+  }
+});
+
 test("f11 without a guide there is no intent", async ({ page, hub }) => {
   const app = hub.project("app");
   app.submit("copy", "Fix the copy", { "README.md": "# app\n" });

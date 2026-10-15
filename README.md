@@ -100,7 +100,7 @@ Or build from source (needs Rust, Node 22 and pnpm for the UI):
 MG_REQUIRE_UI=1 cargo install --locked --git https://github.com/damian-kolasinski/mergegate mg
 ```
 
-macOS ships an unrelated `/usr/bin/mg` text editor. Both installs also put `mg` on your `PATH` as `mergegate`, which nothing else claims: `mergegate doctor` says which `mg` your `PATH` finds and prints the `export PATH=...` that puts mergegate's first.
+macOS ships an unrelated `/usr/bin/mg` text editor. Both installs also put `mg` on your `PATH` as `mergegate`, which nothing else claims: `mergegate doctor` says which `mg` your `PATH` finds and prints the line that puts mergegate's first, appended to the profile your login shell reads (`~/.zprofile` for zsh). Put it there, not in `~/.zshenv`, which macOS's `/etc/zprofile` overrides, or only in `~/.zshrc`, which the login shells agents start don't read.
 
 ## Quick start
 
