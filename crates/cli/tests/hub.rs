@@ -1,12 +1,14 @@
 //! Running the hub: `mg hub start | stop | status` against real hub processes.
 
+use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
+use std::process::Command;
 use std::time::Duration;
 
-use serde_json::json;
+use serde_json::{Value, json};
 use testkit::{Env, http};
 
 fn env() -> Env {
@@ -50,7 +52,7 @@ impl Paused {
     fn new(pid: u64) -> Self {
         let pid = pid.to_string();
         assert!(
-            std::process::Command::new("kill")
+            Command::new("kill")
                 .args(["-STOP", &pid])
                 .status()
                 .unwrap()
@@ -62,9 +64,7 @@ impl Paused {
 
 impl Drop for Paused {
     fn drop(&mut self) {
-        let _ = std::process::Command::new("kill")
-            .args(["-CONT", &self.0])
-            .status();
+        let _ = Command::new("kill").args(["-CONT", &self.0]).status();
     }
 }
 
@@ -84,6 +84,58 @@ fn a_hub_that_does_not_answer_is_reported_as_such_not_as_stopped() {
     );
     let status = env.mg(&["--json", "hub", "status"]).assert_code(0).json();
     assert_eq!(status["unresponsive"], true);
+}
+
+/// Takes `env`'s hub lock, as a starting hub does before it answers.
+fn hold_lock(env: &Env) -> File {
+    let file = File::options()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(env.home().join("hub.lock"))
+        .unwrap();
+    file.lock().unwrap();
+    file
+}
+
+#[test]
+fn a_command_waits_for_a_hub_that_is_starting() {
+    let other = env();
+    other.start_hub();
+    let env = env();
+    let lock = hold_lock(&env);
+    let inbox = env.spawn(&["--json", "inbox"]);
+    std::thread::sleep(Duration::from_millis(500));
+    // A hub writes hub.json once it answers; another home's hub stands in.
+    let info = env.home().join("hub.json");
+    std::fs::copy(other.home().join("hub.json"), &info).unwrap();
+    let inbox = inbox.wait_with_output().unwrap();
+    // So this home's teardown leaves the other's hub to its own.
+    std::fs::remove_file(&info).unwrap();
+    drop(lock);
+    let stdout = String::from_utf8_lossy(&inbox.stdout);
+    assert_eq!(inbox.status.code(), Some(0), "{stdout}");
+}
+
+#[test]
+fn a_hub_that_never_answers_names_no_pid_that_is_gone() {
+    let env = env();
+    let _lock = hold_lock(&env);
+    let mut gone = Command::new("true").spawn().unwrap();
+    let pid = gone.id();
+    gone.wait().unwrap();
+    let info = json!({"addr": "127.0.0.1:9", "pid": pid});
+    std::fs::write(env.home().join("hub.json"), info.to_string()).unwrap();
+
+    let run = env.mg(&["--json", "inbox"]).assert_code(69);
+    let error = &run.json()["error"];
+    assert_eq!(error["code"], "hub_unresponsive", "{run:?}");
+    let hint = error["hint"].as_str().unwrap();
+    assert!(!hint.contains(&pid.to_string()), "{hint}");
+    assert!(hint.contains("hub.lock"), "{hint}");
+    let status = env.mg(&["--json", "hub", "status"]).assert_code(0).json();
+    assert_eq!(status["unresponsive"], true);
+    assert_eq!(status["pid"], Value::Null);
 }
 
 #[test]

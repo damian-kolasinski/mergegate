@@ -3,28 +3,16 @@ use std::time::{Duration, Instant};
 use hub::Home;
 
 use super::POLL;
-use super::probe::{agent, probe};
-use super::report::{HubStatus, unresponsive};
+use super::probe::{agent, settle};
+use super::report::HubStatus;
 use super::service;
 use crate::output::{CliError, Outcome, exit};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
-    // A hub that holds the lock without answering is starting or stopping;
-    // give it until the deadline to do either.
-    let deadline = Instant::now() + TIMEOUT;
-    let running = loop {
-        if let Some(running) = probe(home) {
-            break running;
-        }
-        if !home.is_locked() {
-            return stopped(home, false);
-        }
-        if Instant::now() > deadline {
-            return Err(unresponsive(home));
-        }
-        std::thread::sleep(POLL);
+    let Some(running) = settle(home, TIMEOUT)? else {
+        return stopped(home, false);
     };
 
     let kill_hint = format!("kill {}", running.health.pid);

@@ -2,7 +2,7 @@
 
 mod devices;
 pub(crate) mod probe;
-pub(crate) mod report;
+mod report;
 pub(crate) mod service;
 mod set;
 mod spawn;

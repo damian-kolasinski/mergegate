@@ -9,9 +9,13 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use ureq::http::Response;
 
-use crate::hub_cmd::probe::probe;
-use crate::hub_cmd::report::unresponsive;
+use crate::hub_cmd::probe::settle;
 use crate::output::{CliError, exit};
+
+/// How long a command waits for a hub that holds its lock but doesn't
+/// answer yet, as one starting does while it opens and migrates its store.
+/// Shorter than `mg hub start`'s wait: past it, a hung hub is reported.
+const STARTING: Duration = Duration::from_secs(3);
 
 pub(crate) struct Client {
     url: String,
@@ -212,12 +216,10 @@ pub(crate) fn running(home: &Home) -> Result<Hub, CliError> {
     if let Some(connection) = home.read_connection() {
         return reach(&connection.url);
     }
-    let running = probe(home).ok_or_else(|| {
-        // `mg hub start` refuses while a hub holds the lock, so hinting it
-        // for a hub that hangs would send the agent in a circle.
-        if home.is_locked() {
-            return unresponsive(home);
-        }
+    // A hub that holds the lock without answering is not "not running":
+    // `mg hub start` refuses while it holds it, so hinting that would send
+    // the agent in a circle.
+    let running = settle(home, STARTING)?.ok_or_else(|| {
         CliError::new("hub_unavailable", "the hub is not running")
             .hint("mg hub start")
             .exit(exit::UNAVAILABLE)
