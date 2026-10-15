@@ -30,9 +30,10 @@ impl Guide {
         let mut guide = Self::default();
         let mut in_files = false;
         let mut fenced = false;
-        // The bullet indented lines continue: `Some(None)` under one that
-        // was refused, whose wrapped text belongs to no file.
-        let mut open: Option<Option<usize>> = None;
+        // The bullet indented lines continue, with the column its text
+        // starts at: `None` under one that was refused, whose wrapped text
+        // belongs to no file.
+        let mut open: Option<(Option<usize>, usize)> = None;
         for line in text.lines() {
             let trimmed = line.trim_start();
             if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
@@ -51,9 +52,16 @@ impl Guide {
             if !in_files || trimmed.is_empty() {
                 continue;
             }
-            // A wrapped reason or a sub-bullet adds to the bullet above.
-            if line.starts_with([' ', '\t'])
-                && let Some(current) = open
+            let indent = indent(line);
+            let item = bullet(trimmed);
+            // A wrapped reason, or a sub-bullet indented to the text of the
+            // bullet above, adds to it. As in Markdown, a bullet indented
+            // less is that bullet's sibling, but only one naming a path
+            // counts as such: agents often indent a note on a numbered item
+            // by two spaces, short of its text.
+            if indent > 0
+                && let Some((current, text)) = open
+                && (indent >= text || item.and_then(named).is_none())
             {
                 if let Some(file) = current.map(|i| &mut guide.files[i]) {
                     let reason = file.reason.get_or_insert_with(String::new);
@@ -64,16 +72,13 @@ impl Guide {
                 }
                 continue;
             }
-            let Some(bullet) = bullet(trimmed) else {
+            let Some(bullet) = item else {
                 open = None;
                 continue;
             };
-            open = Some(None);
-            let Some((path, rest)) = bullet
-                .strip_prefix('`')
-                .and_then(|rest| rest.split_once('`'))
-                .filter(|(path, _)| !path.trim().is_empty())
-            else {
+            let text = indent + trimmed.len() - bullet.len();
+            open = Some((None, text));
+            let Some((path, rest)) = named(bullet) else {
                 guide
                     .problems
                     .push(format!("\"{}\" names no `path`", trimmed.trim_end()));
@@ -92,7 +97,7 @@ impl Guide {
                     rest.strip_prefix(separator).unwrap_or(rest)
                 })
                 .trim();
-            open = Some(Some(guide.files.len()));
+            open = Some((Some(guide.files.len()), text));
             guide.files.push(GuideFile {
                 path,
                 reason: (!reason.is_empty()).then(|| reason.to_owned()),
@@ -164,6 +169,25 @@ fn bullet(line: &str) -> Option<&str> {
             .flatten()
     })
     .map(str::trim_start)
+}
+
+/// The `path` a bullet's text starts with, and what follows it.
+fn named(bullet: &str) -> Option<(&str, &str)> {
+    bullet
+        .strip_prefix('`')
+        .and_then(|rest| rest.split_once('`'))
+        .filter(|(path, _)| !path.trim().is_empty())
+}
+
+/// The column `line`'s text starts at, a tab reaching the next multiple of
+/// four as in Markdown.
+fn indent(line: &str) -> usize {
+    line.chars()
+        .take_while(|c| matches!(c, ' ' | '\t'))
+        .fold(0, |column, c| match c {
+            '\t' => column + 4 - column % 4,
+            _ => column + 1,
+        })
 }
 
 /// The title of an ATX heading, as in `## Files`.
