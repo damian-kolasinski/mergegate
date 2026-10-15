@@ -19,6 +19,18 @@ fn get(env: &Env, path: &str) -> Reply {
     )
 }
 
+fn post(env: &Env, path: &str) -> Reply {
+    let addr = env.hub_addr();
+    http_reply(
+        &addr,
+        &format!(
+            "POST {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\
+             {}: ui\r\nContent-Length: 0\r\n\r\n",
+            api::CLIENT_HEADER,
+        ),
+    )
+}
+
 fn json_of(reply: &Reply) -> Value {
     serde_json::from_str(&reply.body).unwrap_or_else(|e| panic!("{e}: {}", reply.body))
 }
@@ -63,6 +75,17 @@ fn write_rules(env: &Env, text: &str) {
     fs::write(dir.join("rules.toml"), text).unwrap();
 }
 
+/// Writes the file and approves it as the operator, as a trusted rule in it
+/// waits for them.
+fn apply_rules(env: &Env, text: &str) {
+    write_rules(env, text);
+    let rules = json_of(&get(env, "/api/projects/app/rules"));
+    if !rules["edit"].is_null() {
+        let reply = post(env, "/api/projects/app/rules/edit/approve");
+        assert_eq!(reply.status, 200, "{}", reply.body);
+    }
+}
+
 fn submit(env: &Env, repo: &TestRepo, files: &[(&str, &str)]) {
     repo.git(["switch", "--quiet", "-c", "feature"]);
     repo.commit_files("Bump the parser", files);
@@ -92,7 +115,7 @@ fn triage(env: &Env) -> Vec<Value> {
 fn f12_rules_sort_files_into_review_and_trusted() {
     let env = env();
     let repo = project(&env);
-    write_rules(&env, RULES);
+    apply_rules(&env, RULES);
     submit(
         &env,
         &repo,
@@ -150,9 +173,8 @@ fn f12_without_rules_every_file_is_reviewed() {
     let text = env.mg(&["inbox"]).assert_code(0).stdout;
     assert!(!text.contains("to review"), "{text}");
 
-    // Open items follow an edit without a new submit.
-    write_rules(&env, RULES);
-    env.mg(&["rules", "list", "app"]).assert_code(0);
+    // Open items follow an approved edit without a new submit.
+    apply_rules(&env, RULES);
     let tiers: Vec<_> = triage(&env).iter().map(|f| f["tier"].clone()).collect();
     assert_eq!(tiers, [json!("trusted"), json!("trusted")]);
     let item = &env.mg(&["--json", "inbox"]).assert_code(0).json()["needs_you"][0];
@@ -163,7 +185,7 @@ fn f12_without_rules_every_file_is_reviewed() {
 fn f12_a_changed_gitattributes_stays_in_review() {
     let env = env();
     let repo = project(&env);
-    write_rules(
+    apply_rules(
         &env,
         "[[rule]]\nid = \"R1\"\ntier = \"trusted\"\npath = \"**\"\nreason = \"everything\"\n",
     );
@@ -195,7 +217,7 @@ fn f12_a_changed_gitattributes_stays_in_review() {
 fn f12_code_moved_into_a_generated_directory_stays_in_review() {
     let env = env();
     let repo = project(&env);
-    write_rules(&env, RULES);
+    apply_rules(&env, RULES);
     repo.commit_files("Add core", &[("lib/core.rs", "fn core() {}\n")]);
     repo.git(["switch", "--quiet", "-c", "feature"]);
     fs::create_dir(repo.root().join("dist")).unwrap();
@@ -214,7 +236,7 @@ fn f12_code_moved_into_a_generated_directory_stays_in_review() {
 fn f12_rules_list_shows_the_applied_rules() {
     let env = env();
     let repo = project(&env);
-    write_rules(&env, RULES);
+    apply_rules(&env, RULES);
 
     let listed = env
         .mg_at(repo.root(), &["--json", "rules", "list"])
@@ -247,8 +269,7 @@ fn f12_rules_list_shows_the_applied_rules() {
 fn f12_a_broken_rules_file_keeps_the_last_good_rules() {
     let env = env();
     let repo = project(&env);
-    write_rules(&env, RULES);
-    env.mg(&["rules", "list", "app"]).assert_code(0);
+    apply_rules(&env, RULES);
     write_rules(&env, "[[rule]]\nid = \"R4\"\ntier = \"hidden\"\n");
     submit(&env, &repo, &[("Cargo.lock", "a\n")]);
 
@@ -262,4 +283,242 @@ fn f12_a_broken_rules_file_keeps_the_last_good_rules() {
     assert_eq!(triage(&env)[0]["rule"], "R2");
     let text = env.mg(&["rules", "list", "app"]).assert_code(0).stdout;
     assert!(text.contains("can't be used"), "{text}");
+}
+
+fn rules_file(env: &Env) -> String {
+    fs::read_to_string(env.home().join("projects").join("app").join("rules.toml")).unwrap()
+}
+
+#[test]
+fn f12_a_hand_edit_that_hides_more_waits_for_the_operator() {
+    let env = env();
+    let repo = project(&env);
+    submit(
+        &env,
+        &repo,
+        &[("Cargo.lock", "a\n"), ("src/main.rs", "fn main() {}\n")],
+    );
+    write_rules(&env, RULES);
+
+    let listed = env
+        .mg(&["--json", "rules", "list", "app"])
+        .assert_code(0)
+        .json();
+    assert_eq!(listed["rules"], json!([]));
+    assert_eq!(listed["edit"]["rules"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        listed["edit"]["preview"],
+        json!({
+            "items": 1,
+            "hidden": [{
+                "item": "app#1", "title": "Bump the parser", "path": "Cargo.lock", "rule": "R2",
+            }],
+        })
+    );
+    assert_eq!(triage(&env)[0]["tier"], "review");
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert_eq!(inbox["rules"], json!([{"project": "app", "changes": 1}]));
+    let text = env.mg(&["rules", "list", "app"]).assert_code(0).stdout;
+    assert!(
+        text.contains("rules.toml: it would have hidden 1 file in 1 of 1 item"),
+        "{text}"
+    );
+
+    // Rejecting writes the applied rules back, here none.
+    let reply = post(&env, "/api/projects/app/rules/edit/reject");
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    assert_eq!(json_of(&reply)["edit"], Value::Null);
+    assert_eq!(rules_file(&env), "");
+    assert_eq!(triage(&env)[0]["tier"], "review");
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert_eq!(inbox["rules"], json!([]));
+    let again = post(&env, "/api/projects/app/rules/edit/reject");
+    assert_eq!(again.status, 404, "{}", again.body);
+}
+
+#[test]
+fn f12_a_hand_edit_that_only_reviews_more_applies_at_once() {
+    let env = env();
+    let repo = project(&env);
+    apply_rules(&env, RULES);
+    submit(&env, &repo, &[("Cargo.lock", "a\n")]);
+    let fewer: String = RULES
+        .split("[[rule]]")
+        .take(2)
+        .collect::<Vec<_>>()
+        .join("[[rule]]");
+    write_rules(&env, &fewer);
+
+    let listed = env
+        .mg(&["--json", "rules", "list", "app"])
+        .assert_code(0)
+        .json();
+    assert_eq!(listed["edit"], Value::Null);
+    assert_eq!(listed["rules"].as_array().unwrap().len(), 1);
+    assert_eq!(triage(&env)[0]["tier"], "review");
+}
+
+#[test]
+fn f12_agents_propose_rules_the_operator_approves() {
+    let env = env();
+    let repo = project(&env);
+    submit(
+        &env,
+        &repo,
+        &[("Cargo.lock", "a\n"), ("src/main.rs", "fn main() {}\n")],
+    );
+
+    let review = env
+        .mg_at(
+            repo.root(),
+            &[
+                "--json", "rules", "propose", "--tier", "review", "--path", "src/**", "--reason",
+                "the core",
+            ],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(
+        [&review["rule"]["id"], &review["state"], &review["preview"]],
+        [&json!("R1"), &json!("applied"), &Value::Null]
+    );
+    assert_eq!(triage(&env)[1]["rule"], "R1");
+    assert!(
+        rules_file(&env).contains("id = \"R1\""),
+        "{}",
+        rules_file(&env)
+    );
+
+    let text = env
+        .mg_at(
+            repo.root(),
+            &[
+                "rules",
+                "propose",
+                "--tier",
+                "trusted",
+                "--path",
+                "**/*.lock",
+                "--reason",
+                "regenerated by cargo",
+            ],
+        )
+        .assert_code(0)
+        .stdout;
+    assert!(
+        text.contains(
+            "R2 waits for the operator's approval in the UI: \
+             it would have hidden 1 file in 1 of 1 item"
+        ),
+        "{text}"
+    );
+    assert_eq!(triage(&env)[0]["tier"], "review");
+    assert!(!rules_file(&env).contains("R2"));
+    let shown = env
+        .mg(&["--json", "rules", "show", "R2", "app"])
+        .assert_code(0)
+        .json();
+    assert_eq!(shown["state"], "pending");
+    assert_eq!(shown["preview"]["hidden"][0]["path"], "Cargo.lock");
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert_eq!(inbox["rules"], json!([{"project": "app", "changes": 1}]));
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    assert!(
+        text.contains("app: 1 change to its rules waits for the operator's approval in the UI"),
+        "{text}"
+    );
+
+    let reply = post(&env, "/api/projects/app/rules/proposals/R2/approve");
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    let rules = json_of(&reply);
+    let ids: Vec<_> = rules["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].clone())
+        .collect();
+    assert_eq!(ids, [json!("R1"), json!("R2")]);
+    assert_eq!(rules["pending"], json!([]));
+    assert_eq!(triage(&env)[0]["rule"], "R2");
+    assert!(rules_file(&env).contains("id = \"R2\""));
+    // The file now holds the applied rules, so nothing waits.
+    assert_eq!(
+        json_of(&get(&env, "/api/projects/app/rules"))["edit"],
+        Value::Null
+    );
+    let text = env
+        .mg(&["rules", "show", "R2", "app"])
+        .assert_code(0)
+        .stdout;
+    assert!(
+        text.starts_with("R2 was approved by the operator"),
+        "{text}"
+    );
+
+    let again = post(&env, "/api/projects/app/rules/proposals/R2/approve");
+    assert_eq!(again.status, 409, "{}", again.body);
+    let missing = env
+        .mg(&["--json", "rules", "show", "R9", "app"])
+        .assert_code(1)
+        .json();
+    assert_eq!(missing["error"]["code"], "rule_not_found");
+    let invalid = env
+        .mg(&[
+            "--json",
+            "rules",
+            "propose",
+            "--tier",
+            "trusted",
+            "--reason",
+            "all",
+            "--project",
+            "app",
+        ])
+        .assert_code(1)
+        .json();
+    assert_eq!(invalid["error"]["code"], "invalid_rule");
+}
+
+#[test]
+fn f12_rejecting_a_proposal_leaves_the_rules() {
+    let env = env();
+    let repo = project(&env);
+    let proposed = env
+        .mg_at(
+            repo.root(),
+            &[
+                "--json",
+                "rules",
+                "propose",
+                "--tier",
+                "trusted",
+                "--kind",
+                "generated",
+                "--reason",
+                "built",
+            ],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(proposed["preview"], json!({"items": 0, "hidden": []}));
+
+    let reply = post(&env, "/api/projects/app/rules/proposals/R1/reject");
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    assert_eq!(json_of(&reply)["rules"], json!([]));
+    let text = env
+        .mg(&["rules", "show", "R1", "app"])
+        .assert_code(0)
+        .stdout;
+    assert!(text.starts_with("R1 was rejected"), "{text}");
+    // A rejected rule's number isn't reused.
+    let next = env
+        .mg_at(
+            repo.root(),
+            &[
+                "--json", "rules", "propose", "--tier", "review", "--path", "a", "--reason", "a",
+            ],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(next["rule"]["id"], "R2");
 }

@@ -280,6 +280,7 @@ function Review(props: {
         </Show>
       </div>
       <FileList
+        project={project()}
         files={review()}
         trusted={trusted()}
         expanded={showTrusted()}

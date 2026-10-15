@@ -101,6 +101,8 @@ pub struct Inbox {
     pub needs_you: Vec<InboxItem>,
     pub with_agents: Vec<InboxItem>,
     pub merging: Vec<InboxItem>,
+    /// Projects with changes to their rules waiting for the operator.
+    pub rules: Vec<crate::rules::PendingRules>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

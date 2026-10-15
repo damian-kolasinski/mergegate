@@ -1,11 +1,18 @@
 import { type Accessor, createSignal, onCleanup } from "solid-js";
 
 // Hash routes leave every real path to the hub's API and git endpoints.
-export type Route = { screen: "inbox" } | { screen: "item"; id: string };
+export type Route =
+  | { screen: "inbox" }
+  | { screen: "item"; id: string }
+  | { screen: "rules"; project: string };
 
 export function itemHref(id: string): string {
   // Ids carry a `#` (`app#42`), which would end the fragment's path.
   return `#/items/${encodeURIComponent(id)}`;
+}
+
+export function rulesHref(project: string): string {
+  return `#/projects/${encodeURIComponent(project)}/rules`;
 }
 
 export const inboxHref = "#/";
@@ -20,10 +27,14 @@ export function useRoute(): Accessor<Route> {
 
 function parse(hash: string): Route {
   const id = /^#\/items\/(.+)$/.exec(hash)?.[1];
-  if (id === undefined) return { screen: "inbox" };
+  const project = /^#\/projects\/([^/]+)\/rules$/.exec(hash)?.[1];
   try {
-    return { screen: "item", id: decodeURIComponent(id) };
+    if (id !== undefined) return { screen: "item", id: decodeURIComponent(id) };
+    if (project !== undefined) {
+      return { screen: "rules", project: decodeURIComponent(project) };
+    }
   } catch {
-    return { screen: "inbox" };
+    // A malformed escape addresses nothing; fall back to the inbox.
   }
+  return { screen: "inbox" };
 }

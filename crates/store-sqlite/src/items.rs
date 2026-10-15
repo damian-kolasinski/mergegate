@@ -44,6 +44,19 @@ impl ItemStore for Store {
         rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
+    fn merged_items(&self, project: &ProjectName, limit: u32) -> Result<Vec<Item>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!(
+                "{SELECT} WHERE i.state = 'merged' AND p.name = ?1 ORDER BY i.id DESC LIMIT ?2"
+            ))
+            .map_err(StoreError::new)?;
+        let rows = stmt
+            .query_map(params![project.as_str(), limit], read)
+            .map_err(StoreError::new)?;
+        rows.map(|row| row.map_err(StoreError::new)?).collect()
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         self.conn
             .query_row(

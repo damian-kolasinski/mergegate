@@ -26,7 +26,10 @@ use crate::review::{
 };
 use crate::settings::SettingsStore;
 use crate::store::StoreError;
-use crate::triage::{Rule, RuleId, Rules, RulesStore, Tier, Triage, TriageGit};
+use crate::triage::{
+    HeldEdit, Place, Proposal, ProposalState, Rule, RuleId, Rules, RulesFile, RulesFileError,
+    RulesStore, RulesText, Tier, Triage, TriageGit,
+};
 use crate::viewed::ViewedStore;
 
 /// A commit ID for tests: `n` as 40 hex digits.
@@ -502,6 +505,12 @@ pub(crate) struct FakeStore {
     /// The external comments a batch carried.
     batched: BTreeSet<CommentId>,
     rules: BTreeMap<ProjectName, Rules>,
+    applied_text: BTreeMap<ProjectName, String>,
+    /// The highest rule number each project used.
+    last_rule: BTreeMap<ProjectName, u32>,
+    /// Oldest first.
+    proposals: Vec<(ProjectName, Proposal)>,
+    held: BTreeMap<ProjectName, HeldEdit>,
     clock: u32,
     /// Every item's, oldest first.
     attachments: Vec<(ItemId, Attachment)>,
@@ -557,6 +566,13 @@ impl FakeStore {
 
     pub fn items(&self) -> &[Item] {
         &self.items
+    }
+
+    fn used<'a>(&mut self, project: &ProjectName, rules: impl IntoIterator<Item = &'a Rule>) {
+        let last = self.last_rule.entry(project.clone()).or_default();
+        for rule in rules {
+            *last = (*last).max(rule.id.number());
+        }
     }
 
     pub fn set_state(&mut self, id: &ItemId, state: ItemState) {
@@ -674,6 +690,17 @@ impl ItemStore for FakeStore {
             .collect())
     }
 
+    fn merged_items(&self, project: &ProjectName, limit: u32) -> Result<Vec<Item>, StoreError> {
+        Ok(self
+            .items
+            .iter()
+            .rev()
+            .filter(|i| i.state == ItemState::Merged && i.id.project() == project)
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         Ok(self
             .open_items(Some(project))?
@@ -753,12 +780,91 @@ impl RulesStore for FakeStore {
         Ok(self.rules.get(project).cloned().unwrap_or_default())
     }
 
+    fn applied_text(&self, project: &ProjectName) -> Result<Option<String>, StoreError> {
+        Ok(self.applied_text.get(project).cloned())
+    }
+
     fn set_applied_rules(
         &mut self,
         project: &ProjectName,
         rules: &Rules,
+        text: Option<&str>,
     ) -> Result<(), StoreError> {
+        self.used(project, rules.rules());
         self.rules.insert(project.clone(), rules.clone());
+        match text {
+            Some(text) => self.applied_text.insert(project.clone(), text.into()),
+            None => self.applied_text.remove(project),
+        };
+        Ok(())
+    }
+
+    fn next_rule_id(&self, project: &ProjectName) -> Result<RuleId, StoreError> {
+        Ok(RuleId::new(
+            self.last_rule.get(project).copied().unwrap_or(0) + 1,
+        ))
+    }
+
+    fn insert_proposal(
+        &mut self,
+        project: &ProjectName,
+        proposal: &Proposal,
+    ) -> Result<(), StoreError> {
+        self.used(project, [&proposal.rule]);
+        self.proposals.push((project.clone(), proposal.clone()));
+        Ok(())
+    }
+
+    fn proposal(&self, project: &ProjectName, id: RuleId) -> Result<Option<Proposal>, StoreError> {
+        Ok(self
+            .proposals
+            .iter()
+            .find(|(p, proposal)| p == project && proposal.rule.id == id)
+            .map(|(_, proposal)| proposal.clone()))
+    }
+
+    fn pending_proposals(&self, project: &ProjectName) -> Result<Vec<Proposal>, StoreError> {
+        Ok(self
+            .proposals
+            .iter()
+            .filter(|(p, proposal)| p == project && proposal.state == ProposalState::Pending)
+            .map(|(_, proposal)| proposal.clone())
+            .collect())
+    }
+
+    fn set_proposal_state(
+        &mut self,
+        project: &ProjectName,
+        id: RuleId,
+        state: ProposalState,
+    ) -> Result<(), StoreError> {
+        let (_, proposal) = self
+            .proposals
+            .iter_mut()
+            .find(|(p, proposal)| p == project && proposal.rule.id == id)
+            .unwrap();
+        proposal.state = state;
+        Ok(())
+    }
+
+    fn held_edit(&self, project: &ProjectName) -> Result<Option<HeldEdit>, StoreError> {
+        Ok(self.held.get(project).cloned())
+    }
+
+    fn set_held_edit(
+        &mut self,
+        project: &ProjectName,
+        edit: Option<&HeldEdit>,
+    ) -> Result<(), StoreError> {
+        match edit {
+            Some(edit) => {
+                self.used(project, edit.rules.rules());
+                self.held.insert(project.clone(), edit.clone());
+            }
+            None => {
+                self.held.remove(project);
+            }
+        }
         Ok(())
     }
 
@@ -787,18 +893,103 @@ pub(crate) fn rules(rules: &[(Tier, &str)]) -> Rules {
     Rules::new(
         (1..)
             .zip(rules)
-            .map(|(n, (tier, path))| Rule {
-                id: RuleId::new(n),
-                tier: *tier,
-                path: Some((*path).to_owned()),
-                kind: None,
-                max_lines: None,
-                diff_matches: None,
-                reason: format!("rule {n}"),
-            })
+            .map(|(n, (tier, path))| rule(n, *tier, path))
             .collect(),
     )
     .unwrap()
+}
+
+/// `R<n>`, matching `path`.
+pub(crate) fn rule(n: u32, tier: Tier, path: &str) -> Rule {
+    Rule {
+        id: RuleId::new(n),
+        tier,
+        path: Some(path.to_owned()),
+        kind: None,
+        max_lines: None,
+        diff_matches: None,
+        reason: format!("rule {n}"),
+    }
+}
+
+/// A rules file whose text is a rule ID per line, `#` lines comments; each
+/// ID stands for the rule last written under it.
+#[derive(Default)]
+pub(crate) struct FakeRulesFile {
+    text: RefCell<Option<String>>,
+    rules: RefCell<BTreeMap<RuleId, Rule>>,
+    error: RefCell<Option<RulesFileError>>,
+}
+
+impl FakeRulesFile {
+    /// The operator writes `rules` by hand, under a comment.
+    pub fn edit<'a>(&self, rules: impl IntoIterator<Item = &'a Rule>) {
+        let mut text = String::from("# mine\n");
+        for rule in rules {
+            self.rules.borrow_mut().insert(rule.id, rule.clone());
+            text.push_str(&format!("{}\n", rule.id));
+        }
+        self.write_text(&text);
+    }
+
+    pub fn write_text(&self, text: &str) {
+        *self.text.borrow_mut() = Some(text.to_owned());
+        *self.error.borrow_mut() = None;
+    }
+
+    pub fn break_with(&self, error: RulesFileError) {
+        *self.error.borrow_mut() = Some(error);
+    }
+
+    pub fn text(&self) -> Option<String> {
+        self.text.borrow().clone()
+    }
+
+    /// The IDs in the file, in order.
+    pub fn ids(&self) -> Vec<RuleId> {
+        self.text()
+            .unwrap_or_default()
+            .lines()
+            .filter_map(RuleId::parse)
+            .collect()
+    }
+}
+
+impl RulesFile for FakeRulesFile {
+    fn read(&self, _project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+        if let Some(error) = self.error.borrow().clone() {
+            return Err(error);
+        }
+        let Some(text) = self.text() else {
+            return Ok(None);
+        };
+        let rules = self.rules.borrow();
+        let rules = self.ids().iter().map(|id| rules[id].clone()).collect();
+        Ok(Some(RulesText { text, rules }))
+    }
+
+    fn write(&self, _project: &ProjectName, text: &str) -> Result<(), RulesFileError> {
+        self.write_text(text);
+        Ok(())
+    }
+
+    fn insert(&self, text: &str, rule: &Rule, at: Place) -> Result<String, RulesFileError> {
+        self.rules.borrow_mut().insert(rule.id, rule.clone());
+        let mut lines: Vec<_> = text.lines().map(str::to_owned).collect();
+        let line = rule.id.to_string();
+        match at {
+            Place::First => {
+                let first = lines.iter().position(|l| !l.starts_with('#'));
+                lines.insert(first.unwrap_or(lines.len()), line);
+            }
+            Place::Last => lines.push(line),
+        }
+        Ok(lines.iter().map(|l| format!("{l}\n")).collect())
+    }
+
+    fn location(&self, project: &ProjectName) -> String {
+        format!("{project}/rules.toml")
+    }
 }
 
 impl DiffStore for FakeStore {

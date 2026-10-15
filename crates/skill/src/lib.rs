@@ -19,6 +19,10 @@ pub const FILES: &[(&str, &str)] = &[
         "references/waiting.md",
         include_str!("../mergegate/references/waiting.md"),
     ),
+    (
+        "references/operator.md",
+        include_str!("../mergegate/references/operator.md"),
+    ),
 ];
 
 /// `SKILL.md` without its frontmatter, then each file it links under a

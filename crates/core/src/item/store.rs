@@ -7,6 +7,9 @@ pub trait ItemStore {
     /// Open items, oldest first; only `project`'s when given.
     fn open_items(&self, project: Option<&ProjectName>) -> Result<Vec<Item>, StoreError>;
 
+    /// The project's merged items, newest first, at most `limit`.
+    fn merged_items(&self, project: &ProjectName, limit: u32) -> Result<Vec<Item>, StoreError>;
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError>;
 
     /// Any item, open or closed.

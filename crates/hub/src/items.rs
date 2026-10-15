@@ -46,7 +46,7 @@ async fn submit(
                 Ok(project) if store.project(&project)?.is_some() => {
                     app.rules.sync(store, &project)?
                 }
-                _ => Vec::new(),
+                _ => rules::Changes::default(),
             };
             // The moves stand even when the submit fails, so the UI hears
             // of them either way.
@@ -95,10 +95,21 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                     })
                     .collect()
             };
+            let mut pending = Vec::new();
+            for project in store.projects()? {
+                let changes = rules::waiting(store, &project.name)?;
+                if changes > 0 {
+                    pending.push(api::rules::PendingRules {
+                        project: project.name.to_string(),
+                        changes,
+                    });
+                }
+            }
             Ok(api::item::Inbox {
                 needs_you: entries(inbox.needs_you)?,
                 with_agents: entries(inbox.with_agents)?,
                 merging: entries(inbox.merging)?,
+                rules: pending,
             })
         })
         .await
