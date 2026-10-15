@@ -1,8 +1,18 @@
 /* Fixed widths line the figures up into columns across rows and groups. */
 
+/* A list read at a glance from across the desk: a size up from the rest of
+   the app's rows. */
+.inbox {
+  --type-p3: 400 16px / 24px var(--font-sans);
+  --type-p4: 400 14px / 20px var(--font-sans);
+  --type-mono: 400 15px / 24px var(--font-mono);
+  --type-h5: 600 15px / 20px var(--font-sans);
+  font: var(--type-p3);
+}
+
 .id {
   flex: none;
-  width: 12ch;
+  width: 16ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -40,6 +50,18 @@
 
 .flag {
   flex: none;
+}
+
+.demo {
+  flex: none;
+  width: 6em;
+  text-align: right;
+}
+
+.link {
+  flex: none;
+  width: 9em;
+  text-align: right;
 }
 
 .figure {

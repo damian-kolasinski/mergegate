@@ -222,7 +222,7 @@ test("show in diff opens a viewed file at the comment", async ({
   const comment = page.getByRole("article", { name: "Comment c_1" });
   await expect(comment).toBeVisible();
   const mark = page
-    .getByRole("navigation", { name: "Files" })
+    .getByRole("region", { name: "Diff" })
     .getByLabel("Viewed login.rs");
   await mark.check();
   await expect(comment).toHaveCount(0);

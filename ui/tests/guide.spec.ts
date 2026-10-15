@@ -83,8 +83,9 @@ test("f11 a long reason gives way to the file's name in its header", async ({
   expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
     true,
   );
-  // Slotted into the header from the page, so not inside its shadow root.
-  const note = page.locator('[slot="header-metadata"] > span').first();
+  // Slotted into the header from the page, so not inside its shadow root;
+  // it carries its whole text as a title.
+  const note = page.locator('[slot="header-metadata"] span[title]').first();
   await expect(note).toContainText(reason);
   const box = await header.boundingBox();
   const noteBox = await note.boundingBox();

@@ -28,3 +28,38 @@
   font-weight: 400;
   opacity: 0.75;
 }
+
+/* GitHub's Viewed box, at the end of a file's header. */
+.viewed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  font: var(--type-p4);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.viewed:hover {
+  background: var(--background-hover);
+}
+
+.viewed:has(input:checked) {
+  border-color: var(--border-brand);
+  background: var(--background-selected);
+  color: var(--text-primary);
+}
+
+.viewed:has(input:disabled) {
+  cursor: default;
+}
+
+.viewed > input {
+  margin: 0;
+  accent-color: var(--border-brand);
+  cursor: inherit;
+}

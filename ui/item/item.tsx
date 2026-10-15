@@ -710,6 +710,19 @@ function Review(props: {
             blobUrl={blobUrl}
             highlightsUrl={highlightsUrl}
             describe={describe}
+            viewedBox={(file) =>
+              // The newest revision doesn't change a dropped file, so it
+              // has no mark to set.
+              file.interdiff === "dropped"
+                ? undefined
+                : file.tier === "trusted"
+                  ? {
+                      checked: true,
+                      disabledWhy: "Trusted files count as viewed",
+                    }
+                  : { checked: viewed.paths().has(file.path) }
+            }
+            onViewed={mark}
             onFile={nav.scrolledTo}
             onRow={nav.clicked}
             commentable={reviewable(state())}
@@ -743,7 +756,7 @@ function Review(props: {
           onStopPlacing={comments.drafts.stopPlacing}
           replies={comments.replyDrafts.list().length}
           holding={comments.editor.holding()}
-          writing={writing()}
+          writing={writing() || (abandoning() && open(state()))}
           summary={props.summary}
           onSummary={props.onSummary}
           onSubmitted={reviewed}

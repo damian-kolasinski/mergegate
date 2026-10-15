@@ -253,20 +253,27 @@ test("f6 v right after moving to a file still moves on", async ({
   await expect(current).toContainText("gone.txt");
 });
 
-test("f6 a file's checkbox marks it viewed", async ({ page, hub }) => {
+test("f6 a file's header marks it viewed", async ({ page, hub }) => {
   submitChange(hub);
   await page.goto(`${hub.url}#/items/app%231`);
 
   const files = page.getByRole("navigation", { name: "Files" });
-  await files.getByLabel("Viewed new.txt").check();
+  const diff = page.getByRole("region", { name: "Diff" });
+  // The list only shows the mark; the diff's header is where it's made.
+  await expect(files.getByRole("checkbox")).toHaveCount(0);
+  await diff.getByText("new.txt", { exact: true }).click();
   await expect(page.getByText("1 of 4 reviewed")).toBeVisible();
   await expect(page.getByText("hello", { exact: true })).toHaveCount(0);
-  // The checkbox doesn't keep the keys.
+  await expect(diff.getByLabel("Viewed new.txt")).toBeChecked();
+  // The header doesn't keep the keys.
   await page.keyboard.press("n");
   await expect(files.locator("li[aria-current=true]")).toContainText("a.txt");
 
   await page.reload();
-  await expect(files.getByLabel("Viewed new.txt")).toBeChecked();
+  // Its box unmarks it.
+  await diff.getByLabel("Viewed new.txt").uncheck();
+  await expect(page.getByText("0 of 4 reviewed")).toBeVisible();
+  await expect(page.getByText("hello", { exact: true })).toBeVisible();
 });
 
 test("f6 escape goes back to the inbox", async ({ page, hub }) => {
@@ -367,7 +374,10 @@ test("a large item opens and answers keys within budget", async ({
       read: "text",
     },
     j: { selector: "[data-line][data-editor-active-line]", read: "text" },
-    v: { selector: '[aria-label="Files"] input:checked', read: "count" },
+    v: {
+      selector: '[aria-label="Files"] [role="img"][aria-label="Viewed"]',
+      read: "count",
+    },
   } as const;
   const keys = { n: [] as number[], j: [] as number[], v: [] as number[] };
   for (const [key, steps] of [

@@ -8,10 +8,11 @@ import { describe } from "./why";
 
 /**
  * The files the diff shows beside it, the current one selected: those to
- * review, then the trusted ones folded into a group of their own. Since an
- * earlier revision, the ones unchanged since then follow, folded away, so
- * they can still be marked viewed; one holding a thread that waits on the
- * operator is in the diff instead, marked unchanged.
+ * review, then the trusted ones folded into a group of their own. Files are
+ * marked viewed from their headers in the diff, which the list follows.
+ * Since an earlier revision, the ones unchanged since then follow, folded
+ * away: they have no header, so they're marked here. One holding a thread
+ * that waits on the operator is in the diff instead, labelled unchanged.
  */
 export function FileList(props: {
   /** Whose rules sorted the files, linked from the trusted group. */
@@ -26,6 +27,7 @@ export function FileList(props: {
   viewed: ReadonlySet<string>;
   current: string | undefined;
   onShow: (path: string) => void;
+  /** A mark set on a file unchanged since the earlier revision. */
   onViewed: (path: string, viewed: boolean) => void;
 }) {
   const entries = (files: File[]) => (
@@ -40,7 +42,6 @@ export function FileList(props: {
             file={file}
             since={props.since}
             viewed={props.viewed.has(file.path)}
-            onViewed={(value) => props.onViewed(file.path, value)}
           />
         </Row>
       )}
@@ -107,48 +108,68 @@ function FileEntry(props: {
   /** What an unchanged file is labelled unchanged since. */
   since: number | null;
   viewed: boolean;
-  onViewed: (viewed: boolean) => void;
+  /** Set for a file with no header in the diff to mark it from. */
+  onViewed?: (viewed: boolean) => void;
 }) {
-  // Counted as viewed without a mark, so there's nothing to tick.
+  // Counted as viewed without a mark.
   const trusted = () => props.file.tier === "trusted";
+  const done = () => props.viewed || trusted();
   const slash = () => props.file.path.lastIndexOf("/");
   const name = () => props.file.path.slice(slash() + 1);
   const folder = () => props.file.path.slice(0, Math.max(slash(), 0));
   return (
     <>
-      {/* The newest revision doesn't change a dropped file, so it has no
-          mark to set. */}
       <Show
-        when={props.file.interdiff !== "dropped"}
-        fallback={<span class={styles.viewed} />}
+        when={props.onViewed}
+        fallback={
+          <span
+            class={styles.viewed}
+            role={done() ? "img" : undefined}
+            aria-label={done() ? "Viewed" : undefined}
+            title={
+              trusted()
+                ? "Trusted files count as viewed"
+                : props.viewed
+                  ? "Viewed"
+                  : undefined
+            }
+          />
+        }
       >
-        <input
-          type="checkbox"
-          class={styles.viewed}
-          checked={props.viewed || trusted()}
-          disabled={trusted()}
-          title={trusted() ? "Trusted files count as viewed" : undefined}
-          aria-label={`Viewed ${props.file.path}`}
-          // The row would show the file too.
-          onClick={(event) => event.stopPropagation()}
-          onChange={(event) => {
-            props.onViewed(event.currentTarget.checked);
-            // A focused field keeps keys from the shortcuts.
-            event.currentTarget.blur();
-          }}
-        />
+        {(onViewed) => (
+          <input
+            type="checkbox"
+            class={styles.viewed}
+            checked={done()}
+            disabled={trusted()}
+            title={trusted() ? "Trusted files count as viewed" : undefined}
+            aria-label={`Viewed ${props.file.path}`}
+            onChange={(event) => {
+              onViewed()(event.currentTarget.checked);
+              // A focused field keeps keys from the shortcuts.
+              event.currentTarget.blur();
+            }}
+          />
+        )}
       </Show>
-      <span class={styles.entry}>
-        {/* The name first, where the eye lands; a deep folder gives up its
-            start rather than the part next to the name. */}
-        <span class={styles.path} title={props.file.path}>
+      {/* The list is in review order, not the tree's, so each entry says
+          where it lives: its folder over the file, as a tree draws it. The
+          name still comes first to read, so the grid places the folder
+          above it. A deep folder gives up its start rather than the part
+          next to the file. */}
+      <span
+        class={styles.entry}
+        title={props.file.path}
+        data-viewed={done() ? "" : undefined}
+      >
+        <span class={styles.leaf} data-nested={folder() ? "" : undefined}>
           <span class={styles.name}>{name()}</span>
-          <Show when={folder()}>
-            <span class={styles.folder}>
-              <bdi dir="ltr">{folder()}</bdi>
-            </span>
-          </Show>
         </span>
+        <Show when={folder()}>
+          <span class={styles.folder}>
+            <bdi dir="ltr">{folder()}</bdi>
+          </span>
+        </Show>
         <Show when={describe(props.file)}>
           {(why) => (
             <span class={styles.why} title={why()}>
@@ -156,14 +177,16 @@ function FileEntry(props: {
             </span>
           )}
         </Show>
+        <span class={styles.facts}>
+          <Show when={label(props.file, props.since)}>
+            {(text) => <Meta>{text()}</Meta>}
+          </Show>
+          <Counts
+            additions={props.file.additions}
+            deletions={props.file.deletions}
+          />
+        </span>
       </span>
-      <Show when={label(props.file, props.since)}>
-        {(text) => <Meta>{text()}</Meta>}
-      </Show>
-      <Counts
-        additions={props.file.additions}
-        deletions={props.file.deletions}
-      />
     </>
   );
 }
