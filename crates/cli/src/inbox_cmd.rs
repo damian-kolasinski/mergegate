@@ -68,5 +68,9 @@ fn line(i: &InboxItem) -> String {
         let note = note.split_whitespace().collect::<Vec<_>>().join(" ");
         out.push_str(&format!("\n      {note}"));
     }
+    if !i.conflicts_with.is_empty() {
+        let with = i.conflicts_with.join(", ");
+        out.push_str(&format!("\n      conflicts with {with}"));
+    }
     out
 }

@@ -12,6 +12,8 @@
 
 The operator reviews the newest revision. Each revision is the whole branch against the target, so amend, rebase or add commits as you like before submitting again.
 
+The hub test-merges open items as their target moves. When yours stops merging cleanly, a `merge.conflict` can come before the operator reviews it, once per revision: rebase as it says and submit, and the item is back in the operator's queue.
+
 ## The guide
 
 A guide tells the operator what the change is for and where to start. It is Markdown: a few lines on the intent, then a `## Files` list with one bullet per file worth reading, in the order to read them:

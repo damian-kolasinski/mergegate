@@ -90,12 +90,29 @@ pub(crate) fn fetch(
     upstream: &Upstream,
     target: &str,
 ) -> Result<(), GitError> {
+    fetch_into(home, dir, upstream, target, &format!("refs/heads/{target}"))
+}
+
+/// As [`fetch`], into `dest` rather than staging's own `target`.
+pub(crate) fn fetch_into(
+    home: &Path,
+    dir: &Path,
+    upstream: &Upstream,
+    target: &str,
+    dest: &str,
+) -> Result<(), GitError> {
     let mut git_dir = OsString::from("--git-dir=");
     git_dir.push(dir);
-    let refspec = format!("+refs/heads/{target}:refs/heads/{target}");
+    let refspec = format!("+refs/heads/{target}:{dest}");
     let mut cmd = command::git(home);
     cmd.args([
         git_dir.as_os_str(),
+        // A connection that stalls fails in half a minute rather than
+        // holding up whatever waits on the fetch.
+        OsStr::new("-c"),
+        OsStr::new("http.lowSpeedLimit=1"),
+        OsStr::new("-c"),
+        OsStr::new("http.lowSpeedTime=30"),
         OsStr::new("fetch"),
         OsStr::new("--quiet"),
         OsStr::new("--no-tags"),

@@ -170,6 +170,9 @@ pub struct InboxItem {
     pub changed_since: Option<ChangedSince>,
     pub priority: Option<Priority>,
     pub note: Option<String>,
+    /// The open items its head conflicts with, of its project and target,
+    /// oldest first: landing one of them hands this one back.
+    pub conflicts_with: Vec<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

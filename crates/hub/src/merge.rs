@@ -86,6 +86,8 @@ fn changed(state: &AppState, id: &ItemId) {
     state.events.logged();
     // A merge closes the item, which starts its attachments' time to live.
     state.prune.notify_one();
+    // And moves the target under every other open item.
+    state.conflicts.notify_one();
     state.events.send(UiEvent::InboxChanged);
     state.events.send(UiEvent::ItemChanged {
         item: id.to_string(),

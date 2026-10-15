@@ -4,6 +4,7 @@
 mod agents;
 mod attachments;
 mod comments;
+mod conflicts;
 mod diffs;
 mod external;
 mod feedback;

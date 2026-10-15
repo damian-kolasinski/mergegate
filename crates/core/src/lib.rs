@@ -3,6 +3,7 @@
 
 pub mod agent;
 pub mod attachment;
+pub mod conflict;
 pub mod decision;
 pub mod diff;
 pub mod doctor;

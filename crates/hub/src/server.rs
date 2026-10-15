@@ -17,7 +17,7 @@ use rules_toml::RulesToml;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, abandon, attachments, comments, conversation, diff, doctor,
+    Home, HubError, HubInfo, abandon, attachments, comments, conflicts, conversation, diff, doctor,
     draft_replies, event_log, events, external, feedback, git_http, guard, highlights, io, items,
     languages, lifecycle, merge, priority, projects, replies, reply, resume, reviews, rules,
     settings, ui, viewed, wake,
@@ -44,6 +44,8 @@ pub(crate) struct AppState {
     pub highlight: Notify,
     /// Asks the attachment pruner to look now.
     pub prune: Notify,
+    /// Asks the conflict watch to test-merge now, after its current pass.
+    pub conflicts: Notify,
     pub rules: rules::RulesFiles,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
@@ -100,6 +102,18 @@ impl AppState {
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
+
+    /// [`Self::blocking_git`], with GitHub too, for the target watch: its
+    /// fetch writes only the watch's own refs, which nothing else touches.
+    pub(crate) async fn unlocked<T: Send + 'static>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&HubGit, &GithubClient) -> T + Send + 'static,
+    ) -> T {
+        let state = Arc::clone(self);
+        tokio::task::spawn_blocking(move || f(&state.git, &state.github))
+            .await
+            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
 }
 
 pub(crate) async fn serve(
@@ -146,6 +160,7 @@ pub(crate) async fn serve(
         releases: Arc::new(releases),
         highlight: Notify::new(),
         prune: Notify::new(),
+        conflicts: Notify::new(),
         rules: rules::RulesFiles::new(RulesToml::new(home.projects())),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
@@ -196,6 +211,7 @@ pub(crate) async fn serve(
     tokio::spawn(highlights::run(state.clone()));
     tokio::spawn(attachments::prune(state.clone()));
     tokio::spawn(rules::run(state.clone()));
+    tokio::spawn(conflicts::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

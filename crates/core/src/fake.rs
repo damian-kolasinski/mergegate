@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::agent::{Agent, AgentStore, DueWake};
 use crate::attachment::{Attachment, AttachmentStore, Media, NewAttachment};
+use crate::conflict::{ConflictGit, ConflictStore, Pair};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
@@ -55,6 +56,11 @@ pub(crate) struct FakeGit {
     fail_unpin: bool,
     /// The paths every trial merge conflicts on, if it does.
     conflicts: Option<Vec<String>>,
+    /// The paths two commits conflict on, by the pair in order; any other
+    /// two merge cleanly.
+    between: RefCell<BTreeMap<(String, String), Vec<String>>>,
+    /// Every `conflicts` call: the two commits, in order.
+    merged: RefCell<Vec<(String, String)>>,
     /// Commits of every repo, by ID. Each has at most one parent.
     commits: BTreeMap<String, Commit>,
     /// Branches of every upstream, a remote's under its URL.
@@ -82,6 +88,8 @@ impl Default for FakeGit {
             fail_sync: false,
             fail_unpin: false,
             conflicts: None,
+            between: RefCell::default(),
+            merged: RefCell::default(),
             commits: BTreeMap::new(),
             upstream: RefCell::default(),
             published: RefCell::default(),
@@ -245,7 +253,19 @@ impl FakeGit {
         self.synced.borrow().clone()
     }
 
-    /// Every `fetch_target` call: project, target.
+    /// Makes merging `a` and `b`, either way round, conflict on `paths`.
+    pub fn conflict_between(&self, a: &str, b: &str, paths: &[&str]) {
+        self.between
+            .borrow_mut()
+            .insert(ordered(a, b), paths.iter().map(|p| (*p).into()).collect());
+    }
+
+    /// Every `conflicts` call: the two commits, in order.
+    pub fn merged(&self) -> Vec<(String, String)> {
+        self.merged.borrow().clone()
+    }
+
+    /// Every `fetch_target` and `fetch_watched` call: project, target.
     pub fn fetched(&self) -> Vec<(String, String)> {
         self.fetched.borrow().clone()
     }
@@ -560,6 +580,56 @@ impl MergeGit for FakeGit {
     }
 }
 
+impl ConflictGit for FakeGit {
+    fn conflicts(
+        &self,
+        _project: &ProjectName,
+        ours: &str,
+        theirs: &str,
+    ) -> Result<Vec<String>, GitError> {
+        let pair = ordered(ours, theirs);
+        self.merged.borrow_mut().push(pair.clone());
+        Ok(self
+            .between
+            .borrow()
+            .get(&pair)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn fetch_watched(
+        &self,
+        project: &ProjectName,
+        upstream: &Upstream,
+        target: &str,
+    ) -> Result<String, GitError> {
+        if self.fail_sync {
+            return Err(GitError::Failed("fetch failed".into()));
+        }
+        self.fetched
+            .borrow_mut()
+            .push((project.to_string(), target.into()));
+        self.upstream
+            .borrow()
+            .get(&(root_of(upstream), target.into()))
+            .cloned()
+            .ok_or_else(|| GitError::Failed(format!("the upstream has no {target}")))
+    }
+
+    fn advance(&self, project: &ProjectName, target: &str, commit: &str) -> Result<(), GitError> {
+        self.push(project.as_str(), target, commit);
+        Ok(())
+    }
+}
+
+fn ordered(a: &str, b: &str) -> (String, String) {
+    if a <= b {
+        (a.into(), b.into())
+    } else {
+        (b.into(), a.into())
+    }
+}
+
 /// The URL of a remote, as a path, so remotes and repos share one map.
 fn root_of(upstream: &Upstream) -> PathBuf {
     match upstream {
@@ -636,6 +706,7 @@ pub(crate) struct FakeStore {
     /// Every item's, oldest first.
     attachments: Vec<(ItemId, Attachment)>,
     settings: BTreeMap<String, String>,
+    pairs: BTreeMap<ProjectName, Vec<Pair>>,
 }
 
 impl FakeStore {
@@ -1424,6 +1495,22 @@ impl InterdiffStore for FakeStore {
             .filter(|(item, _, t)| item == id && *t == to)
             .map(|(_, from, _)| *from)
             .collect())
+    }
+}
+
+impl ConflictStore for FakeStore {
+    fn pairs(&self, project: Option<&ProjectName>) -> Result<Vec<Pair>, StoreError> {
+        Ok(self
+            .pairs
+            .iter()
+            .filter(|(name, _)| project.is_none_or(|p| p == *name))
+            .flat_map(|(_, pairs)| pairs.iter().cloned())
+            .collect())
+    }
+
+    fn set_pairs(&mut self, project: &ProjectName, pairs: &[Pair]) -> Result<(), StoreError> {
+        self.pairs.insert(project.clone(), pairs.to_vec());
+        Ok(())
     }
 }
 

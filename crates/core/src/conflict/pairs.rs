@@ -1,0 +1,113 @@
+//! Open items test-merged into each other: what the inbox shows as
+//! "conflicts with". It reaches no agent, since only landing one of them
+//! makes it a conflict, and the target watch tells the other's agent then.
+//!
+//! As with the watch, the merges run without the store, between a read and
+//! a save under it.
+
+use std::collections::BTreeMap;
+
+use super::{ConflictError, ConflictGit, ConflictStore, Pair};
+use crate::item::{Item, ItemId, ItemStore};
+use crate::project::ProjectName;
+
+/// A project's open items and the pairs last tried among them.
+#[derive(Debug)]
+pub struct Pairing {
+    project: ProjectName,
+    open: Vec<Item>,
+    cached: Vec<Pair>,
+}
+
+impl Pairing {
+    pub fn read<S: ItemStore + ConflictStore>(
+        store: &S,
+        project: &ProjectName,
+    ) -> Result<Self, ConflictError> {
+        let mut open = store.open_items(Some(project))?;
+        open.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(Self {
+            project: project.clone(),
+            open,
+            cached: store.pairs(Some(project))?,
+        })
+    }
+
+    /// Every two open items with one target, Merging included, as one may
+    /// land any moment. A pair is merged again only once a head moves.
+    pub fn try_all(&self, git: &impl ConflictGit) -> Result<Vec<Pair>, ConflictError> {
+        let mut tried = Vec::new();
+        for (i, item) in self.open.iter().enumerate() {
+            for other in self.open[i + 1..]
+                .iter()
+                .filter(|o| o.target == item.target)
+            {
+                let (item_head, other_head) = (&item.revision.head, &other.revision.head);
+                let known = self.cached.iter().find(|pair| {
+                    pair.item == item.id
+                        && pair.other == other.id
+                        && pair.item_head == *item_head
+                        && pair.other_head == *other_head
+                });
+                let conflicts = match known {
+                    Some(pair) => pair.conflicts,
+                    None => !git
+                        .conflicts(&self.project, item_head, other_head)?
+                        .is_empty(),
+                };
+                tried.push(Pair {
+                    item: item.id.clone(),
+                    item_head: item_head.clone(),
+                    other: other.id.clone(),
+                    other_head: other_head.clone(),
+                    conflicts,
+                });
+            }
+        }
+        Ok(tried)
+    }
+}
+
+/// Replaces the project's pairs with `tried`, and returns whether what the
+/// inbox shows changed. Pairs at heads that moved since they were tried show
+/// nothing, and the pass the move asked for tries them.
+pub fn save_pairs<S: ItemStore + ConflictStore>(
+    store: &mut S,
+    project: &ProjectName,
+    tried: &[Pair],
+) -> Result<bool, ConflictError> {
+    let cached = store.pairs(Some(project))?;
+    if tried == cached {
+        return Ok(false);
+    }
+    store.set_pairs(project, tried)?;
+    let open = store.open_items(Some(project))?;
+    Ok(conflicting(&open, &cached) != conflicting(&open, tried))
+}
+
+/// The open items each of `open` conflicts with, by `pairs` tried at their
+/// heads now. An item with none isn't listed.
+pub fn conflicting(open: &[Item], pairs: &[Pair]) -> BTreeMap<ItemId, Vec<ItemId>> {
+    let head = |id: &ItemId| {
+        open.iter()
+            .find(|item| item.id == *id)
+            .map(|item| &item.revision.head)
+    };
+    let mut conflicts: BTreeMap<ItemId, Vec<ItemId>> = BTreeMap::new();
+    for pair in pairs.iter().filter(|pair| pair.conflicts) {
+        if head(&pair.item) == Some(&pair.item_head) && head(&pair.other) == Some(&pair.other_head)
+        {
+            for (one, two) in [(&pair.item, &pair.other), (&pair.other, &pair.item)] {
+                conflicts.entry(one.clone()).or_default().push(two.clone());
+            }
+        }
+    }
+    for with in conflicts.values_mut() {
+        with.sort();
+    }
+    conflicts
+}
+
+#[cfg(test)]
+#[path = "pairs_tests.rs"]
+mod tests;
