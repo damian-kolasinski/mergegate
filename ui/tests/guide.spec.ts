@@ -68,3 +68,25 @@ test("f11 without a guide there is no intent", async ({ page, hub }) => {
   await expect(screen.getByRole("navigation", { name: "Files" })).toBeVisible();
   await expect(screen.getByRole("region", { name: "Intent" })).toHaveCount(0);
 });
+
+test("f11 a list in the intent keeps its bullets inside", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("copy", "Fix the copy", { "README.md": "# app\n" });
+  const guide = join(hub.root, "guide.md");
+  writeFileSync(guide, "Fixes the copy:\n\n- the title\n- the intro\n");
+  hub.mg(["submit", "--guide", guide], app.dir);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const screen = page.getByRole("region", { name: "app#1" });
+  await screen.locator("summary").filter({ hasText: "Intent" }).click();
+  const list = screen.getByRole("region", { name: "Intent" }).getByRole("list");
+  await expect(list.getByRole("listitem")).toHaveText([
+    "the title",
+    "the intro",
+  ]);
+  // The bullets hang in the padding, past the text's edge without it.
+  await expect(list).not.toHaveCSS("padding-left", "0px");
+});
