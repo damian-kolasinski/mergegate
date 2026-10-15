@@ -1,8 +1,8 @@
 use super::*;
 use crate::diff::{Hunk, Line};
 use crate::item::{ChangedFile, FileMode};
-use FileMode::{Submodule, Symlink};
 use crate::triage::{Rule, RuleId};
+use FileMode::{Submodule, Symlink};
 
 /// A rule as `tier path [kind=K] [max=N] [diff=REGEX]`, `-` for no path.
 fn rule(n: u32, spec: &str) -> Rule {

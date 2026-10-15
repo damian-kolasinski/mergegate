@@ -17,11 +17,12 @@ pub(crate) fn read(
 ) -> rusqlite::Result<Result<[Option<FileMode>; 2], StoreError>> {
     let old: Option<String> = row.get(first)?;
     let new: Option<String> = row.get(first + 1)?;
-    let parse = |mode: Option<String>| {
-        mode.map(|m| {
-            FileMode::parse(&m).ok_or_else(|| StoreError::new(format!("unknown file mode {m:?}")))
-        })
-        .transpose()
-    };
-    Ok((|| Ok([parse(old)?, parse(new)?]))())
+    Ok(parse(old).and_then(|old| Ok([old, parse(new)?])))
+}
+
+fn parse(mode: Option<String>) -> Result<Option<FileMode>, StoreError> {
+    mode.map(|m| {
+        FileMode::parse(&m).ok_or_else(|| StoreError::new(format!("unknown file mode {m:?}")))
+    })
+    .transpose()
 }
