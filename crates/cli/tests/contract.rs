@@ -21,7 +21,7 @@ fn usage_errors_exit_64_not_2() {
     let run = env.mg(&["--json", "hub", "frobnicate"]).assert_code(64);
     let error = &run.json()["error"];
     assert_eq!(error["code"], "usage");
-    assert_eq!(error["hint"], "mg --help");
+    assert_eq!(error["hint"], "mg hub --help");
 
     let run = env.mg(&["--json", "hub"]).assert_code(64);
     let error = &run.json()["error"];
@@ -29,6 +29,42 @@ fn usage_errors_exit_64_not_2() {
     assert_eq!(error["message"], "a subcommand is required");
 
     env.mg(&[]).assert_code(64);
+}
+
+#[test]
+fn json_usage_errors_name_what_is_missing() {
+    let env = env();
+    let run = env.mg(&["--json", "attach", "app#1"]).assert_code(64);
+    let error = &run.json()["error"];
+    assert_eq!(
+        error["message"],
+        "the following required arguments were not provided: <FILES>..."
+    );
+    assert_eq!(error["hint"], "mg attach --help");
+
+    let run = env.mg(&["--json", "connect"]).assert_code(64);
+    let error = &run.json()["error"];
+    assert_eq!(
+        error["message"],
+        "the following required arguments were not provided: <HUB>"
+    );
+    assert_eq!(error["hint"], "mg connect --help");
+
+    let run = env.mg(&["--json", "lang", "add"]).assert_code(64);
+    let error = &run.json()["error"];
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .ends_with("provided: <NAMES|--from <PATH>|--detect [<PROJECT>]>"),
+        "{run:?}"
+    );
+    assert_eq!(error["hint"], "mg lang add --help");
+
+    let run = env.mg(&["--json", "inbox", "--bogus"]).assert_code(64);
+    let error = &run.json()["error"];
+    assert_eq!(error["message"], "unexpected argument '--bogus' found");
+    assert_eq!(error["hint"], "mg inbox --help");
 }
 
 #[test]
