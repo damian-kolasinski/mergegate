@@ -155,6 +155,12 @@ fn f9_a_conflict_sends_the_item_back_to_rebase() {
     assert_eq!(item(&env)["blocked"], conflict);
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(inbox["with_agents"][0]["blocked"], conflict);
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    let blocked = format!(
+        "\n      conflicts with the target at {}: src/login.rs\n",
+        &target[..12]
+    );
+    assert!(text.contains(&blocked), "{text}");
 
     let feedback = env.mg(&["--json", "wait", "app#1"]).assert_code(0).json();
     assert_eq!(feedback["state"], "changes_requested");
@@ -214,6 +220,10 @@ fn f8_a_dirty_checkout_of_the_target_holds_the_merge_until_retried() {
     );
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(inbox["merging"][0]["blocked"]["kind"], "held");
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    // On one line under the item, however many git's reason takes.
+    let held = reason.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(text.contains(&format!("\n      held: {held}")), "{text}");
 
     // Held is still the operator's to act on, so the agent's wait for them
     // keeps waiting; a plain wait shows it.

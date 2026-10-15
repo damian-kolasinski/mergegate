@@ -168,6 +168,8 @@ fn f7_shows_what_changed_since_the_last_review_over_a_moved_base() {
         inbox["needs_you"][0]["changed_since"],
         json!({ "revision": 1, "files": 2 })
     );
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    assert!(text.contains(" · 2 changed since r1)"), "{text}");
 }
 
 #[test]
