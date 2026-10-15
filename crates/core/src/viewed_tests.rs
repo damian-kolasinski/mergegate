@@ -78,7 +78,7 @@ fn marks_and_unmarks_a_file() {
     let mut store = revised();
     mark(&mut store, marking(2, "src/login.rs", true)).unwrap();
     mark(&mut store, marking(2, "README.md", true)).unwrap();
-    assert_eq!(viewed_in_diff(&store), ["README.md", "src/login.rs"]);
+    assert_eq!(viewed_in_diff(&store), ["src/login.rs", "README.md"]);
 
     mark(&mut store, marking(2, "README.md", false)).unwrap();
     mark(&mut store, marking(2, "README.md", false)).unwrap();

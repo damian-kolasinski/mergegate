@@ -5,12 +5,13 @@
 //! `Env::new(env!("CARGO_BIN_EXE_mg"))`.
 //!
 //! [`TestRepo`] builds the real git repositories those hubs work on, and
-//! [`FakeGithub`] stands in for GitHub.
+//! [`FakeGithub`] stands in for GitHub, [`FakeJev`] for the Jev judge.
 
 mod env;
 mod files;
 mod github;
 mod http;
+mod jev;
 mod repo;
 mod tailscale;
 
@@ -21,5 +22,6 @@ pub use github::{
     NewComment as GithubNewComment, Pull as GithubPull, PullState as GithubPullState,
 };
 pub use http::{Reply, http, http_reply};
+pub use jev::{FakeJev, JEV_KEY};
 pub use repo::{TestRepo, commit_files, git};
 pub use tailscale::{FakeTailscale, HUB_OWNER};

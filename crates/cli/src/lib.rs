@@ -10,6 +10,7 @@ mod feedback_cmd;
 mod hub_cmd;
 mod inbox_cmd;
 mod init_cmd;
+mod judge_cmd;
 mod lang_cmd;
 pub mod output;
 mod prioritize_cmd;
@@ -76,6 +77,9 @@ enum Command {
     /// The rules that sort a project's files into review and trusted
     #[command(subcommand)]
     Rules(rules_cmd::RulesCommand),
+    /// The model that ranks a project's files by how much they need review
+    #[command(subcommand)]
+    Judge(judge_cmd::JudgeCommand),
     /// In a clone: add the `mergegate` remote, pointing at its project
     Init {
         /// Project to push to [default: the one registered for this repo]
@@ -225,6 +229,7 @@ fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
         Command::Project(command) => project_cmd::run(command),
         Command::Lang(command) => lang_cmd::run(command),
         Command::Rules(command) => rules_cmd::run(command),
+        Command::Judge(command) => judge_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
         Command::Submit {
             title,

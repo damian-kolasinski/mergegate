@@ -7,9 +7,10 @@ use super::diff_files::compute_diffs;
 use super::{ChangedFile, FileStat, Item, ItemError, ItemId, ItemState, ItemStore};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::interdiff::{Change, InterdiffStore};
+use crate::judge::JudgeStore;
 use crate::review::{self, Conversation, ReviewStore};
 use crate::store::StoreError;
-use crate::triage::{Guide, Tier, Triage};
+use crate::triage::{self, Guide, Hint, Rank, Tier, Triage};
 use crate::viewed::ViewedStore;
 
 /// What the newest revision's files are diffed from.
@@ -37,10 +38,9 @@ pub struct ItemDiff {
     /// The earlier revisions there's an interdiff from, ascending; none once
     /// the item is closed.
     pub interdiffs: Vec<u32>,
-    /// The files to review in the guide's order, the rest of them in path
-    /// order, then the trusted ones in path order. Since an earlier revision,
-    /// every file the newest changes, and those the earlier one did that it
-    /// no longer does.
+    /// The files to review in [`triage::order`], then the trusted ones in
+    /// path order. Since an earlier revision, every file the newest changes,
+    /// and those the earlier one did that it no longer does.
     pub files: Vec<DiffedFile>,
     /// The agent's review guide, as it sent it.
     pub guide: Option<String>,
@@ -60,12 +60,23 @@ pub struct DiffedFile {
     /// without a mark.
     pub viewed: bool,
     pub generated: bool,
+    /// The tier is review for a file the judge promoted, `by` still the
+    /// rule that trusted it.
     pub triage: Triage,
     /// Why the guide says to review the file; none for a trusted one.
     pub reason: Option<String>,
     /// How the file changed since the earlier revision; none against the
     /// base.
     pub change: Option<Change>,
+    /// The judge's score, 1 to 100; none when it hasn't judged the file.
+    pub importance: Option<u8>,
+    /// The judge's one line on the file.
+    pub judge_reason: Option<String>,
+    /// A rule trusted the file and the judge pulled it back into review.
+    pub promoted: bool,
+    /// The judge's score put the file ahead of the guide's order.
+    pub raised: bool,
+    pub hint: Option<Hint>,
 }
 
 /// `None` when there's no such item. An open item's diffs were all cached at
@@ -75,7 +86,9 @@ pub struct DiffedFile {
 ///
 /// A closed item shows all changes: its interdiffs' diffs were dropped with
 /// the rest.
-pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore + InterdiffStore>(
+pub fn item_diff<
+    S: ItemStore + DiffStore + ViewedStore + ReviewStore + InterdiffStore + JudgeStore,
+>(
     store: &S,
     git: &impl DiffGit,
     id: &ItemId,
@@ -152,30 +165,88 @@ pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore + Interdif
     }
     let guide = store.guide(id, item.revision.number)?;
     let parsed = Guide::parse(guide.as_deref().unwrap_or_default());
-    let mut files: Vec<DiffedFile> = stats
-        .into_iter()
-        .zip(contents)
-        .zip(changes)
-        .map(|((stat, content), change)| DiffedFile {
+    let setting = store.judge_setting(id.project())?;
+    let mut verdicts = BTreeMap::new();
+    if let Some(setting) = &setting {
+        let given = store.verdicts(id, newest, &setting.key())?;
+        verdicts.extend(
+            given
+                .unwrap_or_default()
+                .into_iter()
+                .map(|v| (v.path.clone(), v)),
+        );
+    }
+    let (mut review, mut trusted) = (Vec::new(), Vec::new());
+    for ((stat, content), change) in stats.into_iter().zip(contents).zip(changes) {
+        let verdict = verdicts.remove(&stat.file.path);
+        let mut triage = stat.triage;
+        let promoted = triage.tier == Tier::Trusted
+            && setting.as_ref().is_some_and(|s| {
+                verdict
+                    .as_ref()
+                    .and_then(|v| v.promote)
+                    .is_some_and(|p| p >= s.threshold)
+            });
+        if promoted {
+            triage.tier = Tier::Review;
+        }
+        let file = DiffedFile {
             // A dropped file isn't one of the newest revision's.
             viewed: change != Some(Change::Dropped) && viewed.contains(&stat.file.path),
             generated: stat.generated,
-            reason: (stat.triage.tier == Tier::Review)
+            reason: (triage.tier == Tier::Review)
                 .then(|| parsed.reason(&stat.file.path).map(str::to_owned))
                 .flatten(),
-            triage: stat.triage,
+            // Nothing in a file unchanged since the earlier revision is new
+            // to the operator, so there's nothing to rank it by.
+            hint: (change != Some(Change::Unchanged))
+                .then(|| {
+                    triage::hint(
+                        &stat.file.path,
+                        stat.generated,
+                        stat.additions,
+                        stat.deletions,
+                        content.as_ref(),
+                    )
+                })
+                .flatten(),
+            importance: verdict.as_ref().map(|v| v.importance),
+            judge_reason: verdict.and_then(|v| v.reason),
+            promoted,
+            raised: false,
+            triage,
             file: stat.file,
             additions: stat.additions,
             deletions: stat.deletions,
             content,
             change,
+        };
+        match file.triage.tier {
+            Tier::Review => review.push(file),
+            Tier::Trusted => trusted.push(file),
+        }
+    }
+    let ranks: Vec<Rank> = review
+        .iter()
+        .map(|f| Rank {
+            path: &f.file.path,
+            importance: f.importance,
+            hint: f.hint,
         })
         .collect();
-    // Stable, so files the guide doesn't place keep their path order.
-    files.sort_by_key(|f| match f.triage.tier {
-        Tier::Review => (0, parsed.position(&f.file.path).unwrap_or(usize::MAX)),
-        Tier::Trusted => (1, 0),
-    });
+    let placed = triage::order(&ranks, &parsed);
+    let mut slots: Vec<Option<DiffedFile>> = review.into_iter().map(Some).collect();
+    let mut files: Vec<DiffedFile> = placed
+        .into_iter()
+        .filter_map(|p| {
+            let mut file = slots[p.index].take()?;
+            file.raised = p.raised;
+            Some(file)
+        })
+        .collect();
+    // In path order, as the store lists them: they're there to open, not to
+    // work through.
+    files.append(&mut trusted);
     let mut conversation = review::read_conversation(store, id, newest)?;
     conversation.placements =
         review::placements(store, git, &item, newest, &conversation.comments)?;

@@ -9,7 +9,8 @@ pub enum UiEvent {
     #[serde(rename = "inbox.changed")]
     InboxChanged,
     /// The item's thread changed: its agent replied or submitted a new
-    /// revision, which addresses replies.
+    /// revision, which addresses replies. Also sent when the judge scored
+    /// the newest revision's files.
     #[serde(rename = "item.changed")]
     ItemChanged {
         /// As in `app#42`.

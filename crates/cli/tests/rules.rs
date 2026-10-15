@@ -383,7 +383,9 @@ fn f12_agents_propose_rules_the_operator_approves() {
         [&review["rule"]["id"], &review["state"], &review["preview"]],
         [&json!("R1"), &json!("applied"), &Value::Null]
     );
-    assert_eq!(triage(&env)[1]["rule"], "R1");
+    // First, as the heuristics rank a lockfile low.
+    assert_eq!(triage(&env)[0]["path"], "src/main.rs");
+    assert_eq!(triage(&env)[0]["rule"], "R1");
     assert!(
         rules_file(&env).contains("id = \"R1\""),
         "{}",

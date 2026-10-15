@@ -2,13 +2,17 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
 /** The binaries the tests run, by name, and the variable naming each. */
-const BINS = { mg: "MG_BIN", "fake-github": "FAKE_GITHUB_BIN" } as const;
+const BINS = {
+  mg: "MG_BIN",
+  "fake-github": "FAKE_GITHUB_BIN",
+  "fake-jev": "FAKE_JEV_BIN",
+} as const;
 
 /**
  * Builds the `mg` under test, with the UI this checkout holds: `MG_REQUIRE_UI`
  * fails the build instead of embedding the stub page. Also builds testkit's
- * `fake-github`. `MG_BIN` or `FAKE_GITHUB_BIN` skips a build and tests that
- * binary instead.
+ * `fake-github` and `fake-jev`. A binary's variable, as `MG_BIN`, skips its
+ * build and tests that binary instead.
  */
 export default function globalSetup() {
   const missing = Object.entries(BINS)

@@ -1,0 +1,74 @@
+//! The order of the files to review: what the judge scores highest, highest
+//! first, then the guide's list, then the judge's scores, the heuristics and
+//! the path.
+
+use std::cmp::Reverse;
+
+use super::Guide;
+use super::heuristic::Hint;
+
+/// A judge score from this up puts a file ahead of the guide's list, which
+/// the authoring agent wrote about its own work.
+pub const RAISE_AT: u8 = 80;
+
+/// What a file the judge skipped counts as: an average one, so it neither
+/// sinks below every scored file nor rises above them.
+const UNSCORED: u8 = 50;
+
+/// A file to review, as the order sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rank<'a> {
+    pub path: &'a str,
+    /// The judge's score, 1 to 100; none when it didn't judge the file.
+    pub importance: Option<u8>,
+    pub hint: Option<Hint>,
+}
+
+/// Where a file goes: `index` into the files given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Placed {
+    pub index: usize,
+    /// The judge's score put it ahead of where the guide, or the order
+    /// without that score, would have.
+    pub raised: bool,
+}
+
+/// `files` in review order.
+pub fn order(files: &[Rank], guide: &Guide) -> Vec<Placed> {
+    let usual = |r: &Rank<'_>| {
+        (
+            guide.position(r.path).unwrap_or(usize::MAX),
+            Reverse(r.importance.unwrap_or(UNSCORED)),
+            Reverse(r.hint.map_or(0, Hint::weight)),
+        )
+    };
+    let mut before: Vec<usize> = (0..files.len()).collect();
+    before.sort_by(|&a, &b| {
+        let (a, b) = (&files[a], &files[b]);
+        usual(a).cmp(&usual(b)).then_with(|| a.path.cmp(b.path))
+    });
+    // The raised highest first; stable, so ties and the rest keep the usual
+    // order.
+    let raise = |r: &Rank<'_>| r.importance.filter(|&i| i >= RAISE_AT);
+    let mut after = before.clone();
+    after.sort_by_key(|&i| {
+        let raised = raise(&files[i]);
+        (raised.is_none(), Reverse(raised))
+    });
+    let mut was = vec![0; files.len()];
+    for (at, &index) in before.iter().enumerate() {
+        was[index] = at;
+    }
+    after
+        .into_iter()
+        .enumerate()
+        .map(|(at, index)| Placed {
+            index,
+            raised: at < was[index],
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "order_tests.rs"]
+mod tests;

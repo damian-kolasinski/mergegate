@@ -149,6 +149,11 @@ fn file_to_api(
             triage,
             reason,
             change,
+            importance,
+            judge_reason,
+            promoted,
+            raised,
+            hint,
         },
         spans,
     ): (DiffedFile, FileHighlights),
@@ -193,6 +198,11 @@ fn file_to_api(
             Change::Unseparated => api::diff::Interdiff::Unseparated,
             Change::Dropped => api::diff::Interdiff::Dropped,
         }),
+        importance,
+        judge_reason,
+        promoted,
+        raised,
+        hint: hint.map(|h| h.describe().to_owned()),
     }
 }
 

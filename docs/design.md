@@ -166,7 +166,8 @@ mg project add [PATH] [--name NAME] [--backend github|local] [--github OWNER/REP
                [--target BRANCH] [--languages LIST|none]  PATH in a linked worktree registers its main repo
 mg project set <project> <key> <value>                   backend, target, upstream, github, bots, …
 mg project show [<project>]                              Default: the project at the current directory
-mg judge set none|jev|anthropic|openai-compatible|command [provider options]
+mg judge set none|jev|command [--model M] [--command CMD] [--threshold X] [--project P]
+mg judge show [<project>]                                The judge, and the revisions it failed on
 mg lang list [--available]                               Syntax highlighting language packs (hub only)
 mg lang add <name>... | --detect [<project>] | --from PATH
 mg lang remove <name> | update
@@ -310,15 +311,21 @@ Two groups only. There's no middle "skim" state: importance is expressed by orde
 
 1. **Built-in guards** (always `review`): changes to a `.gitattributes`, which can mark files generated, and any file the operator commented on in an earlier revision that changed again.
 2. **Rules**, first match wins. They are deterministic and explainable ("trusted by rule R7: `**/*.xcstrings`").
-3. **Signals that can rank but never hide.** The authoring agent's guide and the judge can:
+3. **Signals that can rank but never hide.** The authoring agent's guide, the judge and structural heuristics can:
    - order files within `review`, most important first,
-   - attach reasons and flags ("touches navigation state"),
-   - **promote** a rule-trusted file to `review` when its content looks risky (above a confidence threshold, so it isn't noisy).
+   - attach a one-line reason,
+   - **promote**, the judge only, a rule-trusted file to `review` when it is confident the file needs a look (0.8 by default, so it isn't noisy). A promoted file says "promoted by the judge" beside its rule and isn't counted as viewed.
 
    They can never move a file to `trusted`.
 4. Unmatched files default to `review`.
 
-The guide's `## Files` list orders the files to review; the ones it leaves out follow in path order, and the trusted ones come last. It can neither hide nor promote a file.
+The files to review are ordered:
+
+1. Files the judge scores 80 or more of 100, highest first. One that rose above where the guide would have put it says "raised by the judge".
+2. The guide's `## Files` list, in its order. The guide alone can neither hide nor promote a file.
+3. The rest by the judge's score, a file it skipped counting as 50, then the heuristics, then path.
+
+The trusted files come last, in path order. The heuristics read only paths and the diff, with no parse: lockfiles, generated files, tests, docs and pure deletions sink; migrations, changed declarations (a function, type or export) and config rise. A file nothing else explains shows the heuristic's hint ("ranked low: tests"). Promotion and order are applied when the item is read, so a rule change re-sorts without a new judge call.
 
 The asymmetry matters: the authoring agent grades its own work, and the judge can be wrong. Hiding a file is therefore always the result of a rule the operator approved.
 
@@ -344,16 +351,25 @@ Matchers (v1): path glob (`*` stays within a directory), change kind (added / de
 
 ### 7.4 Judge providers
 
-Interface: `classify(files, item context) → [{path, promote, rank, reason, flags, confidence}]`. `promote` can only move a rule-trusted file to `review` (§7.2); there's no way to suggest `trusted`.
+Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
 
 | Provider | Notes |
 |---|---|
-| `none` (default) | Rules + authoring-agent guide only. Fully functional. |
-| `jev` (TypeSafe AI) | Very fast (70–500ms) and cheap, with calibrated confidences, so the promotion threshold is meaningful. Hosted, early-access, and doesn't take images yet. Opt-in. |
-| `anthropic` / `openai-compatible` | e.g. Haiku via API key, or Ollama locally. |
-| `command` | Shell out to an installed agent CLI (`claude -p`, `codex exec`) with a JSON contract. |
+| `none` (default) | Rules, the guide and the heuristics. Fully functional. |
+| `jev` (TypeSafe AI) | Very fast and cheap, with calibrated confidences, so the threshold is meaningful. The only API provider; its key is `TYPESAFE_API_KEY` in the hub's environment, read on each call. Pinned to `jev-1.13.0` unless `--model` says otherwise. Each file gets a 10-level score (0–9, mapped onto 1–100) and each trusted one a yes/no "needs a look", whose probability is `promote`; a file a rule trusts only after the call isn't asked about, so Jev can't promote it. 429 and 529 retry with backoff. A change too large for one call is split into chunks of whole files grouped by directory, each with the full file map; a file too large alone, or binary, goes unjudged, never truncated. |
+| `command` | Any other model (`claude -p`, `codex exec`, Ollama): `sh -c CMD` in the project's repo, in its own process group, killed after five minutes. |
 
-Any hosted provider sees diff content, so it's opt-in per project. Judge results are cached per (file blob, rules version).
+The command reads the change as JSON on stdin and prints its verdicts on stdout. Fields are only ever added:
+
+```
+stdin:  {"item": "app#42", "revision": 2, "title": "…", "guide": "…" | null,
+         "files": [{"path", "old_path", "change": "added|deleted|renamed|modified",
+                    "additions", "deletions", "tier": "review|trusted", "generated",
+                    "diff": "unified hunks" | null}]}
+stdout: {"files": [{"path", "importance": 1-100, "reason"?: "one line", "promote"?: 0-1}]}
+```
+
+The judge is per project and off until the operator picks one, since it sends their code to a model. It runs in the background, like highlighting: a submit or `mg judge set` wakes it, it judges the newest revision of every open item that lacks a verdict from the project's judge, and the UI is pinged when verdicts land; a submit never waits. Verdicts are kept per (revision, judge), where the judge is its provider and model or command; the threshold applies on read. A failed call is logged once and shown by `mg judge show` until the next `mg judge set` or hub start, which retry it; meanwhile the item reads as with no judge.
 
 ## 8. Backends
 
@@ -435,7 +451,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - **Viewed marks follow a file while it's unchanged:** marking or unmarking it on rK applies to every later revision where it hasn't changed since rK, then and when a later revision arrives.
 - **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can agree, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. Sync GitHub refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
-- **Intent panel** under the header, above the demo: the agent's guide as plain text, as written, folding away. Each file to review carries the guide's reason for it, and each trusted one the rule that hid it ("trusted by R3: `glob` — reason").
+- **Intent panel** under the header, above the demo: the agent's guide as plain text, as written, folding away. Each file to review carries the guide's reason for it, the judge's score and reason ("raised by the judge 92/100: …"), and each trusted or promoted one the rule ("trusted by R3: `glob` — reason", "promoted by the judge; trusted by R3: …"); a file with none of these shows its heuristic hint.
 - **Demo panel** under the header: thumbnails of the screenshots and recordings attached with `mg submit --attach` or `mg attach`. A click opens one full size, videos with controls; ←/→ step through them and Escape closes the viewer. Attachments belong to a revision: the panel shows the newest revision's, or, while it has none, the newest earlier revision's, labeled "from rN", so a small fix needn't be recorded again; with the revision selector it follows the selected revision. Only PNG, JPEG, GIF, WebP, MP4 and WebM up to 100 MB, typed by their bytes, since the hub serves them from its own origin. GitHub items keep theirs in mergegate: GitHub has no upload API. An attach updates the screen and the inbox's `▶ demo` marker live; it tells the agent nothing.
 - **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.
 - **Approve & merge** asks first, showing how many files are still unviewed without blocking on them; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge shows the upstream's reason under the header with Retry and Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.

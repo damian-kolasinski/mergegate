@@ -2,8 +2,10 @@ use super::*;
 use crate::diff::{Content, LineKind};
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit, rebased, submit_login};
 use crate::item::{Submit, submit};
+use crate::judge::{JudgeSetting, JudgeStore, Provider, Verdict};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
-use crate::review::{NewReview, Verdict};
+use crate::review::NewReview;
+use crate::triage::{Hint, RulesStore, Tier, Triage};
 
 /// `app#1`: c2 adds `src/login.rs` and changes `README.md` on top of c1.
 fn submitted() -> FakeStore {
@@ -52,15 +54,16 @@ fn id(id: &str) -> ItemId {
 }
 
 #[test]
-fn reads_every_files_diff_in_path_order() {
+fn reads_every_files_diff() {
     let store = submitted();
     let diff = item_diff(&store, &FakeGit::default(), &id("app#1"), Compare::Default)
         .unwrap()
         .unwrap();
     assert_eq!(diff.item.title, "Add login");
     let paths: Vec<&str> = diff.files.iter().map(|f| f.file.path.as_str()).collect();
-    assert_eq!(paths, ["README.md", "src/login.rs"]);
-    let readme = &diff.files[0];
+    assert_eq!(paths, ["src/login.rs", "README.md"], "docs sink");
+    assert_eq!(diff.files[1].hint, Some(Hint::Docs));
+    let readme = &diff.files[1];
     assert_eq!(readme.file.old_blob, Some(format!("{}\n", commit(1))));
     let Some(Content::Text(hunks)) = &readme.content else {
         panic!("not text: {:?}", readme.content);
@@ -153,7 +156,7 @@ fn request_changes(store: &mut FakeStore, revision: u32) {
     let review = NewReview {
         item: id("app#1"),
         revision,
-        verdict: Verdict::ChangesRequested,
+        verdict: crate::review::Verdict::ChangesRequested,
         summary: String::new(),
         moved: Vec::new(),
     };
@@ -183,15 +186,16 @@ fn shows_what_changed_since_an_earlier_revision() {
     assert_eq!(diff.interdiffs, [1, 2]);
     assert_eq!(
         changes(&diff),
+        // The dropped file only removes lines, so it ranks last.
         [
-            ("src/api.rs", Some(Change::Dropped)),
             ("src/db.rs", Some(Change::Unseparated)),
             ("src/lib.rs", Some(Change::Changed)),
             ("src/login.rs", Some(Change::Unchanged)),
             ("src/token.rs", Some(Change::Changed)),
+            ("src/api.rs", Some(Change::Dropped)),
         ]
     );
-    let lib = &diff.files[2];
+    let lib = &diff.files[1];
     let Some(Content::Text(hunks)) = &lib.content else {
         panic!("lib.rs has no text diff");
     };
@@ -277,4 +281,122 @@ fn a_dropped_file_is_never_viewed() {
         .map(|f| f.file.path.as_str())
         .collect();
     assert_eq!(viewed, ["src/lib.rs"]);
+}
+
+fn judged(store: &mut FakeStore, verdicts: &[(&str, u8, Option<f64>)]) {
+    let setting = JudgeSetting {
+        provider: Provider::Command {
+            command: "judge".into(),
+        },
+        threshold: 0.8,
+    };
+    let app = ProjectName::parse("app").unwrap();
+    store.set_judge_setting(&app, Some(&setting)).unwrap();
+    let verdicts: Vec<Verdict> = verdicts
+        .iter()
+        .map(|&(path, importance, promote)| Verdict {
+            path: path.into(),
+            importance,
+            reason: Some(format!("{path} matters")),
+            promote,
+        })
+        .collect();
+    store
+        .insert_verdicts(&id("app#1"), 1, &setting.key(), &verdicts)
+        .unwrap();
+}
+
+fn trust(store: &mut FakeStore, path: &str) {
+    let triage = Triage {
+        tier: Tier::Trusted,
+        by: None,
+    };
+    store
+        .set_triage(&id("app#1"), 1, &[(path.into(), triage)])
+        .unwrap();
+}
+
+#[test]
+fn the_judge_orders_and_a_high_score_goes_ahead_of_the_guide() {
+    let mut store = submitted();
+    let guide = "## Files\n- `src/login.rs`\n";
+    store.set_guide(&id("app#1"), 1, Some(guide)).unwrap();
+    judged(
+        &mut store,
+        &[("README.md", 40, None), ("src/login.rs", 10, None)],
+    );
+    let read = |store: &FakeStore| {
+        let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::Default)
+            .unwrap()
+            .unwrap();
+        diff.files
+            .into_iter()
+            .map(|f| (f.file.path, f.importance, f.raised))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        read(&store),
+        [
+            ("src/login.rs".into(), Some(10), false),
+            ("README.md".into(), Some(40), false),
+        ]
+    );
+    judged(
+        &mut store,
+        &[("README.md", 90, None), ("src/login.rs", 10, None)],
+    );
+    assert_eq!(
+        read(&store),
+        [
+            ("README.md".into(), Some(90), true),
+            ("src/login.rs".into(), Some(10), false),
+        ]
+    );
+}
+
+#[test]
+fn the_judge_promotes_a_trusted_file_from_the_threshold() {
+    let mut store = submitted();
+    trust(&mut store, "src/login.rs");
+    let read = |store: &FakeStore| {
+        let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::Default)
+            .unwrap()
+            .unwrap();
+        diff.files
+            .into_iter()
+            .map(|f| (f.file.path, f.triage.tier, f.promoted, f.judge_reason))
+            .collect::<Vec<_>>()
+    };
+    judged(&mut store, &[("src/login.rs", 30, Some(0.79))]);
+    assert_eq!(
+        read(&store),
+        [
+            ("README.md".into(), Tier::Review, false, None),
+            (
+                "src/login.rs".into(),
+                Tier::Trusted,
+                false,
+                Some("src/login.rs matters".into())
+            ),
+        ]
+    );
+    judged(&mut store, &[("src/login.rs", 30, Some(0.8))]);
+    // The README, unscored, counts as an average file, over login.rs's 30.
+    assert_eq!(
+        read(&store),
+        [
+            ("README.md".into(), Tier::Review, false, None),
+            (
+                "src/login.rs".into(),
+                Tier::Review,
+                true,
+                Some("src/login.rs matters".into())
+            ),
+        ]
+    );
+
+    // Verdicts from a judge the project no longer has don't count.
+    let app = ProjectName::parse("app").unwrap();
+    store.set_judge_setting(&app, None).unwrap();
+    assert_eq!(read(&store)[1].1, Tier::Trusted);
 }

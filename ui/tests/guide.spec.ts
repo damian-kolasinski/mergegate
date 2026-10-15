@@ -39,7 +39,7 @@ test("f11 the guide is the intent and orders the review", async ({
   await expect(files.getByRole("listitem")).toHaveText([
     /^src\/parser\.rs\s*the new parser, start here\s*\+1$/,
     /^src\/main\.rs\s*now only calls it\s*\+1$/,
-    /^README\.md\s*\+1$/,
+    /^README\.md\s*ranked low: docs\s*\+1$/,
   ]);
   const current = files.locator("li[aria-current=true]");
   await expect(current).toContainText("src/parser.rs");

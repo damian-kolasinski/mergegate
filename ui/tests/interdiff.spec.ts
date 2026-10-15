@@ -43,7 +43,7 @@ test("f7 a new revision shows what changed since the review", async ({
   const diff = screen.getByRole("region", { name: "Diff" });
   const review = page.getByRole("form", { name: "Review" });
   const current = files.locator("li[aria-current=true]");
-  await page.keyboard.press("n");
+  // It adds a declaration, which ranks it first.
   await expect(current).toContainText("src/login.rs");
   await files.getByLabel("Viewed src/login.rs").check();
   await requestChanges(page);
@@ -80,8 +80,8 @@ test("f7 a new revision shows what changed since the review", async ({
 
   await screen.getByLabel("Compare").selectOption("all");
   await expect(files.getByRole("listitem")).toHaveText([
-    /^src\/lib\.rs/,
     /^src\/login\.rs/,
+    /^src\/lib\.rs/,
   ]);
   await expect(files.getByText("unchanged since")).toHaveCount(0);
   await expect(summary).toHaveValue("Closer.");

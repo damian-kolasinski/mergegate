@@ -138,10 +138,24 @@ function FileEntry(props: {
             </span>
           )}
         </Show>
+        <Show when={judged(props.file)}>
+          {(line) => (
+            <span class={styles.why} title={line()}>
+              <Meta>{line()}</Meta>
+            </span>
+          )}
+        </Show>
         <Show when={props.file.why}>
           {(why) => (
             <span class={styles.why} title={why()}>
               <Meta>{tier(props.file, why())}</Meta>
+            </span>
+          )}
+        </Show>
+        <Show when={hint(props.file)}>
+          {(hint) => (
+            <span class={styles.why} title={hint()}>
+              <Meta>{hint()}</Meta>
             </span>
           )}
         </Show>
@@ -155,9 +169,28 @@ function FileEntry(props: {
   );
 }
 
+/** The judge's score and line, as in "judged 87/100: touches the expiry". */
+function judged(file: File): string | undefined {
+  if (file.importance === null) return undefined;
+  const score = `${file.raised ? "raised by the judge" : "judged"} ${file.importance}/100`;
+  return file.judge_reason ? `${score}: ${file.judge_reason}` : score;
+}
+
+/**
+ * The heuristics' hint, only when nothing else says why the file is where it
+ * is.
+ */
+function hint(file: File): string | null {
+  if (file.reason || file.importance !== null || file.why) return null;
+  return file.hint;
+}
+
 /** Why the file is where it is, as in "trusted by R3: `*.lock` — lockfile". */
 function tier(file: File, why: string): string {
   if (!file.rule) return `kept in review: ${why}`;
+  if (file.promoted) {
+    return `promoted by the judge; trusted by ${file.rule}: ${why}`;
+  }
   return `${file.tier === "trusted" ? "trusted" : "reviewed"} by ${file.rule}: ${why}`;
 }
 

@@ -9,7 +9,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { test as base } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
+import type { Rules } from "../api/Rules";
 import { FakeGithub } from "./github";
 
 /**
@@ -68,6 +69,24 @@ export class Hub {
     this.mg(["project", "add", "--backend", "github"], dir);
     this.mg(["init"], dir);
     return new Project(this, dir);
+  }
+
+  /**
+   * Writes `project`'s rules.toml where the hub reads it, and approves it as
+   * the operator, as a trusted rule in it waits for them.
+   */
+  async rules(project: string, text: string) {
+    const dir = join(this.root, "home", "projects", project);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "rules.toml"), text);
+    const route = `${this.url}api/projects/${project}/rules`;
+    const read = (await (await fetch(route)).json()) as Rules;
+    if (read.edit === null) return;
+    const approved = await fetch(`${route}/edit/approve`, {
+      method: "POST",
+      headers: { "x-mergegate-client": "ui" },
+    });
+    expect(approved.status).toBe(200);
   }
 
   stop() {
@@ -164,7 +183,7 @@ export const test = base.extend<{
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect };
 
 function mgBin(): string {
   const bin = process.env.MG_BIN;

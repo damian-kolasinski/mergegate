@@ -151,12 +151,13 @@ fn f7_shows_what_changed_since_the_last_review_over_a_moved_base() {
 
     let all = get(&env, "/api/items/app%231?since=all");
     assert_eq!(all["since"], Value::Null);
+    // Against the base, login.rs declares a function, which ranks it first.
     assert_eq!(
         files(&all),
         [
+            file("src/login.rs", Value::Null, true),
             file("src/db.rs", Value::Null, false),
             file("src/lib.rs", Value::Null, false),
-            file("src/login.rs", Value::Null, true),
         ]
     );
     let since = get(&env, "/api/items/app%231?since=1");

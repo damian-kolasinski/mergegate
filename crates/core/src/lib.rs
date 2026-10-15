@@ -17,6 +17,7 @@ pub mod github;
 pub mod highlight;
 pub mod interdiff;
 pub mod item;
+pub mod judge;
 pub mod merge;
 pub mod project;
 pub mod remap;

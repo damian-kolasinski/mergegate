@@ -2089,6 +2089,8 @@ dependencies = [
  "mergegate-core",
  "mergegate-git",
  "mergegate-highlight",
+ "mergegate-judge-command",
+ "mergegate-judge-jev",
  "mergegate-lang-release",
  "mergegate-rules-toml",
  "mergegate-store-sqlite",
@@ -2100,6 +2102,25 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "mergegate-judge-command"
+version = "0.1.0"
+dependencies = [
+ "mergegate-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "mergegate-judge-jev"
+version = "0.1.0"
+dependencies = [
+ "mergegate-core",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]

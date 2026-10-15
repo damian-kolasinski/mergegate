@@ -25,8 +25,8 @@ pub struct ItemDiff {
     /// The earlier revisions `since` may name, ascending; none once the item
     /// is closed.
     pub interdiffs: Vec<u32>,
-    /// The files to review in the guide's order, the rest of them in path
-    /// order, then the trusted ones in path order.
+    /// The files to review, ranked by the guide, the judge and the
+    /// heuristics (design §7.2), then the trusted ones in path order.
     pub files: Vec<File>,
     /// The agent's review guide, Markdown as it sent it.
     pub guide: Option<String>,
@@ -73,6 +73,18 @@ pub struct File {
     /// Blobs, counts and content are the interdiff's for `changed` and
     /// `dropped` files, the revision's own otherwise.
     pub interdiff: Option<Interdiff>,
+    /// The judge's score, 1 to 100; null when it hasn't judged the file.
+    pub importance: Option<u8>,
+    /// The judge's one line on the file.
+    pub judge_reason: Option<String>,
+    /// A rule trusted the file and the judge pulled it back into review;
+    /// `rule` and `why` still name the rule.
+    pub promoted: bool,
+    /// The judge's score put the file ahead of the guide's order.
+    pub raised: bool,
+    /// Why the heuristics ranked the file as they did, as in `ranked low:
+    /// lockfile`.
+    pub hint: Option<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

@@ -1,0 +1,15 @@
+[package]
+name = "mergegate-judge-jev"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mergegate-core.workspace = true
+serde_json = "1.0.154"
+ureq = { version = "3.4.2", default-features = false, features = ["json", "rustls"] }
