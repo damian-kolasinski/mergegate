@@ -42,6 +42,50 @@ fn start_status_stop() {
     assert_eq!(status, json!({"running": false, "home": home}));
 }
 
+/// A hub process paused with SIGSTOP, resumed when dropped so the test's
+/// `Env` can stop it even after a failed assertion.
+struct Paused(String);
+
+impl Paused {
+    fn new(pid: u64) -> Self {
+        let pid = pid.to_string();
+        assert!(
+            std::process::Command::new("kill")
+                .args(["-STOP", &pid])
+                .status()
+                .unwrap()
+                .success()
+        );
+        Self(pid)
+    }
+}
+
+impl Drop for Paused {
+    fn drop(&mut self) {
+        let _ = std::process::Command::new("kill")
+            .args(["-CONT", &self.0])
+            .status();
+    }
+}
+
+#[test]
+fn a_hub_that_does_not_answer_is_reported_as_such_not_as_stopped() {
+    let env = env();
+    let pid = env.start_hub()["pid"].as_u64().unwrap();
+    let _paused = Paused::new(pid);
+
+    let run = env.mg(&["--json", "inbox"]).assert_code(69);
+    let error = &run.json()["error"];
+    assert_eq!(error["code"], "hub_unresponsive", "{run:?}");
+    assert_eq!(
+        error["hint"],
+        format!("kill {pid}, then mg hub start"),
+        "{run:?}"
+    );
+    let status = env.mg(&["--json", "hub", "status"]).assert_code(0).json();
+    assert_eq!(status["unresponsive"], true);
+}
+
 #[test]
 fn start_is_a_no_op_while_the_hub_runs() {
     let env = env();

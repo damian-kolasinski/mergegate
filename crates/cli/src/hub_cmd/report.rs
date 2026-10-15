@@ -79,7 +79,7 @@ pub(super) fn exited(printed: &[u8], home: &Home) -> CliError {
     }
 }
 
-pub(super) fn unresponsive(home: &Home) -> CliError {
+pub(crate) fn unresponsive(home: &Home) -> CliError {
     let hint = match home.read_info() {
         Some(info) => format!("kill {}, then mg hub start", info.pid),
         None => format!(

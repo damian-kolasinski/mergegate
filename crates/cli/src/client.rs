@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use ureq::http::Response;
 
 use crate::hub_cmd::probe::probe;
+use crate::hub_cmd::report::unresponsive;
 use crate::output::{CliError, exit};
 
 pub(crate) struct Client {
@@ -212,6 +213,11 @@ pub(crate) fn running(home: &Home) -> Result<Hub, CliError> {
         return reach(&connection.url);
     }
     let running = probe(home).ok_or_else(|| {
+        // `mg hub start` refuses while a hub holds the lock, so hinting it
+        // for a hub that hangs would send the agent in a circle.
+        if home.is_locked() {
+            return unresponsive(home);
+        }
         CliError::new("hub_unavailable", "the hub is not running")
             .hint("mg hub start")
             .exit(exit::UNAVAILABLE)
