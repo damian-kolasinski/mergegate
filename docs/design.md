@@ -155,7 +155,7 @@ Command design rules:
 ### 6.0 Setup and configuration
 
 ```
-mg hub start [--foreground] [--port N] | stop | status
+mg hub start [--foreground] [--port N] | stop | status  start installs a user service; stop removes it
 mg hub set listen local|tailnet
 mg hub set attachment-ttl <duration>                     How long a closed item keeps its demos (default 2d)
 mg hub devices | allow <device> | deny <device>         Tailscale devices allowed to connect
@@ -172,11 +172,13 @@ mg lang remove <name> | update
 
 mg connect <hub>                                         On a worker: point the CLI at a hub
 mg init                                                  In any clone: add the `mergegate` remote
-mg doctor                                                Check hub, auth, remote, GitHub access
+mg doctor                                                Check hub, service, auth, skill, remote, GitHub access
 mg skill install [--dir PATH]                            Write the agent skill and print where (§11)
 ```
 
 `MERGEGATE_HOME` selects the data directory (default `~/.mergegate`) for both the hub and the CLI, which finds the hub's address there. A development build can run next to the installed one without sharing state.
+
+`mg hub start` for the default home runs the hub as a user service: a launchd agent (`dev.mergegate.hub`) on macOS, a systemd user unit (`mergegate-hub.service`) on Linux. It starts at login and is restarted after a crash or failed start, but not after `mg hub stop`, which also removes the unit. The unit runs the `mg` that wrote it with that shell's `PATH`; `mg doctor` warns when it runs another. Where no service manager is usable (no systemd user session) the hub starts detached with a warning. A hub with `MERGEGATE_HOME` set, or started `--foreground`, never touches a unit, so a development build or a test can't replace the installed hub's.
 
 A repo with a GitHub remote is asked which backend to use (a `needs_decision`, defaulting to `github`); one without lands on `local`. The GitHub repository is origin's if origin is on github.com, else the only github.com remote, else a `needs_decision`; `--github` names it and implies `--backend github`. The hub checks that the operator can push to it before registering. A local project keeps its GitHub repository, so switching backends back and forth needs no flags.
 

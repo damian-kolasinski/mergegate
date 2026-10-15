@@ -5,6 +5,7 @@ use hub::Home;
 use super::POLL;
 use super::probe::{agent, probe};
 use super::report::{HubStatus, unresponsive};
+use super::service;
 use crate::output::{CliError, Outcome, exit};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -18,8 +19,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
             break running;
         }
         if !home.is_locked() {
-            let status = HubStatus::stopped(home, false);
-            return Ok(Outcome::done(&status, "hub not running"));
+            return stopped(home, false);
         }
         if Instant::now() > deadline {
             return Err(unresponsive(home));
@@ -28,6 +28,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
     };
 
     let kill_hint = format!("kill {}", running.health.pid);
+    // The hub exits 0, which its service doesn't restart.
     agent()
         .post(format!("{}/api/hub/shutdown", running.url()))
         .header(api::CLIENT_HEADER, env!("CARGO_PKG_VERSION"))
@@ -52,6 +53,29 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
         }
         std::thread::sleep(POLL);
     }
-    let status = HubStatus::stopped(home, true);
-    Ok(Outcome::done(&status, "hub stopped"))
+    stopped(home, true)
+}
+
+/// Also removes the hub's service, so a stopped hub stays stopped across
+/// logins.
+fn stopped(home: &Home, stopped: bool) -> Result<Outcome, CliError> {
+    let removed = if service::applies() {
+        service::remove()?
+    } else {
+        None
+    };
+    let mut text = if stopped {
+        "hub stopped"
+    } else {
+        "hub not running"
+    }
+    .to_owned();
+    if let Some(removed) = &removed {
+        text.push_str(&format!("; removed its {} service", removed.manager.name()));
+    }
+    let status = HubStatus {
+        service_removed: removed.map(|r| r.unit),
+        ..HubStatus::stopped(home, stopped)
+    };
+    Ok(Outcome::done(&status, text))
 }
