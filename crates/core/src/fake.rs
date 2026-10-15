@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::agent::{Agent, AgentStore, DueWake};
 use crate::attachment::{Attachment, AttachmentStore, Media, NewAttachment};
 use crate::conflict::{ConflictGit, ConflictStore, Pair};
+use crate::device::{DeviceId, DeviceStore, Record};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
@@ -707,6 +708,7 @@ pub(crate) struct FakeStore {
     attachments: Vec<(ItemId, Attachment)>,
     settings: BTreeMap<String, String>,
     pairs: BTreeMap<ProjectName, Vec<Pair>>,
+    devices: BTreeMap<DeviceId, Record>,
 }
 
 impl FakeStore {
@@ -1600,6 +1602,23 @@ impl AttachmentStore for FakeStore {
             open
         });
         Ok(pruned)
+    }
+}
+
+impl DeviceStore for FakeStore {
+    fn device(&self, id: &DeviceId) -> Result<Option<Record>, StoreError> {
+        Ok(self.devices.get(id).cloned())
+    }
+
+    fn devices(&self) -> Result<Vec<Record>, StoreError> {
+        let mut records: Vec<_> = self.devices.values().cloned().collect();
+        records.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(records)
+    }
+
+    fn put_device(&mut self, record: &Record) -> Result<(), StoreError> {
+        self.devices.insert(record.id.clone(), record.clone());
+        Ok(())
     }
 }
 

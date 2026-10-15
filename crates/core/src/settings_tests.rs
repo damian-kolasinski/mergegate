@@ -54,13 +54,27 @@ fn defaults_until_set() {
 }
 
 #[test]
+fn listens_locally_until_told_the_tailnet() {
+    let mut store = FakeStore::default();
+    assert_eq!(settings(&store).unwrap().listen, Listen::Local);
+    let changed = set(&mut store, "listen", "tailnet").unwrap();
+    assert_eq!(changed.listen, Listen::Tailnet);
+    assert_eq!(
+        set(&mut store, "listen", "local").unwrap().listen,
+        Listen::Local
+    );
+}
+
+#[test]
 fn refuses_unknown_keys_and_bad_values() {
     let mut store = FakeStore::default();
     assert_eq!(
-        set(&mut store, "listen", "tailnet")
-            .unwrap_err()
-            .to_string(),
-        "there is no hub setting \"listen\"; settings: attachment-ttl"
+        set(&mut store, "port", "7801").unwrap_err().to_string(),
+        "there is no hub setting \"port\"; settings: attachment-ttl, listen"
+    );
+    assert_eq!(
+        set(&mut store, "listen", "lan").unwrap_err().to_string(),
+        "listen can't be \"lan\"; expected local or tailnet"
     );
     assert_eq!(
         set(&mut store, "attachment-ttl", "soon")
