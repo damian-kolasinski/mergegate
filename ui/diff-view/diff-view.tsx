@@ -4,10 +4,19 @@ import {
   type CodeViewOptions,
   type DiffLineAnnotation,
 } from "@pierre/diffs";
-import { createEffect, type JSX, onCleanup, onMount, untrack } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from "solid-js";
 import { render } from "solid-js/web";
 import type { BlobHighlights } from "../api/BlobHighlights";
 import type { File } from "../api/File";
+import { Button } from "../design-system";
 import styles from "./diff-view.module.css";
 import {
   highlightCSS,
@@ -16,8 +25,12 @@ import {
   paintings,
   samePainting,
 } from "./highlight";
+import { isLfsPointer } from "./lfs";
 import { isSubmodule, modeNote } from "./mode";
 import { type Row, toFileDiff } from "./patch";
+import { previewLabel, previewOf } from "./preview/kind";
+import { PreviewDialog } from "./preview/preview";
+import previewStyles from "./preview/preview.module.css";
 
 /** What the review screen drives the view with. */
 export type DiffViewControl = {
@@ -50,7 +63,7 @@ export function DiffView(props: {
   files: readonly File[];
   /** Paths shown collapsed to their header. */
   collapsed: ReadonlySet<string>;
-  /** Where a blob's bytes are, for expanding gaps. */
+  /** Where a blob's bytes are, for expanding gaps and previews. */
   blobUrl: (id: string) => string;
   /** Where a blob's spans are, for expanding gaps. */
   highlightsUrl: (grammar: string, blob: string) => string;
@@ -70,6 +83,7 @@ export function DiffView(props: {
   control: (control: DiffViewControl) => void;
 }) {
   let root!: HTMLDivElement;
+  const [previewing, setPreviewing] = createSignal<File>();
   const byPath = new Map<string, File>();
   const items = new Map<string, CodeViewDiffItem<string>>();
   // CodeView drops a note's element without saying so, as it re-renders or
@@ -144,22 +158,40 @@ export function DiffView(props: {
     renderHeaderMetadata: (diff) => {
       const file = byPath.get(diff.name);
       // A mode changes no line, so a collapsed header still says so.
+      const collapsed = items.get(diff.name)?.collapsed;
       const notes = [
-        items.get(diff.name)?.collapsed ? "Viewed" : file && headerStatus(file),
+        collapsed ? "Viewed" : file && headerStatus(file),
         file && modeNote(file),
         // Backticks would show as typed: the header's text is plain.
         file && props.describe?.(file)?.replaceAll("`", ""),
       ].filter((note): note is string => Boolean(note));
-      if (notes.length === 0) return undefined;
-      const element = document.createElement("span");
-      element.className = "mg-header-note";
-      notes.forEach((note, index) => {
-        if (index > 0) element.append(" · ");
+      const preview = file && !collapsed ? previewOf(file) : undefined;
+      if (notes.length === 0 && !preview) return undefined;
+      const note = document.createElement("span");
+      note.className = "mg-header-note";
+      notes.forEach((text, index) => {
+        if (index > 0) note.append(" · ");
         const part = document.createElement("span");
-        part.textContent = note;
-        element.append(part);
+        part.textContent = text;
+        note.append(part);
       });
-      element.title = element.textContent;
+      note.title = note.textContent;
+      if (!file || !preview) return note;
+      const element = document.createElement("span");
+      mounted.set(
+        element,
+        render(
+          () => (
+            <span class={previewStyles.header}>
+              {note}
+              <Button onClick={() => setPreviewing(file)}>
+                {previewLabel(file, preview)}
+              </Button>
+            </span>
+          ),
+          element,
+        ),
+      );
       return element;
     },
     onSelectedLinesChange: (selection) => {
@@ -398,7 +430,20 @@ export function DiffView(props: {
     return files[low]?.path;
   };
 
-  return <div ref={root} class={styles.view} role="region" aria-label="Diff" />;
+  return (
+    <>
+      <div ref={root} class={styles.view} role="region" aria-label="Diff" />
+      <Show when={previewing()} keyed>
+        {(file) => (
+          <PreviewDialog
+            file={file}
+            blobUrl={props.blobUrl}
+            onClose={() => setPreviewing(undefined)}
+          />
+        )}
+      </Show>
+    </>
+  );
 }
 
 /**
@@ -440,8 +485,11 @@ function contentNote(file: File): string | undefined {
   }
   switch (file.content.kind) {
     case "binary":
-      // The mode note shows a submodule's commits instead.
-      return isSubmodule(file) ? undefined : "Binary file not shown";
+      // The mode note shows a submodule's commits instead, and an image's
+      // button shows the image.
+      return isSubmodule(file) || previewOf(file)
+        ? undefined
+        : "Binary file not shown";
     case "too_large":
       return "Too large to show";
     case "gone":
@@ -454,7 +502,10 @@ function contentNote(file: File): string | undefined {
     case "deleted":
       return "Deleted since the earlier revision";
     default:
-      return undefined;
+      // Text, but not the file itself.
+      return isLfsPointer(file)
+        ? "Git LFS pointer; the hub doesn't hold the file it points to"
+        : undefined;
   }
 }
 
