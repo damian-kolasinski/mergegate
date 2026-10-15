@@ -10,6 +10,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 ## Rules
 
 - Never `git push` and never `gh pr create`. `mg submit` pushes the branch to the hub and puts it up for review.
+- Reach the hub only through `mg`. Never open its UI or call its HTTP API, not even to read: the UI is the operator's, and the hub can't tell your requests from theirs, so one could approve your own work.
 - Wait for feedback the cheapest way your environment allows: see [references/waiting.md](references/waiting.md).
 - Answer every comment with `mg reply`: `addressed` once your next revision has the change, `rejected` with a `--body` saying why, or `question` with a `--body` that asks.
 - Weigh each comment before acting on it. Reject one that would make the code worse, and say why.

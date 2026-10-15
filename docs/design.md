@@ -506,7 +506,7 @@ mergegate/
 - Install also asks the agent to settle with its operator what to do with a branch after its item merges: the squash leaves it unmerged to git. The skill's default is to fetch the hub and detach onto its target, which then holds the squash commit, then `git branch -D` it.
 - The skill covers setup too, so "set up mergegate" is a request to an agent, not a manual.
 
-Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` with a guide, demo, and the priority/note from the task brief; wait for feedback the cheapest way available; reply to every comment with `addressed`/`rejected` + reason; evaluate external feedback critically before acting; when a command returns `needs_decision`, ask the operator.
+Core rules in `SKILL.md`: never `git push` or `gh pr create`; reach the hub only through `mg`, never its UI or HTTP API, since the hub takes a local request for the operator's; use `mg submit` with a guide, demo, and the priority/note from the task brief; wait for feedback the cheapest way available; reply to every comment with `addressed`/`rejected` + reason; evaluate external feedback critically before acting; when a command returns `needs_decision`, ask the operator.
 
 ## 12. Decisions log
 
