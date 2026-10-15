@@ -44,12 +44,18 @@ fn feedback(state: ItemState) -> Feedback {
 #[test]
 fn the_cursor_line_names_the_command_that_reads_on() {
     let open = feedback(ItemState::Merging);
-    let wait = describe(&open, "wait");
+    let wait = describe(&open, &["wait"]);
     assert!(
         wait.ends_with("\n\ncursor 9 (mg wait app#1 --since 9 continues after it)"),
         "{wait}"
     );
-    let feedback = describe(&open, "feedback");
+    let operator = describe(&open, &["wait", "--for", "operator"]);
+    assert!(
+        operator
+            .ends_with("\n\ncursor 9 (mg wait app#1 --for operator --since 9 continues after it)"),
+        "{operator}"
+    );
+    let feedback = describe(&open, &["feedback"]);
     assert!(
         feedback.ends_with("\n\ncursor 9 (mg feedback app#1 --since 9 continues after it)"),
         "{feedback}"
@@ -59,7 +65,7 @@ fn the_cursor_line_names_the_command_that_reads_on() {
 #[test]
 fn a_closed_item_has_nothing_to_read_on_from() {
     for state in [ItemState::Merged, ItemState::Abandoned] {
-        let text = describe(&feedback(state), "wait");
+        let text = describe(&feedback(state), &["wait"]);
         assert!(text.ends_with("\n\ncursor 9"), "{text}");
     }
 }

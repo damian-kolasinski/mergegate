@@ -245,6 +245,9 @@ fn warns_when_the_intent_names_the_review() {
         "Answers c_3 and c_02, as r4 will.",
         "Stores blobs in R2, r02 or r2d2, and sets `r2` in asm.",
         "```\nr1 = load()\n```\n",
+        "Runs\n\n    r1 = load()\n",
+        // Paths, URLs and link targets.
+        "Reads https://example.com/r2/x and crates/r1/lib.rs, as [the docs](docs/r3.md) say.",
         // The list doesn't land in the commit.
         "Adds tests.\n\n## Files\n- `a.rs` — for c_2, in r2\n",
     ] {

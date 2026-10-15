@@ -188,3 +188,65 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
     list.getByRole("article", { name: "Comment c_1" }),
   ).toContainText("Addressed in r2");
 });
+
+test("f7 an unchanged file stays in the diff once its thread is settled", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ "src/greet.py": "def greet(): return None\n" });
+  app.submit("greet", "Add greet", { "src/greet.py": "def greet(): pass\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const files = screen.getByRole("navigation", { name: "Files" });
+  const diff = screen.getByRole("region", { name: "Diff" });
+  const review = page.getByRole("form", { name: "Review" });
+  const current = files.locator("li[aria-current=true]");
+  await expect(diff.getByText("def greet(): pass")).toBeVisible();
+  // On the removed line, which an interdiff's replayed old side lacks.
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  await expect(
+    page.getByRole("textbox", { name: "Comment on src/greet.py line 1" }),
+  ).toBeFocused();
+  await page.keyboard.type("Why not None?");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await requestChanges(page);
+  app.revise("Test greet", { "tests/test_greet.py": "greet()\n" });
+  await page.reload();
+  await requestChanges(page, 2);
+  hub.mg(["reply", "c_1", "--status", "question", "--body", "Which inputs?"]);
+  app.revise("Test more", { "tests/test_more.py": "greet()\n" });
+
+  // greet.py is as r2 left it, but the agent asked on its removed line: the
+  // file is in the diff, its own base on the left.
+  await page.reload();
+  await expect(screen.getByLabel("Compare")).toHaveValue("2");
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^greet\.py\s*src.*unchanged since r2/,
+    /^test_more\.py\s*tests.*added/,
+  ]);
+  await expect(current).toContainText("greet.py");
+  const comment = diff.getByRole("article", { name: "Comment c_1" });
+  await expect(comment).toContainText("Which inputs?");
+
+  // Answering settles the thread; the file, the thread and the operator's
+  // place stay.
+  await comment.getByRole("button", { name: "Reply" }).click();
+  await expect(
+    comment.getByRole("textbox", { name: "Reply to c_1" }),
+  ).toBeFocused();
+  await page.keyboard.type("Any name.");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await review.getByRole("button", { name: "Comment" }).click();
+  await expect(
+    review.getByText("Sent to the agent on r3 with 1 reply"),
+  ).toBeVisible();
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^greet\.py\s*src.*unchanged since r2/,
+    /^test_more\.py\s*tests.*added/,
+  ]);
+  await expect(current).toContainText("greet.py");
+  await expect(comment).toContainText("Any name.");
+  await expect(comment.getByText("Draft")).toHaveCount(0);
+});

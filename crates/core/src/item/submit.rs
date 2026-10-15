@@ -211,6 +211,9 @@ pub fn submit<
         None => None,
     };
     let guide = guide.unwrap_or_else(|| described.clone());
+    let number = existing.as_ref().map_or(1, |item| item.revision.number + 1);
+    // Before publishing, so a store error can't leave GitHub ahead of the hub.
+    let mut warnings = warnings(store, existing.as_ref(), number, guide.as_deref(), &files)?;
     let backend = match (&upstream, github_repo) {
         (Upstream::Remote(remote), Some(repo)) => {
             let id = match &existing {
@@ -236,8 +239,6 @@ pub fn submit<
         }
         _ => ItemBackend::Local,
     };
-    let number = existing.as_ref().map_or(1, |item| item.revision.number + 1);
-    let mut warnings = warnings(store, existing.as_ref(), number, guide.as_deref(), &files)?;
     if let Some(item) = existing.as_ref().filter(|_| prioritized) {
         warnings.push(kept(item));
     }

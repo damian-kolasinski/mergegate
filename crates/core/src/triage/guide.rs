@@ -129,7 +129,8 @@ impl Guide {
     /// intent becomes the squash commit's body, where neither means anything.
     /// A comment counts anywhere, as agents quote its ID as code. A revision
     /// counts only lowercase in prose: Cloudflare's `R2`, a register or a
-    /// variable in code are no revision.
+    /// variable in code, or a segment of a path, URL or link target are no
+    /// revision.
     pub fn review_warning(text: &str, comments: &[CommentId], revision: u32) -> Option<String> {
         let mut named: Vec<&str> = Vec::new();
         let mut fenced = false;
@@ -139,19 +140,25 @@ impl Guide {
                 fenced = !fenced;
                 continue;
             }
+            let indented = line.starts_with("    ") || line.starts_with('\t');
             // Every other piece between backticks is a code span.
             for (piece, code) in line.split('`').zip([false, true].into_iter().cycle()) {
-                let code = code || fenced;
-                for word in piece.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
-                    let comment = CommentId::parse(word).is_some_and(|id| comments.contains(&id));
-                    let revised = !code
-                        && word
-                            .strip_prefix('r')
-                            .filter(|number| !number.starts_with('0'))
-                            .and_then(|number| number.parse::<u32>().ok())
-                            .is_some_and(|number| number <= revision);
-                    if (comment || revised) && !named.contains(&word) {
-                        named.push(word);
+                let code = code || fenced || indented;
+                for token in piece.split_whitespace() {
+                    let path = token.contains('/');
+                    for word in token.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+                        let comment =
+                            CommentId::parse(word).is_some_and(|id| comments.contains(&id));
+                        let revised = !code
+                            && !path
+                            && word
+                                .strip_prefix('r')
+                                .filter(|number| !number.starts_with('0'))
+                                .and_then(|number| number.parse::<u32>().ok())
+                                .is_some_and(|number| number <= revision);
+                        if (comment || revised) && !named.contains(&word) {
+                            named.push(word);
+                        }
                     }
                 }
             }

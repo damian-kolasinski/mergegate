@@ -17,7 +17,7 @@ import styles from "./thread.module.css";
  * under the last of the lines theirs became, and the new one being written.
  * A file unchanged since the revision compared against stays folded out of
  * the diff, with its threads in the Conversation list, unless one of them
- * waits on the operator: that brings the file back into the diff.
+ * waits on the operator: that brings the file back into the diff, to stay.
  */
 export function useThreads(
   revision: number,
@@ -29,7 +29,9 @@ export function useThreads(
   /** Lines of a side the diff on screen has, as an interdiff has no base. */
   onScreen: (spot: Spot) => boolean,
   unchanged: {
-    paths: ReadonlySet<string>;
+    /** The revision the diff compares against; null for all changes. */
+    since: () => number | null;
+    paths: () => ReadonlySet<string>;
     waiting: (comment: Comment) => boolean;
   },
 ) {
@@ -42,24 +44,34 @@ export function useThreads(
     const spot = spotOf(comment, revision);
     return spot && onScreen(spot) ? spot : undefined;
   };
-  const unfolded = createMemo(
-    () =>
-      new Set(
-        all().flatMap((comment) => {
-          const spot = onSide(comment);
-          return spot &&
-            unchanged.paths.has(spot.path) &&
-            unchanged.waiting(comment)
-            ? [spot.path]
-            : [];
-        }),
-      ) as ReadonlySet<string>,
+  // An unfolded file stays in the diff while the screen compares against
+  // the same revision, though its thread stops waiting: settled from its
+  // card there, or answered in a sync, it would otherwise take the file and
+  // the operator's place in it away.
+  const kept = createMemo<{ since: number | null; paths: ReadonlySet<string> }>(
+    (before) => {
+      const since = unchanged.since();
+      const paths: ReadonlySet<string> =
+        before?.since === since ? before.paths : new Set();
+      const back = all().flatMap((comment) => {
+        const spot = onSide(comment);
+        return spot &&
+          !paths.has(spot.path) &&
+          unchanged.paths().has(spot.path) &&
+          unchanged.waiting(comment)
+          ? [spot.path]
+          : [];
+      });
+      if (before && paths === before.paths && !back.length) return before;
+      return { since, paths: new Set([...paths, ...back]) };
+    },
   );
+  const unfolded = () => kept().paths;
   const inDiff = (comment: Comment) => {
     const spot = onSide(comment);
     return (
       spot !== undefined &&
-      (!unchanged.paths.has(spot.path) || unfolded().has(spot.path))
+      (!unchanged.paths().has(spot.path) || unfolded().has(spot.path))
     );
   };
   const shown = createMemo(() => all().filter(inDiff));
@@ -75,7 +87,10 @@ export function useThreads(
     all,
     /** Shown under its line in the diff, not only in the Conversation list. */
     inDiff,
-    /** The unchanged files a waiting thread keeps in the diff. */
+    /**
+     * The unchanged files a waiting thread brought into the diff since the
+     * screen began comparing against the revision it does.
+     */
     unfolded,
     spots,
     at: (spot: Spot) =>
