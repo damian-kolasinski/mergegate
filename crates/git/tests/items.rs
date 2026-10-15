@@ -234,6 +234,21 @@ fn unpins_one_items_revisions() {
     hub.git.unpin(&app(), "refs/mergegate/items/1/").unwrap();
 }
 
+#[test]
+fn drops_a_branch_only_where_it_was_left() {
+    let hub = Hub::new();
+    let head = hub.repo.rev("login");
+    let base = hub.repo.rev("main");
+    hub.git.drop_branch(&app(), "login", &base).unwrap();
+    assert_eq!(hub.staging_rev("login"), head, "it moved on");
+
+    hub.git.drop_branch(&app(), "login", &head).unwrap();
+    assert_eq!(hub.git.branch_head(&app(), "login").unwrap(), None);
+    hub.git.drop_branch(&app(), "login", &head).unwrap();
+    // Its name is free for branches under it.
+    hub.push("login/again");
+}
+
 fn get(hub: &Hub, path: &str, query: &str) -> String {
     let request = HttpRequest {
         method: "GET",

@@ -8,8 +8,12 @@ use crate::highlight::HighlightStore;
 use crate::store::StoreError;
 
 /// Moves `item` to `state`, a closed one, with `notice` for its agent, then
-/// drops its revision pins and the cached diffs and spans no open item
-/// still uses.
+/// drops its revision pins, its branch and the cached diffs and spans no
+/// open item still uses.
+/// The branch goes so it doesn't keep names that nest with it (`a/b` beside
+/// `a`) from being pushed, as git refuses those; nothing reads it once the
+/// item is closed. It stays if it moved past the newest revision, which is
+/// someone's work the hub never saw.
 /// Its file list and line counts stay. A merged item keeps its newest
 /// revision's pin: a squash that auto-merged a file the target also changed
 /// leaves the item's own blob out of the target's history, and its diff is
@@ -31,6 +35,7 @@ pub(crate) fn close<S: ItemStore + DiffStore + HighlightStore + FeedbackStore>(
     let _ = store.prune_diffs(&item.id);
     let _ = store.prune_highlights(&item.id);
     let _ = git.unpin(item.id.project(), &item.pins());
+    let _ = git.drop_branch(item.id.project(), &item.branch, &item.revision.head);
     if state == ItemState::Merged {
         let _ = git.pin(item.id.project(), &item.pin_ref(), &item.revision.head);
     }

@@ -47,6 +47,27 @@ impl ItemGit for HubGit {
         Ok(Some(id.to_string()))
     }
 
+    fn drop_branch(&self, project: &ProjectName, branch: &str, head: &str) -> Result<(), GitError> {
+        if self.branch_head(project, branch)?.as_deref() != Some(head) {
+            return Ok(());
+        }
+        // With the old value, so a push that lands after the read above
+        // fails the delete instead of being deleted.
+        let reference = format!("refs/heads/{branch}");
+        run(
+            &self.home,
+            &format!("deleting {reference}"),
+            [
+                self.git_dir(project).as_os_str(),
+                arg("update-ref"),
+                arg("-d"),
+                arg(&reference),
+                arg(head),
+            ],
+        )?;
+        Ok(())
+    }
+
     fn merge_base(
         &self,
         project: &ProjectName,

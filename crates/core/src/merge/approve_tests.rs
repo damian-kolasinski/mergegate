@@ -80,6 +80,17 @@ fn a_merged_item_keeps_only_its_newest_revision_pinned() {
 }
 
 #[test]
+fn a_merged_items_branch_leaves_staging() {
+    let mut store = FakeStore::with_item(2);
+    let git = FakeGit::default();
+    let project = ProjectName::parse("app").unwrap();
+    git.push("app", "login", &commit(3));
+    let backend = FakeBackend::new(Backend::Local);
+    approve(&mut store, &git, &[&backend], approving(2, "")).unwrap();
+    assert_eq!(git.branch_head(&project, "login").unwrap(), None);
+}
+
+#[test]
 fn a_conflict_hands_the_item_back_to_its_agent() {
     let mut store = FakeStore::with_item(1);
     let conflict = Landing::Conflict {

@@ -454,6 +454,15 @@ impl ItemGit for FakeGit {
             .and_then(|branches| branches.get(branch).cloned()))
     }
 
+    fn drop_branch(&self, project: &ProjectName, branch: &str, head: &str) -> Result<(), GitError> {
+        if let Some(branches) = self.staging.borrow_mut().get_mut(project.as_str())
+            && branches.get(branch).is_some_and(|found| found == head)
+        {
+            branches.remove(branch);
+        }
+        Ok(())
+    }
+
     fn merge_base(
         &self,
         project: &ProjectName,

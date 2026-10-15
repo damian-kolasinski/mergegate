@@ -94,6 +94,18 @@ fn f14_the_agent_abandons_its_item() {
 }
 
 #[test]
+fn f14_an_abandoned_items_branch_name_is_free_for_branches_under_it() {
+    let (env, repo) = submitted();
+    env.mg(&["abandon", "app#1"]).assert_code(0);
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "feature"]);
+    repo.git(["switch", "--quiet", "-c", "feature/retry"]);
+    repo.commit_files("Retry", &[("src/login.rs", "fn login() { }\n")]);
+    let next = env.mg_at(repo.root(), &["--json", "submit"]).json();
+    assert_eq!(next["item"]["id"], "app#2", "{next}");
+}
+
+#[test]
 fn f14_the_operator_abandons_an_item_and_its_agent_hears_why() {
     let (env, _repo) = submitted();
     let reply = abandon(&env, json!("Not needed after all."));

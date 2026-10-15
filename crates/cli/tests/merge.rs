@@ -120,6 +120,19 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
 }
 
 #[test]
+fn f8_a_merged_items_branch_name_is_free_for_branches_under_it() {
+    let (env, repo) = submitted();
+    assert_eq!(approve(&env, 1, "Ship it.").status, 200);
+    // The cleanup the merge event asks for, then new work.
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "feature"]);
+    repo.git(["switch", "--quiet", "-c", "feature/followup"]);
+    repo.commit_files("Follow up", &[("src/more.rs", "fn more() {}\n")]);
+    let next = env.mg_at(repo.root(), &["--json", "submit"]).json();
+    assert_eq!(next["item"]["id"], "app#2", "{next}");
+}
+
+#[test]
 fn f9_a_conflict_sends_the_item_back_to_rebase() {
     let (env, repo) = submitted();
     commit_on_main(

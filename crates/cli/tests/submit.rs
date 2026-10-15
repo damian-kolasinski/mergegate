@@ -409,3 +409,25 @@ fn f4_submits_a_branch_a_tag_shares_its_name_with() {
         repo.rev("HEAD")
     );
 }
+
+#[test]
+fn f4_names_the_open_branch_a_new_one_nests_with() {
+    let (env, repo) = hub_with_app();
+    repo.git(["switch", "--quiet", "-c", "auth"]);
+    repo.commit_files("Auth", &[("auth.rs", "1\n")]);
+    assert_eq!(submit(&env, repo.root())["item"]["id"], "app#1");
+
+    // Git can't hold `auth/login` beside `auth`, so neither can the hub
+    // while app#1 is open.
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "auth"]);
+    repo.git(["switch", "--quiet", "-c", "auth/login"]);
+    repo.commit_files("Login", &[("login.rs", "1\n")]);
+    let under = submit(&env, repo.root());
+    assert_eq!(error_code(&under), "branch_nested", "{under}");
+    assert_eq!(
+        under["error"]["message"],
+        "the hub has a branch auth, so it can't take auth/login: one branch name can't nest in another"
+    );
+    assert_eq!(under["error"]["hint"], "git branch -m NAME");
+}
