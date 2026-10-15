@@ -58,4 +58,4 @@ If `mg` answers with a usage line offering the options `-nR`, or opens an editor
 
 ## This skill
 
-`mg skill install` writes this skill, matching the installed `mg`, to `$MERGEGATE_HOME/skill/mergegate` (or `--dir PATH` to write it to `PATH/mergegate`) and prints where. Copy or link the folder to wherever you load skills from. Rerun it after `mg` is upgraded; it replaces the folder. `mg doctor` also checks the copies in `~/.claude/skills` and `~/.codex/skills`, so a copy instead of a link shows when it falls behind.
+`mg skill install` writes this skill, matching the installed `mg`, to `$MERGEGATE_HOME/skill/mergegate` (or `--dir PATH` to write it to `PATH/mergegate`) and prints where. Copy or link the folder to wherever you load skills from. Rerun it after `mg` is upgraded; it replaces the folder. `mg doctor` also checks the copies in `~/.claude/skills` and `~/.codex/skills`, so a copy instead of a link shows when it falls behind. Those belong to the default data directory, `~/.mergegate`: run with another `MERGEGATE_HOME`, `mg doctor` checks only a copy linked to that one's folder, and a current copy there is enough for it.

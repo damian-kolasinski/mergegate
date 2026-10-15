@@ -19,14 +19,14 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 ## The loop
 
-1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)).
+1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)). Start it from the target as the hub has it, `git fetch mergegate` then `git switch -c <branch> mergegate/<target>`: nothing keeps the clone's own `<target>` branch current.
 2. `mg submit --title "Short summary" --guide guide.md`, the guide saying what the change is for and which files to read first ([references/authoring.md](references/authoring.md)). It prints the item's ID, as in `app#3`. Running it again from the same branch adds a revision.
 3. Wait for the item's events, for example `mg wait app#3`.
 4. Act on them (table below), then go back to 2 or 3.
 
 | Event | What to do |
 |---|---|
-| `review.submitted` | Change what the comments ask, `mg reply` to each one, then `mg submit`. A verdict of `approved` needs nothing; wait for the merge. |
+| `review.submitted` | Change what the comments ask, `mg reply` to each one, then `mg submit`. A verdict of `approved` needs nothing; wait for the merge. A review with no new comments, only replies to yours, needs nothing either unless a reply asks for something; keep waiting. |
 | `external.comments` | Reviewers commented on the item's GitHub pull request. Treat them like the operator's comments: change, `mg reply` to each one, `mg submit`. See [references/authoring.md](references/authoring.md), "Comments from GitHub". |
 | `comment.override` | The operator overrides your rejection of a comment: make the change, `mg reply` with `addressed`, `mg submit`. |
 | `merge.conflict` | The target moved under the item, before or after review. Run the commands it lists, resolve the conflicts, `mg submit`. |
@@ -41,13 +41,15 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 ## After a merge
 
-The operator merges an item by squashing it onto the target, so git doesn't see the item's branch as merged and `git branch -d` refuses it. `item.merged` names the branch and lists the default cleanup. Do what you and the operator agreed; if you never agreed anything, the default leaves the clone on the target with the squash commit:
+The operator merges an item by squashing it onto the target, so git doesn't see the item's branch as merged and `git branch -d` refuses it. `item.merged` names the branch and lists the default cleanup. Do what you and the operator agreed; if you never agreed anything, the default leaves the clone on the updated target, which has the squash commit, and drops the remote's branches the hub deleted after their merge:
 
 ```
-git fetch mergegate
+git fetch --prune mergegate
 git switch --detach mergegate/<target>
 git branch -D <branch>
 ```
+
+It leaves the clone's own `<target>` branch where it was, as it may hold the operator's work or be checked out in another worktree. Start the next branch from `mergegate/<target>` (step 1 of the loop), not from `<target>`.
 
 ## Picking up an item again
 

@@ -108,9 +108,9 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
             "[1] review.submitted app#1 r1: the operator approved\n  Ship it.\n\n\
              [2] item.merged app#1 r1: the operator merged it as {commit}\n\n  \
              Clean up feature as agreed with the operator; by default:\n    \
-             git fetch mergegate\n    git switch --detach mergegate/main\n    \
+             git fetch --prune mergegate\n    git switch --detach mergegate/main\n    \
              git branch -D feature\n\n\
-             cursor 2 (mg wait --since 2 continues after it)\n\napp#1 is merged"
+             cursor 2\n\napp#1 is merged"
         )
     );
     // Only once nothing is left does a read say it's closed.
@@ -128,7 +128,7 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     assert_eq!(
         replay["events"][0]["commands"],
         json!([
-            "git fetch mergegate",
+            "git fetch --prune mergegate",
             "git switch --detach mergegate/main",
             "git branch -D feature",
         ])
@@ -229,7 +229,7 @@ fn f9_a_conflict_sends_the_item_back_to_rebase() {
         format!(
             "[2] merge.conflict app#1 r1: merging conflicts with the target at {}\n  src/login.rs\n\n  \
              Rebase and submit again:\n    git fetch mergegate\n    git rebase mergegate/main\n\n\
-             cursor 2 (mg wait --since 2 continues after it)",
+             cursor 2 (mg feedback app#1 --since 2 continues after it)",
             &target[..12]
         )
     );
@@ -306,7 +306,7 @@ fn f8_cancelling_a_held_merge_puts_the_item_back_in_review() {
     assert_eq!(
         text.stdout.trim(),
         "[3] merge.cancelled app#1 r1: the operator cancelled the held merge; it needs review again\n\n\
-         cursor 3 (mg wait --since 3 continues after it)"
+         cursor 3 (mg feedback app#1 --since 3 continues after it)"
     );
 
     let again = send(&env, "DELETE", "/api/items/app%231/merge", &json!({}));
@@ -390,9 +390,9 @@ fn f8_an_approval_carries_to_a_revision_with_the_same_diff() {
              Approved again: the diff is unchanged since r1.\n\n\
              [4] item.merged app#1 r2: the operator merged it as {commit}\n\n  \
              Clean up feature as agreed with the operator; by default:\n    \
-             git fetch mergegate\n    git switch --detach mergegate/main\n    \
+             git fetch --prune mergegate\n    git switch --detach mergegate/main\n    \
              git branch -D feature\n\n\
-             cursor 4 (mg wait --since 4 continues after it)\n\n\
+             cursor 4\n\n\
              app#1 is merged"
         )
     );

@@ -4,6 +4,7 @@
 
 use super::{Tier, TriagedBy};
 use crate::item::FileStat;
+use crate::review::CommentId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Guide {
@@ -121,6 +122,56 @@ impl Guide {
             at += line.len();
         }
         text.trim()
+    }
+
+    /// A warning when `text`'s intent names one of `comments`, the item's
+    /// comment IDs, or one of its revisions up to `revision` as `r2`: the
+    /// intent becomes the squash commit's body, where neither means anything.
+    /// A comment counts anywhere, as agents quote its ID as code. A revision
+    /// counts only lowercase in prose: Cloudflare's `R2`, a register or a
+    /// variable in code, or a segment of a path, URL or link target are no
+    /// revision.
+    pub fn review_warning(text: &str, comments: &[CommentId], revision: u32) -> Option<String> {
+        let mut named: Vec<&str> = Vec::new();
+        let mut fenced = false;
+        for line in Self::intent(text).lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                fenced = !fenced;
+                continue;
+            }
+            let indented = line.starts_with("    ") || line.starts_with('\t');
+            // Every other piece between backticks is a code span.
+            for (piece, code) in line.split('`').zip([false, true].into_iter().cycle()) {
+                let code = code || fenced || indented;
+                for token in piece.split_whitespace() {
+                    let path = token.contains('/');
+                    for word in token.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+                        let comment =
+                            CommentId::parse(word).is_some_and(|id| comments.contains(&id));
+                        let revised = !code
+                            && !path
+                            && word
+                                .strip_prefix('r')
+                                .filter(|number| !number.starts_with('0'))
+                                .and_then(|number| number.parse::<u32>().ok())
+                                .is_some_and(|number| number <= revision);
+                        if (comment || revised) && !named.contains(&word) {
+                            named.push(word);
+                        }
+                    }
+                }
+            }
+        }
+        if named.is_empty() {
+            return None;
+        }
+        let named: Vec<String> = named.iter().map(|word| format!("`{word}`")).collect();
+        Some(format!(
+            "the guide's intent names {} from the review, but it becomes the commit message \
+             when the item merges: describe the change as a whole",
+            named.join(", ")
+        ))
     }
 
     /// Where the guide puts `path` among the files to review.

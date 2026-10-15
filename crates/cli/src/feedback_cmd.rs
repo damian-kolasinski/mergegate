@@ -11,17 +11,23 @@ use crate::output::{CliError, Outcome, exit};
 pub fn run(item: String, since: Option<u64>) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
     let feedback = read(&client, &item, since, None)?;
-    Ok(report(client, &feedback, since))
+    Ok(report(client, &feedback, since, &["feedback"]))
 }
 
 /// Prints and delivers what a read returned. Events exit 0 even on a closed
 /// item, so the approval and the cleanup that came with a merge aren't
 /// mistaken for "nothing new"; a closed item exits 3 only once nothing is
-/// left to deliver.
-pub(crate) fn report(client: Client, feedback: &Feedback, since: Option<u64>) -> Outcome {
+/// left to deliver. `command` is the `mg` subcommand that read it, then its
+/// options, which the cursor line repeats to read on from there.
+pub(crate) fn report(
+    client: Client,
+    feedback: &Feedback,
+    since: Option<u64>,
+    command: &[&str],
+) -> Outcome {
     let mut text = Vec::new();
     if !feedback.events.is_empty() {
-        text.push(describe(feedback));
+        text.push(describe(feedback, command));
     }
     let closed = closed(feedback.state);
     match closed {
@@ -87,12 +93,22 @@ pub(crate) fn closed(state: ItemState) -> Option<&'static str> {
     }
 }
 
-fn describe(feedback: &Feedback) -> String {
+/// The events, then the cursor and, while the item is open, the command
+/// that reads on from it: a closed item has nothing after it to read.
+fn describe(feedback: &Feedback, command: &[&str]) -> String {
     let mut out: Vec<String> = feedback.events.iter().map(event).collect();
-    out.push(format!(
-        "cursor {} (mg wait --since {} continues after it)",
-        feedback.cursor, feedback.cursor
-    ));
+    let cursor = feedback.cursor;
+    out.push(match closed(feedback.state) {
+        None => {
+            let (name, options) = command.split_first().unwrap_or((&"feedback", &[]));
+            let options: String = options.iter().map(|o| format!(" {o}")).collect();
+            format!(
+                "cursor {cursor} (mg {name} {}{options} --since {cursor} continues after it)",
+                feedback.item
+            )
+        }
+        Some(_) => format!("cursor {cursor}"),
+    });
     out.join("\n\n")
 }
 

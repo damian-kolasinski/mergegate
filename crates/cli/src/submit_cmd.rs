@@ -50,6 +50,7 @@ pub fn run(
     // Check and read before pushing, so a wrong file stops the submit.
     let attach = attach_cmd::check(&attach)?;
     let guide = guide.as_deref().map(read_guide).transpose()?;
+    let guided = guide.is_some();
     let client = Client::connect(&crate::home()?)?;
     // Before the push, so nothing is half done; the hub refuses it too.
     if wake.is_some() && client.connected() {
@@ -114,7 +115,7 @@ pub fn run(
                 ..e
             }
         })?;
-    let mut text = describe(&submitted);
+    let mut text = describe(&submitted, guided);
     if !attachments.is_empty() {
         text.push('\n');
         text.push_str(&attach_cmd::describe(&item.id, &attachments));
@@ -187,7 +188,9 @@ fn remote_project() -> Result<String, CliError> {
     }
 }
 
-fn describe(submitted: &Submitted) -> String {
+/// `guided` when a guide came with it, which replaces the revision's guide
+/// even at the same head.
+fn describe(submitted: &Submitted, guided: bool) -> String {
     let item = &submitted.item;
     let r = &item.revision;
     let mut text = if submitted.new_revision {
@@ -207,13 +210,17 @@ fn describe(submitted: &Submitted) -> String {
         }
         text
     } else {
-        format!(
+        let mut text = format!(
             "{} r{} is already at {}: {}",
             item.id,
             r.number,
             r.head.get(..12).unwrap_or(&r.head),
             item.title
-        )
+        );
+        if guided {
+            text.push_str("\n  its guide is now the one sent");
+        }
+        text
     };
     for warning in &submitted.warnings {
         text.push_str(&format!("\nwarning: {warning}"));

@@ -4,6 +4,7 @@ use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::github::{GithubError, GithubRepo, Pull};
 use crate::item::{DiffStat, ItemId};
 use crate::project::{Backend, Project, ProjectError, ProjectName};
+use crate::review::{NewComment, NewReview, Side, Verdict};
 use crate::triage::{RulesStore, Tier};
 
 fn project(name: &str, upstream: &str, target: &str) -> Project {
@@ -885,5 +886,66 @@ fn only_the_submit_that_opens_the_item_sets_its_priority() {
         [
             "--priority and --note set only a new item's; app#1 keeps p1, which mg prioritize changes"
         ]
+    );
+}
+
+#[test]
+fn warns_when_the_guides_intent_names_the_review() {
+    let (mut store, git) = setup();
+    git.push("app", "login", &commit(2));
+    let guided = |head, intent: &str| Submit {
+        guide: Some(format!("{intent}\n\n## Files\n- `src/login.rs`\n")),
+        ..request("app", "login", head)
+    };
+    let first = submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        guided(2, "Signs users in."),
+    )
+    .unwrap();
+    assert!(first.warnings.is_empty());
+    let id = first.item.id;
+    let comment = store
+        .insert_draft(NewComment {
+            item: id.clone(),
+            revision: 1,
+            path: "src/login.rs".into(),
+            side: Side::New,
+            start_line: 1,
+            line: 1,
+            body: "Test it.".into(),
+            quote: "fn login()".into(),
+        })
+        .unwrap()
+        .id;
+    let named = |what: &str| {
+        format!(
+            "the guide's intent names {what} from the review, but it becomes the commit \
+             message when the item merges: describe the change as a whole"
+        )
+    };
+
+    // The agent can't know a draft's ID yet, nor a revision to come.
+    let guide = format!("r1 and r2 add what {comment} asks.");
+    let again = submit(&mut store, &git, &FakeGithub::default(), guided(2, &guide)).unwrap();
+    assert_eq!(again.warnings, [named("`r1`")]);
+
+    let review = NewReview {
+        item: id.clone(),
+        revision: 1,
+        verdict: Verdict::ChangesRequested,
+        summary: String::new(),
+        moved: Vec::new(),
+    };
+    store
+        .insert_review(review, ItemState::ChangesRequested)
+        .unwrap();
+    git.push("app", "login", &commit(3));
+    let second = submit(&mut store, &git, &FakeGithub::default(), guided(3, &guide)).unwrap();
+    assert_eq!(second.item.revision.number, 2);
+    assert_eq!(
+        second.warnings,
+        [named(&format!("`r1`, `r2`, `{comment}`"))]
     );
 }

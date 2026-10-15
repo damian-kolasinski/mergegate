@@ -31,6 +31,13 @@ export function useComments(
     hideAll: () => void;
     /** Lines of a side the diff on screen has, as an interdiff has no base. */
     onScreen: (spot: Spot) => boolean;
+    /**
+     * The revision the diff on screen compares against, null for all
+     * changes, and its files unchanged since then. Comparing another way
+     * keeps the screen, so these follow it.
+     */
+    since: () => number | null;
+    unchanged: () => ReadonlySet<string>;
   },
 ) {
   const revision = diff.item.revision.number;
@@ -71,6 +78,24 @@ export function useComments(
     sent,
     replies,
   });
+  /**
+   * Over a diff since rK, a thread the operator should see again: theirs
+   * not sent yet, written on rK or later, or one the agent answered last,
+   * unless the answer is a fix rK already had or a rejection they agreed to.
+   */
+  const waiting = (comment: Comment) => {
+    const since = options.since();
+    if (since === null) return false;
+    if (drafts.isDraft(comment) || replyDrafts.to(comment).length) return true;
+    if (comment.revision >= since) return true;
+    const latest = replies.to(comment).at(-1);
+    if (latest?.author !== "agent" || external.agreed(comment)) return false;
+    return (
+      latest.status !== "addressed" ||
+      latest.addressed_in === null ||
+      latest.addressed_in > since
+    );
+  };
   const threads = useThreads(
     revision,
     {
@@ -79,6 +104,7 @@ export function useComments(
       composing: drafts.composing,
     },
     options.onScreen,
+    { since: options.since, paths: options.unchanged, waiting },
   );
   return {
     /** The revision the diff shows. */

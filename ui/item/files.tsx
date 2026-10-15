@@ -10,7 +10,8 @@ import { describe } from "./why";
  * The files the diff shows beside it, the current one selected: those to
  * review, then the trusted ones folded into a group of their own. Since an
  * earlier revision, the ones unchanged since then follow, folded away, so
- * they can still be marked viewed.
+ * they can still be marked viewed; one holding a thread that waits on the
+ * operator is in the diff instead, marked unchanged.
  */
 export function FileList(props: {
   /** Whose rules sorted the files, linked from the trusted group. */
@@ -37,6 +38,7 @@ export function FileList(props: {
         >
           <FileEntry
             file={file}
+            since={props.since}
             viewed={props.viewed.has(file.path)}
             onViewed={(value) => props.onViewed(file.path, value)}
           />
@@ -83,8 +85,10 @@ export function FileList(props: {
             <For each={props.unchanged}>
               {(file) => (
                 <li class={styles.still}>
+                  {/* The group's summary says since when. */}
                   <FileEntry
                     file={file}
+                    since={null}
                     viewed={props.viewed.has(file.path)}
                     onViewed={(value) => props.onViewed(file.path, value)}
                   />
@@ -100,6 +104,8 @@ export function FileList(props: {
 
 function FileEntry(props: {
   file: File;
+  /** What an unchanged file is labelled unchanged since. */
+  since: number | null;
   viewed: boolean;
   onViewed: (viewed: boolean) => void;
 }) {
@@ -151,7 +157,9 @@ function FileEntry(props: {
           )}
         </Show>
       </span>
-      <Show when={label(props.file)}>{(text) => <Meta>{text()}</Meta>}</Show>
+      <Show when={label(props.file, props.since)}>
+        {(text) => <Meta>{text()}</Meta>}
+      </Show>
       <Counts
         additions={props.file.additions}
         deletions={props.file.deletions}
@@ -160,8 +168,10 @@ function FileEntry(props: {
   );
 }
 
-function label(file: File): string | undefined {
+function label(file: File, since: number | null): string | undefined {
   switch (file.interdiff) {
+    case "unchanged":
+      return since === null ? undefined : `unchanged since r${since}`;
     case "unseparated":
       return "whole diff";
     case "dropped":

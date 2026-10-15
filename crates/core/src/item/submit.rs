@@ -13,6 +13,8 @@ use crate::git::Upstream;
 use crate::github::Github;
 use crate::interdiff::{InterdiffGit, Recorded, record};
 use crate::project::{Backend, ProjectError, ProjectStore, find};
+use crate::review::{CommentId, ReviewStore};
+use crate::store::StoreError;
 use crate::triage::{Guide, RulesStore, TriageGit, triage_files};
 use crate::viewed::ViewedStore;
 
@@ -58,7 +60,9 @@ pub struct Submitted {
 /// A `github` item is published before it's recorded: its branch pushed and
 /// its pull request opened or updated, described by the item's ID and guide.
 /// If GitHub fails, the submit fails and nothing is recorded.
-pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore + RulesStore>(
+pub fn submit<
+    S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore + RulesStore + ReviewStore,
+>(
     store: &mut S,
     git: &(impl ItemGit + DiffGit + InterdiffGit + TriageGit),
     github: &impl Github,
@@ -125,7 +129,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
             None => described,
         };
         let files = store.revision_files(&item.id, number)?;
-        let mut warnings = warnings(guide.as_deref(), &files);
+        let mut warnings = warnings(store, Some(&item), number, guide.as_deref(), &files)?;
         warnings.extend(prioritized.then(|| kept(&item)));
         return Ok(Submitted {
             item,
@@ -207,6 +211,9 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         None => None,
     };
     let guide = guide.unwrap_or_else(|| described.clone());
+    let number = existing.as_ref().map_or(1, |item| item.revision.number + 1);
+    // Before publishing, so a store error can't leave GitHub ahead of the hub.
+    let mut warnings = warnings(store, existing.as_ref(), number, guide.as_deref(), &files)?;
     let backend = match (&upstream, github_repo) {
         (Upstream::Remote(remote), Some(repo)) => {
             let id = match &existing {
@@ -232,7 +239,6 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         }
         _ => ItemBackend::Local,
     };
-    let mut warnings = warnings(guide.as_deref(), &files);
     if let Some(item) = existing.as_ref().filter(|_| prioritized) {
         warnings.push(kept(item));
     }
@@ -277,8 +283,31 @@ fn kept(item: &Item) -> String {
     )
 }
 
-fn warnings(guide: Option<&str>, files: &[super::FileStat]) -> Vec<String> {
-    guide.map_or_else(Vec::new, |text| Guide::parse(text).warnings(text, files))
+/// What the agent should fix in the guide of revision `revision`, of `item`
+/// or of a new item when none.
+fn warnings(
+    store: &impl ReviewStore,
+    item: Option<&Item>,
+    revision: u32,
+    guide: Option<&str>,
+    files: &[super::FileStat],
+) -> Result<Vec<String>, StoreError> {
+    let Some(text) = guide else {
+        return Ok(Vec::new());
+    };
+    let mut warnings = Guide::parse(text).warnings(text, files);
+    let comments: Vec<CommentId> = match item {
+        // A draft's ID is the operator's until a review sends it.
+        Some(item) => store
+            .comments(&item.id)?
+            .into_iter()
+            .filter(|comment| !comment.is_draft())
+            .map(|comment| comment.id)
+            .collect(),
+        None => Vec::new(),
+    };
+    warnings.extend(Guide::review_warning(text, &comments, revision));
+    Ok(warnings)
 }
 
 #[cfg(test)]

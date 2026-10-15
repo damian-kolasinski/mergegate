@@ -506,17 +506,27 @@ function contentNote(file: File): string | undefined {
     case "gone":
       return "Diff dropped when the item closed";
   }
-  // Only a diff that shows says this: one that can't says why instead.
+  // Only a diff that shows says these: one that can't says why instead.
+  const notes = [
+    sinceNote(file),
+    // Text, but not the file itself.
+    isLfsPointer(file)
+      ? "Git LFS pointer; the hub doesn't hold the file it points to"
+      : undefined,
+  ].filter((note) => note !== undefined);
+  return notes.length ? notes.join(" · ") : undefined;
+}
+
+function sinceNote(file: File): string | undefined {
   switch (file.interdiff) {
     case "added":
       return "Added since the earlier revision";
     case "deleted":
       return "Deleted since the earlier revision";
+    case "unchanged":
+      return "Unchanged since the earlier revision; its own diff shown";
     default:
-      // Text, but not the file itself.
-      return isLfsPointer(file)
-        ? "Git LFS pointer; the hub doesn't hold the file it points to"
-        : undefined;
+      return undefined;
   }
 }
 
