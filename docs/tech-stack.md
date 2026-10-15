@@ -179,7 +179,7 @@ No MCP server. The CLI works in every harness, while MCP tool schemas cost conte
 | Operator writes a comment, marks a file viewed, submits a review | < 16 ms |
 | Approve and merge (local backend) | < 150 ms |
 
-The UI budgets are in `ui/tests/inbox.spec.ts` and `review.spec.ts`; Playwright's `budgets` project runs them alone, after the rest. The hub and CLI budgets are `--ignored` tests run in release: `crates/cli/tests/budgets.rs` and `contract.rs`. CI enforces them on Ubuntu (`MG_ENFORCE_BUDGETS=1`); shared macOS runners are too noisy, so there and locally they only report.
+The UI budgets are in `ui/tests/inbox.spec.ts` and `review.spec.ts`; Playwright's `budgets` project runs them alone, after the rest. The hub and CLI budgets are `--ignored` tests run in release: `crates/cli/tests/budgets.rs` and `contract.rs`. CI enforces them on Ubuntu (`MG_ENFORCE_BUDGETS=1`); shared macOS runners are too noisy, so there and locally they only report. Enforced, the UI budgets also test a release mg, since they time the hub's responses: a debug hub serves the near-cap file's 1 MB diff in 70 ms, against 7 ms in release.
 
 The UI times are taken the way Event Timing (and so INP) takes an interaction's: from the input event's own timestamp to the end of the first frame showing the result, read by a requestAnimationFrame loop in the page, so Playwright's round trips stay out. That includes the wait for the display's next frame, up to 16.7 ms at 60 Hz, which is why a key's budget is two frames. The `budgets` project runs without Playwright's trace, whose DOM snapshots add tens of milliseconds to each action.
 
