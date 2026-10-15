@@ -17,7 +17,7 @@ pub fn run() -> Result<Outcome, CliError> {
 
 fn describe(inbox: &Inbox) -> String {
     let groups = [
-        ("needs you", &inbox.needs_you),
+        ("needs the operator", &inbox.needs_you),
         ("with agents", &inbox.with_agents),
         ("merging", &inbox.merging),
     ];

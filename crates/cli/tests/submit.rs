@@ -189,7 +189,7 @@ fn f4_lists_open_items_in_the_inbox() {
     let text = env.mg(&["inbox"]).assert_code(0).stdout;
     assert_eq!(
         text.trim_end(),
-        "needs you (2)\n  \
+        "needs the operator (2)\n  \
          app#1 r1  The one change  (one · 1 file, +2 -0)\n  \
          app#2 r1  The two change  (two · 1 file, +2 -0)"
     );

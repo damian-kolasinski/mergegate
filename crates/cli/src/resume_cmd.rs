@@ -39,11 +39,17 @@ fn prompt(resume: &Resume) -> String {
         item.branch,
         item.target,
     );
-    match &resume.worktree {
-        Some(worktree) => out.push_str(&format!("- Worktree: {worktree} (work there)\n")),
-        None => out.push_str("- Worktree: not recorded; use a clone with the branch checked out\n"),
-    }
     let closed = matches!(item.state, ItemState::Merged | ItemState::Abandoned);
+    match (&resume.worktree, closed) {
+        (Some(worktree), false) => out.push_str(&format!("- Worktree: {worktree} (work there)\n")),
+        (Some(worktree), true) => {
+            out.push_str(&format!("- Worktree: {worktree} (submitted from there)\n"));
+        }
+        (None, false) => {
+            out.push_str("- Worktree: not recorded; use a clone with the branch checked out\n");
+        }
+        (None, true) => out.push_str("- Worktree: not recorded\n"),
+    }
     if let (Some(wake), false) = (&resume.wake, closed) {
         out.push_str(&format!(
             "- Wake: `{wake}`, left by the session that ended. It would start that session, \
@@ -76,10 +82,15 @@ fn prompt(resume: &Resume) -> String {
     out.push_str(&format!("\n{}", next(resume)));
     out.push_str(&format!(
         "\n\n--- How to work with mergegate ---\n\n{}",
-        skill::inlined()
+        skill::inlined(SKILL)
     ));
     out
 }
+
+/// The skill's references a session picking up an item needs; setting up
+/// and the operator's own requests are left out, as every pickup pays for
+/// them.
+const SKILL: &[&str] = &["references/authoring.md", "references/waiting.md"];
 
 fn describe(thread: &Thread, newest: u32) -> String {
     let comment = &thread.comment;
@@ -112,9 +123,11 @@ fn describe(thread: &Thread, newest: u32) -> String {
 fn next(resume: &Resume) -> String {
     let id = &resume.item.id;
     match resume.item.state {
+        // A wait may have delivered the closing events already, so a plain
+        // `mg feedback` could print nothing new.
         ItemState::Merged | ItemState::Abandoned => format!(
-            "The item is closed. Run `mg feedback {id}` to read how it ended, then clean up as \
-             agreed with the operator."
+            "The item is closed. Run `mg feedback {id} --since 0` to read how it ended, then \
+             clean up as agreed with the operator."
         ),
         state => {
             let mut steps = vec![format!(

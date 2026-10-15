@@ -310,11 +310,26 @@ fn f8_approving_squash_merges_the_pull_request_on_github() {
     // The operator's own checkout is GitHub's to update, not the hub's.
     assert_eq!(repo.rev("main"), base);
 
-    let wait = env.mg(&["wait", "app#1"]).assert_code(3).stdout;
+    let wait = env.mg(&["wait", "app#1"]).assert_code(0).stdout;
     assert!(
-        wait.contains(&format!("the operator merged it as {commit}")),
+        wait.contains(&format!(
+            "item.merged app#1 r1: the operator merged it as {commit}"
+        )),
         "{wait}"
     );
+    // The default cleanup leaves the clone on the squash commit, though its
+    // own main is behind.
+    let replay = env
+        .mg(&["--json", "feedback", "app#1", "--since", "0"])
+        .assert_code(0)
+        .json();
+    let events = replay["events"].as_array().unwrap();
+    let merged = events.iter().find(|e| e["type"] == "item.merged").unwrap();
+    for command in merged["commands"].as_array().unwrap() {
+        let args: Vec<_> = command.as_str().unwrap().split(' ').collect();
+        repo.git(&args[1..]);
+    }
+    assert_eq!(repo.rev("HEAD"), commit);
 
     // The branch name is free for the next item, which pushes it again.
     repo.git(["switch", "--quiet", "-C", "login", "main"]);

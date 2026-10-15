@@ -102,8 +102,14 @@ pub enum EventBody {
     CommentOverride { comment: Box<Comment>, reply: Reply },
     /// The approved revision landed on the target as `commit`. A squash
     /// leaves `branch` unmerged to git, so deleting it takes `git branch -D`.
+    /// `commands` is the default cleanup, for an agent that agreed no other
+    /// with the operator: it leaves the worktree on the updated target.
     #[serde(rename = "item.merged")]
-    ItemMerged { commit: String, branch: String },
+    ItemMerged {
+        commit: String,
+        branch: String,
+        commands: Vec<String>,
+    },
 }
 
 /// Which events end a wait; `for` on the feedback route.

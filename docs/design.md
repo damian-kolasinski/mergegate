@@ -204,9 +204,11 @@ mg submit [--title T] [--base main] [--on <item>|none] [--guide FILE|-] [--attac
 
 mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     Block until there are unacknowledged events for this item.
-    exit 0   events returned (--json: the item, its state, the events and the next cursor)
+    exit 0   events returned (--json: the item, its state, the events and the next cursor), even
+             when they closed the item, so the approval and the merge's cleanup aren't missed
     exit 75  timeout with no events — call again
-    exit 3   item closed (merged / abandoned)
+    exit 3   item closed (merged / abandoned) and no events left to return
+    Text output heads each event with its cursor and type: `[7] review.submitted app#3 r2: …`.
     --for operator: only an event from the operator ends the wait, which then returns every
     unacknowledged event with it, so acknowledging never skips one. --timeout 0 waits until an event.
     External comments come in batches, not a trickle: the hub holds an item's GitHub comments until
@@ -217,8 +219,9 @@ mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
     The hub keeps a delivered cursor per item: wait and feedback return the events after it, and the
-    CLI acknowledges them once printed, so an event arrives at least once. --since replays from any
-    cursor without acknowledging.
+    CLI acknowledges them once printed, so an event arrives at least once. --since N replays the
+    events after cursor N (not N itself; cursors are hub-wide, so an item's have gaps) without
+    acknowledging. Exits as wait does: 3 only on a closed item with no events to return.
 mg reply <comment> --status addressed|rejected|question [--body TEXT]
     Respond to a comment (operator's or external). Replies thread on the comment and the latest
     status counts; a rejection or a question needs a body. Replies live in mergegate only, where the
@@ -232,7 +235,7 @@ mg resume <item>                                 Print a self-contained prompt (
                                                  feedback) for starting a fresh agent session.
 ```
 
-`mg resume` holds the skill's rules, the item, its branch and the worktree it was last submitted from, the last review, and every comment still open with its thread. A comment is settled when the agent's latest reply is `rejected`, or `addressed` and a revision was submitted since, and the operator hasn't replied after it. It acknowledges nothing, so the old session's unread events still reach `mg wait`.
+`mg resume` holds the skill (`SKILL.md` with the authoring and waiting references; setup and operator requests are left out, as every pickup pays for them), the item, its branch and the worktree it was last submitted from, the last review, and every comment still open with its thread. A comment is settled when the agent's latest reply is `rejected`, or `addressed` and a revision was submitted since, and the operator hasn't replied after it. It acknowledges nothing, so the old session's unread events still reach `mg wait`.
 
 `mg submit` also takes `--wake CMD`: a command the hub runs when the item has new events from the operator, typically the agent's own "resume this session" command (§6.5). The latest submit that passes it wins, and `--wake ""` removes it.
 
@@ -272,7 +275,7 @@ mg rules list | propose ... | show <id>                See §7.3.
 
 The cursor is the event's position in the item's log, and comment IDs are hub-wide. A comment anchors to a line range on one side of a file in one revision and quotes the last few of its lines, so the agent needn't open the file to know what it means. Comments are on lines only; a whole-file remark goes in the review's summary. `replies` are the operator's answers to the agent's replies on earlier comments. Only events the agent acts on enter the log; its own submits and replies don't.
 
-Event types: `review.submitted`, `external.comments` (each comment carries `external`: its author, whether a bot, its kind (`review_comment`, `issue_comment` or `review`) and its GitHub URL; one that can't be placed on a line has no anchor, and `edited` lists those an earlier batch carried with another body), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit and the branch, which git sees as unmerged), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (the operator overrode the agent's rejection of an external comment: the comment and the operator's reply, sent at once rather than with a review).
+Event types: `review.submitted`, `external.comments` (each comment carries `external`: its author, whether a bot, its kind (`review_comment`, `issue_comment` or `review`) and its GitHub URL; one that can't be placed on a line has no anchor, and `edited` lists those an earlier batch carried with another body), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit, the branch, which git sees as unmerged, and the default commands to clean it up), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (the operator overrode the agent's rejection of an external comment: the comment and the operator's reply, sent at once rather than with a review).
 
 External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. The operator's own comments (the account `gh` signs in as) are ignored.
 
@@ -498,7 +501,7 @@ mergegate/
 
 - The skill names only commands that exist, and a test keeps the two in sync both ways; each command lands in the skill with the PR that adds it.
 - `mg skill install` writes the folder matching the binary (to `$MERGEGATE_HOME/skill/mergegate`, or `--dir PATH`) and prints where; it isn't agent-specific, so each agent copies or links it into wherever it loads skills from. It replaces the whole folder, so files a newer build dropped go too.
-- Install also asks the agent to settle with its operator what to do with a branch after its item merges: the squash leaves it unmerged to git. The skill's default is to detach, then `git branch -D` it.
+- Install also asks the agent to settle with its operator what to do with a branch after its item merges: the squash leaves it unmerged to git. The skill's default is to fetch the hub and detach onto its target, which then holds the squash commit, then `git branch -D` it.
 - The skill covers setup too, so "set up mergegate" is a request to an agent, not a manual.
 
 Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` with a guide, demo, and the priority/note from the task brief; wait for feedback the cheapest way available; reply to every comment with `addressed`/`rejected` + reason; evaluate external feedback critically before acting; when a command returns `needs_decision`, ask the operator.
