@@ -1,6 +1,8 @@
+use super::unpaired;
 use crate::fake::{FakeStore, commit, rebased, submit_login};
 use crate::interdiff::{Change, InterdiffStore};
-use crate::item::ItemId;
+use crate::item::{ChangedFile, FileStat, ItemId};
+use crate::triage::Triage;
 use crate::viewed::ViewedStore;
 
 fn id() -> ItemId {
@@ -136,4 +138,56 @@ fn carries_marks_from_the_latest_revision_a_file_is_unchanged_since() {
     store.set_viewed(&id(), 2, "src/login.rs", false).unwrap();
     submit_login(&mut store, &git, 5);
     assert_eq!(viewed(&store, 3), Vec::<String>::new());
+}
+
+fn moved(path: &str, from: Option<&str>, old: Option<&str>, new: Option<&str>) -> ChangedFile {
+    ChangedFile {
+        path: path.into(),
+        old_path: from.map(Into::into),
+        old_blob: old.map(Into::into),
+        new_blob: new.map(Into::into),
+    }
+}
+
+fn own(files: &[ChangedFile]) -> Vec<FileStat> {
+    files
+        .iter()
+        .map(|file| FileStat {
+            file: file.clone(),
+            additions: None,
+            deletions: None,
+            generated: false,
+            triage: Triage::default(),
+        })
+        .collect()
+}
+
+#[test]
+fn a_rename_away_from_an_own_file_splits() {
+    // r1 rewrote a.txt, so against the base r2 deletes it and adds b.txt.
+    let own = own(&[
+        moved("a.txt", None, Some("base"), None),
+        moved("b.txt", None, None, Some("r1")),
+    ]);
+    assert_eq!(
+        unpaired(moved("b.txt", Some("a.txt"), Some("r1"), Some("r1")), &own),
+        [
+            moved("a.txt", None, Some("r1"), None),
+            moved("b.txt", None, None, Some("r1")),
+        ]
+    );
+}
+
+#[test]
+fn a_rename_the_own_diff_shares_stays_whole() {
+    let own = own(&[moved("b.txt", Some("a.txt"), Some("base"), Some("r2"))]);
+    let rename = moved("b.txt", Some("a.txt"), Some("r1"), Some("r2"));
+    assert_eq!(unpaired(rename.clone(), &own), [rename]);
+}
+
+#[test]
+fn a_rename_of_a_file_the_item_added_stays_whole() {
+    let own = own(&[moved("b.txt", None, None, Some("r1"))]);
+    let rename = moved("b.txt", Some("a.txt"), Some("r1"), Some("r1"));
+    assert_eq!(unpaired(rename.clone(), &own), [rename]);
 }
