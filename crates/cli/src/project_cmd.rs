@@ -8,6 +8,7 @@ use mergegate_core::project::NONE;
 
 use crate::client::{Client, Reply, segment};
 use crate::output::{CliError, Outcome};
+use crate::project_here::project_here;
 
 #[derive(Subcommand)]
 pub enum ProjectCommand {
@@ -174,13 +175,6 @@ pub(crate) fn named(client: &Client, project: Option<String>) -> Result<String, 
     }
 }
 
-pub(crate) fn project_here(client: &Client) -> Result<Project, CliError> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| CliError::new("io_error", format!("reading the current directory: {e}")))?;
-    let path = absolute(&cwd)?;
-    client.get_query("/api/project-at", &[("path", &path)])
-}
-
 fn all(client: &Client) -> Result<Outcome, CliError> {
     let list: Projects = client.get("/api/projects")?;
     let text = if list.projects.is_empty() {
@@ -255,7 +249,7 @@ pub(crate) fn local_path(client: &Client, path: &Path) -> Result<String, CliErro
 
 /// The hub may run with another working directory, so paths go to it
 /// absolute and with symlinks resolved.
-fn absolute(path: &Path) -> Result<String, CliError> {
+pub(crate) fn absolute(path: &Path) -> Result<String, CliError> {
     let resolved = std::fs::canonicalize(path)
         .map_err(|e| CliError::new("invalid_path", format!("{}: {e}", path.display())))?;
     resolved.into_os_string().into_string().map_err(|path| {

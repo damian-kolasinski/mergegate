@@ -259,6 +259,45 @@ fn f2_a_worker_submits_and_waits_over_the_tailnet() {
 }
 
 #[test]
+fn f2_a_clone_from_the_hub_finds_its_project() {
+    let mut net = Tailnet::new();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    net.hub
+        .mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    net.tailscale.call_from("laptop", HUB_OWNER);
+    net.connect().assert_code(0);
+    let parent = repo.root().parent().unwrap();
+
+    let clone = repo.sibling("from-hub");
+    let url = format!("{}/git/app", net.url);
+    testkit::git(parent, ["clone", "--quiet", &url, clone.to_str().unwrap()]);
+    let init = net
+        .worker
+        .mg_at(&clone, &["--json", "init"])
+        .assert_code(0)
+        .json();
+    assert_eq!(init["project"], "app");
+
+    // A path names a repo on this machine, which the hub's projects aren't.
+    let by_path = repo.sibling("by-path");
+    testkit::git(
+        parent,
+        [
+            "clone",
+            "--quiet",
+            repo.root().to_str().unwrap(),
+            by_path.to_str().unwrap(),
+        ],
+    );
+    let refused = net.worker.mg_at(&by_path, &["--json", "init"]);
+    let refused = error(&refused);
+    assert_eq!(refused["code"], "no_project", "{refused}");
+    assert_eq!(refused["hint"], "mg init --project NAME", "{refused}");
+}
+
+#[test]
 fn f2_the_hub_refuses_a_remote_wake_and_clears_a_local_one() {
     let mut net = Tailnet::new();
     let repo = TestRepo::new("app");

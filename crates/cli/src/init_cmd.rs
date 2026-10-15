@@ -5,7 +5,8 @@ use serde::Serialize;
 
 use crate::client::Client;
 use crate::output::{CliError, Outcome};
-use crate::project_cmd::{project_here, route};
+use crate::project_cmd::route;
+use crate::project_here::project_here;
 use crate::repo::{self, REMOTE};
 
 #[derive(Serialize)]
@@ -21,7 +22,7 @@ pub fn run(project: Option<String>) -> Result<Outcome, CliError> {
     let project: Project = match project {
         Some(name) => client.get(&route(&name)?)?,
         None => project_here(&client).map_err(|e| match e.body.code.as_str() {
-            "no_project" => e.hint("mg init --project NAME"),
+            "no_project" | "ambiguous_project" => e.hint("mg init --project NAME"),
             _ => e,
         })?,
     };

@@ -17,6 +17,17 @@ use crate::output::{CliError, exit};
 /// Shorter than `mg hub start`'s wait: past it, a hung hub is reported.
 const STARTING: Duration = Duration::from_secs(3);
 
+/// How long a connected `mg` waits for the hub on another machine to answer.
+/// Before it answers a device it hasn't seen in a minute, the hub asks the
+/// `tailscale` CLI who it is and gives the CLI 5 seconds; a first request
+/// also waits on MagicDNS and the WireGuard handshake. Shorter than that,
+/// a working hub reads as unreachable.
+const REACH: Duration = Duration::from_secs(10);
+
+/// How long a connected `mg` waits to connect, within `REACH`. A hub machine
+/// that is off the tailnet never refuses, so this is how soon it is reported.
+const REACH_CONNECT: Duration = Duration::from_secs(5);
+
 pub(crate) struct Client {
     url: String,
     agent: ureq::Agent,
@@ -244,7 +255,8 @@ pub(crate) fn reach(url: &str) -> Result<Hub, CliError> {
     // A refusal is the hub's to explain: which device it refused and how the
     // operator lets it in.
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(2)))
+        .timeout_global(Some(REACH))
+        .timeout_connect(Some(REACH_CONNECT))
         .proxy(None)
         .http_status_as_error(false)
         .build()

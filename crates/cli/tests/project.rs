@@ -88,6 +88,25 @@ fn f1_local_registers_the_repo_and_mirrors_its_target() {
 }
 
 #[test]
+fn f1_a_clone_of_the_registered_repo_finds_its_project() {
+    let env = env();
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    env.mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    let clone = repo.sibling("clone");
+    git(
+        repo.root().parent().unwrap(),
+        ["clone", "--quiet", path(repo.root()), path(&clone)],
+    );
+
+    // Its origin is the registered repo, though the clone isn't.
+    let init = env.mg_at(&clone, &["--json", "init"]).assert_code(0).json();
+    assert_eq!(init["project"], "app");
+}
+
+#[test]
 fn f1_local_asks_for_the_target_when_several_could_be_it() {
     let env = env();
     env.start_hub();
