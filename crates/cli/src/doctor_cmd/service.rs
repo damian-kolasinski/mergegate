@@ -61,7 +61,7 @@ fn judge(installed: Option<&Installed>, this: Option<&Path>, hub_running: bool) 
 
 /// Links and relative spellings resolved where the files exist; a Homebrew
 /// `mg` is a link into its versioned cellar.
-fn same_file(a: &Path, b: &Path) -> bool {
+pub(super) fn same_file(a: &Path, b: &Path) -> bool {
     let resolve = |p: &Path| fs::canonicalize(p).unwrap_or_else(|_| p.to_owned());
     resolve(a) == resolve(b)
 }

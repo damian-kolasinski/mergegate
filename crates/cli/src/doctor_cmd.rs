@@ -1,7 +1,8 @@
-//! `mg doctor`: whether the hub, its service, git, every project, the skill
-//! and this clone are ready to work.
+//! `mg doctor`: whether the hub, its service, git, every project, the skill,
+//! the `mg` on PATH and this clone are ready to work.
 
 mod hub;
+mod path;
 mod remote;
 mod service;
 mod skill;
@@ -64,6 +65,7 @@ pub fn run() -> Result<Outcome, CliError> {
         &skill::loaded(),
         ::skill::FILES,
     ));
+    checks.extend(path::check());
     if let Ok((running, client, _)) = &connected {
         checks.extend(remote::check(running, client)?);
     }

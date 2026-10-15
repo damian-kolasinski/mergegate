@@ -66,10 +66,10 @@ fn without_a_hub_doctor_fails_and_says_how_to_start_it() {
             "fix": "mg hub start",
         })
     );
-    // The skill is checked without a hub; the rest needs one.
+    // The skill and PATH are checked without a hub; the rest needs one.
     assert_eq!(
         statuses(&doctor),
-        pairs(&[("hub", "fail"), ("skill", "warn")])
+        pairs(&[("hub", "fail"), ("skill", "warn"), ("path", "ok")])
     );
 
     let Run { stdout, .. } = env.mg_at(dir.path(), &["doctor"]).assert_code(1);
@@ -95,6 +95,7 @@ fn a_fresh_hub_passes_with_warnings_until_a_project_and_the_skill_are_added() {
             ("projects", "warn"),
             ("languages", "ok"),
             ("skill", "warn"),
+            ("path", "ok"),
         ])
     );
     assert_eq!(check(&doctor, "projects")["fix"], "mg project add PATH");
@@ -120,6 +121,29 @@ fn the_skill_check_passes_once_installed_and_warns_once_changed() {
         "{skill}"
     );
     assert_eq!(skill["fix"], "mg skill install");
+}
+
+#[test]
+fn another_mg_first_on_path_warns_with_the_folder_to_put_ahead() {
+    let env = env();
+    let dir = elsewhere();
+    let other = dir.path().join("bin");
+    std::fs::create_dir(&other).unwrap();
+    std::fs::write(other.join("mg"), "#!/bin/sh\n").unwrap();
+    std::fs::set_permissions(
+        other.join("mg"),
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    let path = format!("{}:/usr/bin:/bin", other.display());
+    let run = env.mg_with_env(&["--json", "doctor"], &[("PATH", &path)]);
+    let path_check = check(&run.json(), "path").clone();
+    assert_eq!(path_check["status"], "warn");
+    let mg = Path::new(env!("CARGO_BIN_EXE_mg"));
+    assert_eq!(
+        path_check["fix"],
+        format!("export PATH=\"{}:$PATH\"", mg.parent().unwrap().display())
+    );
 }
 
 #[test]
@@ -165,6 +189,7 @@ fn a_lost_staging_repo_fails_until_its_fix_runs() {
             ("project app", "fail"),
             ("languages", "ok"),
             ("skill", "warn"),
+            ("path", "ok"),
         ])
     );
     let fix = doctor["checks"][3]["fix"].as_str().unwrap();

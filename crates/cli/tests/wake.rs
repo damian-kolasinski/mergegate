@@ -43,6 +43,11 @@ fn setup() -> (Env, TestRepo) {
 
 fn setup_in(env: Env) -> (Env, TestRepo) {
     env.start_hub();
+    with_project(env)
+}
+
+/// [`setup_in`] for a hub the caller started.
+fn with_project(env: Env) -> (Env, TestRepo) {
     let repo = TestRepo::new("app");
     repo.commit_files("Base", &[("README", "title\n")]);
     env.mg_at(repo.root(), &["--json", "project", "add"])
@@ -209,4 +214,35 @@ fn f3_the_wake_runs_outside_the_agent_session_that_started_the_hub() {
         .assert_code(0);
     review(&env, "First.");
     assert_eq!(await_lines(&log, 1), ["unset unset /codex"]);
+}
+
+#[test]
+fn f3_the_wakes_mg_is_the_hubs_whatever_mg_came_first_on_its_path() {
+    // As macOS's /usr/bin/mg editor does on a PATH listing /usr/bin early.
+    let editor = tempfile::tempdir().unwrap();
+    let fake = editor.path().join("mg");
+    std::fs::write(&fake, "#!/bin/sh\necho editor\n").unwrap();
+    std::fs::set_permissions(&fake, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let path = std::env::join_paths(
+        std::iter::once(editor.path().to_owned())
+            .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+    )
+    .unwrap();
+    let env = env();
+    env.mg_with_env(
+        &["--json", "hub", "start", "--port", "0"],
+        &[("PATH", path.to_str().unwrap())],
+    )
+    .assert_code(0);
+    let (env, repo) = with_project(env);
+    let log = log_path(&env);
+    let wake = format!("command -v mg >> {}", log.display());
+    env.mg_at(repo.root(), &["submit", "--wake", &wake])
+        .assert_code(0);
+    review(&env, "First.");
+    let found = PathBuf::from(&await_lines(&log, 1)[0]);
+    assert_eq!(
+        found.canonicalize().unwrap(),
+        Path::new(env!("CARGO_BIN_EXE_mg")).canonicalize().unwrap()
+    );
 }

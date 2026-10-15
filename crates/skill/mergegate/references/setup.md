@@ -52,9 +52,9 @@ On another machine, clone the project from GitHub, or from the hub when it has n
 
 ## Checking
 
-`mg doctor` checks the hub and its service, git, every project and the language packs its files use, this skill, and the `mergegate` remote of the clone you run it in, and prints the fix for anything wrong. Run it after setup and whenever a command fails in a way you don't understand.
+`mg doctor` checks the hub and its service, git, every project and the language packs its files use, this skill, which `mg` is first on `PATH`, and the `mergegate` remote of the clone you run it in, and prints the fix for anything wrong. Run it after setup and whenever a command fails in a way you don't understand.
 
-If `mg` answers with a usage line offering the options `-nR`, or opens an editor, the `mg` on `PATH` is macOS's `/usr/bin/mg`, a text editor: ask the operator where mergegate's `mg` is installed and put that directory ahead of `/usr/bin` on `PATH`.
+If `mg` answers with a usage line offering the options `-nR`, or opens an editor, the `mg` on `PATH` is macOS's `/usr/bin/mg`, a text editor. mergegate's is also installed as `mergegate`: run `mergegate doctor`, and ask the operator to add the `export PATH=...` its `path` check prints to their shell profile. Until they have, run `mergegate` wherever this skill says `mg`.
 
 ## This skill
 

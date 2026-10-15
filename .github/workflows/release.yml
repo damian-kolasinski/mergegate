@@ -155,7 +155,9 @@ jobs:
         uses: jdx/packslip@7b32cd29a9240927882ee18b3db1dcfd8e0328b4 # v1.7.0
         with:
           artifacts: dist/mg-*.tar.gz
-          bin: mg
+          # mergegate is the same file, for a PATH where macOS's /usr/bin/mg
+          # editor comes first.
+          bin: mg mergegate=mg
           upload: false
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
