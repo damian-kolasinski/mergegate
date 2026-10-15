@@ -45,15 +45,11 @@ function describe(help: KeyHelp): void {
 
 function listen(keymap: Keymap, modal: boolean): void {
   const onKey = (event: KeyboardEvent) => {
-    if (
-      event.defaultPrevented ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey
-    ) {
-      return;
-    }
-    if (isEditable(event.target)) return;
+    if (event.defaultPrevented || isEditable(event.target)) return;
+    // A dialog keeps modified keys from the screens too, such as the review's
+    // `⌘↩`, though not from the browser.
+    if (modal) event.stopPropagation();
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     // Enter on a dialog's focused control, such as the demo viewer's Close,
     // is that control's: taken here it would act on the screen behind
     // instead. Elsewhere a link or button left focused by a click keeps the
@@ -62,9 +58,6 @@ function listen(keymap: Keymap, modal: boolean): void {
     if (!modal && event.key === "Enter" && inDialogControl(event.target)) {
       return;
     }
-    // Capturing on window runs before any listener elsewhere; stopping here
-    // keeps the key from them but not from its default, such as `Tab`.
-    if (modal) event.stopPropagation();
     const action = keymap[event.key];
     if (!action) return;
     event.preventDefault();

@@ -229,7 +229,7 @@ test("a file marked viewed stays open while a comment is written on it", async (
   await expect(editor).toBeFocused();
   await page.keyboard.type("Half a thought");
   await page
-    .getByRole("navigation", { name: "Files" })
+    .getByRole("region", { name: "Diff" })
     .getByLabel("Viewed login.rs")
     .check();
   await expect(page.getByText("1 of 2 reviewed")).toBeVisible();

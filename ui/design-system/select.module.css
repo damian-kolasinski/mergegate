@@ -1,16 +1,29 @@
+/* The native arrow sits flush against the border in some engines, so it is
+   drawn instead: two gradient halves of a chevron, in room padded for it. */
 .select {
-  padding: var(--space-1) var(--space-2);
+  appearance: none;
+  padding: var(--space-1) calc(var(--space-2) + 16px) var(--space-1)
+    var(--space-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
-  background: var(--background-page);
+  background-color: var(--background-page);
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    right calc(var(--space-2) + 5px) center,
+    right var(--space-2) center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
   color: var(--text-primary);
   font: var(--type-label3);
+  line-height: 20px;
   letter-spacing: var(--tracking-label);
   cursor: pointer;
 }
 
 .select:hover {
-  background: var(--background-subtle);
+  background-color: var(--background-subtle);
 }
 
 .select:focus-visible {

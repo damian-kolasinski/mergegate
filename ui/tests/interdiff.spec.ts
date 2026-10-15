@@ -47,7 +47,7 @@ test("f7 a new revision shows what changed since the review", async ({
   const current = files.locator("li[aria-current=true]");
   // It adds a declaration, which ranks it first.
   await expect(current).toContainText("login.rs");
-  await files.getByLabel("Viewed src/login.rs").check();
+  await diff.getByLabel("Viewed src/login.rs").check();
   await requestChanges(page);
 
   // r2 waits behind a banner, and only it can be approved.
@@ -163,7 +163,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   ).toBeFocused();
   await page.keyboard.type("Add a test.");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await files.getByLabel("Viewed src/greet.py").check();
+  await diff.getByLabel("Viewed src/greet.py").check();
   await requestChanges(page);
   hub.mg(["reply", "c_1", "--status", "addressed"]);
   app.revise("Test greet", { "tests/test_greet.py": "greet()\n" });
@@ -177,7 +177,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
     /^test_greet\.py\s*tests.*added/,
   ]);
   await expect(files.getByText(/\d unchanged since/)).toHaveCount(0);
-  await expect(files.getByLabel("Viewed src/greet.py")).toBeChecked();
+  await expect(diff.getByLabel("Viewed src/greet.py")).toBeChecked();
   const comment = diff.getByRole("article", { name: "Comment c_1" });
   await expect(comment).toContainText("Add a test.");
   await expect(comment).toContainText("Addressed in r2");

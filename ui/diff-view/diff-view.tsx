@@ -58,6 +58,9 @@ type Note = DiffLineAnnotation<string>;
 
 type Drawn = Pick<FileDiff<string>, "setEditorActiveLine">;
 
+/** A file header's Viewed box. */
+export type ViewedBox = { checked: boolean; disabledWhy?: string };
+
 /**
  * Every file of a change in one scrolling column, virtualized by CodeView,
  * which owns the element's scrolling.
@@ -83,6 +86,13 @@ export function DiffView(props: {
   onComment: (span: Span) => void;
   /** Why a file is where it is, shown in its header. */
   describe?: (file: File) => string | undefined;
+  /**
+   * The Viewed box a file's header shows, as GitHub's does: ticked or not,
+   * with why it can't change when it can't. None for a file with no mark.
+   */
+  viewedBox?: (file: File) => ViewedBox | undefined;
+  /** The box ticked or cleared, from it or a click on the header. */
+  onViewed?: (path: string, viewed: boolean) => void;
   control: (control: DiffViewControl) => void;
 }) {
   let root!: HTMLDivElement;
@@ -158,16 +168,21 @@ export function DiffView(props: {
     },
     renderHeaderMetadata: (diff) => {
       const file = byPath.get(diff.name);
+      if (!file) return undefined;
       // A mode changes no line, so a collapsed header still says so.
       const collapsed = items.get(diff.name)?.collapsed;
       const notes = [
-        collapsed ? "Viewed" : file && headerStatus(file),
-        file && modeNote(file),
+        collapsed ? undefined : headerStatus(file),
+        modeNote(file),
         // Backticks would show as typed: the header's text is plain.
-        file && props.describe?.(file)?.replaceAll("`", ""),
+        props.describe?.(file)?.replaceAll("`", ""),
       ].filter((note): note is string => Boolean(note));
-      const preview = file && !collapsed ? previewOf(file) : undefined;
-      if (notes.length === 0 && !preview) return undefined;
+      const preview = collapsed ? undefined : previewOf(file);
+      // Whether there's a box is the file's to say once; whether it's ticked
+      // follows the marks below, as one open for a comment doesn't collapse
+      // and render its header again.
+      const box = untrack(() => props.viewedBox?.(file));
+      if (notes.length === 0 && !preview && !box) return undefined;
       const note = document.createElement("span");
       // Slotted into CodeView's header from this document, so the shadow
       // root's CSS can't reach it.
@@ -179,17 +194,32 @@ export function DiffView(props: {
         note.append(part);
       });
       note.title = note.textContent;
-      if (!file || !preview) return note;
       const element = document.createElement("span");
       mounted.set(
         element,
         render(
           () => (
             <span class={previewStyles.header}>
-              {note}
-              <Button onClick={() => setPreviewing(file)}>
-                {previewLabel(file, preview)}
-              </Button>
+              <Show when={notes.length}>{note}</Show>
+              <Show when={preview}>
+                {(shown) => (
+                  <Button onClick={() => setPreviewing(file)}>
+                    {previewLabel(file, shown())}
+                  </Button>
+                )}
+              </Show>
+              <Show when={box}>
+                {(shown) => (
+                  <ViewedToggle
+                    path={file.path}
+                    box={props.viewedBox?.(file) ?? shown()}
+                    onChange={(value) => {
+                      props.onViewed?.(file.path, value);
+                      if (value) keepHeader(file.path);
+                    }}
+                  />
+                )}
+              </Show>
             </span>
           ),
           element,
@@ -363,10 +393,47 @@ export function DiffView(props: {
     }
   });
 
+  /**
+   * A click on a file's header, outside what's in it to click, flips its
+   * Viewed box, as GitHub's header does. The header is in the file's shadow
+   * root and the box is slotted into it, so the box is found through its
+   * slot.
+   */
+  const onHeaderClick = (event: MouseEvent) => {
+    // A double click is a word picked from the path, and a modified one is
+    // a selection extended, not two flips of the mark.
+    if (event.button !== 0 || event.defaultPrevented || event.detail > 1)
+      return;
+    if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey)
+      return;
+    const path = event.composedPath();
+    const header = path.find(
+      (target): target is Element =>
+        target instanceof Element && target.hasAttribute("data-diffs-header"),
+    );
+    if (!header) return;
+    const control = path.some(
+      (target) =>
+        target instanceof Element &&
+        target.matches("a, button, input, label, select, textarea"),
+    );
+    // Selecting the path to copy it isn't a click on the header. Chromium
+    // reports a selection inside a shadow root as collapsed on its host, so
+    // it's its text that tells.
+    if (control || document.getSelection()?.toString()) return;
+    const slot = header.querySelector("slot[name=header-metadata]");
+    const box = (slot instanceof HTMLSlotElement ? slot.assignedElements() : [])
+      .map((element) => element.querySelector("input[data-viewed-box]"))
+      .find((input) => input instanceof HTMLInputElement);
+    if (!box || box.disabled) return;
+    box.click();
+  };
+
   onMount(() => {
     view.setup(root);
     const observer = new MutationObserver(sweep);
     observer.observe(root, { childList: true, subtree: true });
+    root.addEventListener("click", onHeaderClick);
     const onScroll = (top: number) => {
       if (movedFrom !== undefined && Math.abs(top - movedFrom) < 1) return;
       movedFrom = undefined;
@@ -377,6 +444,7 @@ export function DiffView(props: {
     };
     const unsubscribe = view.subscribeToScroll(onScroll);
     onCleanup(() => {
+      root.removeEventListener("click", onHeaderClick);
       observer.disconnect();
       unsubscribe();
       view.cleanUp();
@@ -452,6 +520,17 @@ export function DiffView(props: {
     if (spot) draw(spot.path);
   };
 
+  /**
+   * Keeps a file that collapsed from its sticky header on screen: the
+   * scroll was down in its lines, which are gone, so it'd land files below.
+   */
+  const keepHeader = (path: string) => {
+    const top = view.getTopForItem(path);
+    if (top === undefined || top >= view.getScrollTop()) return;
+    moveTo(path);
+    view.scrollTo({ type: "item", id: path, behavior: "instant" });
+  };
+
   const selectRow = (row: Row) => {
     // A dragged range stays while the cursor is on its end, where a click
     // left it; a move takes the cursor, and `+`, off it.
@@ -512,6 +591,30 @@ export function DiffView(props: {
         )}
       </Show>
     </>
+  );
+}
+
+function ViewedToggle(props: {
+  path: string;
+  box: ViewedBox;
+  onChange: (viewed: boolean) => void;
+}) {
+  return (
+    <label class={styles.viewed} title={props.box.disabledWhy}>
+      <input
+        type="checkbox"
+        data-viewed-box=""
+        checked={props.box.checked}
+        disabled={props.box.disabledWhy !== undefined}
+        aria-label={`Viewed ${props.path}`}
+        onChange={(event) => {
+          props.onChange(event.currentTarget.checked);
+          // A focused field keeps keys from the shortcuts.
+          event.currentTarget.blur();
+        }}
+      />
+      Viewed
+    </label>
   );
 }
 
@@ -614,12 +717,14 @@ async function text(url: string): Promise<string> {
 
 // The header's counts read `+3 −1` as everywhere else on the page, and a
 // long note gives way to the file's name: the metadata shrinks first, by
-// its slotted note, which `styles.note` cuts short. Lines an expanded gap
-// shows aren't part of the change, and the hub takes no comment on them.
-// The cursor's line, CodeView's active line, which it marks only by its
-// number's colour, takes a selected line's tint.
+// its slotted note, which `styles.note` cuts short. A click on the header
+// marks the file viewed. Lines an expanded gap shows aren't part of the
+// change, and the hub takes no comment on them. The cursor's line,
+// CodeView's active line, which it marks only by its number's colour,
+// takes a selected line's tint.
 const headerCSS = `
 [data-additions-count] { order: -1; }
+[data-diffs-header] { cursor: pointer; }
 [data-line-type="context-expanded"] [data-gutter-utility-slot] { display: none; }
 [data-metadata] { min-width: 0; flex-shrink: 1000; }
 ::slotted([slot="header-metadata"]) { min-width: 0; overflow: hidden; }

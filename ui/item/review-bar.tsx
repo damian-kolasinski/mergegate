@@ -7,7 +7,7 @@ import type { Review } from "../api/Review";
 import type { SubmitReview } from "../api/SubmitReview";
 import type { Verdict } from "../api/Verdict";
 import { type Failure, failureOf, HubError, postJson } from "../app/hub";
-import { useKeys } from "../app/keys";
+import { isEditable, isSubmitKey, useKeys } from "../app/keys";
 import { Button, ErrorNote, Meta, Mono, TextArea } from "../design-system";
 import { NextItem } from "./next";
 import styles from "./review-bar.module.css";
@@ -160,11 +160,29 @@ export function ReviewBar(props: {
       group: "Review",
       keys: [
         ["r", "Write the review's summary"],
-        ["⌘↩", "Send comments, from the summary"],
+        ["⌘↩", "Send comments"],
         ["a", "Approve & merge, after a confirm"],
       ],
     },
   );
+  // `⌘↩` sends comments from anywhere on the screen, as its hint on the
+  // button says, not only from the summary. `useKeys` leaves modified keys
+  // to the browser, so it's bound here; a field's own `⌘↩` (the summary's,
+  // a comment's) comes first and takes it.
+  const onSubmitKey = (event: KeyboardEvent) => {
+    if (!isSubmitKey(event) || event.defaultPrevented || event.repeat) return;
+    if (isEditable(event.target) || props.writing || confirming()) return;
+    // `⌘↩` on a focused link opens it in a new tab.
+    if (event.target instanceof Element && event.target.closest("a[href]")) {
+      return;
+    }
+    // A dialog over the screen, such as the demo viewer, keeps its keys.
+    if (document.querySelector("[role=dialog][aria-modal=true]")) return;
+    event.preventDefault();
+    submit("comment");
+  };
+  window.addEventListener("keydown", onSubmitKey);
+  onCleanup(() => window.removeEventListener("keydown", onSubmitKey));
   // Escape backs out of the confirm step rather than leaving the item; the
   // screen binds its Escape first, so this one listens ahead of it.
   createEffect(() => {

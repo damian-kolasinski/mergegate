@@ -51,6 +51,27 @@ test("f6 request changes sends the summary to the agent", async ({
   ]);
 });
 
+test("f6 ⌘↩ sends comments from outside the summary", async ({ page, hub }) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const review = page.getByRole("form", { name: "Review" });
+  const summary = review.getByRole("textbox", { name: "Review summary" });
+  // Nothing written, nothing to send.
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(review.getByText(/^Sent to the agent/)).toHaveCount(0);
+
+  await summary.fill("Looks close.");
+  await summary.blur();
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
+  await expect(summary).toHaveValue("");
+  const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
+  expect(feedback.events).toMatchObject([
+    { revision: 1, verdict: "comment", summary: "Looks close." },
+  ]);
+});
+
 test("f6 comment leaves the item with the operator", async ({ page, hub }) => {
   submitChange(hub);
   await page.goto(`${hub.url}#/items/app%231`);

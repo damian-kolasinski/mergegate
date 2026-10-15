@@ -12,7 +12,9 @@ test("f4 links an item to its pull request", async ({ page, github }) => {
   const row = page
     .getByRole("region", { name: "Needs you" })
     .getByRole("listitem");
-  const link = row.getByRole("link", { name: "#1" });
+  // Named by its pull request, not the hub's own count.
+  await expect(row.locator("code")).toHaveText("app#1");
+  const link = row.getByRole("link", { name: "View on GitHub" });
   await expect(link).toHaveAttribute("href", url);
   await expect(link).toHaveAttribute("target", "_blank");
 

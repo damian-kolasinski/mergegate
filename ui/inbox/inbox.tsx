@@ -55,6 +55,11 @@ export function InboxScreen() {
     return waiting ? `(${waiting}) Inbox` : "Inbox";
   });
 
+  const columns = createMemo(() => {
+    const current = inbox();
+    return current ? columnsOf(current) : { demo: false, link: false };
+  });
+
   const [now, setNow] = createSignal(Date.now());
   const clock = setInterval(() => setNow(Date.now()), 30_000);
   onCleanup(() => clearInterval(clock));
@@ -103,7 +108,7 @@ export function InboxScreen() {
 
   // A failed refresh keeps the last inbox on screen, under the message.
   return (
-    <>
+    <div class={styles.inbox}>
       <Show when={failure()}>
         {(current) => (
           <Show
@@ -184,6 +189,7 @@ export function InboxScreen() {
                           {(item) => (
                             <Entry
                               item={item}
+                              columns={columns()}
                               now={now()}
                               selected={item.id === selected()}
                               onSelect={() => setSelectedId(item.id)}
@@ -210,6 +216,7 @@ export function InboxScreen() {
                     {(item) => (
                       <Entry
                         item={item}
+                        columns={columns()}
                         now={now()}
                         selected={false}
                         onSelect={() => undefined}
@@ -237,12 +244,34 @@ export function InboxScreen() {
           />
         )}
       </Show>
-    </>
+    </div>
   );
+}
+
+/** The optional columns: each is there when some row has something in it. */
+type Columns = { demo: boolean; link: boolean };
+
+function columnsOf(inbox: Inbox): Columns {
+  const all = [...GROUPS.flatMap((group) => inbox[group.key]), ...inbox.closed];
+  return {
+    demo: all.some((item) => item.demo),
+    link: all.some((item) => item.link),
+  };
+}
+
+/**
+ * What a row is called: on GitHub its project and pull request, the number
+ * the operator knows it by, as `app#42`; otherwise the hub's own id.
+ */
+function label(item: InboxItem): string {
+  const pull = item.link?.label;
+  if (!pull?.startsWith("#")) return item.id;
+  return `${item.id.split("#")[0] ?? ""}${pull}`;
 }
 
 function Entry(props: {
   item: InboxItem;
+  columns: Columns;
   now: number;
   selected: boolean;
   onSelect: () => void;
@@ -254,8 +283,8 @@ function Entry(props: {
       onSelect={props.onSelect}
       onOpen={props.onOpen}
     >
-      <span class={styles.id}>
-        <Mono>{props.item.id}</Mono>
+      <span class={styles.id} title={props.item.id}>
+        <Mono>{label(props.item)}</Mono>
       </span>
       <span class={styles.revision}>
         <Meta>r{props.item.revision}</Meta>
@@ -311,20 +340,6 @@ function Entry(props: {
           </Meta>
         </span>
       </Show>
-      <Show when={props.item.link}>
-        {(link) => (
-          <span class={styles.flag}>
-            <ExternalLink href={link().url} title={link().title}>
-              {link().label}
-            </ExternalLink>
-          </span>
-        )}
-      </Show>
-      <Show when={props.item.demo}>
-        <span class={styles.flag} title="Has screenshots or recordings">
-          <Badge tone="brand">▶ demo</Badge>
-        </span>
-      </Show>
       <Show when={props.item.changed_since}>
         {(changed) => (
           <span class={styles.flag}>
@@ -352,6 +367,28 @@ function Entry(props: {
           <Badge tone="warning">
             ⚡ conflicts with {props.item.conflicts_with.join(", ")}
           </Badge>
+        </span>
+      </Show>
+      {/* Cells of their own, empty on a row without one, so a demo never
+          pushes the link out of line with the rows around it. */}
+      <Show when={props.columns.demo}>
+        <span class={styles.demo}>
+          <Show when={props.item.demo}>
+            <Badge tone="brand" title="Has screenshots or recordings">
+              ▶ demo
+            </Badge>
+          </Show>
+        </span>
+      </Show>
+      <Show when={props.columns.link}>
+        <span class={styles.link}>
+          <Show when={props.item.link}>
+            {(link) => (
+              <ExternalLink href={link().url} title={link().title}>
+                View on GitHub
+              </ExternalLink>
+            )}
+          </Show>
         </span>
       </Show>
       {/* A zero count leaves its cell empty so the columns stay aligned. */}
