@@ -51,14 +51,26 @@ pub(crate) fn open(
     pull(&reply.body)
 }
 
+pub(crate) fn body(api: &Api, repo: &GithubRepo, number: u64) -> Result<String, GithubError> {
+    let reply = api.get(&format!("/repos/{repo}/pulls/{number}"))?;
+    if !reply.ok() {
+        return Err(not_found_is_access(repo, &reply));
+    }
+    // GitHub sends `null` for a pull request without a description.
+    Ok(reply.body["body"].as_str().unwrap_or_default().to_owned())
+}
+
 pub(crate) fn edit(
     api: &Api,
     repo: &GithubRepo,
     number: u64,
     title: &str,
-    description: &str,
+    description: Option<&str>,
 ) -> Result<(), GithubError> {
-    let body = json!({ "title": title, "body": description });
+    let mut body = json!({ "title": title });
+    if let Some(description) = description {
+        body["body"] = description.into();
+    }
     update(api, repo, number, body)
 }
 

@@ -2463,16 +2463,22 @@ impl Github for FakeGithub {
         Ok(pull_of(&pull))
     }
 
+    fn pull_body(&self, repo: &GithubRepo, number: u64) -> Result<String, GithubError> {
+        self.pull(repo, number, |pull| Ok(pull.body.clone()))
+    }
+
     fn edit_pull(
         &self,
         repo: &GithubRepo,
         number: u64,
         title: &str,
-        body: &str,
+        body: Option<&str>,
     ) -> Result<(), GithubError> {
         self.pull(repo, number, |pull| {
             pull.title = title.into();
-            pull.body = body.into();
+            if let Some(body) = body {
+                pull.body = body.into();
+            }
             Ok(())
         })
     }

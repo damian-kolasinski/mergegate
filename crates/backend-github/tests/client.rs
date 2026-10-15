@@ -104,12 +104,23 @@ fn opens_finds_edits_and_closes_a_pull_request() {
     );
 
     client
-        .edit_pull(&acme(), 1, "Sign in", "Signs users in, safely.")
+        .edit_pull(&acme(), 1, "Sign in", Some("Signs users in, safely."))
         .unwrap();
     let edited = &github.pulls()[0];
     assert_eq!(
         (edited.title.as_str(), edited.body.as_str()),
         ("Sign in", "Signs users in, safely.")
+    );
+    assert_eq!(
+        client.pull_body(&acme(), 1).unwrap(),
+        "Signs users in, safely."
+    );
+    // Without a description, only the title changes.
+    client.edit_pull(&acme(), 1, "Sign in again", None).unwrap();
+    let retitled = &github.pulls()[0];
+    assert_eq!(
+        (retitled.title.as_str(), retitled.body.as_str()),
+        ("Sign in again", "Signs users in, safely.")
     );
     client.close_pull(&acme(), 1).unwrap();
     assert_eq!(github.pulls()[0].state, GithubPullState::Closed);

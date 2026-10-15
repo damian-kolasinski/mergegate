@@ -49,13 +49,17 @@ pub trait Github {
         body: &str,
     ) -> Result<Pull, GithubError>;
 
-    /// Sets the pull request's title and description.
+    /// The pull request's description, empty when it has none.
+    fn pull_body(&self, repo: &GithubRepo, number: u64) -> Result<String, GithubError>;
+
+    /// Sets the pull request's title, and its description unless `body` is
+    /// `None`.
     fn edit_pull(
         &self,
         repo: &GithubRepo,
         number: u64,
         title: &str,
-        body: &str,
+        body: Option<&str>,
     ) -> Result<(), GithubError>;
 
     /// Squash-merges the pull request, as long as its head is still `head`,

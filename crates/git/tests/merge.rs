@@ -79,7 +79,7 @@ impl Hub {
     }
 
     fn land(&self) -> Landing {
-        let message = "Add login (app#1)";
+        let message = "Add login (app#1)\n\nSigns users in.";
         self.git
             .land(&self.project(), &self.item(), message)
             .unwrap()
@@ -101,10 +101,12 @@ fn squashes_the_item_onto_the_target_as_the_operator() {
     assert_eq!(hub.repo.rev("main^"), before);
     let show = hub
         .repo
-        .git(["show", "-s", "--format=%an <%ae>|%cn|%s|%P", "main"]);
+        .git(["show", "-s", "--format=%an <%ae>|%cn|%B|%P", "main"]);
     assert_eq!(
         show.trim(),
-        format!("Operator <operator@example.com>|Operator|Add login (app#1)|{before}")
+        format!(
+            "Operator <operator@example.com>|Operator|Add login (app#1)\n\nSigns users in.\n|{before}"
+        )
     );
     assert_eq!(
         hub.repo.rev("main^{tree}"),

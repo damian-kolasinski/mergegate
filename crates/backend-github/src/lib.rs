@@ -81,12 +81,16 @@ impl Github for GithubClient {
         pulls::open(&self.api, repo, branch, target, title, body)
     }
 
+    fn pull_body(&self, repo: &GithubRepo, number: u64) -> Result<String, GithubError> {
+        pulls::body(&self.api, repo, number)
+    }
+
     fn edit_pull(
         &self,
         repo: &GithubRepo,
         number: u64,
         title: &str,
-        body: &str,
+        body: Option<&str>,
     ) -> Result<(), GithubError> {
         pulls::edit(&self.api, repo, number, title, body)
     }

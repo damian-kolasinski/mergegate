@@ -2,7 +2,7 @@
 
 use super::diff_files::diff_files;
 use super::priority::note_of;
-use super::publish::{Revision, description, publish};
+use super::publish::{Revision, describe, description, publish};
 use super::{
     Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, Priority,
     valid_branch, valid_commit,
@@ -106,9 +106,8 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
             && (retitle.is_some() || reguide.is_some())
         {
             let title = retitle.unwrap_or(&item.title);
-            let guide = reguide.unwrap_or(&described).as_deref();
-            let body = description(&item.id, guide);
-            github.edit_pull(repo, pull.number, title, &body)?;
+            let body = reguide.map(|guide| description(&item.id, guide.as_deref()));
+            describe(github, repo, pull.number, title, body.as_deref())?;
         }
         if let Some(title) = retitle {
             store.set_title(&item.id, title)?;

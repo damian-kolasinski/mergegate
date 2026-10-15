@@ -495,19 +495,28 @@ fn the_pull_request_describes_the_item_by_its_guide() {
         "Reviewed in mergegate as app#1.\n\nRemembers them too."
     );
 
-    // Until the guide changes, an edit made on GitHub stands.
+    // A blank guide removes it from the description.
+    submit(&mut store, &git, &github, guided(3, " ")).unwrap();
+    assert_eq!(github.pulls()[0].body, "Reviewed in mergegate as app#1.");
+
+    // A description written on GitHub stands, whatever the agent sends.
     let repo = GithubRepo::parse("acme/app").unwrap();
     github
-        .edit_pull(&repo, 1, "Add login", "Edited on GitHub")
+        .edit_pull(&repo, 1, "Add login", Some("Written on GitHub"))
         .unwrap();
-    submit(&mut store, &git, &github, guided(3, "Remembers them too.")).unwrap();
+    submit(&mut store, &git, &github, guided(3, "Remembers them.")).unwrap();
+    let retitled = Submit {
+        title: Some("Login page".into()),
+        ..guided(3, "Remembers them, really.")
+    };
+    submit(&mut store, &git, &github, retitled).unwrap();
     git.push("app", "login", &commit(5));
-    submit(&mut store, &git, &github, request("app", "login", 5)).unwrap();
-    assert_eq!(github.pulls()[0].body, "Edited on GitHub");
-
-    // A blank guide removes it from the description.
-    submit(&mut store, &git, &github, guided(5, " ")).unwrap();
-    assert_eq!(github.pulls()[0].body, "Reviewed in mergegate as app#1.");
+    submit(&mut store, &git, &github, guided(5, "And forgets them.")).unwrap();
+    let pull = &github.pulls()[0];
+    assert_eq!(
+        (pull.title.as_str(), pull.body.as_str()),
+        ("Login page", "Written on GitHub")
+    );
 }
 
 #[test]
@@ -560,6 +569,25 @@ fn takes_over_a_pull_request_already_open_for_the_branch() {
     assert_eq!(pull_number(&item), 1);
     assert_eq!(github.pulls().len(), 1);
     assert_eq!(github.pulls()[0].title, "Add login");
+    assert_eq!(github.pulls()[0].body, "Reviewed in mergegate as app#1.");
+}
+
+#[test]
+fn an_adopted_pull_request_keeps_the_description_written_on_github() {
+    let (mut store, git) = on_github();
+    let github = FakeGithub::default();
+    let pull = github.open("acme/app", "login", "WIP");
+    let repo = GithubRepo::parse("acme/app").unwrap();
+    github
+        .edit_pull(&repo, pull.number, "WIP", Some("Why this exists."))
+        .unwrap();
+    git.push("app", "login", &commit(2));
+    submit(&mut store, &git, &github, request("app", "login", 2)).unwrap();
+    let adopted = &github.pulls()[0];
+    assert_eq!(
+        (adopted.title.as_str(), adopted.body.as_str()),
+        ("Add login", "Why this exists.")
+    );
 }
 
 #[test]

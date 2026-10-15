@@ -204,28 +204,13 @@ impl ItemStore for Store {
     }
 
     fn next_id(&self, project: &ProjectName) -> Result<ItemId, StoreError> {
-        let number: i64 = self
-            .conn
-            .query_row(
-                "SELECT (SELECT coalesce(max(number), 0) + 1 FROM items WHERE project_id = p.id)
-                 FROM projects p WHERE p.name = ?1",
-                [project.as_str()],
-                |row| row.get(0),
-            )
-            .map_err(StoreError::new)?;
+        let (_, number) = next_number(&self.conn, project)?;
         Ok(ItemId::new(project.clone(), number as u64))
     }
 
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
-        let (project_id, number): (i64, i64) = tx
-            .query_row(
-                "SELECT p.id, (SELECT coalesce(max(number), 0) + 1 FROM items WHERE project_id = p.id)
-                 FROM projects p WHERE p.name = ?1",
-                [item.project.as_str()],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(StoreError::new)?;
+        let (project_id, number) = next_number(&tx, &item.project)?;
         let now: String = tx
             .query_row(&format!("SELECT {NOW}"), [], |row| row.get(0))
             .map_err(StoreError::new)?;
@@ -362,6 +347,20 @@ impl Store {
         self.item(id)?
             .ok_or_else(|| StoreError::new(format!("{id} vanished after it was written")))
     }
+}
+
+/// The project's row ID, and the number its next item takes.
+fn next_number(
+    conn: &rusqlite::Connection,
+    project: &ProjectName,
+) -> Result<(i64, i64), StoreError> {
+    conn.query_row(
+        "SELECT p.id, (SELECT coalesce(max(number), 0) + 1 FROM items WHERE project_id = p.id)
+         FROM projects p WHERE p.name = ?1",
+        [project.as_str()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .map_err(StoreError::new)
 }
 
 fn insert_revision(

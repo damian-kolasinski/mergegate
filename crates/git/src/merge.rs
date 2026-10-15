@@ -9,7 +9,7 @@ use mergegate_core::item::Item;
 use mergegate_core::merge::{Landing, MergeBackend};
 use mergegate_core::project::{Backend, Project};
 
-use crate::command::{self, failed, output_of, run_command};
+use crate::command::{self, failed, output_of, run_command, run_command_with_input};
 use crate::trial::Merged;
 use crate::{HubGit, staging};
 
@@ -79,11 +79,14 @@ impl HubGit {
                 arg(&tree),
                 arg("-p"),
                 arg(&target_commit),
-                arg("-m"),
-                arg(message),
+                // On stdin, as a guide's intent may be too long for an argument.
+                arg("-F"),
+                arg("-"),
             ])
             .envs(operator.env());
-        let commit = run_command(commit_tree, "writing the merge commit")?
+        let doing = "writing the merge commit";
+        let message = format!("{message}\n");
+        let commit = run_command_with_input(commit_tree, doing, message.as_bytes())?
             .trim()
             .to_owned();
 
