@@ -50,7 +50,7 @@ jobs:
         # Shared macOS runners are too noisy to gate on; there they only report.
         env:
           MG_ENFORCE_BUDGETS: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
-        run: cargo test --release --locked -p mg --test contract -- --ignored --nocapture
+        run: cargo test --release --locked -p mg --test contract --test budgets -- --ignored --nocapture --test-threads=1
 
   langs:
     # Builds every language pack in langs/packs.json, checks that mg loads
@@ -101,7 +101,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm exec playwright install --with-deps chromium
-      - name: End-to-end tests and the first-paint budget
+      - name: End-to-end tests and the UI budgets
         env:
           MG_ENFORCE_BUDGETS: 1
         run: pnpm e2e

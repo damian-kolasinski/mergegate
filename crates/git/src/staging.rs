@@ -101,6 +101,9 @@ pub(crate) fn fetch_into(
     target: &str,
     dest: &str,
 ) -> Result<(), GitError> {
+    if current(dir, upstream, target, dest) {
+        return Ok(());
+    }
     let mut git_dir = OsString::from("--git-dir=");
     git_dir.push(dir);
     let refspec = format!("+refs/heads/{target}:{dest}");
@@ -126,6 +129,49 @@ pub(crate) fn fetch_into(
     let doing = format!("fetching {target} from {}", describe(upstream));
     run_command(cmd, &doing)?;
     Ok(())
+}
+
+/// Moves staging's `target` from `from` to `to`, a commit staging has: after
+/// the hub pushed `to` upstream itself. Refused if the target moved since.
+pub(crate) fn advance(
+    home: &Path,
+    dir: &Path,
+    target: &str,
+    to: &str,
+    from: &str,
+) -> Result<(), GitError> {
+    let mut git_dir = OsString::from("--git-dir=");
+    git_dir.push(dir);
+    let branch = format!("refs/heads/{target}");
+    run(
+        home,
+        "moving the staging repo's target",
+        [
+            git_dir.as_os_str(),
+            OsStr::new("update-ref"),
+            OsStr::new(&branch),
+            OsStr::new(to),
+            OsStr::new(from),
+        ],
+    )?;
+    Ok(())
+}
+
+/// Whether staging's `dest` already is the operator's repo's `target`, read
+/// in process: a fetch with nothing to fetch still costs about 20 ms, and
+/// every submit, merge and conflict poll fetches. Only for an upstream on
+/// this machine; anything unreadable answers no, and git settles it.
+fn current(dir: &Path, upstream: &Upstream, target: &str, dest: &str) -> bool {
+    let Upstream::Repo(root) = upstream else {
+        return false;
+    };
+    let head = |repo: &Path, name: &str| {
+        let repo = gix::open_opts(repo, gix::open::Options::isolated()).ok()?;
+        let mut reference = repo.try_find_reference(name).ok()??;
+        reference.peel_to_id().ok().map(gix::Id::detach)
+    };
+    let upstream = head(root, &format!("refs/heads/{target}"));
+    upstream.is_some() && upstream == head(dir, dest)
 }
 
 pub(crate) fn has(dir: &Path, target: &str) -> Result<bool, GitError> {

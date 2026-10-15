@@ -96,10 +96,11 @@ impl HubGit {
                 }));
             }
         }
-        // So staging's target is the merge, for the next item's diff. The
-        // commit has landed, so a failing fetch mustn't report a hold; every
-        // submit and merge fetches the target again before reading it.
-        let _ = staging::fetch(&self.home, &dir, &upstream, target);
+        // So staging's target is the merge, for the next item's diff: what a
+        // fetch would do, without fetching a commit staging made. The commit
+        // has landed, so a failure mustn't report a hold; every submit and
+        // merge fetches the target again before reading it.
+        let _ = staging::advance(&self.home, &dir, target, &commit, &target_commit);
         Ok(Some(Landing::Merged { commit }))
     }
 }

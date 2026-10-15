@@ -9,7 +9,7 @@ use mergegate_core::git::GitError;
 /// variables from the hub's environment, no system or global config, no
 /// hooks and no prompts.
 pub(crate) fn git(home: &Path) -> Command {
-    let mut cmd = Command::new("git");
+    let mut cmd = Command::new(crate::binary());
     for (key, _) in std::env::vars_os() {
         if key.as_encoded_bytes().starts_with(b"GIT_") {
             cmd.env_remove(key);
@@ -30,7 +30,7 @@ pub(crate) fn git(home: &Path) -> Command {
 /// that point git at a repo are dropped, since the hub may have been started
 /// inside one.
 pub(crate) fn operator() -> Command {
-    let mut cmd = Command::new("git");
+    let mut cmd = Command::new(crate::binary());
     for key in [
         "GIT_DIR",
         "GIT_WORK_TREE",

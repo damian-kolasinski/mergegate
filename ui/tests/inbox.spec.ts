@@ -2,6 +2,7 @@
 // `j/k`, open with `enter`. State comes from real `mg` commands.
 
 import { expect, test } from "./hub";
+import { type Probe, report, sendToFrame } from "./timing";
 
 test("f6 an empty inbox says how items arrive", async ({ page, hub }) => {
   await page.goto(hub.url);
@@ -106,4 +107,28 @@ test("the inbox paints within budget", async ({ page, hub }, info) => {
     description: `${median.toFixed(1)} ms (median of ${timings.length})`,
   });
   if (process.env.MG_ENFORCE_BUDGETS === "1") expect(median).toBeLessThan(100);
+});
+
+// tech-stack.md §9: a change made elsewhere, here a review handing items
+// back to their agents, shows in an open inbox within 50 ms.
+test("the inbox follows the hub within budget", async ({ page, hub }, info) => {
+  const app = hub.project("app");
+  const items = 10;
+  for (let n = 1; n <= items; n++) {
+    app.submit(`change-${n}`, `Change ${n}`, { [`${n}.txt`]: `${n}\n` });
+  }
+  await page.goto(hub.url);
+  const waiting: Probe = {
+    selector: '[aria-label="Needs you"] li',
+    read: "count",
+  };
+  await expect(page.locator(waiting.selector)).toHaveCount(items);
+
+  const followed: number[] = [];
+  const review = { revision: 1, verdict: "changes_requested", summary: "No" };
+  for (let n = 1; n <= items; n++) {
+    const path = `/api/items/app%23${n}/reviews`;
+    followed.push(await sendToFrame(page, path, review, waiting));
+  }
+  report(info, "follow the hub", followed, 50);
 });

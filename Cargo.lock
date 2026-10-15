@@ -2188,6 +2188,7 @@ dependencies = [
  "libc",
  "mergegate-api",
  "mergegate-core",
+ "mergegate-git",
  "mergegate-hub",
  "mergegate-skill",
  "mergegate-testkit",

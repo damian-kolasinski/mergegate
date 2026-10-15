@@ -2,6 +2,7 @@
 // column, walk it with `n/p`, `j/k` and `]/[`, expand the gaps between hunks.
 
 import { expect, type Hub, test } from "./hub";
+import { pressToFrame, report } from "./timing";
 
 const lines = (count: number, line = (n: number) => `line ${n}`) =>
   Array.from({ length: count }, (_, i) => `${line(i + 1)}\n`).join("");
@@ -239,4 +240,65 @@ test("a 5k-line diff scrolls within budget", async ({ page, hub }, info) => {
   expect(sorted.length).toBeGreaterThan(100);
   // A frame dropped at 60 fps takes two refreshes, 33 ms.
   if (process.env.MG_ENFORCE_BUDGETS === "1") expect(at(0.95)).toBeLessThan(25);
+});
+
+// tech-stack.md §9: opening an item from the inbox shows its diff within
+// 100 ms, and moving through it (`n`, `j`, `v`) shows on the next frame.
+test("a large item opens and answers keys within budget", async ({
+  page,
+  hub,
+}, info) => {
+  const big = hub.project("big");
+  const items = 5;
+  for (let item = 1; item <= items; item++) {
+    const files: Record<string, string> = {};
+    for (let file = 1; file <= 50; file++) {
+      files[`src/module_${file}.rs`] = lines(
+        100,
+        (n) => `    let value_${n} = compute(${item}, ${file}, ${n});`,
+      );
+    }
+    big.submit(`big-${item}`, `Large change ${item}`, files);
+  }
+  await page.goto(hub.url);
+  const inbox = page.getByRole("region", { name: "Needs you" });
+  await expect(inbox.getByRole("listitem")).toHaveCount(items);
+
+  // Each item opened once, as the operator meets it.
+  const diffShown = { selector: "[data-line]", read: "found" } as const;
+  const opened: number[] = [];
+  for (let item = 0; item < items; item++) {
+    opened.push(await pressToFrame(page, "Enter", diffShown));
+    await page.keyboard.press("Escape");
+    await expect(inbox).toBeVisible();
+    await page.keyboard.press("j");
+  }
+  report(info, "open an item", opened, 100);
+
+  await page.keyboard.press("Enter");
+  const files = page.getByRole("navigation", { name: "Files" });
+  await expect(files.locator("li[aria-current=true]")).toBeVisible();
+  const probes = {
+    n: {
+      selector: '[aria-label="Files"] li[aria-current="true"]',
+      read: "text",
+    },
+    j: { selector: "[data-line][data-selected-line]", read: "text" },
+    v: { selector: '[aria-label="Files"] input:checked', read: "count" },
+  } as const;
+  const keys = { n: [] as number[], j: [] as number[], v: [] as number[] };
+  for (const [key, steps] of [
+    ["n", 15],
+    ["j", 30],
+    ["v", 15],
+  ] as const) {
+    for (let step = 0; step < steps; step++) {
+      // Lets the last step's scrolling settle, as between real presses.
+      await page.waitForTimeout(50);
+      keys[key].push(await pressToFrame(page, key, probes[key]));
+    }
+  }
+  report(info, "next file (n)", keys.n, 16);
+  report(info, "next line (j)", keys.j, 16);
+  report(info, "mark viewed (v)", keys.v, 16);
 });
