@@ -2,6 +2,7 @@
 //! binary, which the hub needs anyway for merging and which handles every
 //! transport and repo format the operator's repos may use.
 
+mod binary;
 mod command;
 mod conflicts;
 mod diff;
@@ -22,6 +23,7 @@ use std::path::{Path, PathBuf};
 use mergegate_core::git::{Git, GitError, Repo, Upstream};
 use mergegate_core::project::ProjectName;
 
+pub use binary::binary;
 pub use http::HttpRequest;
 
 pub struct HubGit {

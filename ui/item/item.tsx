@@ -6,7 +6,7 @@ import type { ItemState } from "../api/ItemState";
 import type { Review as SentReview } from "../api/Review";
 import { getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
-import { inboxHref } from "../app/router";
+import { go, inboxHref } from "../app/router";
 import {
   DiffView,
   type DiffViewControl,
@@ -168,7 +168,7 @@ function Leave() {
 }
 
 function leave() {
-  location.hash = inboxHref;
+  go(inboxHref);
 }
 
 function Review(props: {

@@ -2,8 +2,9 @@
 // column, walk it with `n/p`, `j/k` and `]/[`, expand the gaps between hunks.
 
 import { chmodSync, mkdirSync, symlinkSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { expect, git, type Hub, test } from "./hub";
+import { clickToFrame, pressToFrame, report } from "./timing";
 
 const lines = (count: number, line = (n: number) => `line ${n}`) =>
   Array.from({ length: count }, (_, i) => `${line(i + 1)}\n`).join("");
@@ -241,6 +242,158 @@ test("a 5k-line diff scrolls within budget", async ({ page, hub }, info) => {
   expect(sorted.length).toBeGreaterThan(100);
   // A frame dropped at 60 fps takes two refreshes, 33 ms.
   if (process.env.MG_ENFORCE_BUDGETS === "1") expect(at(0.95)).toBeLessThan(25);
+});
+
+// tech-stack.md §9: opening an item from the inbox shows its diff within
+// 100 ms, and moving through it (`n`, `j`, `v`) shows by the frame after the
+// next.
+test("a large item opens and answers keys within budget", async ({
+  page,
+  hub,
+}, info) => {
+  const big = hub.project("big");
+  const items = 5;
+  for (let item = 1; item <= items; item++) {
+    const files: Record<string, string> = {};
+    for (let file = 1; file <= 50; file++) {
+      files[`src/module_${file}.rs`] = lines(
+        100,
+        (n) => `    let value_${n} = compute(${item}, ${file}, ${n});`,
+      );
+    }
+    big.submit(`big-${item}`, `Large change ${item}`, files);
+  }
+  await page.goto(hub.url);
+  const inbox = page.getByRole("region", { name: "Needs you" });
+  await expect(inbox.getByRole("listitem")).toHaveCount(items);
+
+  // Each item opened once, as the operator meets it.
+  const diffShown = { selector: "[data-line]", read: "found" } as const;
+  const opened: number[] = [];
+  for (let item = 0; item < items; item++) {
+    opened.push(await pressToFrame(page, "Enter", diffShown));
+    await page.keyboard.press("Escape");
+    await expect(inbox).toBeVisible();
+    await page.keyboard.press("j");
+  }
+  report(info, "open an item", opened, 100);
+
+  await page.keyboard.press("Enter");
+  const files = page.getByRole("navigation", { name: "Files" });
+  await expect(files.locator("li[aria-current=true]")).toBeVisible();
+  const probes = {
+    n: {
+      selector: '[aria-label="Files"] li[aria-current="true"]',
+      read: "text",
+    },
+    j: { selector: "[data-line][data-selected-line]", read: "text" },
+    v: { selector: '[aria-label="Files"] input:checked', read: "count" },
+  } as const;
+  const keys = { n: [] as number[], j: [] as number[], v: [] as number[] };
+  for (const [key, steps] of [
+    ["n", 15],
+    ["j", 30],
+    ["v", 15],
+  ] as const) {
+    for (let step = 0; step < steps; step++) {
+      // Lets the last step's scrolling settle, as between real presses.
+      await page.waitForTimeout(50);
+      keys[key].push(await pressToFrame(page, key, probes[key]));
+    }
+  }
+  // Timed to the frame painted, so the wait for the display's next refresh
+  // counts: one refresh of work at most leaves the result two refreshes
+  // after the press.
+  report(info, "next file (n)", keys.n, 33);
+  report(info, "next line (j)", keys.j, 33);
+  report(info, "mark viewed (v)", keys.v, 33);
+});
+
+/** A pack built by `langs/build.mjs`, as highlight.spec.ts installs. */
+const jsonPack = resolve(
+  import.meta.dirname,
+  "../../crates/highlight/tests/fixtures/json-0.24.8.tar.gz",
+);
+
+/** A JSON object of `count` entries, one a line after the opening brace. */
+const json = (count: number, entry: (n: number) => string) =>
+  `{\n${lines(count, entry)}  "end": 0\n}\n`;
+
+// tech-stack.md §9: the largest file the hub keeps hunks for opens within
+// 100 ms, as an item of many files does, highlighted by an installed pack.
+test("a single large file opens within budget", async ({ page, hub }, info) => {
+  hub.mg(["lang", "add", "--from", jsonPack]);
+  const big = hub.project("big");
+  // 18k changed lines, near the 20k past which a file is too large to show.
+  const size = 9000;
+  big.seed({ "big.json": json(size, (n) => `  "old_${n}": ${n},`) });
+  const items = 5;
+  for (let item = 1; item <= items; item++) {
+    big.submit(`big-${item}`, `Rewrite ${item}`, {
+      "big.json": json(size, (n) => `  "new_${item}_${n}": ${n},`),
+    });
+  }
+  await page.goto(hub.url);
+  const inbox = page.getByRole("region", { name: "Needs you" });
+  await expect(inbox.getByRole("listitem")).toHaveCount(items);
+
+  // Timed to the hub's spans painted, not to a plain render before them.
+  const highlighted = { selector: "[data-tok]", read: "found" } as const;
+  const opened: number[] = [];
+  for (let item = 0; item < items; item++) {
+    opened.push(await pressToFrame(page, "Enter", highlighted));
+    await page.keyboard.press("Escape");
+    await expect(inbox).toBeVisible();
+    await page.keyboard.press("j");
+  }
+  report(info, "open a single large file", opened, 100);
+});
+
+// tech-stack.md §9: expanding a gap between hunks shows its lines within
+// 50 ms, the file's blobs and their spans fetched from the hub included.
+// Every file's gaps are long and its rows virtualized as the 5k-line diff's.
+test("a gap expands within budget", async ({ page, hub }, info) => {
+  hub.mg(["lang", "add", "--from", jsonPack]);
+  const files: Record<string, string> = {};
+  const changed: Record<string, string> = {};
+  const count = 10;
+  for (let file = 1; file <= count; file++) {
+    const path = `gap_${file}.json`;
+    const entry = (n: number) => `  "value_${n}": ${file * n},`;
+    files[path] = json(2000, entry);
+    changed[path] = json(2000, (n) =>
+      n === 100 || n === 1900 ? `  "changed_${n}": 0,` : entry(n),
+    );
+  }
+  const app = hub.project("app");
+  app.seed(files);
+  app.submit("gaps", "Change two entries a file", changed);
+  await page.goto(`${hub.url}#/items/app%231`);
+  await expect(page.locator("[data-tok]").first()).toBeVisible();
+
+  // The gap between each file's hunks, expanded by the step its buttons
+  // show, 20 lines. Every one is the first its file expands, so each
+  // fetches the file's blobs and their spans.
+  const gap = page
+    .locator("[data-separator]", { hasText: "1793 unmodified lines" })
+    .first()
+    .locator("[data-expand-down]");
+  const gaps = { selector: "[data-unmodified-lines]", read: "texts" } as const;
+  const current = page
+    .getByRole("navigation", { name: "Files" })
+    .locator("li[aria-current=true]");
+  const expanded: number[] = [];
+  for (let file = 1; file <= count; file++) {
+    if (file > 1) {
+      const was = await current.textContent();
+      await page.keyboard.press("n");
+      await expect(current).not.toHaveText(was ?? "");
+    }
+    await expect(gap).toBeVisible();
+    await page.waitForTimeout(50);
+    expanded.push(await clickToFrame(page, gap, gaps));
+  }
+  report(info, "expand a gap", expanded, 50);
 });
 
 test("f6 a mode or type change says so in the file's header", async ({

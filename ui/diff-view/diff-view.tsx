@@ -25,6 +25,8 @@ export type DiffViewControl = {
   showFile(path: string): void;
   /** Marks `row` as the cursor's line and scrolls it into view. */
   showRow(row: Row): void;
+  /** Marks `row` as the cursor's line where it is. */
+  selectRow(row: Row): void;
   /** Clears the cursor's line, for a file without one. */
   clearRow(): void;
   /** Scrolls `spot` into view, leaving the cursor where it is. */
@@ -304,16 +306,10 @@ export function DiffView(props: {
         view.scrollTo({ type: "item", id: path, behavior: "instant" });
       },
       showRow: (row) => {
-        movedTo = row.path;
-        const range = {
-          start: row.line,
-          end: row.line,
-          side: row.side,
-          endSide: row.side,
-        };
-        view.setSelectedLines({ id: row.path, range });
+        selectRow(row);
         showLine(row);
       },
+      selectRow,
       showLine,
       clearRow: () => view.clearSelectedLines(),
     });
@@ -331,6 +327,17 @@ export function DiffView(props: {
       props.files[props.files.findIndex((file) => file.path === path) + 1];
     const end = (next && view.getTopForItem(next.path)) ?? Infinity;
     return start < top + view.getHeight() && end > top;
+  };
+
+  const selectRow = (row: Row) => {
+    movedTo = row.path;
+    const range = {
+      start: row.line,
+      end: row.line,
+      side: row.side,
+      endSide: row.side,
+    };
+    view.setSelectedLines({ id: row.path, range });
   };
 
   const showLine = (spot: Spot) =>

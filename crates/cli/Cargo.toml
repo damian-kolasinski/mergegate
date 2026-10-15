@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 api.workspace = true
 clap = { version = "4.6.7", features = ["derive"] }
+git.workspace = true
 hub.workspace = true
 libc = "0.2.190"
 mergegate-core.workspace = true

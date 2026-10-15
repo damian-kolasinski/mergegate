@@ -17,8 +17,19 @@ export function rulesHref(project: string): string {
 
 export const inboxHref = "#/";
 
+const [route, setRoute] = createSignal(parse(location.hash));
+
+/**
+ * Goes to `href` now. `hashchange` fires only after the next frame, so
+ * waiting for it would hold back opening an item, and its fetch, by up to a
+ * frame. Links and history still arrive through it.
+ */
+export function go(href: string) {
+  location.hash = href;
+  setRoute(parse(location.hash));
+}
+
 export function useRoute(): Accessor<Route> {
-  const [route, setRoute] = createSignal(parse(location.hash));
   const onChange = () => setRoute(parse(location.hash));
   window.addEventListener("hashchange", onChange);
   onCleanup(() => window.removeEventListener("hashchange", onChange));

@@ -8,7 +8,7 @@ use crate::output::CliError;
 pub(crate) const REMOTE: &str = "mergegate";
 
 fn output(args: &[&str]) -> Result<Output, CliError> {
-    Command::new("git")
+    Command::new(git::binary())
         .args(args)
         // Never prompt: agents can't answer.
         .env("GIT_TERMINAL_PROMPT", "0")

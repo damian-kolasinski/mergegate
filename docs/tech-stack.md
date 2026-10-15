@@ -83,7 +83,7 @@ Ports (traits in `core`): `Git`, `Backend`, `Store`, `RulesFile`, `Highlighter`,
 | Operation | Implementation | Why |
 |---|---|---|
 | Receive pushes from workers | `git http-backend` (CGI) behind axum, bodies streamed both ways, `refs/mergegate` hidden | gix has no server side. |
-| Test-merge, merge | `git merge-tree --write-tree` | Must match git's `ort` merge exactly, or conflicts are detected wrongly. The early watch reuses it: each pair of open items is merged again only when one of their heads moved, and each item against a target commit only once per hub run (once per revision across restarts, as a conflict already sent isn't tried again). Every pass, a submit's or a merge's too, re-fetches each target. `MG_TARGET_POLL_MS` shortens the target poll for tests, and `MG_TARGET_WATCH=off` stops the watch for tests of what a merge finds. |
+| Test-merge, merge | `git merge-tree --write-tree` | Must match git's `ort` merge exactly, or conflicts are detected wrongly. The early watch reuses it: each pair of open items is merged again only when one of their heads moved, and each item against a target commit only once per hub run (once per revision across restarts, as a conflict already sent isn't tried again). Every pass, a submit's or a merge's too, re-fetches each target, unless staging's ref already points at the commit a local upstream's target names (read with gix, as a fetch with nothing to fetch costs about 20 ms). After its own merge the hub moves staging's target to the commit it pushed, without fetching it back. `MG_TARGET_POLL_MS` shortens the target poll for tests, and `MG_TARGET_WATCH=off` stops the watch for tests of what a merge finds. |
 | Push to GitHub / operator repo | `git push` (`updateInstead` for local) | gix push is incomplete; must respect git semantics. |
 | Read blobs, trees, history | gix | No process spawn per call (~2–5 ms each on macOS); typed results. |
 | File diffs, interdiffs | gix tree diff + imara-diff (histogram) | In-memory; yields the line mapping that comment anchoring needs. |
@@ -167,12 +167,25 @@ No MCP server. The CLI works in every harness, while MCP tool schemas cost conte
 | `mg inbox --json` | < 30 ms |
 | UI first paint | < 100 ms |
 | Open item (diffs precomputed, comments placed) | < 50 ms |
-| Switch file / keyboard action | < 16 ms |
+| Open item from the inbox, to its diff on screen (50 files, 5k lines) | < 100 ms |
+| Switch file / keyboard action (`n`, `j`, `v`), keypress to the frame showing the result | < 33 ms (one frame's wait plus at most one of work) |
+| Open the largest single file, a full rewrite of 9k lines (18k changed, near the 20k cap), highlighted, from the inbox | < 100 ms |
+| Expand a gap between hunks in a highlighted file, click to the lines on screen (first expansion in a file, blobs fetched) | < 50 ms |
 | Scroll a 5k-line diff | 60 fps (virtualized; p95 frame < 25 ms in `ui/tests/review.spec.ts`) |
+| A change made elsewhere showing in an open inbox | < 50 ms |
+| `mg submit` of 20 files, new item or revision, push included | < 150 ms |
+| `mg wait` exiting after the operator submits a review | < 50 ms |
+| `mg feedback` reading a review of 60 comments | < 30 ms |
+| Operator writes a comment, marks a file viewed, submits a review | < 16 ms |
+| Approve and merge (local backend) | < 150 ms |
 
-CI enforces them on Ubuntu (`MG_ENFORCE_BUDGETS=1`); shared macOS runners are too noisy, so there and locally they only report.
+The UI budgets are in `ui/tests/inbox.spec.ts` and `review.spec.ts`; Playwright's `budgets` project runs them alone, after the rest. The hub and CLI budgets are `--ignored` tests run in release: `crates/cli/tests/budgets.rs` and `contract.rs`. CI enforces them on Ubuntu (`MG_ENFORCE_BUDGETS=1`); shared macOS runners are too noisy, so there and locally they only report.
 
-The UI also prefetches the next item and next file, and updates optimistically (marking viewed and similar actions don't wait for the server).
+The UI times are taken the way Event Timing (and so INP) takes an interaction's: from the input event's own timestamp to the end of the first frame showing the result, read by a requestAnimationFrame loop in the page, so Playwright's round trips stay out. That includes the wait for the display's next frame, up to 16.7 ms at 60 Hz, which is why a key's budget is two frames. The `budgets` project runs without Playwright's trace, whose DOM snapshots add tens of milliseconds to each action.
+
+The UI doesn't prefetch: opening a 5k-line item from the inbox paints in about 25 ms, well inside its budget. Opening one starts its fetch in the key press: the router sets the route itself rather than waiting for `hashchange`, which Chrome fires only after the next frame. `ui/diff-view/patch.ts` builds CodeView's model of a file straight from the hub's hunks rather than writing a patch for the library to parse, which copied every line through a TextEncoder. CodeView renders a plain-text diff, which ours all are (the hub's spans colour them), again in full every time it renders the file, as its window moves or a note or a viewed mark changes; `ui/diff-view/highlight.ts` keeps each diff's render, so an 18k-line file is rendered once per open rather than on every one of those. It updates optimistically (marking viewed and similar actions don't wait for the server).
+
+On macOS, git is spawned by absolute path (`git::binary`): `/usr/bin/git` there is xcrun's shim, which adds about 7 ms to every spawn, and a submit spawns a dozen.
 
 ## 10. Testing
 

@@ -92,13 +92,49 @@ const renderer = DiffHunksRenderer.prototype as unknown as {
   renderDiffWithHighlighter: Render;
 };
 const render = renderer.renderDiffWithHighlighter;
-renderer.renderDiffWithHighlighter = function (diff, ...rest) {
-  const rendered = render.call(this, diff, ...rest);
+/**
+ * Each diff's last render. CodeView keeps a highlighted diff's, but renders
+ * a plain one's every line again whenever it renders the file at all, as
+ * its window moves or a note or the viewed mark changes: 18k lines are a
+ * frame's work many times over. Ours are all plain, coloured by the hub's
+ * spans, and the same lines render the same. Spans come with a new diff;
+ * expanding a gap fills the diff in place, with new arrays of lines and
+ * hunks, so those are part of the key. One CodeView renders every diff,
+ * with the same options.
+ */
+const kept = new WeakMap<
+  FileDiffMetadata,
+  Pick<FileDiffMetadata, "deletionLines" | "additionLines" | "hunks"> & {
+    highlighter: DiffsHighlighter;
+    plain: boolean | undefined;
+    rendered: ReturnType<Render>;
+  }
+>();
+renderer.renderDiffWithHighlighter = function (diff, highlighter, plain) {
+  const last = kept.get(diff);
+  if (
+    last?.deletionLines === diff.deletionLines &&
+    last.additionLines === diff.additionLines &&
+    last.hunks === diff.hunks &&
+    last.highlighter === highlighter &&
+    last.plain === plain
+  ) {
+    return last.rendered;
+  }
+  const rendered = render.call(this, diff, highlighter, plain);
   const painting = paintings.get(diff.name);
   if (painting) {
     paintLines(rendered.result.code.deletionLines, painting.deletions);
     paintLines(rendered.result.code.additionLines, painting.additions);
   }
+  kept.set(diff, {
+    deletionLines: diff.deletionLines,
+    additionLines: diff.additionLines,
+    hunks: diff.hunks,
+    highlighter,
+    plain,
+    rendered,
+  });
   return rendered;
 };
 
@@ -120,47 +156,53 @@ function paintLines(
  * token, a word diff's mark), so those keep their look.
  */
 function paintLine(line: Element, spans: readonly Span[]) {
-  let offset = 0;
-  let next = 0;
-  const walk = (element: Element) => {
-    const children: Node[] = [];
-    for (const child of element.children) {
-      if (child.type === "element") walk(child);
-      if (child.type !== "text") {
-        children.push(child);
-        continue;
-      }
-      const text = child.value;
-      const end = offset + text.length;
-      let at = offset;
-      while (at < end) {
-        let span = spans[next];
-        while (span && spanEnd(span) <= at) span = spans[++next];
-        if (!span || span[0] > at) {
-          const to = Math.min(span?.[0] ?? end, end);
-          children.push({
-            type: "text",
-            value: text.slice(at - offset, to - offset),
-          });
-          at = to;
-          continue;
-        }
-        const to = Math.min(spanEnd(span), end);
+  walk(line, { spans, offset: 0, next: 0 });
+}
+
+/** Where `paintLine` is in the line's text and in its spans. */
+type Cursor = { spans: readonly Span[]; offset: number; next: number };
+
+// A function of its own rather than a closure per line: a near-cap file
+// paints 18k lines in the frame that opens it.
+function walk(element: Element, cursor: Cursor) {
+  const { spans } = cursor;
+  const children: Node[] = [];
+  for (const child of element.children) {
+    if (child.type === "element") walk(child, cursor);
+    if (child.type !== "text") {
+      children.push(child);
+      continue;
+    }
+    const text = child.value;
+    const offset = cursor.offset;
+    const end = offset + text.length;
+    let at = offset;
+    while (at < end) {
+      let span = spans[cursor.next];
+      while (span && spanEnd(span) <= at) span = spans[++cursor.next];
+      if (!span || span[0] > at) {
+        const to = Math.min(span?.[0] ?? end, end);
         children.push({
-          type: "element",
-          tagName: "span",
-          properties: { "data-tok": span[2] },
-          children: [
-            { type: "text", value: text.slice(at - offset, to - offset) },
-          ],
+          type: "text",
+          value: text.slice(at - offset, to - offset),
         });
         at = to;
+        continue;
       }
-      offset = end;
+      const to = Math.min(spanEnd(span), end);
+      children.push({
+        type: "element",
+        tagName: "span",
+        properties: { "data-tok": span[2] },
+        children: [
+          { type: "text", value: text.slice(at - offset, to - offset) },
+        ],
+      });
+      at = to;
     }
-    element.children = children;
-  };
-  walk(line);
+    cursor.offset = end;
+  }
+  element.children = children;
 }
 
 function spanEnd(span: Span): number {

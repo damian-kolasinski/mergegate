@@ -4,7 +4,7 @@ import type { Rule } from "../api/Rule";
 import type { Rules } from "../api/Rules";
 import { getJson, onHubEvent, postJson } from "../app/hub";
 import { useKeys } from "../app/keys";
-import { inboxHref, itemHref } from "../app/router";
+import { go, inboxHref, itemHref } from "../app/router";
 import { Badge, Button, Empty, Meta, Mono, Section } from "../design-system";
 import styles from "./rules.module.css";
 
@@ -39,7 +39,7 @@ export function RulesScreen(props: { project: string }) {
   });
   useKeys({
     Escape: () => {
-      location.hash = inboxHref;
+      go(inboxHref);
     },
   });
 
