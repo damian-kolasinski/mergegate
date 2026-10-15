@@ -1,6 +1,7 @@
 //! `mg inbox`: open items by who has to act next.
 
 use api::item::{Inbox, InboxItem};
+use api::merge::Blocked;
 
 use crate::client::Client;
 use crate::output::{CliError, Outcome};
@@ -59,14 +60,32 @@ fn line(i: &InboxItem) -> String {
         Some(priority) => format!(" {}", name(priority)),
         None => String::new(),
     };
+    let changed = match &i.changed_since {
+        Some(since) => format!(" · {} changed since r{}", since.files, since.revision),
+        None => String::new(),
+    };
     let mut out = format!(
-        "  {}{priority} r{}  {}  ({}{link} · {files}, +{} -{})",
+        "  {}{priority} r{}  {}  ({}{link} · {files}, +{} -{}{changed})",
         i.id, i.revision, i.title, i.branch, i.additions, i.deletions
     );
     if let Some(note) = &i.note {
-        // One line, so a note written over several stays under its item.
-        let note = note.split_whitespace().collect::<Vec<_>>().join(" ");
-        out.push_str(&format!("\n      {note}"));
+        out.push_str(&format!("\n      {}", one_line(note)));
+    }
+    match &i.blocked {
+        Some(Blocked::Held { reason }) => {
+            out.push_str(&format!("\n      held: {}", one_line(reason)));
+        }
+        Some(Blocked::Conflict {
+            target_commit,
+            paths,
+        }) => {
+            let short = &target_commit[..target_commit.len().min(12)];
+            out.push_str(&format!(
+                "\n      conflicts with the target at {short}: {}",
+                listed(paths)
+            ));
+        }
+        None => {}
     }
     if !i.conflicts_with.is_empty() {
         let with = i.conflicts_with.join(", ");
@@ -74,3 +93,23 @@ fn line(i: &InboxItem) -> String {
     }
     out
 }
+
+/// The first few paths, so a conflict over many keeps its item one screen
+/// line; `mg feedback` lists them all.
+fn listed(paths: &[String]) -> String {
+    const SHOWN: usize = 3;
+    let shown = paths[..paths.len().min(SHOWN)].join(", ");
+    match paths.len().saturating_sub(SHOWN) {
+        0 => shown,
+        more => format!("{shown} and {more} more"),
+    }
+}
+
+/// One line, so text written over several stays under its item.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[cfg(test)]
+#[path = "inbox_cmd_tests.rs"]
+mod tests;

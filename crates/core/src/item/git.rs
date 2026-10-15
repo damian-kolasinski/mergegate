@@ -31,6 +31,11 @@ pub trait ItemGit {
 
     fn branch_head(&self, project: &ProjectName, branch: &str) -> Result<Option<String>, GitError>;
 
+    /// Deletes staging's `branch` if it is still at `head`, checked and
+    /// deleted as one step. A branch that's gone or moved on, as a worker's
+    /// push moves it, is left as it is.
+    fn drop_branch(&self, project: &ProjectName, branch: &str, head: &str) -> Result<(), GitError>;
+
     /// `head` is a commit and `target` a branch.
     fn merge_base(
         &self,

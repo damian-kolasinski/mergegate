@@ -84,7 +84,8 @@ pub fn run(
     repo::run(
         &format!("pushing {branch} to the hub"),
         &["push", "--quiet", &url, &refspec],
-    )?;
+    )
+    .map_err(|e| nested(&branch, e))?;
     let request = Submit {
         project: project.name,
         branch,
@@ -123,6 +124,34 @@ pub fn run(
         attachments: &attachments,
     };
     Ok(Outcome::done(&output, text))
+}
+
+/// Git can't hold two branches whose names nest (`a` and `a/b`), and the hub
+/// keeps every open item's. Its refusal names the other branch, worded
+/// `cannot lock ref '…': 'refs/heads/a' exists` while that branch is a loose
+/// ref and `'refs/heads/a' exists; cannot create '…'` once it is packed. The
+/// hub's git runs with `LC_ALL=C`, so neither is translated.
+fn nested(branch: &str, error: CliError) -> CliError {
+    let message = &error.body.message;
+    let taken = message
+        .split_once("': 'refs/heads/")
+        .and_then(|(_, rest)| rest.split_once("' exists"))
+        .or_else(|| {
+            message
+                .split_once("'refs/heads/")
+                .and_then(|(_, rest)| rest.split_once("' exists; cannot create"))
+        })
+        .map(|(taken, _)| taken.to_owned());
+    match taken {
+        Some(taken) => CliError::new(
+            "branch_nested",
+            format!(
+                "the hub has a branch {taken}, so it can't take {branch}: one branch name can't nest in another"
+            ),
+        )
+        .hint("git branch -m NAME"),
+        None => error,
+    }
 }
 
 fn read_guide(path: &Path) -> Result<String, CliError> {

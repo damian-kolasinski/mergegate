@@ -61,15 +61,21 @@ async fn read(
     let mut last = query.wait == 0;
     // Its agent is awake while this reads, and needs no wake command run.
     let _reading = state.wakes.reading(&id);
+    let mut since = query.since;
     loop {
         log.mark_unchanged();
         let read = {
             let id = id.clone();
             state
-                .blocking(move |store, _| feedback::feedback(store, &id, query.since))
+                .blocking(move |store, _| feedback::feedback(store, &id, since))
                 .await
                 .map_err(failure)?
         };
+        // A `since` past the item's events reads from its newest; staying
+        // there keeps an event logged meanwhile, below `since`, in the next.
+        if since.is_some() && read.events.is_empty() {
+            since = Some(read.cursor);
+        }
         let woke = wake.by(&read.events) || !read.item.state.is_open();
         if last || woke {
             // A wait's answer at its deadline can hold events its `mg wait`
@@ -80,7 +86,7 @@ async fn read(
             let (read, released) = {
                 let id = id.clone();
                 state
-                    .blocking(move |store, _| handing(store, &id, query.since, read))
+                    .blocking(move |store, _| handing(store, &id, since, read))
                     .await
                     .map_err(failure)?
             };

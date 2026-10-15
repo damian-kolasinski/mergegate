@@ -2,6 +2,7 @@
 
 mod abandon;
 mod attachments;
+mod branches;
 mod comments;
 mod conflicts;
 mod conversation;

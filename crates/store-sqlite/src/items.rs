@@ -77,6 +77,15 @@ impl ItemStore for Store {
         rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
+    fn closed_items(&self) -> Result<Vec<Item>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("{SELECT} WHERE NOT {OPEN} ORDER BY i.id"))
+            .map_err(StoreError::new)?;
+        let rows = stmt.query_map([], read).map_err(StoreError::new)?;
+        rows.map(|row| row.map_err(StoreError::new)?).collect()
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         self.conn
             .query_row(
@@ -246,6 +255,17 @@ impl ItemStore for Store {
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)?;
         self.written(id)
+    }
+
+    fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE items SET title = ?3
+                 WHERE number = ?2 AND project_id = (SELECT id FROM projects WHERE name = ?1)",
+                params![id.project().as_str(), id.number() as i64, title],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
     }
 
     fn set_priority(

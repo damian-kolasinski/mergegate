@@ -79,6 +79,16 @@ fn since_replays_from_any_cursor_without_moving_the_delivered_one() {
 }
 
 #[test]
+fn since_past_the_newest_event_reads_from_it() {
+    let mut store = FakeStore::with_item(1);
+    let app = id("app#1");
+    let first = review(&mut store, "First");
+    let past = feedback(&store, &app, Some(first + 50)).unwrap();
+    assert!(past.events.is_empty());
+    assert_eq!(past.cursor, first);
+}
+
+#[test]
 fn refuses_cursors_past_the_newest_event() {
     let mut store = FakeStore::with_item(1);
     let app = id("app#1");

@@ -9,14 +9,16 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
+use git::HubGit;
 use mergegate_core::feedback::FeedbackStore;
 use mergegate_core::item::{Item, ItemId};
 use mergegate_core::merge::{self, Approve, Blocked, GithubBackend, Landing, Merge, MergeError};
 use mergegate_core::store::StoreError;
+use store_sqlite::Store;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{items, projects, reviews};
+use crate::{branches, items, projects, reviews};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -41,7 +43,8 @@ async fn approve(
         .blocking_github(move |store, git, github| {
             let github = GithubBackend::new(git, github);
             // The hub's git is the local backend.
-            merge::approve(store, git, &[git, &github], request)
+            let merge = merge::approve(store, git, &[git, &github], request);
+            dropped(store, git, merge)
         })
         .await;
     changed(&state, &id);
@@ -58,7 +61,8 @@ async fn retry(
     let merge = state
         .blocking_github(move |store, git, github| {
             let github = GithubBackend::new(git, github);
-            merge::retry(store, git, &[git, &github], &merging)
+            let merge = merge::retry(store, git, &[git, &github], &merging);
+            dropped(store, git, merge)
         })
         .await;
     changed(&state, &id);
@@ -77,6 +81,22 @@ async fn cancel(
         .map_err(failure)?;
     changed(&state, &item.id);
     Ok(Json(items::to_api(&item)))
+}
+
+/// Drops a merged item's branch from staging.
+fn dropped(
+    store: &Store,
+    git: &HubGit,
+    merge: Result<Merge, MergeError>,
+) -> Result<Merge, MergeError> {
+    if let Ok(Merge {
+        item,
+        landing: Landing::Merged { .. },
+    }) = &merge
+    {
+        branches::drop(store, git, &item.id);
+    }
+    merge
 }
 
 /// Every outcome logs an event for the agent and moves the item. So can a
@@ -150,6 +170,7 @@ fn failure(e: MergeError) -> Failure {
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::NotMerging(_) => (S::CONFLICT, "not_merging", None),
+        E::NoRevision { .. } => (S::NOT_FOUND, "revision_not_found", None),
         E::Stale { .. } => (S::CONFLICT, "stale_revision", None),
         E::NoBackend { .. } => (S::CONFLICT, "backend_unavailable", None),
     };

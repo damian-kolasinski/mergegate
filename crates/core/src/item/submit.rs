@@ -50,7 +50,7 @@ pub struct Submitted {
 /// target is fetched fresh first, so the merge-base is current. Every file's
 /// diff, and the interdiff from each earlier revision, is cached and the file
 /// triaged by the applied rules before the revision is recorded. A submit at
-/// the open item's head still records its worktree, wake and guide.
+/// the open item's head still records its worktree, wake, guide and title.
 ///
 /// A `github` item is published before it's recorded: its branch pushed and
 /// its pull request opened or retitled. If GitHub fails, the submit fails
@@ -93,6 +93,19 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
     if let Some(item) = existing.as_ref().filter(|i| i.revision.head == head) {
         // Pinning again repairs a submit that failed after recording.
         git.pin(&project.name, &item.pin_ref(), &head)?;
+        let mut item = item.clone();
+        let retitle = title
+            .as_deref()
+            .map(str::trim)
+            .filter(|title| !title.is_empty() && *title != item.title);
+        if let Some(title) = retitle {
+            // GitHub first, as for a new revision, so a failure records nothing.
+            if let ItemBackend::Github { repo, pull } = &item.backend {
+                github.retitle_pull(repo, pull.number, title)?;
+            }
+            store.set_title(&item.id, title)?;
+            item.title = title.to_owned();
+        }
         agent::record(store, &item.id, worktree, wake)?;
         let number = item.revision.number;
         let guide = match guide {
@@ -104,9 +117,9 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         };
         let files = store.revision_files(&item.id, number)?;
         let mut warnings = warnings(guide.as_deref(), &files);
-        warnings.extend(prioritized.then(|| kept(item)));
+        warnings.extend(prioritized.then(|| kept(&item)));
         return Ok(Submitted {
-            item: item.clone(),
+            item,
             new_revision: false,
             warnings,
         });
