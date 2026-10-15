@@ -1,76 +1,79 @@
 import { createSignal, Show } from "solid-js";
 import type { Abandon as AbandonBody } from "../api/Abandon";
 import type { Item } from "../api/Item";
-import { postJson } from "../app/hub";
-import { Button, Meta, TextArea } from "../design-system";
+import { type Failure, failureOf, postJson } from "../app/hub";
+import { Button, ErrorNote, Meta, Mono, TextArea } from "../design-system";
 import styles from "./abandon.module.css";
 
 /**
- * The header's Abandon button, and the confirm step it opens: closing an
- * item drops its diffs, so it takes a second click and has no key.
+ * The confirm step the menu's Abandon opens: closing an item drops its
+ * diffs, so it takes a second click and has no key of its own.
  */
 export function Abandon(props: {
   item: string;
-  open: boolean;
-  onToggle: () => void;
+  /** Set for an item on GitHub, whose pull request closes with it. */
+  pullRequest: { label: string; branch: string } | undefined;
+  /** What's typed as the reason, which a reload keeps. */
+  reason: string;
+  onReason: (reason: string) => void;
+  onCancel: () => void;
   onAbandoned: (item: Item) => void;
 }) {
-  const [reason, setReason] = createSignal("");
   const [sending, setSending] = createSignal(false);
-  const [failure, setFailure] = createSignal<string>();
+  const [failure, setFailure] = createSignal<Failure>();
 
   const abandon = () => {
+    if (sending()) return;
     const body: AbandonBody = {
       source: "operator",
-      reason: reason().trim() || null,
+      reason: props.reason.trim() || null,
     };
     setSending(true);
     setFailure(undefined);
     postJson<Item>(`/api/items/${encodeURIComponent(props.item)}/abandon`, body)
-      .then(props.onAbandoned, (error: unknown) =>
-        setFailure(error instanceof Error ? error.message : String(error)),
-      )
+      .then(props.onAbandoned, (error: unknown) => setFailure(failureOf(error)))
       .finally(() => setSending(false));
   };
 
   return (
-    <>
-      <span class={styles.toggle}>
-        <Button
-          expanded={props.open}
-          controls="abandon"
-          onClick={() => props.onToggle()}
-        >
-          Abandon
-        </Button>
-      </span>
-      <Show when={props.open}>
-        <form id="abandon" class={styles.panel} aria-label="Abandon">
+    <form id="abandon" class={styles.panel} aria-label="Abandon">
+      <Meta>
+        Close {props.item} without merging. Its agent hears why, and its diffs
+        are dropped.
+      </Meta>
+      <Show when={props.pullRequest}>
+        {(pull) => (
           <Meta>
-            Close {props.item} without merging. Its agent hears why, and its
-            diffs are dropped.
+            Also closes PR {pull().label} on GitHub and deletes its branch,{" "}
+            <Mono>{pull().branch}</Mono>.
           </Meta>
-          <TextArea
-            label="Reason"
-            placeholder="Why, for the agent (optional)"
-            value={reason()}
-            disabled={sending()}
-            onInput={setReason}
-            ref={(element) => requestAnimationFrame(() => element.focus())}
-          />
-          <div class={styles.actions}>
-            <Show when={failure()}>
-              {(message) => <Meta tone="removed">{message()}</Meta>}
-            </Show>
-            <Button disabled={sending()} onClick={() => props.onToggle()}>
-              Cancel
-            </Button>
-            <Button variant="solid" disabled={sending()} onClick={abandon}>
-              Abandon {props.item}
-            </Button>
-          </div>
-        </form>
+        )}
       </Show>
-    </>
+      <TextArea
+        label="Reason"
+        placeholder="Why, for the agent (optional) — ⌘↩ abandons"
+        value={props.reason}
+        disabled={sending()}
+        onInput={(reason) => props.onReason(reason)}
+        onSubmit={abandon}
+        ref={(element) => requestAnimationFrame(() => element.focus())}
+      />
+      <div class={styles.actions}>
+        <Show when={failure()}>
+          {(failure) => <ErrorNote failure={failure()} />}
+        </Show>
+        <Button disabled={sending()} onClick={() => props.onCancel()}>
+          Cancel
+        </Button>
+        <Button
+          variant="danger"
+          busy={sending()}
+          keyHint="⌘↩"
+          onClick={abandon}
+        >
+          {sending() ? "Abandoning…" : `Abandon ${props.item}`}
+        </Button>
+      </div>
+    </form>
   );
 }

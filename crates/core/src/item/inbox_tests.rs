@@ -3,6 +3,7 @@ use crate::conflict::{ConflictStore, Pair};
 use crate::fake::FakeStore;
 use crate::item::{ItemBackend, ItemId, NewItem, NewRevision, Priority};
 use crate::project::ProjectName;
+use crate::review::{Author, NewComment, NewReply, ReplyStatus, ReviewStore, Side};
 
 fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
     let item = NewItem {
@@ -103,4 +104,57 @@ fn breaks_priority_ties_by_how_many_items_each_conflicts_with() {
     assert_eq!(inbox.conflicts[&b], [d.clone(), e.clone()]);
     assert_eq!(inbox.conflicts[&d], [b, e]);
     assert!(!inbox.conflicts.contains_key(&a));
+}
+
+#[test]
+fn an_agent_waiting_on_an_answer_puts_its_item_under_needs_you() {
+    let mut store = FakeStore::default();
+    let asked = add(&mut store, "app", "asked");
+    let working = add(&mut store, "app", "working");
+    for id in [&asked, &working] {
+        store.set_state(id, ItemState::ChangesRequested);
+    }
+    let comment = store
+        .insert_draft(NewComment {
+            item: asked.clone(),
+            revision: 1,
+            path: "src/login.rs".into(),
+            side: Side::New,
+            start_line: 1,
+            line: 1,
+            body: "Why here?".into(),
+            quote: "fn login()".into(),
+        })
+        .unwrap();
+    store
+        .insert_reply(NewReply {
+            comment: comment.id,
+            item: asked.clone(),
+            author: Author::Agent,
+            status: Some(ReplyStatus::Question),
+            body: "Should it retry?".into(),
+            revision: 1,
+        })
+        .unwrap();
+
+    let inbox = inbox(&store).unwrap();
+    let ids = |group: &[Item]| group.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&inbox.needs_you), std::slice::from_ref(&asked));
+    assert_eq!(ids(&inbox.with_agents), [working]);
+    assert_eq!(inbox.waiting[&asked].questions, 1);
+}
+
+#[test]
+fn lists_items_closed_today_latest_first() {
+    let mut store = FakeStore::default();
+    let merged = add(&mut store, "app", "merged");
+    let open = add(&mut store, "app", "open");
+    let abandoned = add(&mut store, "app", "abandoned");
+    store.set_state(&merged, ItemState::Merged);
+    store.set_state(&abandoned, ItemState::Abandoned);
+
+    let inbox = inbox(&store).unwrap();
+    let ids = |group: &[Item]| group.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&inbox.closed), [abandoned, merged]);
+    assert_eq!(ids(&inbox.needs_you), [open]);
 }

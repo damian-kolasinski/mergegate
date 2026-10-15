@@ -8,4 +8,11 @@
   --diffs-header-font-family: var(--font-sans);
   --diffs-font-size: 13px;
   --diffs-line-height: 20px;
+  /* The page's own colours, so a diff reads as part of it: the background
+     just off the page's, additions and deletions in the same green and red
+     as every count. */
+  --diffs-light-bg: var(--background-page);
+  --diffs-dark-bg: var(--background-page);
+  --diffs-addition-color-override: var(--text-added);
+  --diffs-deletion-color-override: var(--text-removed);
 }

@@ -30,24 +30,32 @@ test("f11 the guide is the intent and orders the review", async ({
   await page.goto(`${hub.url}#/items/app%231`);
 
   const screen = page.getByRole("region", { name: "app#1" });
+  const fold = screen.locator("summary").filter({ hasText: "Intent" });
+  // Folded to its first line, so the diff keeps the screen.
+  await expect(fold).toContainText(
+    "Splits parsing out of main, so the CLI can reuse it.",
+  );
   const intent = screen.getByRole("region", { name: "Intent" });
-  await expect(intent).toHaveText(GUIDE.trim());
-  // Shown as written: the Markdown isn't rendered.
-  await expect(intent).toContainText("- `src/parser.rs` — the new parser");
+  await expect(intent).toBeHidden();
+  await fold.click();
+  // The file list says what the Files section did, so it isn't repeated.
+  await expect(intent).toHaveText(
+    "Splits parsing out of main, so the CLI can reuse it.",
+  );
 
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^src\/parser\.rs\s*the new parser, start here\s*\+1$/,
-    /^src\/main\.rs\s*now only calls it\s*\+1$/,
+    /^parser\.rs\s*src\s*the new parser, start here\s*\+1$/,
+    /^main\.rs\s*src\s*now only calls it\s*\+1$/,
     /^README\.md\s*ranked low: docs\s*\+1$/,
   ]);
   const current = files.locator("li[aria-current=true]");
-  await expect(current).toContainText("src/parser.rs");
+  await expect(current).toContainText("parser.rs");
   await page.keyboard.press("n");
-  await expect(current).toContainText("src/main.rs");
+  await expect(current).toContainText("main.rs");
 
-  // Folded away, it leaves the diff to the files.
-  await intent.locator("xpath=..").locator("summary").click();
+  // Folded away again, it leaves the diff to the files.
+  await fold.click();
   await expect(intent).toBeHidden();
 });
 

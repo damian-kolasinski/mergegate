@@ -36,7 +36,9 @@ export function useRoute(): Accessor<Route> {
   return route;
 }
 
-function parse(hash: string): Route {
+function parse(full: string): Route {
+  // What follows `?` is the screen's own state, such as the file on screen.
+  const hash = full.split("?")[0] ?? "";
   const id = /^#\/items\/(.+)$/.exec(hash)?.[1];
   const project = /^#\/projects\/([^/]+)\/rules$/.exec(hash)?.[1];
   try {

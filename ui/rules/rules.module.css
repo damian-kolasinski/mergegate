@@ -69,6 +69,28 @@
   color: var(--text-warning);
 }
 
+/* Hiding nothing so far is nothing to warn about. */
+.preview[data-none] {
+  color: var(--text-secondary);
+}
+
+.question {
+  font: var(--type-p3);
+  color: var(--text-primary);
+}
+
+.back {
+  flex-basis: 100%;
+  width: fit-content;
+  font: var(--type-p3);
+  color: var(--text-brand);
+  text-decoration: none;
+}
+
+.back:hover {
+  text-decoration: underline;
+}
+
 .hidden {
   display: flex;
   flex-direction: column;
@@ -84,5 +106,7 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }

@@ -44,7 +44,7 @@ test("f7 a new revision shows what changed since the review", async ({
   const review = page.getByRole("form", { name: "Review" });
   const current = files.locator("li[aria-current=true]");
   // It adds a declaration, which ranks it first.
-  await expect(current).toContainText("src/login.rs");
+  await expect(current).toContainText("login.rs");
   await files.getByLabel("Viewed src/login.rs").check();
   await requestChanges(page);
 
@@ -66,22 +66,22 @@ test("f7 a new revision shows what changed since the review", async ({
   await expect(screen.getByLabel("Compare")).toHaveValue("1");
   // main's README isn't the item's, and login.rs is as r1 left it, its
   // mark with it.
-  await expect(files.getByRole("listitem")).toHaveText([/^src\/lib\.rs/]);
+  await expect(files.getByRole("listitem")).toHaveText([/^lib\.rs\s*src/]);
   // login.rs was current, and isn't shown now.
-  await expect(current).toContainText("src/lib.rs");
+  await expect(current).toContainText("lib.rs");
   await expect(diff.getByText("mod token;")).toBeVisible();
   await expect(diff.getByText("more", { exact: true })).toHaveCount(0);
   await files.getByText("1 unchanged since r1").click();
   await expect(files.getByLabel("Viewed src/login.rs")).toBeChecked();
-  await expect(screen.getByText("1/2 viewed")).toBeVisible();
+  await expect(screen.getByText("1 of 2 reviewed")).toBeVisible();
   await expect(
     review.getByRole("button", { name: "Approve & merge" }),
   ).toBeEnabled();
 
   await screen.getByLabel("Compare").selectOption("all");
   await expect(files.getByRole("listitem")).toHaveText([
-    /^src\/login\.rs/,
-    /^src\/lib\.rs/,
+    /^login\.rs\s*src/,
+    /^lib\.rs\s*src/,
   ]);
   await expect(files.getByText("unchanged since")).toHaveCount(0);
   await expect(summary).toHaveValue("Closer.");

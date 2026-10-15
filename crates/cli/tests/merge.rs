@@ -112,10 +112,13 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
         .json();
     assert_eq!(replay["events"][0]["type"], "item.merged");
     assert_eq!(replay["events"][0]["branch"], "feature");
-    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let mut inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let closed = inbox["closed"].take();
+    assert_eq!(closed[0]["id"], "app#1");
+    assert_eq!(closed[0]["state"], "merged");
     assert_eq!(
         inbox,
-        json!({ "needs_you": [], "with_agents": [], "merging": [], "rules": [] })
+        json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "rules": [] })
     );
 }
 

@@ -29,7 +29,7 @@ fn holds_every_revisions_comments_and_replies() {
     let review = SubmitReview {
         id: id("app#1"),
         revision: 1,
-        verdict: Verdict::ChangesRequested,
+        verdict: Verdict::Comment,
         summary: String::new(),
     };
     submit(&mut store, &FakeGit::default(), review).unwrap();

@@ -12,10 +12,11 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use mergegate_core::attachment;
+use mergegate_core::conflict::{ConflictStore, conflicting};
 use mergegate_core::diff::{self, Content, LineKind};
 use mergegate_core::highlight::{self, FileHighlights, Highlighter, Span};
 use mergegate_core::interdiff::Change;
-use mergegate_core::item::{self, Compare, DiffedFile, FileMode, ItemId};
+use mergegate_core::item::{self, Compare, DiffedFile, FileMode, ItemId, ItemStore};
 use mergegate_core::triage::TriagedBy;
 use serde::Deserialize;
 
@@ -79,12 +80,17 @@ async fn show(
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 let demo = attachment::demo(store, &id)?;
-                Ok(Some((diff, blocked, spans, demo)))
+                let project = Some(id.project());
+                let open = store.open_items(project)?;
+                let conflicts = conflicting(&open, &store.pairs(project)?)
+                    .remove(&id)
+                    .unwrap_or_default();
+                Ok(Some((diff, blocked, spans, demo, conflicts)))
             })
             .await
             .map_err(items::failure)?
     };
-    let (diff, blocked, spans, demo) = found.ok_or_else(|| {
+    let (diff, blocked, spans, demo, conflicts) = found.ok_or_else(|| {
         Failure::new(
             StatusCode::NOT_FOUND,
             "item_not_found",
@@ -101,6 +107,7 @@ async fn show(
         interdiffs: diff.interdiffs,
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         guide: diff.guide,
+        conflicts_with: conflicts.iter().map(ToString::to_string).collect(),
         conversation: conversation::to_api(&diff.conversation),
     }))
 }

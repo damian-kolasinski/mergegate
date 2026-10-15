@@ -1014,6 +1014,17 @@ impl ItemStore for FakeStore {
             .collect())
     }
 
+    /// The fake keeps no close times, so every closed item closed today.
+    fn closed_today(&self) -> Result<Vec<Item>, StoreError> {
+        Ok(self
+            .items
+            .iter()
+            .rev()
+            .filter(|i| !i.state.is_open())
+            .cloned()
+            .collect())
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         Ok(self
             .open_items(Some(project))?

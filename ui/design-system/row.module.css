@@ -5,10 +5,11 @@
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border-inactive);
   cursor: pointer;
+  transition: background-color var(--motion-fast);
 }
 
 .row:hover {
-  background: var(--background-subtle);
+  background: var(--background-hover);
 }
 
 /* The bar keeps the selection visible to people who can't tell the fills

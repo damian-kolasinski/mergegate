@@ -8,6 +8,7 @@
   z-index: 1;
   display: flex;
   align-items: center;
+  gap: var(--space-3);
   height: 48px;
   padding: 0 var(--space-4);
   border-bottom: 1px solid var(--border-container);
@@ -15,6 +16,9 @@
 }
 
 .name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font: var(--type-h4);
   letter-spacing: var(--tracking-heading);
   color: var(--text-primary);
@@ -23,6 +27,61 @@
 
 .name:hover {
   color: var(--text-primary);
+}
+
+.logo {
+  color: var(--background-brand);
+}
+
+.trail {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font: var(--type-p3);
+  color: var(--text-subtle);
+}
+
+.trail a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.trail a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.offline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--background-tint-warning);
+  color: var(--text-tint-warning);
+  font: var(--type-p4);
+  animation: var(--motion-arrive);
+}
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--background-warning);
+  animation: mg-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mg-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.help {
+  margin-left: auto;
+  font: var(--type-p4);
+  color: var(--text-subtle);
 }
 
 .main {

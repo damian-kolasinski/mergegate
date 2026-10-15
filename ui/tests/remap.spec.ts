@@ -122,7 +122,7 @@ test("f13 comments follow their lines to the next revision", async ({
 
   // The drafts whose lines changed or went hold the review.
   await expect(
-    review.getByText("3 drafts can't move to r2: re-place or delete them"),
+    review.getByText("3 drafts can't move to r2 — re-place or delete them"),
   ).toBeVisible();
   for (const name of ["Comment", "Request changes", "Approve & merge"]) {
     await expect(review.getByRole("button", { name })).toBeDisabled();
@@ -135,7 +135,7 @@ test("f13 comments follow their lines to the next revision", async ({
   await expect(renamed.getByText("Changed since r1")).toHaveCount(0);
   await expect(renamed).toContainText("Line 5");
   await expect(
-    review.getByText("2 drafts can't move to r2: re-place or delete them"),
+    review.getByText("2 drafts can't move to r2 — re-place or delete them"),
   ).toBeVisible();
 
   // Those on deleted lines are only in the list, beside the sent one.
@@ -238,7 +238,7 @@ test("drafts from another tab that hold the review can be dealt with", async ({
   await review.getByRole("textbox", { name: "Review summary" }).fill("Again.");
   await review.getByRole("button", { name: "Comment" }).click();
   await expect(
-    review.getByText("2 drafts can't move to r2: re-place or delete them"),
+    review.getByText("2 drafts can't move to r2 — re-place or delete them"),
   ).toBeVisible();
 
   // Deleting the draft being re-placed ends the re-placing.
@@ -249,7 +249,7 @@ test("drafts from another tab that hold the review can be dealt with", async ({
   await expect(renamed).toHaveCount(0);
   await expect(review.getByText("Pick the lines")).toHaveCount(0);
   await expect(
-    review.getByText("1 draft can't move to r2: re-place or delete it"),
+    review.getByText("1 draft can't move to r2 — re-place or delete it"),
   ).toBeVisible();
 
   await screen.getByRole("button", { name: /^Conversation/ }).click();

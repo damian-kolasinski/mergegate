@@ -15,6 +15,15 @@ export function Conversation(props: {
   onShow: () => void;
   ref: (button: HTMLButtonElement) => void;
 }) {
+  // The agent's open questions wait on the operator, so the button says so
+  // before the list is opened.
+  const questions = () =>
+    props.comments.threads
+      .all()
+      .filter(
+        (comment) =>
+          props.comments.replies.answer(comment)?.status === "question",
+      ).length;
   return (
     <>
       <span class={styles.talk}>
@@ -25,6 +34,13 @@ export function Conversation(props: {
           onClick={() => props.onToggle()}
         >
           Conversation {props.comments.threads.all().length}
+          <Show when={questions()}>
+            {(count) => (
+              <Badge tone="brand" solid>
+                {count()} {count() === 1 ? "question" : "questions"}
+              </Badge>
+            )}
+          </Show>
         </Button>
       </span>
       <Show when={props.open}>
@@ -91,9 +107,9 @@ function Entry(props: {
                 fallback={
                   <Show
                     when={props.comment.external?.pending}
-                    fallback={<Badge tone="success">Sent</Badge>}
+                    fallback={<Badge tone="success">Sent to agent</Badge>}
                   >
-                    <Badge tone="warning">Held</Badge>
+                    <Badge tone="warning">Not sent yet</Badge>
                   </Show>
                 }
               >

@@ -24,8 +24,9 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
   background: var(--background-page);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
-  transform: translateX(-50%);
+  box-shadow: var(--shadow-popover);
+  animation: var(--motion-pop);
+  translate: -50% 0;
 }
 
 .choices {

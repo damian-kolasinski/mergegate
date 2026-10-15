@@ -71,6 +71,12 @@ export function useNavigation(options: {
     current,
     currentFile: () => options.files()[order().get(current() ?? "") ?? -1],
     showFile,
+    /** Puts the cursor on `spot`, or shows its file when it's not a line. */
+    showSpot(spot: Pick<Line, "path" | "side" | "line">) {
+      const at = lines().findIndex((line) => same(line, spot));
+      if (at === -1) showFile(spot.path);
+      else moveCursor(at);
+    },
     stepFile(step: number) {
       const next = options.files()[(order().get(current() ?? "") ?? 0) + step];
       if (next) showFile(next.path);
@@ -99,7 +105,10 @@ export function useNavigation(options: {
   };
 }
 
-function same(line: Line, other: Line | undefined): boolean {
+function same(
+  line: Line,
+  other: Pick<Line, "path" | "side" | "line"> | undefined,
+): boolean {
   return (
     line.path === other?.path &&
     line.side === other.side &&

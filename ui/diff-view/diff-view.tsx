@@ -65,6 +65,8 @@ export function DiffView(props: {
   note: (spot: Spot) => JSX.Element;
   /** Lines the reviewer asked to comment on, from the gutter's `+`. */
   onComment: (span: Span) => void;
+  /** Why a file is where it is, shown in its header. */
+  describe?: (file: File) => string | undefined;
   control: (control: DiffViewControl) => void;
 }) {
   let root!: HTMLDivElement;
@@ -85,7 +87,7 @@ export function DiffView(props: {
     stickyHeaders: true,
     expansionLineCount: 20,
     themeType: "system",
-    unsafeCSS: highlightCSS,
+    unsafeCSS: `${highlightCSS}\n${headerCSS}`,
     enableLineSelection: true,
     enableGutterUtility: untrack(() => props.commentable),
     // CodeView pins `+` to the selected lines while there are some, so with
@@ -143,10 +145,22 @@ export function DiffView(props: {
       const file = byPath.get(diff.name);
       // A mode changes no line, so a collapsed header still says so.
       const notes = [
-        items.get(diff.name)?.collapsed ? "Viewed" : file && contentNote(file),
+        items.get(diff.name)?.collapsed ? "Viewed" : file && headerStatus(file),
         file && modeNote(file),
-      ].filter((note) => note !== undefined);
-      return notes.length > 0 ? notes.join(" · ") : undefined;
+        // Backticks would show as typed: the header's text is plain.
+        file && props.describe?.(file)?.replaceAll("`", ""),
+      ].filter((note): note is string => Boolean(note));
+      if (notes.length === 0) return undefined;
+      const element = document.createElement("span");
+      element.className = "mg-header-note";
+      notes.forEach((note, index) => {
+        if (index > 0) element.append(" · ");
+        const part = document.createElement("span");
+        part.textContent = note;
+        element.append(part);
+      });
+      element.title = element.textContent;
+      return element;
     },
     onSelectedLinesChange: (selection) => {
       const side = selection?.range.endSide ?? selection?.range.side;
@@ -169,6 +183,19 @@ export function DiffView(props: {
     options = { ...options, enableGutterUtility: commentable };
     view.setOptions(options);
   });
+
+  /** What the header says about a file's diff, beside the reason. */
+  const headerStatus = (file: File): string | undefined => {
+    const note = contentNote(file);
+    if (note !== undefined || file.content.kind !== "text") return note;
+    // Said on the first file a pack would colour, not on every one.
+    const pack = file.missing_pack;
+    if (!pack) return undefined;
+    const first = [...byPath.values()].find(
+      (other) => other.missing_pack === pack,
+    );
+    return first === file ? `No ${pack} language pack` : undefined;
+  };
 
   /**
    * Adds a side's spans to `file`'s painting before an expanded gap renders.
@@ -420,9 +447,7 @@ function contentNote(file: File): string | undefined {
     case "gone":
       return "Diff dropped when the item closed";
     default:
-      return file.missing_pack
-        ? `No ${file.missing_pack} language pack`
-        : undefined;
+      return undefined;
   }
 }
 
@@ -449,3 +474,17 @@ async function text(url: string): Promise<string> {
   if (!response.ok) throw new Error(`${url} answered ${response.status}`);
   return new TextDecoder().decode(await response.arrayBuffer());
 }
+
+// The header's counts read `+3 −1` as everywhere else on the page, and a
+// long reason gives way to the file's name.
+const headerCSS = `
+[data-additions-count] { order: -1; }
+.mg-header-note {
+  max-width: 56ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  opacity: 0.75;
+}
+`;

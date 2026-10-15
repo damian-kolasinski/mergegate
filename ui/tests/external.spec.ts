@@ -26,7 +26,7 @@ test("f5 shows comments from GitHub and syncs them to the agent", async ({
   await expect(inline).toContainText("Hash the password.");
   await expect(inline.getByText("codex[bot]")).toBeVisible();
   await expect(inline.getByText("Bot", { exact: true })).toBeVisible();
-  await expect(inline.getByText("Held", { exact: true })).toBeVisible();
+  await expect(inline.getByText("Not sent yet", { exact: true })).toBeVisible();
   await expect(inline.getByRole("link", { name: "GitHub" })).toHaveAttribute(
     "href",
     /\/acme\/app\/pull\/1#/,
@@ -39,12 +39,15 @@ test("f5 shows comments from GitHub and syncs them to the agent", async ({
   await expect(entry).toContainText("Needs a test.");
   await expect(entry.getByText("alice")).toBeVisible();
 
-  await screen.getByRole("button", { name: "Sync GitHub" }).click();
+  await screen.getByRole("button", { name: "More actions" }).click();
+  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
   await expect(
     screen.getByText("Up to date, 2 sent to the agent"),
   ).toBeVisible();
-  await expect(inline.getByText("Sent", { exact: true })).toBeVisible();
-  await expect(entry.getByText("Held", { exact: true })).toHaveCount(0);
+  await expect(
+    inline.getByText("Sent to agent", { exact: true }),
+  ).toBeVisible();
+  await expect(entry.getByText("Not sent yet", { exact: true })).toHaveCount(0);
 });
 
 test("the operator agrees with a rejection or overrides it", async ({
@@ -58,8 +61,10 @@ test("the operator agrees with a rejection or overrides it", async ({
   await github.github.comment(1, { login: "alice", body: "Split it." });
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await screen.getByRole("button", { name: "Sync GitHub" }).click();
+  await screen.getByRole("button", { name: "More actions" }).click();
+  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
   await expect(screen.getByText(/sent to the agent$/)).toBeVisible();
+  await page.keyboard.press("Escape");
   hub.mg(["feedback", "app#1"]);
   for (const comment of ["c_1", "c_2"]) {
     hub.mg(["reply", comment, "--status", "rejected", "--body", "No."]);
@@ -70,18 +75,22 @@ test("the operator agrees with a rejection or overrides it", async ({
   const split = page.getByRole("article", { name: "Comment c_2" });
   await expect(rename.getByText("Rejected", { exact: true })).toBeVisible();
 
-  await split.getByRole("button", { name: "Agree" }).click();
-  await expect(split.getByText("Agreed", { exact: true })).toBeVisible();
+  await split.getByRole("button", { name: "Accept rejection" }).click();
+  await expect(
+    split.getByText("Rejection accepted", { exact: true }),
+  ).toBeVisible();
   await expect(split.getByRole("button", { name: "Override" })).toHaveCount(0);
 
-  await rename.getByRole("button", { name: "Override" }).click();
+  await rename.getByRole("button", { name: "Override — must fix" }).click();
   await page
     .getByRole("textbox", { name: "Override the rejection of c_1" })
     .fill("The old name misleads.");
   await rename.getByRole("button", { name: "Send override" }).click();
   await expect(rename.getByText("Override", { exact: true })).toBeVisible();
   await expect(rename).toContainText("The old name misleads.");
-  await expect(rename.getByRole("button", { name: "Agree" })).toHaveCount(0);
+  await expect(
+    rename.getByRole("button", { name: "Accept rejection" }),
+  ).toHaveCount(0);
 
   // The agent has it at once, with no review.
   const feedback = hub.mg(["feedback", "app#1"]) as {

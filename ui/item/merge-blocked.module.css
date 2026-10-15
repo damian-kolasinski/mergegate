@@ -1,5 +1,5 @@
-/* A strip under the header; a refusal from the operator's repo can be long
-   and wraps. */
+/* A strip under the header, tinted so a merge that's waiting on the operator
+   reads before the diff does. */
 .notice {
   display: flex;
   flex-wrap: wrap;
@@ -7,14 +7,45 @@
   gap: var(--space-2) var(--space-3);
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border-container);
+  background: var(--background-tint-warning);
+  animation: var(--motion-arrive);
 }
 
 .notice > :not(:first-child) {
   white-space: normal;
 }
 
+.reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.details summary {
+  width: fit-content;
+  font: var(--type-p3);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* What git said, as it said it; a long refusal scrolls in place. */
+.details pre {
+  max-height: 20vh;
+  margin-top: var(--space-1);
+  padding: var(--space-2);
+  overflow: auto;
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  font: var(--type-mono);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin-left: auto;

@@ -1,4 +1,4 @@
-import { onCleanup } from "solid-js";
+import { createSignal, onCleanup } from "solid-js";
 import type { ErrorEnvelope } from "../api/ErrorEnvelope";
 import type { UiEvent } from "../api/UiEvent";
 
@@ -7,9 +7,22 @@ export class HubError extends Error {
   constructor(
     message: string,
     readonly code: string,
+    /** What fixes it, when the hub says. */
+    readonly hint?: string,
   ) {
     super(message);
   }
+}
+
+/** What went wrong, and what fixes it when that's known: for `ErrorNote`. */
+export type Failure = { message: string; hint?: string | undefined };
+
+/** Any rejection as a `Failure`, keeping the hub's hint. */
+export function failureOf(error: unknown): Failure {
+  if (error instanceof HubError) {
+    return { message: error.message, hint: error.hint };
+  }
+  return { message: error instanceof Error ? error.message : String(error) };
 }
 
 /** `GET`s a hub endpoint. The UI is served by the hub, so paths are relative. */
@@ -52,7 +65,11 @@ async function send(path: string, init: RequestInit): Promise<unknown> {
   try {
     response = await fetch(path, init);
   } catch {
-    throw new HubError("The hub isn't running.", "hub_unreachable");
+    throw new HubError(
+      "The hub isn't running.",
+      "hub_unreachable",
+      "start it with mg hub start, then retry",
+    );
   }
   const body: unknown = await response.json().catch(() => undefined);
   if (!response.ok) {
@@ -60,6 +77,7 @@ async function send(path: string, init: RequestInit): Promise<unknown> {
     throw new HubError(
       error?.message ?? `The hub answered ${response.status}.`,
       error?.code ?? "unexpected_response",
+      error?.hint ?? undefined,
     );
   }
   return body;
@@ -70,6 +88,17 @@ type Listener = (event?: UiEvent) => void;
 
 const listeners = new Map<UiEvent["type"], Set<Listener>>();
 let source: EventSource | undefined;
+let retry: ReturnType<typeof setTimeout> | undefined;
+
+// Assumed up until the stream says otherwise, so a page doesn't flash a
+// warning while it first connects.
+const [connected, setConnected] = createSignal(true);
+
+/**
+ * Whether the live-update stream is up. While it's down the page shows what
+ * it last had, which could be stale, so the shell says so.
+ */
+export const hubConnected = connected;
 
 /**
  * Calls `listener` whenever the hub says `type` changed, for as long as the
@@ -114,8 +143,19 @@ function connect() {
     for (const listener of listeners.get(event.type) ?? []) listener(event);
   };
   source.onopen = () => {
+    setConnected(true);
     for (const forType of listeners.values()) {
       for (const listener of forType) listener();
     }
+  };
+  // EventSource retries a dropped stream by itself, but gives up for good on
+  // an answer that isn't a stream, such as a hub restarting behind a proxy;
+  // then this page retries it.
+  source.onerror = () => {
+    setConnected(false);
+    if (source?.readyState !== EventSource.CLOSED) return;
+    source = undefined;
+    clearTimeout(retry);
+    retry = setTimeout(connect, 2000);
   };
 }

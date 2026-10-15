@@ -2,13 +2,15 @@ import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import type { Blocked } from "../api/Blocked";
 import type { Inbox } from "../api/Inbox";
 import type { InboxItem } from "../api/InboxItem";
-import { getJson, onHubEvent } from "../app/hub";
+import { type Failure, failureOf, getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { go, itemHref, rulesHref } from "../app/router";
+import { useTitle } from "../app/title";
 import { PriorityBadge, PriorityPicker } from "../priority/priority";
 import {
   Badge,
   Empty,
+  ErrorNote,
   ExternalLink,
   Meta,
   Mono,
@@ -29,7 +31,7 @@ const [selectedId, setSelectedId] = createSignal<string>();
 /** Open items in the hub's groups, refreshed whenever the hub says so. */
 export function InboxScreen() {
   const [inbox, setInbox] = createSignal<Inbox>();
-  const [failure, setFailure] = createSignal<string>();
+  const [failure, setFailure] = createSignal<Failure>();
   let latest = 0;
   const load = async () => {
     // Responses can arrive out of order; only the newest request's counts.
@@ -41,21 +43,29 @@ export function InboxScreen() {
       setFailure(undefined);
     } catch (error) {
       if (request !== latest) return;
-      setFailure(error instanceof Error ? error.message : String(error));
+      setFailure(failureOf(error));
     }
   };
   void load();
   onHubEvent("inbox.changed", () => void load());
+  // The tab says how many items wait on the operator, from any other tab.
+  useTitle(() => {
+    const waiting = inbox()?.needs_you.length;
+    return waiting ? `(${waiting}) Inbox` : "Inbox";
+  });
 
   const [now, setNow] = createSignal(Date.now());
   const clock = setInterval(() => setNow(Date.now()), 30_000);
   onCleanup(() => clearInterval(clock));
 
-  // `j/k` walk all groups as one list, in the order they're shown.
+  // `j/k` walk the open groups as one list, in the order they're shown;
+  // what closed today is there to look back on, not to work through.
   const items = createMemo(() => {
     const current = inbox();
     return current ? GROUPS.flatMap((group) => current[group.key]) : [];
   });
+  // An item that leaves the list, say once it's merged, hands the selection
+  // to the first one waiting on the operator.
   const selected = createMemo(() => {
     const list = items();
     return list.find((item) => item.id === selectedId())?.id ?? list[0]?.id;
@@ -71,19 +81,44 @@ export function InboxScreen() {
   };
   // The item `p` opened the priority picker on.
   const [picking, setPicking] = createSignal<InboxItem>();
-  useKeys({
-    j: () => move(1),
-    k: () => move(-1),
-    ArrowDown: () => move(1),
-    ArrowUp: () => move(-1),
-    Enter: () => open(),
-    p: () => setPicking(items().find((item) => item.id === selected())),
-  });
+  useKeys(
+    {
+      j: () => move(1),
+      k: () => move(-1),
+      ArrowDown: () => move(1),
+      ArrowUp: () => move(-1),
+      Enter: () => open(),
+      p: () => setPicking(items().find((item) => item.id === selected())),
+    },
+    {
+      group: "Inbox",
+      keys: [
+        ["j / k", "Next / previous item"],
+        ["Enter", "Open the item"],
+        ["p", "Set the item's priority"],
+      ],
+    },
+  );
 
   // A failed refresh keeps the last inbox on screen, under the message.
   return (
     <>
-      <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
+      <Show when={failure()}>
+        {(current) => (
+          <Show
+            when={inbox()}
+            fallback={
+              <Empty>
+                <ErrorNote failure={current()} />
+              </Empty>
+            }
+          >
+            <div class={styles.failure}>
+              <ErrorNote failure={current()} />
+            </div>
+          </Show>
+        )}
+      </Show>
       <Show when={inbox()}>
         {(current) => (
           <>
@@ -120,8 +155,26 @@ export function InboxScreen() {
                       when={current()[group.key].length}
                       fallback={
                         <Empty>
-                          Nothing to review. Items show up here when an agent
-                          runs <code>mg submit</code>.
+                          <Show
+                            when={
+                              current().with_agents.length +
+                              current().merging.length
+                            }
+                            fallback={
+                              <>
+                                Nothing to review. Items show up here when an
+                                agent runs <code>mg submit</code>.
+                              </>
+                            }
+                          >
+                            {(working) => (
+                              <>
+                                All caught up — agents are working on{" "}
+                                {working()} {working() === 1 ? "item" : "items"}
+                                .
+                              </>
+                            )}
+                          </Show>
                         </Empty>
                       }
                     >
@@ -143,6 +196,29 @@ export function InboxScreen() {
                 </Show>
               )}
             </For>
+            <Show when={current().closed.length}>
+              <details class={styles.closed}>
+                <summary
+                  // A focused summary would take Enter from the shortcuts.
+                  onClick={(event) => event.currentTarget.blur()}
+                >
+                  Closed today ({current().closed.length})
+                </summary>
+                <ul>
+                  <For each={current().closed}>
+                    {(item) => (
+                      <Entry
+                        item={item}
+                        now={now()}
+                        selected={false}
+                        onSelect={() => undefined}
+                        onOpen={() => open(item.id)}
+                      />
+                    )}
+                  </For>
+                </ul>
+              </details>
+            </Show>
           </>
         )}
       </Show>
@@ -180,8 +256,22 @@ function Entry(props: {
       <span class={styles.id}>
         <Mono>{props.item.id}</Mono>
       </span>
-      <PriorityBadge priority={props.item.priority} note={props.item.note} />
-      <span class={styles.title} title={props.item.branch}>
+      <span class={styles.revision}>
+        <Meta>r{props.item.revision}</Meta>
+      </span>
+      <span class={styles.priority}>
+        <PriorityBadge
+          priority={props.item.priority}
+          note={props.item.note}
+          keyHint="p"
+        />
+      </span>
+      {/* A real link, so a middle or ⌘ click opens the item in a new tab. */}
+      <a
+        class={styles.title}
+        href={itemHref(props.item.id)}
+        title={props.item.branch}
+      >
         {props.item.title}
         <Show when={props.item.note}>
           {(note) => (
@@ -191,7 +281,35 @@ function Entry(props: {
             </span>
           )}
         </Show>
-      </span>
+      </a>
+      <Show when={props.item.questions}>
+        {(count) => (
+          <span class={styles.flag} title="The agent asked: it waits on you">
+            <Badge tone="brand" solid>
+              {count()} {count() === 1 ? "question" : "questions"}
+            </Badge>
+          </span>
+        )}
+      </Show>
+      <Show when={props.item.rejections}>
+        {(count) => (
+          <span
+            class={styles.flag}
+            title="The agent rejected a comment: accept it or override"
+          >
+            <Badge tone="warning" solid>
+              {count()} {count() === 1 ? "rejection" : "rejections"}
+            </Badge>
+          </span>
+        )}
+      </Show>
+      <Show when={props.item.state === "changes_requested"}>
+        <span class={styles.flag}>
+          <Meta>
+            changes requested · waiting for r{props.item.revision + 1}
+          </Meta>
+        </span>
+      </Show>
       <Show when={props.item.link}>
         {(link) => (
           <span class={styles.flag}>
@@ -218,7 +336,7 @@ function Entry(props: {
       <Show when={props.item.blocked}>
         {(blocked) => (
           <span class={styles.flag} title={why(blocked())}>
-            <Badge tone="warning">
+            <Badge tone="warning" solid>
               {blocked().kind === "held" ? "Merge held" : "Conflict"}
             </Badge>
           </span>
@@ -248,7 +366,10 @@ function Entry(props: {
       <span class={styles.files} title={trusted(props.item)}>
         <Meta>{files(props.item)}</Meta>
       </span>
-      <span class={styles.figure} title={props.item.updated_at}>
+      <span
+        class={styles.figure}
+        title={new Date(props.item.updated_at).toLocaleString()}
+      >
         <Meta>{age(props.item.updated_at, props.now)}</Meta>
       </span>
     </Row>
@@ -269,7 +390,7 @@ function trusted(item: InboxItem): string | undefined {
 }
 
 function why(blocked: Blocked): string {
-  if (blocked.kind === "held") return blocked.reason;
+  if (blocked.kind === "held") return blocked.reason.split("\n\n")[0] ?? "";
   return `Conflicts in ${blocked.paths.join(", ")}`;
 }
 

@@ -43,6 +43,15 @@ pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
     if revision == 0 || revision > item.revision.number {
         return Err(ReviewError::NoRevision { id, revision });
     }
+    // The agent already sent a newer revision, which sending the item back
+    // would hand back unread. A comment on the older one still goes out.
+    if verdict == Verdict::ChangesRequested && revision < item.revision.number {
+        return Err(ReviewError::Stale {
+            id,
+            revision,
+            newest: item.revision.number,
+        });
+    }
     let summary = summary.trim().to_owned();
     if summary.is_empty()
         && !store.comments(&id)?.iter().any(Comment::is_draft)

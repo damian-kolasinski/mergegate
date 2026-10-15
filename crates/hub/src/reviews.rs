@@ -78,6 +78,11 @@ pub(crate) fn failure(e: ReviewError) -> Failure {
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::Empty => (S::BAD_REQUEST, "empty_review", None),
         E::Approval => (S::BAD_REQUEST, "invalid_verdict", None),
+        E::Stale { newest, .. } => (
+            S::CONFLICT,
+            "stale_revision",
+            Some(format!("show r{newest} and review it")),
+        ),
         E::Unplaced { .. } => (S::CONFLICT, "drafts_unplaced", None),
         E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),

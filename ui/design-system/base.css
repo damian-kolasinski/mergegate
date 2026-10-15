@@ -46,6 +46,20 @@ kbd {
   font: var(--type-mono);
 }
 
+/* A key to press, inline in text or on a button. */
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-container);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-small);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
 a {
   color: var(--text-brand);
 }
@@ -61,4 +75,29 @@ a:hover {
 
 ::selection {
   background: var(--background-selected);
+}
+
+/* Popovers and confirms fade in with a small rise; `--motion-pop` names it. */
+@keyframes mg-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Something new on screen: a banner, the merged check. */
+@keyframes mg-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
