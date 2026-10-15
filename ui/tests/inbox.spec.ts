@@ -65,7 +65,7 @@ test("f6 j and k move the selection, enter opens the item", async ({
   await page.keyboard.press("j");
 
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/items\/app%232$/);
+  await expect(page).toHaveURL(/#\/items\/app%232(\?.*)?$/);
   await expect(page.getByRole("region", { name: "app#2" })).toBeVisible();
 
   // Back on the inbox, the selection is where it was.
@@ -77,7 +77,7 @@ test("f6 clicking a row opens its item", async ({ page, hub }) => {
   hub.project("app").submit("parser", "Add the parser", { "p.rs": "p\n" });
   await page.goto(hub.url);
   await page.getByText("Add the parser").click();
-  await expect(page).toHaveURL(/#\/items\/app%231$/);
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
 });
 
 // tech-stack.md §9: first paint under 100 ms. Measured everywhere, enforced
