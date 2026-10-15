@@ -3,9 +3,10 @@ import type { Comment } from "../../api/Comment";
 import type { ItemDiff } from "../../api/ItemDiff";
 import type { Reply } from "../../api/Reply";
 import type { ReplyStatus } from "../../api/ReplyStatus";
-import { Badge, Meta, type Tone } from "../../design-system";
+import { Badge, ErrorNote, Meta, type Tone } from "../../design-system";
 import type { Comments } from "./comments";
 import { Editor } from "./editor";
+import { SettleRejection } from "./external";
 import { kept, merged } from "./merge";
 import { DraftReplyActions } from "./reply-drafts";
 import styles from "./replies.module.css";
@@ -48,7 +49,13 @@ export function ReplyList(props: { comments: Comments; comment: Comment }) {
       <Show when={props.comments.thread(props.comment).length}>
         <ol class={styles.replies} aria-label="Replies">
           <For each={props.comments.thread(props.comment)}>
-            {(reply) => <ReplyEntry comments={props.comments} reply={reply} />}
+            {(reply) => (
+              <ReplyEntry
+                comments={props.comments}
+                comment={props.comment}
+                reply={reply}
+              />
+            )}
           </For>
         </ol>
       </Show>
@@ -64,7 +71,11 @@ export function ReplyList(props: { comments: Comments; comment: Comment }) {
 }
 
 /** A reply, or its editor while a draft one is being edited. */
-function ReplyEntry(props: { comments: Comments; reply: Reply }) {
+function ReplyEntry(props: {
+  comments: Comments;
+  comment: Comment;
+  reply: Reply;
+}) {
   return (
     <li>
       <Show
@@ -98,12 +109,16 @@ function ReplyEntry(props: { comments: Comments; reply: Reply }) {
         <Show when={props.reply.body}>
           <p class={styles.body}>{props.reply.body}</p>
         </Show>
+        <Show
+          when={
+            props.comments.external.rejection(props.comment)?.id ===
+            props.reply.id
+          }
+        >
+          <SettleRejection comments={props.comments} comment={props.comment} />
+        </Show>
         <Show when={props.comments.replyDrafts.failure(props.reply)}>
-          {(message) => (
-            <p role="alert">
-              <Meta tone="removed">{message()}</Meta>
-            </p>
-          )}
+          {(failure) => <ErrorNote failure={failure()} />}
         </Show>
       </Show>
     </li>
@@ -116,7 +131,11 @@ export function StatusBadge(props: {
   addressedIn: number | null;
 }) {
   return (
-    <Badge tone={statusTone[props.status]}>
+    <Badge
+      tone={statusTone[props.status]}
+      // A rejection waits on the operator; it outweighs the rest.
+      solid={props.status === "rejected"}
+    >
       {props.status === "addressed"
         ? addressedIn(props.addressedIn)
         : statusLabel[props.status]}

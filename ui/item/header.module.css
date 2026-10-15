@@ -1,19 +1,44 @@
-/* The anchor of the Conversation list, which hangs below it. */
+/* The anchor of the panels that hang below it: the Conversation list, the
+   menu, Abandon. */
 .header {
   position: relative;
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-container);
   min-width: 0;
 }
 
+.name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
 .title {
-  font: var(--type-h4);
+  min-width: 0;
+  font: var(--type-h3);
   letter-spacing: var(--tracking-heading);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
 }

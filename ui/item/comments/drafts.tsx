@@ -1,13 +1,19 @@
-import { batch, createSignal, Show } from "solid-js";
+import { batch, createSignal, onCleanup, Show } from "solid-js";
 import type { Comment } from "../../api/Comment";
 import type { EditDraft } from "../../api/EditDraft";
 import type { ItemDiff } from "../../api/ItemDiff";
 import type { MoveDraft } from "../../api/MoveDraft";
 import type { Review } from "../../api/Review";
 import type { WriteDraft } from "../../api/WriteDraft";
-import { deleteJson, postJson, putJson } from "../../app/hub";
+import {
+  deleteJson,
+  type Failure,
+  failureOf,
+  postJson,
+  putJson,
+} from "../../app/hub";
 import type { Span, Spot } from "../../diff-view/diff-view";
-import { Button } from "../../design-system";
+import { Button, ErrorNote } from "../../design-system";
 import { isFlagged, sideOf } from "./anchor";
 import type { Comments } from "./comments";
 import type { CommentEditor } from "./editor";
@@ -42,7 +48,12 @@ export function useDrafts(
   // The flagged draft whose new lines the operator is picking.
   const [placing, setPlacing] = createSignal<Comment>();
   const revision = diff.item.revision.number;
-  const [failure, setFailure] = createSignal<{ id: string; message: string }>();
+  const [failure, setFailure] = createSignal<{ id: string } & Failure>();
+  // The draft just deleted, which Undo writes again for a few seconds.
+  const [deleted, setDeleted] = createSignal<Comment>();
+  const [restoring, setRestoring] = createSignal<Failure | "sending">();
+  let forget: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(forget));
   editor.onReset(() => setFailure(undefined));
   const isDraft = (comment: Comment) =>
     list().some((other) => other.id === comment.id);
@@ -56,10 +67,7 @@ export function useDrafts(
     if (ids.has(placing()?.id ?? "")) setPlacing(undefined);
   };
   const failed = (comment: Comment) => (error: unknown) =>
-    setFailure({
-      id: comment.id,
-      message: error instanceof Error ? error.message : String(error),
-    });
+    setFailure({ id: comment.id, ...failureOf(error) });
   /** Re-placing `comment` ends once it's moved or gone. */
   const settled = (comment: Comment) => {
     if (placing()?.id === comment.id) setPlacing(undefined);
@@ -127,9 +135,9 @@ export function useDrafts(
     },
     deleting,
     /** Why deleting `comment` failed. */
-    failure: (comment: Comment) => {
+    failure: (comment: Comment): Failure | undefined => {
       const failed = failure();
-      return failed?.id === comment.id ? failed.message : undefined;
+      return failed?.id === comment.id ? failed : undefined;
     },
     /** Where the new comment is being written. */
     composing: () => (editor.isOpen("new") ? span() : undefined),
@@ -189,8 +197,47 @@ export function useDrafts(
         .then(() => {
           settled(comment);
           setList((all) => all.filter((other) => other.id !== comment.id));
+          clearTimeout(forget);
+          setRestoring(undefined);
+          setDeleted(comment);
+          forget = setTimeout(() => setDeleted(undefined), 10_000);
         }, failed(comment))
         .finally(() => setDeleting(undefined));
+    },
+    deleted,
+    restoring,
+    dismissDeleted() {
+      clearTimeout(forget);
+      setDeleted(undefined);
+    },
+    /**
+     * Writes the deleted draft again, where it was. The hub gives it a new
+     * id; nothing else about it changes.
+     */
+    undoDelete() {
+      const comment = deleted();
+      if (!comment || restoring() === "sending") return;
+      if (comment.path === null || comment.side === null) return;
+      if (comment.start_line === null || comment.line === null) return;
+      const body: WriteDraft = {
+        revision: comment.revision,
+        path: comment.path,
+        side: comment.side,
+        start_line: comment.start_line,
+        line: comment.line,
+        body: comment.body,
+      };
+      clearTimeout(forget);
+      setRestoring("sending");
+      postJson<Comment>(url, body).then(
+        (restored) => {
+          setDeleted(undefined);
+          setRestoring(undefined);
+          setList((all) => merged(all, [restored]));
+          options.show(restored.id);
+        },
+        (error: unknown) => setRestoring(failureOf(error)),
+      );
     },
     sent,
     /** The hub's drafts, which another tab may have written. */
@@ -235,12 +282,47 @@ export function DraftActions(props: { comments: Comments; comment: Comment }) {
           Edit
         </Button>
         <Button
+          variant="danger"
+          busy={props.comments.drafts.deleting() === props.comment.id}
           disabled={props.comments.drafts.deleting() !== undefined}
           onClick={() => props.comments.drafts.remove(props.comment)}
         >
           Delete
         </Button>
       </span>
+    </Show>
+  );
+}
+
+/** "Draft deleted · Undo", for a few seconds after a delete. */
+export function DeletedDraft(props: { comments: Comments }) {
+  const drafts = () => props.comments.drafts;
+  return (
+    <Show when={drafts().deleted()}>
+      <div class={styles.toast} role="status">
+        <span>Draft deleted</span>
+        <Show
+          when={
+            typeof drafts().restoring() === "object" && drafts().restoring()
+          }
+        >
+          {(failure) => <ErrorNote failure={failure() as Failure} />}
+        </Show>
+        <Button
+          busy={drafts().restoring() === "sending"}
+          onClick={() => drafts().undoDelete()}
+        >
+          Undo
+        </Button>
+        <button
+          type="button"
+          class={styles.dismiss}
+          aria-label="Dismiss"
+          onClick={() => drafts().dismissDeleted()}
+        >
+          ×
+        </button>
+      </div>
     </Show>
   );
 }

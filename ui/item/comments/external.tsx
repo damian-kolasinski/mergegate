@@ -3,8 +3,14 @@ import type { Comment } from "../../api/Comment";
 import type { ExternalComment } from "../../api/ExternalComment";
 import type { OverrideRejection } from "../../api/OverrideRejection";
 import type { Reply } from "../../api/Reply";
-import { postJson } from "../../app/hub";
-import { Badge, Button, ExternalLink, Meta } from "../../design-system";
+import { type Failure, failureOf, postJson } from "../../app/hub";
+import {
+  Badge,
+  Button,
+  ErrorNote,
+  ExternalLink,
+  Meta,
+} from "../../design-system";
 import type { Comments } from "./comments";
 import { Editor, type CommentEditor } from "./editor";
 import type { Replies } from "./replies";
@@ -27,7 +33,7 @@ export function useExternal(options: {
 }) {
   const { editor } = options;
   const [agreeing, setAgreeing] = createSignal<string>();
-  const [failure, setFailure] = createSignal<{ id: string; message: string }>();
+  const [failure, setFailure] = createSignal<{ id: string } & Failure>();
   editor.onReset(() => setFailure(undefined));
   const overrideKey = (comment: string) => `override ${comment}`;
   /**
@@ -48,6 +54,7 @@ export function useExternal(options: {
     );
   };
   return {
+    rejection,
     agreed,
     /** A rejection the operator hasn't settled, while the item is open. */
     canSettle: (comment: Comment) =>
@@ -55,9 +62,9 @@ export function useExternal(options: {
       rejection(comment) !== undefined &&
       !agreed(comment),
     agreeing,
-    failure: (comment: Comment) => {
+    failure: (comment: Comment): Failure | undefined => {
       const failed = failure();
-      return failed?.id === comment.id ? failed.message : undefined;
+      return failed?.id === comment.id ? failed : undefined;
     },
     overriding: (comment: Comment) => editor.isOpen(overrideKey(comment.id)),
     agree(comment: Comment) {
@@ -65,10 +72,7 @@ export function useExternal(options: {
       setFailure(undefined);
       postJson<Comment>(`${urlOf(comment.id)}/agree`, {})
         .then(options.sent.update, (error: unknown) =>
-          setFailure({
-            id: comment.id,
-            message: error instanceof Error ? error.message : String(error),
-          }),
+          setFailure({ id: comment.id, ...failureOf(error) }),
         )
         .finally(() => setAgreeing(undefined));
     },
@@ -93,16 +97,21 @@ export function useExternal(options: {
 export function ExternalMeta(props: { external: ExternalComment }) {
   return (
     <>
-      <Show
-        when={props.external.pending}
-        fallback={<Badge tone="success">Sent</Badge>}
-      >
-        {/* Until the reviewers go quiet, so the agent gets them at once. */}
-        <Badge tone="warning">Held</Badge>
-      </Show>
       <Meta>{props.external.author}</Meta>
       <Show when={props.external.bot}>
         <Badge>Bot</Badge>
+      </Show>
+      <Show
+        when={props.external.pending}
+        fallback={<Badge tone="success">Sent to agent</Badge>}
+      >
+        {/* Until the reviewers go quiet, so the agent gets them at once. */}
+        <Badge
+          tone="warning"
+          title="Held until the reviewers go quiet, so the agent gets them together"
+        >
+          Not sent yet
+        </Badge>
       </Show>
       <ExternalLink href={props.external.url} title="Open on GitHub">
         GitHub
@@ -111,31 +120,47 @@ export function ExternalMeta(props: { external: ExternalComment }) {
   );
 }
 
-/** Agree and Override on the agent's rejection of a comment from GitHub. */
+/** Whether the operator accepted the agent's rejection of the comment. */
 export function RejectionActions(props: {
+  comments: Comments;
+  comment: Comment;
+}) {
+  return (
+    <Show when={props.comments.external.agreed(props.comment)}>
+      <Badge tone="neutral">Rejection accepted</Badge>
+    </Show>
+  );
+}
+
+/**
+ * The operator's say on the agent's rejection, on the rejection itself:
+ * accept it, or override it and send the agent back to the comment.
+ */
+export function SettleRejection(props: {
   comments: Comments;
   comment: Comment;
 }) {
   const external = () => props.comments.external;
   return (
-    <>
-      <Show when={external().agreed(props.comment)}>
-        <Badge tone="neutral">Agreed</Badge>
-      </Show>
-      <Show when={external().canSettle(props.comment)}>
+    <Show when={external().canSettle(props.comment)}>
+      <div class={styles.settle}>
         <span class={styles.actions}>
           <Button
+            busy={external().agreeing() === props.comment.id}
             disabled={external().agreeing() !== undefined}
             onClick={() => external().agree(props.comment)}
           >
-            Agree
+            Accept rejection
           </Button>
           <Button onClick={() => external().override(props.comment)}>
-            Override
+            Override — must fix
           </Button>
         </span>
-      </Show>
-    </>
+        <Meta>
+          Accepting closes it · Override sends your reply to the agent now
+        </Meta>
+      </div>
+    </Show>
   );
 }
 
@@ -155,11 +180,7 @@ export function OverrideEditor(props: {
         />
       </Show>
       <Show when={props.comments.external.failure(props.comment)}>
-        {(message) => (
-          <p role="alert">
-            <Meta tone="removed">{message()}</Meta>
-          </p>
-        )}
+        {(failure) => <ErrorNote failure={failure()} />}
       </Show>
     </>
   );

@@ -1,43 +1,76 @@
 .bar {
   grid-column: 1 / -1;
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-container);
+  background: var(--background-subtle);
 }
 
-.summary {
-  flex: 1;
+/* What went out, what failed, and what's waiting, on a line of their own so
+   a long note never squeezes the summary or pushes the buttons away. */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: 0;
+}
+
+.status:not(:has(> :not(.said:empty))) {
+  display: none;
+}
+
+.said {
+  display: flex;
   min-width: 0;
 }
 
-/* Notes such as the drafts that can't move are long; they wrap onto a row of
-   their own rather than pushing the buttons out of view. */
+.said:empty {
+  display: none;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.summary {
+  flex: 0 1 640px;
+  min-width: 240px;
+}
+
 .actions {
   display: flex;
-  flex: none;
+  flex: 1;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: var(--space-2);
-  max-width: 50%;
-}
-
-/* A hub error can be long; it wraps instead of squeezing the summary. */
-.status {
-  min-width: 0;
-}
-
-.status > * {
-  white-space: normal;
 }
 
 .confirm {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-2) var(--space-3);
   margin: 0;
   padding: 0;
   border: none;
+  animation: var(--motion-arrive);
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: var(--type-p3);
+  color: var(--text-primary);
+}
+
+.question > * {
+  white-space: normal;
 }

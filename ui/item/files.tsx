@@ -1,9 +1,10 @@
 import { For, Show } from "solid-js";
 import type { File } from "../api/File";
 import { rulesHref } from "../app/router";
-import { Meta, Mono, Row } from "../design-system";
+import { CodeText, Meta, Row } from "../design-system";
 import { Counts } from "./counts";
 import styles from "./files.module.css";
+import { describe } from "./why";
 
 /**
  * The files the diff shows beside it, the current one selected: those to
@@ -104,6 +105,9 @@ function FileEntry(props: {
 }) {
   // Counted as viewed without a mark, so there's nothing to tick.
   const trusted = () => props.file.tier === "trusted";
+  const slash = () => props.file.path.lastIndexOf("/");
+  const name = () => props.file.path.slice(slash() + 1);
+  const folder = () => props.file.path.slice(0, Math.max(slash(), 0));
   return (
     <>
       {/* The newest revision doesn't change a dropped file, so it has no
@@ -117,6 +121,7 @@ function FileEntry(props: {
           class={styles.viewed}
           checked={props.viewed || trusted()}
           disabled={trusted()}
+          title={trusted() ? "Trusted files count as viewed" : undefined}
           aria-label={`Viewed ${props.file.path}`}
           // The row would show the file too.
           onClick={(event) => event.stopPropagation()}
@@ -128,34 +133,20 @@ function FileEntry(props: {
         />
       </Show>
       <span class={styles.entry}>
+        {/* The name first, where the eye lands; a deep folder gives up its
+            start rather than the part next to the name. */}
         <span class={styles.path} title={props.file.path}>
-          <Mono>{props.file.path}</Mono>
+          <span class={styles.name}>{name()}</span>
+          <Show when={folder()}>
+            <span class={styles.folder}>
+              <bdi dir="ltr">{folder()}</bdi>
+            </span>
+          </Show>
         </span>
-        <Show when={props.file.reason}>
-          {(reason) => (
-            <span class={styles.why} title={reason()}>
-              <Meta>{reason()}</Meta>
-            </span>
-          )}
-        </Show>
-        <Show when={judged(props.file)}>
-          {(line) => (
-            <span class={styles.why} title={line()}>
-              <Meta>{line()}</Meta>
-            </span>
-          )}
-        </Show>
-        <Show when={props.file.why}>
+        <Show when={describe(props.file)}>
           {(why) => (
             <span class={styles.why} title={why()}>
-              <Meta>{tier(props.file, why())}</Meta>
-            </span>
-          )}
-        </Show>
-        <Show when={hint(props.file)}>
-          {(hint) => (
-            <span class={styles.why} title={hint()}>
-              <Meta>{hint()}</Meta>
+              <CodeText text={why()} />
             </span>
           )}
         </Show>
@@ -167,31 +158,6 @@ function FileEntry(props: {
       />
     </>
   );
-}
-
-/** The judge's score and line, as in "judged 87/100: touches the expiry". */
-function judged(file: File): string | undefined {
-  if (file.importance === null) return undefined;
-  const score = `${file.raised ? "raised by the judge" : "judged"} ${file.importance}/100`;
-  return file.judge_reason ? `${score}: ${file.judge_reason}` : score;
-}
-
-/**
- * The heuristics' hint, only when nothing else says why the file is where it
- * is.
- */
-function hint(file: File): string | null {
-  if (file.reason || file.importance !== null || file.why) return null;
-  return file.hint;
-}
-
-/** Why the file is where it is, as in "trusted by R3: `*.lock` — lockfile". */
-function tier(file: File, why: string): string {
-  if (!file.rule) return `kept in review: ${why}`;
-  if (file.promoted) {
-    return `promoted by the judge; trusted by ${file.rule}: ${why}`;
-  }
-  return `${file.tier === "trusted" ? "trusted" : "reviewed"} by ${file.rule}: ${why}`;
 }
 
 function label(file: File): string | undefined {

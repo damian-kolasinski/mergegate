@@ -1,8 +1,8 @@
 import { createSignal, For, Match, Show, Switch } from "solid-js";
 import type { Blocked } from "../api/Blocked";
 import type { Merge } from "../api/Merge";
-import { deleteJson, postJson } from "../app/hub";
-import { Badge, Button, Meta, Mono } from "../design-system";
+import { deleteJson, type Failure, failureOf, postJson } from "../app/hub";
+import { Badge, Button, ErrorNote, Meta, Mono } from "../design-system";
 import styles from "./merge-blocked.module.css";
 
 /**
@@ -17,46 +17,75 @@ export function MergeBlocked(props: {
   /** The hub moved the item: a retry landed or held again, or a cancel. */
   onChanged: () => void;
 }) {
-  const [sending, setSending] = createSignal(false);
-  const [failure, setFailure] = createSignal<string>();
+  const [sending, setSending] = createSignal<"cancel" | "retry">();
+  const [failure, setFailure] = createSignal<Failure>();
   const path = () => `/api/items/${encodeURIComponent(props.item)}/merge`;
-  const send = (request: Promise<unknown>) => {
-    setSending(true);
+  const send = (kind: "cancel" | "retry") => {
+    setSending(kind);
     setFailure(undefined);
+    const request =
+      kind === "cancel" ? deleteJson(path()) : postJson<Merge>(path(), {});
     request
-      .then(props.onChanged, (error: unknown) =>
-        setFailure(error instanceof Error ? error.message : String(error)),
-      )
-      .finally(() => setSending(false));
+      .then(props.onChanged, (error: unknown) => setFailure(failureOf(error)))
+      .finally(() => setSending(undefined));
   };
-  const cancel = () => send(deleteJson(path()));
-  const retry = () => send(postJson<Merge>(path(), {}));
+  const cancel = () => send("cancel");
+  const retry = () => send("retry");
 
   return (
     <Switch>
       <Match when={props.blocked.kind === "held" && props.blocked}>
-        {(held) => (
-          <section class={styles.notice} aria-label="Merge held">
-            <Badge tone="warning">Merge held</Badge>
-            <Meta>{held().reason}</Meta>
-            <span class={styles.actions}>
-              <Show when={failure()}>
-                {(message) => <Meta tone="removed">{message()}</Meta>}
-              </Show>
-              <Button disabled={sending()} onClick={cancel}>
-                Cancel merge
-              </Button>
-              <Button variant="solid" disabled={sending()} onClick={retry}>
-                Retry merge
-              </Button>
-            </span>
-          </section>
-        )}
+        {(held) => {
+          // The hub says what happened first, then what git said, which is
+          // there for whoever wants it.
+          const reason = () => split(held().reason);
+          return (
+            <section class={styles.notice} aria-label="Merge held">
+              <Badge tone="warning" solid>
+                Merge held
+              </Badge>
+              <span class={styles.reason}>
+                <Meta>{reason().said}</Meta>
+                <Show when={reason().detail}>
+                  {(detail) => (
+                    <details class={styles.details}>
+                      <summary>Details</summary>
+                      <pre>{detail()}</pre>
+                    </details>
+                  )}
+                </Show>
+              </span>
+              <span class={styles.actions}>
+                <Show when={failure()}>
+                  {(failure) => <ErrorNote failure={failure()} />}
+                </Show>
+                <Button
+                  variant="danger"
+                  disabled={sending() !== undefined}
+                  busy={sending() === "cancel"}
+                  onClick={cancel}
+                >
+                  {sending() === "cancel" ? "Cancelling…" : "Cancel merge"}
+                </Button>
+                <Button
+                  variant="solid"
+                  disabled={sending() !== undefined}
+                  busy={sending() === "retry"}
+                  onClick={retry}
+                >
+                  {sending() === "retry" ? "Retrying…" : "Retry merge"}
+                </Button>
+              </span>
+            </section>
+          );
+        }}
       </Match>
       <Match when={props.blocked.kind === "conflict" && props.blocked}>
         {(conflict) => (
           <section class={styles.notice} aria-label="Merge conflict">
-            <Badge tone="warning">Conflict</Badge>
+            <Badge tone="warning" solid>
+              Conflict
+            </Badge>
             <Meta>
               Conflicts with <Mono>{props.target}</Mono> at{" "}
               <Mono>{conflict().target_commit.slice(0, 12)}</Mono> in
@@ -76,4 +105,10 @@ export function MergeBlocked(props: {
       </Match>
     </Switch>
   );
+}
+
+function split(reason: string): { said: string; detail: string | undefined } {
+  const at = reason.indexOf("\n\n");
+  if (at < 0) return { said: reason, detail: undefined };
+  return { said: reason.slice(0, at), detail: reason.slice(at + 2).trim() };
 }

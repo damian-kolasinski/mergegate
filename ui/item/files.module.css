@@ -23,11 +23,47 @@
   min-width: 0;
 }
 
-.path,
-.why {
+.path {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font: var(--type-mono);
+}
+
+.name {
+  flex: none;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Right to left, so the ellipsis eats the folder's start and the part
+   nearest the name stays. */
+.folder {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* Every reason on one line, wrapped to two at most; the title has it all. */
+.why {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font: var(--type-p4);
+  color: var(--text-subtle);
+  overflow-wrap: anywhere;
 }
 
 .group {

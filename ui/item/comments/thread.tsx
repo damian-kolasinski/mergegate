@@ -1,7 +1,7 @@
 import { createMemo, For, Match, Show, Switch } from "solid-js";
 import type { Comment } from "../../api/Comment";
 import type { Spot } from "../../diff-view/diff-view";
-import { Badge, Meta } from "../../design-system";
+import { Badge, ErrorNote, Meta } from "../../design-system";
 import { linesOf, linesOn, sameSpot, spotOf } from "./anchor";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
@@ -104,9 +104,14 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
             fallback={
               <Show
                 when={props.comments.drafts.isDraft(props.comment)}
-                fallback={<Badge tone="success">Sent</Badge>}
+                fallback={<Badge tone="success">Sent to agent</Badge>}
               >
-                <Badge tone="warning">Draft</Badge>
+                <Badge
+                  tone="warning"
+                  title="Not sent yet: it goes out with your review"
+                >
+                  Draft
+                </Badge>
               </Show>
             }
           >
@@ -124,11 +129,7 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
         <ReplyList comments={props.comments} comment={props.comment} />
         <OverrideEditor comments={props.comments} comment={props.comment} />
         <Show when={props.comments.drafts.failure(props.comment)}>
-          {(message) => (
-            <p role="alert">
-              <Meta tone="removed">{message()}</Meta>
-            </p>
-          )}
+          {(failure) => <ErrorNote failure={failure()} />}
         </Show>
       </article>
     </Show>

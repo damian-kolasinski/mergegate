@@ -1,4 +1,7 @@
 .button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
@@ -8,6 +11,9 @@
   letter-spacing: var(--tracking-label);
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast);
 }
 
 .button:hover:enabled {
@@ -25,9 +31,44 @@
   background: var(--background-brand-hover);
 }
 
+.button[data-variant="danger"] {
+  border-color: var(--background-error);
+  background: var(--background-error);
+  color: var(--text-on-fill);
+}
+
+.button[data-variant="danger"]:hover:enabled {
+  border-color: var(--background-error-hover);
+  background: var(--background-error-hover);
+}
+
 .button:disabled {
   border-color: var(--border-inactive);
   background: none;
   color: var(--text-inactive);
   cursor: default;
+}
+
+/* Busy keeps its fill, dimmed, so it reads as working, not forbidden. */
+.button[aria-busy="true"] {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.button[aria-busy="true"][data-variant="solid"] {
+  border-color: var(--background-brand);
+  background: var(--background-brand);
+  color: var(--text-on-fill);
+}
+
+.button[aria-busy="true"][data-variant="danger"] {
+  border-color: var(--background-error);
+  background: var(--background-error);
+  color: var(--text-on-fill);
+}
+
+.key {
+  border-color: currentcolor;
+  color: inherit;
+  opacity: 0.7;
 }

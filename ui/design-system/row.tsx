@@ -20,9 +20,14 @@ export function Row(props: {
       ref={row}
       class={styles.row}
       aria-current={props.selected ? "true" : undefined}
-      onClick={() => {
+      onClick={(event) => {
+        // A link in the row goes where it points, and a modified click
+        // (a new tab, say) stays with the browser.
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
         props.onSelect();
-        props.onOpen();
+        if (!(event.target as Element).closest("a")) props.onOpen();
       }}
     >
       {props.children}

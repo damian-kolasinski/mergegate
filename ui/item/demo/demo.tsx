@@ -1,55 +1,41 @@
-import { createSignal, For, Show } from "solid-js";
-import type { Attachment } from "../../api/Attachment";
+import { createSignal, Show } from "solid-js";
 import type { Demo as DemoData } from "../../api/Demo";
-import { Meta } from "../../design-system";
 import styles from "./demo.module.css";
 import { Viewer } from "./viewer";
 
 /**
- * The screenshots and recordings the agent attached, as a strip under the
- * header, to watch before reading the diff. They may come from an earlier
- * revision when the newest has none, which the strip says.
+ * The screenshots and recordings the agent attached, as a chip in the
+ * header that opens them over the review: the diff keeps its height. They
+ * may come from an earlier revision when the newest has none, which the
+ * chip says.
  */
 export function Demo(props: { demo: DemoData; revision: number }) {
   const [shown, setShown] = createSignal<number>();
-  const thumbs: HTMLButtonElement[] = [];
+  let chip: HTMLButtonElement | undefined;
   const close = () => {
-    const index = shown();
     setShown(undefined);
-    if (index !== undefined) thumbs[index]?.focus();
+    chip?.focus();
   };
+  const older = () => props.demo.revision !== props.revision;
+  const count = () => props.demo.attachments.length;
 
   return (
-    <section class={styles.strip} aria-label="Demo">
-      <span class={styles.label}>Demo</span>
-      <Show when={props.demo.revision !== props.revision}>
-        <Meta>from r{props.demo.revision}</Meta>
-      </Show>
-      <ul class={styles.thumbs}>
-        <For each={props.demo.attachments}>
-          {(attachment, index) => (
-            <li>
-              <button
-                type="button"
-                class={styles.thumb}
-                title={attachment.name}
-                aria-label={`Open ${attachment.name}`}
-                ref={(element) => {
-                  thumbs[index()] = element;
-                }}
-                onClick={() => setShown(index())}
-              >
-                <Preview attachment={attachment} />
-                <Show when={attachment.video}>
-                  <span class={styles.play} aria-hidden="true">
-                    ▶
-                  </span>
-                </Show>
-              </button>
-            </li>
-          )}
-        </For>
-      </ul>
+    <>
+      <button
+        type="button"
+        ref={chip}
+        class={styles.chip}
+        title={`${count()} ${count() === 1 ? "attachment" : "attachments"} from r${props.demo.revision}${older() ? `, not r${props.revision}` : ""}`}
+        onClick={() => setShown(0)}
+      >
+        <span class={styles.play} aria-hidden="true">
+          ▶
+        </span>
+        Demo ({count()})
+        <Show when={older()}>
+          <span class={styles.from}>from r{props.demo.revision}</span>
+        </Show>
+      </button>
       <Show when={shown() !== undefined}>
         <Viewer
           attachments={props.demo.attachments}
@@ -58,31 +44,6 @@ export function Demo(props: { demo: DemoData; revision: number }) {
           onClose={close}
         />
       </Show>
-    </section>
-  );
-}
-
-/** A video's first frame, or the image itself scaled down. */
-function Preview(props: { attachment: Attachment }) {
-  return (
-    <Show
-      when={props.attachment.video}
-      fallback={
-        <img
-          class={styles.media}
-          src={props.attachment.url}
-          alt=""
-          loading="lazy"
-        />
-      }
-    >
-      {/* `#t` makes Safari paint a frame instead of a blank box. */}
-      <video
-        class={styles.media}
-        src={`${props.attachment.url}#t=0.1`}
-        preload="metadata"
-        muted
-      />
-    </Show>
+    </>
   );
 }

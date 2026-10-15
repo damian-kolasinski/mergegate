@@ -1,7 +1,12 @@
+/* In the menu: the button, then what it found under it. */
 .sync {
   display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-2);
-  align-self: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.sync > :not(button) {
+  padding: 0 var(--space-1);
+  white-space: normal;
 }

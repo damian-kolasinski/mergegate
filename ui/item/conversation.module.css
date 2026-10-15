@@ -11,7 +11,8 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
   background: var(--background-page);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+  box-shadow: var(--shadow-popover);
+  animation: var(--motion-pop);
   font: var(--type-p3);
   color: var(--text-primary);
 }
