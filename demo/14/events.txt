@@ -1,0 +1,22 @@
+$ mg events --follow
+[1] app#2 r1: the operator approved
+
+[2] app#2 r1: the operator merged it as 245e18ba3252fab9304e7635c443ad6b2259816f
+
+  Clean up greet as agreed with the operator; by default:
+    git switch --detach
+    git branch -D greet
+
+[3] app#4 r1: merging conflicts with the target at 245e18ba3252
+  README
+
+  Rebase and submit again:
+    git fetch mergegate
+    git rebase mergegate/main
+
+[4] app#1 r1: merging conflicts with the target at 1046eb3ff5b7
+  parser.rs
+
+  Rebase and submit again:
+    git fetch mergegate
+    git rebase mergegate/main
