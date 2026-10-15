@@ -179,7 +179,11 @@ async fn run_command(state: &AppState, wake: &DueWake) {
             return;
         }
     };
-    let spawned = Command::new("sh")
+    let mut command_line = Command::new("sh");
+    for name in agent::SESSION_MARKERS {
+        command_line.env_remove(name);
+    }
+    let spawned = command_line
         .arg("-c")
         .arg(&command)
         .current_dir(worktree)

@@ -431,6 +431,35 @@ fn f12_a_command_judges_from_the_projects_repo() {
 }
 
 #[test]
+fn f12_a_command_runs_outside_the_agent_session_that_started_the_hub() {
+    let jev = FakeJev::start();
+    let mut vars = jev.env();
+    vars.extend([
+        ("CLAUDECODE".into(), "1".into()),
+        ("CLAUDE_CODE_SESSION_ID".into(), "s".into()),
+        ("CLAUDE_CONFIG_DIR".into(), "/claude".into()),
+    ]);
+    let env = Env::new(env!("CARGO_BIN_EXE_mg")).with_vars(vars);
+    let repo = project(&env);
+    let seen = tempfile::tempdir().unwrap();
+    let markers = seen.path().join("markers");
+    let command = format!(
+        "printf '%s %s %s' \"${{CLAUDECODE-unset}}\" \"${{CLAUDE_CODE_SESSION_ID-unset}}\" \
+         \"${{CLAUDE_CONFIG_DIR-unset}}\" > '{}'; printf '{{\"files\": []}}'",
+        markers.display()
+    );
+    env.mg_at(
+        repo.root(),
+        &["--json", "judge", "set", "command", "--command", &command],
+    )
+    .assert_code(0);
+    submit(&env, &repo);
+
+    item_when(&env, |_| markers.exists());
+    assert_eq!(fs::read_to_string(&markers).unwrap(), "unset unset /claude");
+}
+
+#[test]
 fn f12_a_failing_command_is_shown_by_what_it_said() {
     let jev = FakeJev::start();
     let env = env(&jev);

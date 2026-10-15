@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use mergegate_core::agent;
 use mergegate_core::judge::{JudgeError, Request};
 
 /// More output than any verdicts need; past it the command is stopped.
@@ -28,7 +29,11 @@ pub(crate) fn run(
     stop: &AtomicBool,
 ) -> Result<Vec<u8>, JudgeError> {
     let failed = |e: &dyn std::fmt::Display| JudgeError(format!("the judge command: {e}"));
-    let mut child = Command::new("sh")
+    let mut sh = Command::new("sh");
+    for name in agent::SESSION_MARKERS {
+        sh.env_remove(name);
+    }
+    let mut child = sh
         .arg("-c")
         .arg(command)
         .current_dir(dir)
