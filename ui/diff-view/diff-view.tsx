@@ -167,7 +167,9 @@ export function DiffView(props: {
       const preview = file && !collapsed ? previewOf(file) : undefined;
       if (notes.length === 0 && !preview) return undefined;
       const note = document.createElement("span");
-      note.className = "mg-header-note";
+      // Slotted into CodeView's header from this document, so the shadow
+      // root's CSS can't reach it.
+      note.className = styles.note ?? "";
       notes.forEach((text, index) => {
         if (index > 0) note.append(" · ");
         const part = document.createElement("span");
@@ -545,17 +547,12 @@ async function text(url: string): Promise<string> {
 }
 
 // The header's counts read `+3 −1` as everywhere else on the page, and a
-// long reason gives way to the file's name. Lines an expanded gap shows
-// aren't part of the change, and the hub takes no comment on them.
+// long note gives way to the file's name: the metadata shrinks first, by
+// its slotted note, which `styles.note` cuts short. Lines an expanded gap
+// shows aren't part of the change, and the hub takes no comment on them.
 const headerCSS = `
 [data-additions-count] { order: -1; }
 [data-line-type="context-expanded"] [data-gutter-utility-slot] { display: none; }
-.mg-header-note {
-  max-width: 56ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 400;
-  opacity: 0.75;
-}
+[data-metadata] { min-width: 0; flex-shrink: 1000; }
+::slotted([slot="header-metadata"]) { min-width: 0; overflow: hidden; }
 `;
