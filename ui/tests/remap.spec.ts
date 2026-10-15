@@ -4,6 +4,7 @@
 // review until the operator re-places or deletes them.
 
 import type { Page } from "@playwright/test";
+import type { WriteDraft } from "../api/WriteDraft";
 import { expect, test } from "./hub";
 
 type Wait = {
@@ -193,4 +194,70 @@ test("f13 comments follow their lines to the next revision", async ({
       ],
     },
   ]);
+});
+
+test("drafts from another tab that hold the review can be dealt with", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ "README.md": "app\n" });
+  app.submit("work", "Add login", { "login.rs": file(r1) });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const diff = screen.getByRole("region", { name: "Diff" });
+  const review = page.getByRole("form", { name: "Review" });
+  app.revise("Verify passwords", { "login.rs": file(r2) });
+  await screen
+    .getByRole("region", { name: "Newer revision" })
+    .getByRole("button", { name: "Show changes since r1" })
+    .click();
+  await expect(diff.getByText("verify(password);")).toBeVisible();
+
+  // Another tab, still on r1, drafts on lines r2 deleted and changed.
+  for (const [line, body] of [
+    [4, "Log less."],
+    [6, "Rename it."],
+  ] as const) {
+    const draft: WriteDraft = {
+      revision: 1,
+      path: "login.rs",
+      side: "new",
+      start_line: line,
+      line,
+      body,
+    };
+    const answer = await page.request.post(
+      `${hub.url}api/items/app%231/drafts`,
+      { data: draft, headers: { "x-mergegate-client": "ui" } },
+    );
+    expect(answer.ok(), await answer.text()).toBe(true);
+  }
+
+  // The hub holds the review, and this tab picks the drafts up.
+  await review.getByRole("textbox", { name: "Review summary" }).fill("Again.");
+  await review.getByRole("button", { name: "Comment" }).click();
+  await expect(
+    review.getByText("2 drafts can't move to r2: re-place or delete them"),
+  ).toBeVisible();
+
+  // Deleting the draft being re-placed ends the re-placing.
+  const renamed = diff.getByRole("article", { name: "Comment c_2" });
+  await renamed.getByRole("button", { name: "Re-place" }).click();
+  await expect(review.getByText("Pick the lines for c_2")).toBeVisible();
+  await renamed.getByRole("button", { name: "Delete" }).click();
+  await expect(renamed).toHaveCount(0);
+  await expect(review.getByText("Pick the lines")).toHaveCount(0);
+  await expect(
+    review.getByText("1 draft can't move to r2: re-place or delete it"),
+  ).toBeVisible();
+
+  await screen.getByRole("button", { name: /^Conversation/ }).click();
+  await page
+    .getByRole("complementary", { name: "Conversation" })
+    .getByRole("listitem", { name: "c_1" })
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await review.getByRole("button", { name: "Comment" }).click();
+  await expect(review.getByText("Sent to the agent on r2")).toBeVisible();
 });

@@ -108,6 +108,11 @@ export function useComments(
       [...replies.to(comment), ...replyDrafts.to(comment)].sort(
         (a, b) => a.id - b.id,
       ),
+    /**
+     * The hub held a review over drafts that can't move, which another tab
+     * may have written: they're fetched so they can be re-placed or deleted.
+     */
+    held: () => refresh(true),
     /** A review sent every draft the hub had for the item. */
     submitted(review: Review) {
       drafts.submitted(review);

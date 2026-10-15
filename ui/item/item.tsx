@@ -450,6 +450,7 @@ function Review(props: {
           summary={props.summary}
           onSummary={props.onSummary}
           onSubmitted={reviewed}
+          onHeld={comments.held}
           onMerged={props.onMerge}
         />
       </Show>
