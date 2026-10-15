@@ -43,6 +43,9 @@ async fn write(
     state.events.send(UiEvent::ItemChanged {
         item: reply.item.to_string(),
     });
+    // A question or a rejection is the inbox's to count, and may move the
+    // item under Needs you; any other reply may end one.
+    state.events.send(UiEvent::InboxChanged);
     // Written on the item's newest revision, so nothing has addressed it yet.
     let newest = reply.revision;
     Ok((StatusCode::CREATED, Json(to_api(&reply, newest))))

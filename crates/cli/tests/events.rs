@@ -5,7 +5,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-use testkit::{Env, TestRepo};
+use serde_json::{Value, json};
+use testkit::{Env, FakeGithub, GithubNewComment, Reply, TestRepo, http_reply};
 
 fn env() -> Env {
     Env::new(env!("CARGO_BIN_EXE_mg"))
@@ -68,6 +69,116 @@ fn f6_a_submit_tells_open_pages_the_inbox_changed() {
 
     assert_eq!(next_data(&mut first), r#"{"type":"inbox.changed"}"#);
     assert_eq!(next_data(&mut second), r#"{"type":"inbox.changed"}"#);
+}
+
+/// The next two events, which an action that sends both leaves in order.
+/// Highlighting, which the hub does in the background after a submit, may
+/// finish at any time, so its event is skipped.
+fn next_two(reader: &mut BufReader<TcpStream>) -> [String; 2] {
+    let mut next = || loop {
+        let data = next_data(reader);
+        if data != r#"{"type":"highlights.changed"}"# {
+            return data;
+        }
+    };
+    [next(), next()]
+}
+
+fn post(env: &Env, path: &str, body: &Value) -> Reply {
+    let addr = env.hub_addr();
+    let body = body.to_string();
+    let reply = http_reply(
+        &addr,
+        &format!(
+            "POST {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\
+             {}: ui\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+            api::CLIENT_HEADER,
+            body.len(),
+        ),
+    );
+    assert!(reply.status < 300, "{}", reply.body);
+    reply
+}
+
+const CHANGED: [&str; 2] = [
+    r#"{"type":"item.changed","item":"app#1"}"#,
+    r#"{"type":"inbox.changed"}"#,
+];
+
+#[test]
+fn an_agents_question_tells_open_pages_the_inbox_changed() {
+    let env = env();
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    env.mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    env.mg_at(repo.root(), &["--json", "init"]).assert_code(0);
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Login", &[("src/login.rs", "fn login() {}\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    let draft = json!({
+        "revision": 1, "path": "src/login.rs", "side": "new",
+        "start_line": 1, "line": 1, "body": "Check the password.",
+    });
+    post(&env, "/api/items/app%231/drafts", &draft);
+    let review = json!({ "revision": 1, "verdict": "changes_requested", "summary": "" });
+    post(&env, "/api/items/app%231/reviews", &review);
+    let mut page = open(&env);
+
+    // The question moves app#1 under Needs you.
+    let question = ["reply", "c_1", "--status", "question", "--body", "Which?"];
+    env.mg(&question).assert_code(0);
+
+    assert_eq!(next_two(&mut page), CHANGED);
+}
+
+#[test]
+fn agreeing_with_a_rejection_tells_open_pages_the_inbox_changed() {
+    let github = FakeGithub::start();
+    let mut vars = github.env();
+    // Long enough that only `mg sync` brings the comment in.
+    for name in [
+        "MG_GITHUB_POLL_MS",
+        "MG_EXTERNAL_QUIET_MS",
+        "MG_EXTERNAL_CAP_MS",
+    ] {
+        vars.push((name.to_owned(), "600000".to_owned()));
+    }
+    let env = Env::new(env!("CARGO_BIN_EXE_mg")).with_vars(vars);
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    repo.git(["remote", "add", "origin", "git@github.com:acme/app.git"]);
+    github.create_repo("acme/app", repo.root());
+    env.mg_at(
+        repo.root(),
+        &["--json", "project", "add", "--backend", "github"],
+    )
+    .assert_code(0);
+    env.mg_at(repo.root(), &["--json", "init"]).assert_code(0);
+    repo.git(["switch", "--quiet", "-c", "login"]);
+    repo.commit_files("Add login", &[("src/login.rs", "fn login() {}\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    let rename = GithubNewComment::issue("alice", "Rename it.");
+    github.comment("acme/app", 1, rename);
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    let comment = feedback["events"][0]["comments"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let reject = ["reply", &comment, "--status", "rejected", "--body", "No."];
+    env.mg(&reject).assert_code(0);
+    let mut page = open(&env);
+
+    // The rejection no longer waits on the operator.
+    post(&env, &format!("/api/comments/{comment}/agree"), &json!({}));
+
+    assert_eq!(next_two(&mut page), CHANGED);
 }
 
 #[test]
