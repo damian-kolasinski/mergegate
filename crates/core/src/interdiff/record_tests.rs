@@ -37,7 +37,7 @@ fn replays_the_earlier_revision_onto_the_moved_base() {
             ("src/db.rs", Change::Unseparated),
             ("src/lib.rs", Change::Changed),
             ("src/login.rs", Change::Unchanged),
-            ("src/token.rs", Change::Changed),
+            ("src/token.rs", Change::Added),
         ])
     );
     assert_eq!(store.interdiffs_to(&id(), 2).unwrap(), [1]);
@@ -114,7 +114,7 @@ fn an_unmoved_base_diffs_the_heads() {
             ("src/db.rs", Change::Unseparated),
             ("src/lib.rs", Change::Changed),
             ("src/login.rs", Change::Unchanged),
-            ("src/token.rs", Change::Changed),
+            ("src/token.rs", Change::Added),
         ])
     );
 }

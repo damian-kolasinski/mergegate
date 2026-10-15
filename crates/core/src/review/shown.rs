@@ -14,8 +14,8 @@ pub(crate) struct Shown {
     /// The revision's own diff, on either side.
     own: Vec<Hunk>,
     /// On the new side only, every interdiff into the revision that changes
-    /// the file: its new side is the revision's file, so a comment there is
-    /// on the revision as much as one on its own diff.
+    /// or adds the file: its new side is the revision's file, so a comment
+    /// there is on the revision as much as one on its own diff.
     since: Vec<Vec<Hunk>>,
 }
 
@@ -43,7 +43,10 @@ impl Shown {
                 .interdiff(id, from, revision)?
                 .into_iter()
                 .flatten()
-                .find(|f| f.stat.file.path == file.path && f.change == Change::Changed);
+                .find(|f| {
+                    f.stat.file.path == file.path
+                        && matches!(f.change, Change::Changed | Change::Added)
+                });
             let Some(changed) = changed else { continue };
             let file = changed.stat.file;
             let diff = store.diff(file.old_blob.as_deref(), file.new_blob.as_deref())?;

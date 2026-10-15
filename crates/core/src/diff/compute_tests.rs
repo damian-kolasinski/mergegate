@@ -104,6 +104,21 @@ fn a_missing_final_newline_is_a_change() {
 }
 
 #[test]
+fn counts_the_unchanged_lines_after_the_last_hunk() {
+    let after = |old: &str, new: &str| diff(old, new).lines_after;
+    // Three lines of context, and the file ends there or goes on.
+    assert_eq!(after(&numbers(&[]), &numbers(&[(17, "x")])), Some(0));
+    assert_eq!(after(&numbers(&[]), &numbers(&[(16, "x")])), Some(1));
+    assert_eq!(after(&numbers(&[]), &numbers(&[(5, "x")])), Some(12));
+    // A deleted run ends past its last line; an empty side ends where it
+    // starts.
+    assert_eq!(after("a\nb\nc\nd\ne\n", "a\ne\n"), Some(0));
+    assert_eq!(after("x\ny\n", ""), Some(0));
+    assert_eq!(after("", "x\ny\n"), Some(0));
+    assert_eq!(after("a\nb\n", "a\nb\nc\n"), Some(0));
+}
+
+#[test]
 fn identical_blobs_have_no_hunks() {
     assert_eq!(
         diff("a\n", "a\n"),
@@ -111,6 +126,7 @@ fn identical_blobs_have_no_hunks() {
             additions: Some(0),
             deletions: Some(0),
             content: Content::Text(Vec::new()),
+            lines_after: Some(1),
         }
     );
 }
@@ -138,6 +154,7 @@ fn too_many_changed_lines_are_counted_but_not_kept() {
             additions: Some(MAX_CHANGED_LINES + 1),
             deletions: Some(0),
             content: Content::TooLarge,
+            lines_after: None,
         }
     );
     let at_limit: String = (1..=MAX_CHANGED_LINES).map(|n| format!("{n}\n")).collect();

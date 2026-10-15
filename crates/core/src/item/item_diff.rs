@@ -56,6 +56,9 @@ pub struct DiffedFile {
     /// None once the item is abandoned: its diffs were dropped, and its blobs
     /// may be gone too.
     pub content: Option<Content>,
+    /// Unchanged lines after the last hunk, as
+    /// [`FileDiff::lines_after`](crate::diff::FileDiff::lines_after).
+    pub lines_after: Option<u32>,
     /// Marked viewed in the newest revision. A trusted file counts as viewed
     /// without a mark.
     pub viewed: bool,
@@ -147,7 +150,7 @@ pub fn item_diff<
             ItemState::Abandoned => None,
             _ => store
                 .diff(file.old_blob.as_deref(), file.new_blob.as_deref())?
-                .map(|diff| diff.content),
+                .map(|diff| (diff.content, diff.lines_after)),
         });
     }
     let missing: Vec<usize> = (0..stats.len())
@@ -157,7 +160,7 @@ pub fn item_diff<
         let files: Vec<&ChangedFile> = missing.iter().map(|&i| &stats[i].file).collect();
         let diffs = compute_diffs(git, id.project(), &files)?;
         for (&index, diff) in missing.iter().zip(diffs) {
-            contents[index] = Some(diff.content);
+            contents[index] = Some((diff.content, diff.lines_after));
         }
     } else if let Some(&index) = missing.first() {
         let path = &stats[index].file.path;
@@ -177,7 +180,9 @@ pub fn item_diff<
         );
     }
     let (mut review, mut trusted) = (Vec::new(), Vec::new());
-    for ((stat, content), change) in stats.into_iter().zip(contents).zip(changes) {
+    for ((stat, diff), change) in stats.into_iter().zip(contents).zip(changes) {
+        let (content, lines_after) =
+            diff.map_or((None, None), |(content, after)| (Some(content), after));
         let verdict = verdicts.remove(&stat.file.path);
         let mut triage = stat.triage;
         let promoted = triage.tier == Tier::Trusted
@@ -219,6 +224,7 @@ pub fn item_diff<
             additions: stat.additions,
             deletions: stat.deletions,
             content,
+            lines_after,
             change,
         };
         match file.triage.tier {

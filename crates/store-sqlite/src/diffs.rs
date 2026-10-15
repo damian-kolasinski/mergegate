@@ -16,7 +16,7 @@ impl DiffStore for Store {
         let row = self
             .conn
             .prepare_cached(
-                "SELECT kind, additions, deletions, hunks FROM diffs
+                "SELECT kind, additions, deletions, hunks, lines_after FROM diffs
                  WHERE old_blob = ?1 AND new_blob = ?2",
             )
             .map_err(StoreError::new)?
@@ -26,11 +26,12 @@ impl DiffStore for Store {
                     row.get::<_, Option<i64>>(1)?,
                     row.get::<_, Option<i64>>(2)?,
                     row.get::<_, String>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
                 ))
             })
             .optional()
             .map_err(StoreError::new)?;
-        let Some((kind, additions, deletions, hunks)) = row else {
+        let Some((kind, additions, deletions, hunks, lines_after)) = row else {
             return Ok(None);
         };
         let content = match kind.as_str() {
@@ -43,6 +44,7 @@ impl DiffStore for Store {
             additions: additions.map(|n| n as u64),
             deletions: deletions.map(|n| n as u64),
             content,
+            lines_after: lines_after.map(|n| n as u32),
         }))
     }
 
@@ -59,8 +61,9 @@ impl DiffStore for Store {
         };
         self.conn
             .prepare_cached(
-                "INSERT OR REPLACE INTO diffs (old_blob, new_blob, kind, additions, deletions, hunks)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT OR REPLACE INTO diffs
+                     (old_blob, new_blob, kind, additions, deletions, hunks, lines_after)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )
             .map_err(StoreError::new)?
             .execute(params![
@@ -70,6 +73,7 @@ impl DiffStore for Store {
                 diff.additions.map(|n| n as i64),
                 diff.deletions.map(|n| n as i64),
                 hunks,
+                diff.lines_after,
             ])
             .map_err(StoreError::new)?;
         Ok(())

@@ -107,3 +107,24 @@ test("f7 the inbox counts what changed since the review", async ({
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Compare")).toHaveValue("1");
 });
+
+test("f7 a file new since the review says so", async ({ page, hub }) => {
+  const app = hub.project("app");
+  app.seed({ "src/lib.rs": "lib\n" });
+  app.submit("login", "Add login", { "src/lib.rs": "lib\nmod login;\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  await requestChanges(page);
+  app.revise("Add tokens", { "src/token.rs": "fn token() {}\n" });
+
+  const screen = page.getByRole("region", { name: "app#1" });
+  const banner = screen.getByRole("region", { name: "Newer revision" });
+  await banner.getByRole("button", { name: "Show changes since r1" }).click();
+  const files = screen.getByRole("navigation", { name: "Files" });
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^token\.rs\s*src.*added/,
+  ]);
+  const diff = screen.getByRole("region", { name: "Diff" });
+  await expect(
+    diff.getByText("Added since the earlier revision"),
+  ).toBeVisible();
+});
