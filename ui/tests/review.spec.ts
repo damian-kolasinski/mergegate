@@ -3,6 +3,7 @@
 
 import { chmodSync, mkdirSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { ItemDiff } from "../api/ItemDiff";
 import { expect, git, type Hub, test } from "./hub";
 import { clickToFrame, pressToFrame, report } from "./timing";
 
@@ -315,6 +316,25 @@ const jsonPack = resolve(
   "../../crates/highlight/tests/fixtures/json-0.24.8.tar.gz",
 );
 
+/**
+ * Waits for the hub's spans on every file of item `id`. It highlights in
+ * the background after a submit, and opening a file before then would time
+ * that pass, not the open.
+ */
+async function highlighted(hub: Hub, id: string) {
+  const route = `${hub.url}api/items/${encodeURIComponent(id)}`;
+  await expect
+    .poll(async () => {
+      const diff = (await (await fetch(route)).json()) as ItemDiff;
+      return diff.files.every(
+        (file) =>
+          file.content.kind === "text" &&
+          file.content.hunks.some((hunk) => hunk.spans.some((s) => s.length)),
+      );
+    })
+    .toBe(true);
+}
+
 /** A JSON object of `count` entries, one a line after the opening brace. */
 const json = (count: number, entry: (n: number) => string) =>
   `{\n${lines(count, entry)}  "end": 0\n}\n`;
@@ -333,15 +353,17 @@ test("a single large file opens within budget", async ({ page, hub }, info) => {
       "big.json": json(size, (n) => `  "new_${item}_${n}": ${n},`),
     });
   }
+  for (let item = 1; item <= items; item++)
+    await highlighted(hub, `big#${item}`);
   await page.goto(hub.url);
   const inbox = page.getByRole("region", { name: "Needs you" });
   await expect(inbox.getByRole("listitem")).toHaveCount(items);
 
   // Timed to the hub's spans painted, not to a plain render before them.
-  const highlighted = { selector: "[data-tok]", read: "found" } as const;
+  const painted = { selector: "[data-tok]", read: "found" } as const;
   const opened: number[] = [];
   for (let item = 0; item < items; item++) {
-    opened.push(await pressToFrame(page, "Enter", highlighted));
+    opened.push(await pressToFrame(page, "Enter", painted));
     await page.keyboard.press("Escape");
     await expect(inbox).toBeVisible();
     await page.keyboard.press("j");
@@ -368,6 +390,7 @@ test("a gap expands within budget", async ({ page, hub }, info) => {
   const app = hub.project("app");
   app.seed(files);
   app.submit("gaps", "Change two entries a file", changed);
+  await highlighted(hub, "app#1");
   await page.goto(`${hub.url}#/items/app%231`);
   await expect(page.locator("[data-tok]").first()).toBeVisible();
 
