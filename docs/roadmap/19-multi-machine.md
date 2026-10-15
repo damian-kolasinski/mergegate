@@ -23,7 +23,7 @@ Agents on other machines of the operator's tailnet submit to the hub and get the
 
 - `core`: `device` (identity, access, the trust rule, `DeviceStore` and the `Tailnet` port), the `listen` setting.
 - New adapter crate `tailscale` (tech-stack's `auth-tailscale` and `auth-token` become this one).
-- `store-sqlite`: `0008_devices.sql`, `devices.rs`.
+- `store-sqlite`: `0011_devices.sql`, `devices.rs`.
 - `api::device`, `api::settings` gains `listen`; `hub`: `tailnet` (listener and guard), `devices` routes, `whoami`; `guard`, `items` (wake), `doctor` and `settings` touched.
 - `cli`: `connect_cmd`, `hub_cmd/devices`, `client` and `probe` read `connect.json`; skill reference for setup.
 - `testkit`: `FakeTailscale`.
