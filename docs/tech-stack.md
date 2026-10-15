@@ -33,7 +33,7 @@ The principle behind most choices below: **precompute at submit time, display at
 | Git writes | `git` ≥ 2.40 subprocess | `http-backend` (receive), `merge-tree --write-tree`, `check-attr --source`, push upstream, `updateInstead`. Run with a sanitized environment (§5). |
 | GitHub | ureq (blocking, rustls) with typed endpoints, ETag-conditional polling | Token from `gh auth token`, in memory only; git gets it as an `http.<url>.extraheader` through `GIT_CONFIG_*` variables. No octocrab, no tokio in the adapter: the hub calls it from `spawn_blocking`, as it does git. `MG_GITHUB_API_URL` and `MG_GITHUB_URL` point it elsewhere, for the fake; `MG_GITHUB_POLL_MS`, `MG_EXTERNAL_QUIET_MS` and `MG_EXTERNAL_CAP_MS` shorten the comment poll and batching for tests. |
 | Highlighting | tree-sitter, grammars loaded as WASM at runtime | See §6. |
-| Tailscale | LocalAPI `whois` (or `tailscale whois --json`), cached per peer | No Go client library in Rust; the macOS app exposes the LocalAPI differently from Linux, so this is an adapter with per-platform discovery. |
+| Tailscale | The `tailscale` CLI: `status --json` and `whois --json`, each peer's answer cached | No Go client library in Rust, and the macOS app exposes the LocalAPI differently from Linux; the CLI answers the same on both, in about 25 ms. Found on `PATH`, else inside the Mac app. |
 | UI | SolidJS + TypeScript, esbuild with `esbuild-plugin-solid`, pnpm; embedded in the binary | Fine-grained reactivity, no virtual DOM, ~7 KB runtime. The hub's `build.rs` builds it, so a plain `cargo build` yields a binary with the UI; without pnpm it embeds a stub page that `mg doctor` reports, and `MG_REQUIRE_UI=1` makes that an error. ESLint with `eslint-plugin-solid` lints, Biome only formats. |
 | Diff view | `@pierre/diffs` `CodeView` (Apache-2.0), wrapped in `ui/diff-view/` | Variable-height virtualization, scroll anchoring, sticky file headers, line selection, expandable context, annotation slots for comments. It's fed the hunks the hub computed, so it shows exactly the lines comments anchor to, and the hub's spans paint them (§6); `ui/build.mjs` leaves Shiki's grammars and themes out. Its rows use inline styles, so the hub's CSP allows them. Cmd+F can't find lines scrolled out of view. |
 | UI styling | Own design tokens (CSS custom properties) + small primitive set | No Tailwind, no component library. Tokens are copied by hand from the Academy Figma; features use only its semantic names. DM Sans, self-hosted. |
@@ -54,7 +54,7 @@ crates/
   rules-toml/            RulesFile port impl: reads and writes the operator's rules.toml
   highlight/             tree-sitter + WASM grammar loader + language manager
   judge-anthropic/  judge-openai/  judge-command/  judge-jev/
-  auth-tailscale/  auth-token/
+  tailscale/             Tailnet port impl: the tailscale CLI
   hub/                   axum server, scheduler, wake runner; composition root of the daemon
   cli/                   mg commands
   skill/                 SKILL.md + references, embedded
@@ -140,7 +140,7 @@ mg lang remove <name>
 | Inbox prioritization | Explicit priority → conflict pressure and stacked children → age → optional judge | `ItemRanker` |
 | Judge | Provider for both rankers | `Judge` |
 | Events & delivery | Event log, cursors, debounce, long-poll, `--wake` | in `hub` |
-| Identity & transport | Listen modes, Tailscale whois, tokens | `Auth` |
+| Identity & transport | Listen modes, Tailscale whois, device trust, `mg connect` | `Tailnet`, `DeviceStore` |
 | Highlighting | Language packs, tokenization, cache | `Highlighter` |
 | Store | Schema, migrations, attachments | `Store` |
 | Design system | Tokens, primitives | `ui/design-system` |
@@ -176,12 +176,12 @@ The UI also prefetches the next item and next file, and updates optimistically (
 - Real git repos in temp dirs for git, diff, merge and anchoring tests.
 - Golden files for diffs, interdiffs, highlighting spans and triage output.
 - A stateful fake GitHub server for the backend (`testkit::FakeGithub`, REST, git over HTTP and a fake `gh`; also the `fake-github` binary for the browser tests); an optional contract test checks it against the real API.
+- A fake `tailscale` CLI (`testkit::FakeTailscale`) answering `status` and `whois` from JSON the test writes. `MG_TAILNET_ADDR` puts the hub's tailnet listener on another loopback port, so one machine plays both the hub and a worker.
 - Playwright end-to-end tests against a real hub, with state created through `mg` commands rather than a prepared database. Chromium only: the operator uses Chrome and Arc.
 - Benchmarks for every budget in §9; a regression fails the build.
 
 ## 11. Open questions
 
-- Per-platform Tailscale LocalAPI discovery on macOS: decide between the LocalAPI and the `tailscale` CLI after a spike.
 - A contract test running `backend-github`'s calls against a scratch repository on real GitHub, opt-in, so the fake can't drift from what GitHub answers.
 - The hub holds its store lock across GitHub calls in a submit, merge or abandon, so one slow GitHub call stalls every other request for up to the 30 s timeout. Release the lock around them once that shows up in daily use.
 - Staging mirrors one target ref per project, from whichever upstream the backend uses; switching backends re-syncs it from the new upstream, so a `local` item and a `github` item open at once diff against the same target.

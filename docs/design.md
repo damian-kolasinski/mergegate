@@ -94,12 +94,14 @@ Principles
 
 ### Multi-machine & security
 
-- By default the hub listens on `127.0.0.1` only. `mg hub set listen tailnet` also binds it to the Tailscale interface.
-- **Tailscale identity instead of tokens.** For each tailnet connection, the hub asks the local Tailscale daemon who is calling (`whois`). Devices owned by the same Tailscale user as the hub are trusted automatically. Other devices need `mg hub allow <device>`. There's nothing to copy between machines, so an agent can connect a worker end to end (F2).
-- Fallback for networks without Tailscale: `mg hub token create` on the hub, `mg connect <url> --token T` on the worker.
+- By default the hub listens on `127.0.0.1` only. `mg hub set listen tailnet` also binds it to its Tailscale IPv4 on the same port, at once, and answers with the URL a worker connects to, `http://<MagicDNS short name>:<port>`. A hub started before Tailscale is up keeps retrying, and `mg doctor` says why it isn't listening. The Host guard on that listener accepts only the hub's short name, full MagicDNS name and tailnet addresses, so DNS rebinding stays shut.
+- **Tailscale is the only way in from another machine.** There are no tokens and no listening beyond loopback and the tailnet. For each tailnet connection, the hub asks Tailscale who is calling (`whois`). Devices owned by the same Tailscale user as the hub are trusted automatically. Other devices, tagged ones included, need `mg hub allow <device>`, and `mg hub deny <device>` shuts out any device, the operator's own too. Decisions are kept by the device's stable ID, so a rename keeps them. There's nothing to copy between machines, so an agent can connect a worker end to end (F2).
+- **A device the hub refuses gets an error, not a decision.** It names the device and its owner and hints `mg hub allow <device>` on the hub, and `mg hub devices` lists the device as asked. A worker can't answer a `needs_decision` that would let itself in.
+- **A trusted device reaches everything a loopback caller does,** the UI included, so the operator can review from a laptop. Whether a request is remote is decided by the listener it arrived on, never by anything the client sends.
+- `mg connect <hub>` checks that the hub lets this device in, then writes `connect.json` in `MERGEGATE_HOME`, which wins over `hub.json`; nothing is written when it is refused. `mg connect --local` goes back to the hub on the machine. `mg hub start | stop | status` always mean the local hub, and status names the connection.
 - `mg wait` connections are resumable via an event cursor, so a dropped connection never loses feedback.
 - **The hub signs in to GitHub as the operator's `gh` does.** It runs `gh auth token --hostname github.com` and keeps the token in memory only, never on disk or in logs, reading it again after GitHub turns it down. Git gets it as an HTTP header through the environment, scoped to the repository's URL, so it never shows in the process list or reaches another remote. A logged-out `gh` is an error whose fix is `gh auth login`. Only github.com is supported.
-- Only a worker on the hub's machine may set `mg submit --wake`: the hub runs whatever command it is given. The hub decides by the connection, not by anything the client sends: a `--wake` that arrives over the tailnet or with a token is refused with an error, so the agent knows to wait with `mg wait` instead. Since a wake runs in the worktree of the item's latest submit, a submit from another machine clears the item's wake, so a remote worker can't choose the directory a trusted command starts in.
+- Only a worker on the hub's machine may set `mg submit --wake`: the hub runs whatever command it is given. The hub decides by the connection, not by anything the client sends: a `--wake` that arrives over the tailnet, even an empty one, is refused with an error before anything is recorded, so the agent knows to wait with `mg wait` instead. Since a wake runs in the worktree of the item's latest submit, a submit from another machine clears the item's wake, so a remote worker can't choose the directory a trusted command starts in.
 
 ## 5. Item lifecycle
 
@@ -159,7 +161,6 @@ mg hub start [--foreground] [--port N] | stop | status  start installs a user se
 mg hub set listen local|tailnet
 mg hub set attachment-ttl <duration>                     How long a closed item keeps its demos (default 2d)
 mg hub devices | allow <device> | deny <device>         Tailscale devices allowed to connect
-mg hub token create                                      Fallback auth for non-Tailscale networks
 
 mg project add [PATH] [--name NAME] [--backend github|local] [--github OWNER/REPO]
                [--target BRANCH] [--languages LIST|none]  PATH in a linked worktree registers its main repo
@@ -170,7 +171,7 @@ mg lang list [--available]                               Syntax highlighting lan
 mg lang add <name>... | --detect [<project>] | --from PATH
 mg lang remove <name> | update
 
-mg connect <hub>                                         On a worker: point the CLI at a hub
+mg connect <hub> | --local                               On a worker: point the CLI at a hub, or back
 mg init                                                  In any clone: add the `mergegate` remote
 mg doctor                                                Check hub, service, auth, language packs, skill, remote, GitHub access
 mg skill install [--dir PATH]                            Write the agent skill and print where (§11)
@@ -485,7 +486,7 @@ Core rules in `SKILL.md`: never `git push` or `gh pr create`; use `mg submit` wi
 | 5 | Mirror agent replies to GitHub | No. Shown in mergegate only, for bot and human external comments alike. |
 | 6 | Who sets priority | Both: the authoring agent at submit (from the operator agent's brief); the operator agent or operator updates it via `mg prioritize` / UI. |
 | 7 | Who runs setup | The operator's agent, end to end. Commands never prompt; decisions come back as `needs_decision` for the agent to ask. Every setting can be changed later. |
-| 8 | Worker auth | Tailscale identity: same-owner devices trusted automatically, others via `mg hub allow`. Tokens only as a fallback. |
+| 8 | Worker auth | Tailscale identity: same-owner devices trusted automatically, others via `mg hub allow`. No tokens: every machine is on the operator's tailnet. |
 | 9 | Agent integration | One generic skill. Each agent waits with its best native mechanism, chosen by capability. |
 | 10 | File groups | Two: `review` (ordered by importance) and `trusted` (hidden, rules only). No skim tier. |
 | 11 | Merge strategy | Squash, on both backends: one commit per item, authored by the operator (§4). |

@@ -287,11 +287,14 @@ sequenceDiagram
   Hub->>Hub: Tailscale whois, who is calling?
   alt same Tailscale owner as the hub
     Hub-->>W: trusted
-  else another owner
-    Hub-->>OA: needs_decision, allow worker-2?
+  else another owner, or a tagged device
+    Hub-->>W: device_not_allowed, on the hub: mg hub allow worker-2
+    W-->>OA: refused
     OA->>Op: allow worker-2 owned by another account?
     Op-->>OA: yes
     OA->>Hub: mg hub allow worker-2
+    OA->>W: mg connect main
+    Hub-->>W: allowed
   end
   OA->>W: mg init in each clone, adds remote mergegate
   OA->>W: mg doctor
@@ -302,7 +305,8 @@ sequenceDiagram
           <li>No tokens to copy. The hub identifies callers through Tailscale, so one agent can do both halves.</li>
           <li>If your agent can't reach the worker over SSH, an agent on the worker runs the worker half with the same commands.</li>
           <li>Workers only run the CLI. They need no daemon and no GitHub credentials.</li>
-          <li>Without Tailscale, <code>mg hub token create</code> and <code>mg connect --token</code> are the fallback.</li>
+          <li>Tailscale is the only way in: every machine is on your tailnet. <code>mg hub devices</code> shows who may connect, and <code>mg hub deny</code> shuts out any device, your own too.</li>
+          <li>A worker reaches everything you do, the UI included, except <code>mg submit --wake</code>: a wake command runs on the hub's machine, so remote agents wait with <code>mg wait</code>.</li>
         </ul>
       </section>
 
