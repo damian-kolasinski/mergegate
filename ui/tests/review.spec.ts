@@ -85,7 +85,7 @@ test("f6 j, k, ] and [ move the line cursor", async ({ page, hub }) => {
   await page.goto(`${hub.url}#/items/app%231`);
 
   // The line's content cell; its gutter carries the mark too.
-  const cursor = page.locator("[data-line][data-selected-line]");
+  const cursor = page.locator("[data-line][data-editor-active-line]");
   await expect(page.getByText("changed 10", { exact: true })).toBeVisible();
   await expect(cursor).toHaveCount(0);
   await page.keyboard.press("j");
@@ -134,7 +134,7 @@ test("f6 j walks a realigned change in the order it shows", async ({
   await page.goto(`${hub.url}#/items/app%231`);
   await expect(page.getByText("foo(1, 3)", { exact: true })).toBeVisible();
 
-  const cursor = page.locator("[data-line][data-selected-line]");
+  const cursor = page.locator("[data-line][data-editor-active-line]");
   for (const text of ["keep", "bar", "baz", "foo(1, 2)", "foo(1, 3)"]) {
     await page.keyboard.press("j");
     await expect(cursor).toHaveText(text);
@@ -204,7 +204,7 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(screen.getByText("1 of 4 reviewed")).toBeVisible();
   // Collapsed to its header, and out of the cursor's way.
   await expect(changed).toHaveCount(0);
-  const cursor = page.locator("[data-line][data-selected-line]");
+  const cursor = page.locator("[data-line][data-editor-active-line]");
   await expect(cursor).toHaveText("bye");
   await page.keyboard.press("k");
   await expect(cursor).toHaveText("bye");
@@ -366,7 +366,7 @@ test("a large item opens and answers keys within budget", async ({
       selector: '[aria-label="Files"] li[aria-current="true"]',
       read: "text",
     },
-    j: { selector: "[data-line][data-selected-line]", read: "text" },
+    j: { selector: "[data-line][data-editor-active-line]", read: "text" },
     v: { selector: '[aria-label="Files"] input:checked', read: "count" },
   } as const;
   const keys = { n: [] as number[], j: [] as number[], v: [] as number[] };

@@ -57,7 +57,7 @@ const file = (lines: string[]) => `${lines.join("\n")}\n`;
 
 /** Walks the keyboard cursor to the line with this text in `shown`. */
 async function cursorTo(page: Page, shown: string[], text: string) {
-  const cursor = page.locator("[data-line][data-selected-line]");
+  const cursor = page.locator("[data-line][data-editor-active-line]");
   if (!(await cursor.count())) await page.keyboard.press("j");
   const from = shown.indexOf((await cursor.innerText()).trim());
   const to = shown.indexOf(text);

@@ -3,6 +3,7 @@ import {
   type CodeViewDiffItem,
   type CodeViewOptions,
   type DiffLineAnnotation,
+  type FileDiff,
 } from "@pierre/diffs";
 import {
   createEffect,
@@ -55,6 +56,8 @@ export type Span = Spot & { start: number };
 /** Where under a line a note sits; one per line, for `note` to fill. */
 type Note = DiffLineAnnotation<string>;
 
+type Drawn = Pick<FileDiff<string>, "setEditorActiveLine">;
+
 /**
  * Every file of a change in one scrolling column, virtualized by CodeView,
  * which owns the element's scrolling.
@@ -104,9 +107,8 @@ export function DiffView(props: {
     unsafeCSS: `${highlightCSS}\n${headerCSS}`,
     enableLineSelection: true,
     enableGutterUtility: untrack(() => props.commentable),
-    // CodeView pins `+` to the selected lines while there are some, so with
-    // the keyboard cursor in a file `+` comments on the cursor's line, as
-    // `c` does; elsewhere it follows the pointer.
+    // `+` follows the pointer, except that CodeView pins it to the end of a
+    // dragged range.
     onGutterUtilityClick: (range, context) => {
       const side = range.endSide ?? range.side;
       if (!side) return;
@@ -167,7 +169,9 @@ export function DiffView(props: {
       const preview = file && !collapsed ? previewOf(file) : undefined;
       if (notes.length === 0 && !preview) return undefined;
       const note = document.createElement("span");
-      note.className = "mg-header-note";
+      // Slotted into CodeView's header from this document, so the shadow
+      // root's CSS can't reach it.
+      note.className = styles.note ?? "";
       notes.forEach((text, index) => {
         if (index > 0) note.append(" · ");
         const part = document.createElement("span");
@@ -202,6 +206,26 @@ export function DiffView(props: {
         line: selection.range.end,
         hunkStart: false,
       });
+    },
+    // A clicked line is the cursor's, not a selection that would pin `+`.
+    onLineSelected: (range) => {
+      const single =
+        range?.start === range?.end &&
+        (range?.endSide ?? range?.side) === range?.side;
+      if (range && single) view.clearSelectedLines({ notify: false });
+    },
+    onPostRender: (_node, instance, phase, context) => {
+      const path = context.item.id;
+      if (phase === "unmount") {
+        if (drawn.get(path) === instance) drawn.delete(path);
+        return;
+      }
+      // CodeView can hand a file's instance on to another file.
+      for (const [other, shown] of drawn) {
+        if (shown === instance) drawn.delete(other);
+      }
+      drawn.set(path, instance);
+      draw(path);
     },
   };
   const view = new CodeView<string>(options);
@@ -366,12 +390,16 @@ export function DiffView(props: {
         view.scrollTo({ type: "item", id: path, behavior: "instant" });
       },
       showRow: (row) => {
+        moveTo(row.path);
         selectRow(row);
         showLine(row);
       },
       selectRow,
       showLine,
-      clearRow: () => view.clearSelectedLines(),
+      clearRow: () => {
+        view.clearSelectedLines({ notify: false });
+        setCursor(undefined);
+      },
     });
   });
 
@@ -399,15 +427,45 @@ export function DiffView(props: {
     return start < top + view.getHeight() && end > top;
   };
 
+  // The cursor's line, drawn as each file's active line rather than as a
+  // selection, which would pin `+` to it away from the pointer.
+  let cursor: Spot | undefined;
+  // The instance showing each file on the page, to draw the cursor in.
+  const drawn = new Map<string, Drawn>();
+  const draw = (path: string) => {
+    const instance = drawn.get(path);
+    const file = byPath.get(path);
+    // Another revision can drop the cursor's line, and CodeView throws on a
+    // line its diff doesn't have.
+    if (
+      cursor?.path === path &&
+      file &&
+      shows(file, { ...cursor, start: cursor.line })
+    ) {
+      instance?.setEditorActiveLine(cursor.line, { side: cursor.side });
+    } else instance?.setEditorActiveLine(null);
+  };
+  const setCursor = (spot: Spot | undefined) => {
+    const was = cursor?.path;
+    cursor = spot;
+    if (was !== undefined && was !== spot?.path) draw(was);
+    if (spot) draw(spot.path);
+  };
+
   const selectRow = (row: Row) => {
-    moveTo(row.path);
-    const range = {
-      start: row.line,
-      end: row.line,
-      side: row.side,
-      endSide: row.side,
-    };
-    view.setSelectedLines({ id: row.path, range });
+    // A dragged range stays while the cursor is on its end, where a click
+    // left it; a move takes the cursor, and `+`, off it.
+    const selected = view.getSelectedLines();
+    const range = selected?.range;
+    if (
+      range &&
+      (selected.id !== row.path ||
+        range.end !== row.line ||
+        (range.endSide ?? range.side) !== row.side)
+    ) {
+      view.clearSelectedLines({ notify: false });
+    }
+    setCursor(row);
   };
 
   const showLine = (spot: Spot) =>
@@ -555,17 +613,24 @@ async function text(url: string): Promise<string> {
 }
 
 // The header's counts read `+3 −1` as everywhere else on the page, and a
-// long reason gives way to the file's name. Lines an expanded gap shows
-// aren't part of the change, and the hub takes no comment on them.
+// long note gives way to the file's name: the metadata shrinks first, by
+// its slotted note, which `styles.note` cuts short. Lines an expanded gap
+// shows aren't part of the change, and the hub takes no comment on them.
+// The cursor's line, CodeView's active line, which it marks only by its
+// number's colour, takes a selected line's tint.
 const headerCSS = `
 [data-additions-count] { order: -1; }
 [data-line-type="context-expanded"] [data-gutter-utility-slot] { display: none; }
-.mg-header-note {
-  max-width: 56ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 400;
-  opacity: 0.75;
+[data-metadata] { min-width: 0; flex-shrink: 1000; }
+::slotted([slot="header-metadata"]) { min-width: 0; overflow: hidden; }
+[data-line][data-editor-active-line] {
+  --mix-selection-light: 82%;
+  --mix-selection-dark: 75%;
+}
+:is([data-line], [data-column-number])[data-editor-active-line] {
+  --diffs-computed-selected-line-bg: light-dark(
+    color-mix(in lab, var(--diffs-computed-diff-line-bg) var(--mix-selection-light), var(--diffs-selection-mix-target)),
+    color-mix(in lab, var(--diffs-computed-diff-line-bg) var(--mix-selection-dark), var(--diffs-selection-mix-target))
+  );
 }
 `;

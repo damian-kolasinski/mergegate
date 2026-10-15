@@ -16,3 +16,15 @@
   --diffs-addition-color-override: var(--text-added);
   --diffs-deletion-color-override: var(--text-removed);
 }
+
+/* A file header's note, on one line however long the guide's reason. */
+.note {
+  display: block;
+  min-width: 0;
+  max-width: 56ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  opacity: 0.75;
+}

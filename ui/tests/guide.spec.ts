@@ -59,6 +59,43 @@ test("f11 the guide is the intent and orders the review", async ({
   await expect(intent).toBeHidden();
 });
 
+test("f11 a long reason gives way to the file's name in its header", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("parser", "Split out the parser", {
+    "src/parser.rs": "fn parse() {}\n",
+  });
+  const guide = join(hub.root, "guide.md");
+  const reason = `${"the new parser, ".repeat(20)}start here`;
+  writeFileSync(
+    guide,
+    `Splits parsing out.\n\n## Files\n\n- \`src/parser.rs\` — ${reason}\n`,
+  );
+  hub.mg(["submit", "--guide", guide], app.dir);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const header = page.locator("[data-diffs-header]").first();
+  const title = header.locator("[data-title]");
+  await expect(title).toHaveText("src/parser.rs");
+  // Whole, and the note cut short inside the header rather than past it.
+  expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  // Slotted into the header from the page, so not inside its shadow root.
+  const note = page.locator('[slot="header-metadata"] > span').first();
+  await expect(note).toContainText(reason);
+  const box = await header.boundingBox();
+  const noteBox = await note.boundingBox();
+  expect(box && noteBox && noteBox.x + noteBox.width <= box.x + box.width).toBe(
+    true,
+  );
+  expect(await note.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+    true,
+  );
+});
+
 test("f11 without a guide there is no intent", async ({ page, hub }) => {
   const app = hub.project("app");
   app.submit("copy", "Fix the copy", { "README.md": "# app\n" });
