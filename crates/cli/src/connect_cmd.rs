@@ -83,9 +83,23 @@ fn url(hub: &str) -> Result<String, CliError> {
         None if address.contains(':') => address.to_owned(),
         None => format!("{address}:{port}"),
     };
-    if let Some((_, port)) = address.rsplit_once(':')
-        && port.parse::<u16>().is_err()
-    {
+    // Every form above ends in a port.
+    let (host, port) = address.rsplit_once(':').unwrap_or((&address, ""));
+    // Left to the request, a malformed host would read as a hub that's
+    // unreachable, which is worth retrying; it never is.
+    let name = match host.strip_prefix('[') {
+        Some(bracketed) => bracketed.strip_suffix(']'),
+        None => Some(host),
+    };
+    let valid_host = name.is_some_and(|name| {
+        !name.is_empty()
+            && !name.contains(['[', ']'])
+            && !name.chars().any(|c| c.is_whitespace() || c.is_control())
+    });
+    if !valid_host {
+        return Err(invalid("isn't a host, host:port or hub URL"));
+    }
+    if port.parse::<u16>().is_err() {
         return Err(invalid("has no valid port"));
     }
     Ok(format!("http://{address}"))
