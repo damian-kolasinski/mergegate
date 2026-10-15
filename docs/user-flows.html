@@ -766,7 +766,6 @@ flowchart TD
   A -->|"Work no longer needed"| H["mg abandon --reason, or Abandon in the UI"]
   H --> I["Item closed, PR closed on GitHub"]
   I --> J["mg wait exits with code 3"]
-  A -->|"Your harness should start an agent"| K["Hub hook on_event runs your command"]
         </pre></div>
         <ul class="rules">
           <li>How an agent waits, and what it costs, is covered in F3.</li>

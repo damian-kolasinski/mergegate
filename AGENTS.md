@@ -6,7 +6,7 @@ Commits and PRs carry only the operator's authorship: no AI co-author trailers, 
 
 ## Stage
 
-mergegate is pre-release until roadmap row 18a (cargo-dist releases) lands. Until then it runs only on the operator's machine and the agent worktrees on it, all of which have Rust, Node and pnpm. Optimize for the dev loop and review cost, not for installs without that toolchain, packaging crates, or other machines' setups. Before PR 9 the database can be reset freely; from PR 9 on, migrations only move forward (see `docs/roadmap.md`).
+mergegate is pre-release until roadmap row 18 (cargo-dist releases) lands. Until then it runs only on the operator's machine and the agent worktrees on it, all of which have Rust, Node and pnpm. Optimize for the dev loop and review cost, not for installs without that toolchain, packaging crates, or other machines' setups. Before PR 9 the database can be reset freely; from PR 9 on, migrations only move forward (see `docs/roadmap.md`).
 
 ## Working
 

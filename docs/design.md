@@ -37,6 +37,7 @@ Non-goals (v1)
 - Multi-repo inbox UX (but the data model is multi-project from day one).
 - CI integration and "merge when green". CI status may be displayed if present, but nothing waits on it.
 - Posting anything back to GitHub other than branches, PRs, and merges.
+- Hub-wide hooks that run commands on events. Harnesses follow `mg events --follow` instead (§6.4).
 
 ## 3. Concepts
 
@@ -267,15 +268,9 @@ Event types: `review.submitted`, `external.comments` (each comment carries `exte
 
 External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. Deleted comments are ignored, as are the operator's own (the account `gh` signs in as).
 
-### 6.4 Push extension point
+### 6.4 Push
 
-Pulling (`mg wait`) is the core mechanism because every agent supports it. For harnesses that want to start an agent when something happens, the hub runs configured hooks:
-
-```toml
-[[hooks.on_event]]
-match = { type = "review.submitted" }
-run = "my-harness resume --item {item}"
-```
+Pulling (`mg wait`) is the core mechanism because every agent supports it. The only push is an item's own `--wake` (§6.5), which brings back the agent that submitted it. The hub runs no hub-wide hooks; a harness that reacts to events across items follows `mg events --follow` (§6.2).
 
 ### 6.5 Waiting and token cost
 
