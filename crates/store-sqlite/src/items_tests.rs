@@ -1,5 +1,5 @@
 use mergegate_core::github::{GithubRepo, Pull};
-use mergegate_core::item::{ChangedFile, FileStat};
+use mergegate_core::item::{ChangedFile, FileMode, FileStat};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 
 use super::*;
@@ -36,6 +36,8 @@ fn revision(head: char) -> NewRevision {
                     old_path: Some("src/old.rs".into()),
                     old_blob: Some("1".repeat(40)),
                     new_blob: Some(head.to_string().repeat(40)),
+                    old_mode: Some(FileMode::Regular),
+                    new_mode: Some(FileMode::Executable),
                 },
                 additions: Some(5),
                 deletions: Some(2),
@@ -48,6 +50,8 @@ fn revision(head: char) -> NewRevision {
                     old_path: None,
                     old_blob: None,
                     new_blob: Some("2".repeat(40)),
+                    old_mode: None,
+                    new_mode: Some(FileMode::Regular),
                 },
                 additions: None,
                 deletions: None,

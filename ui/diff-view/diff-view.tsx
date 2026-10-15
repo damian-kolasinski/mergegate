@@ -16,6 +16,7 @@ import {
   paintings,
   samePainting,
 } from "./highlight";
+import { isSubmodule, modeNote } from "./mode";
 import { type Row, toFileDiff } from "./patch";
 
 /** What the review screen drives the view with. */
@@ -137,26 +138,13 @@ export function DiffView(props: {
       };
     },
     renderHeaderMetadata: (diff) => {
-      if (items.get(diff.name)?.collapsed) return "Viewed";
       const file = byPath.get(diff.name);
-      switch (file?.interdiff) {
-        case "unseparated":
-          return "Can't be told apart from the target's changes; whole diff shown";
-        case "dropped":
-          return "No longer changed";
-      }
-      switch (file?.content.kind) {
-        case "binary":
-          return "Binary file not shown";
-        case "too_large":
-          return "Too large to show";
-        case "gone":
-          return "Diff dropped when the item closed";
-        default: {
-          const pack = byPath.get(diff.name)?.missing_pack;
-          return pack ? `No ${pack} language pack` : undefined;
-        }
-      }
+      // A mode changes no line, so a collapsed header still says so.
+      const notes = [
+        items.get(diff.name)?.collapsed ? "Viewed" : file && contentNote(file),
+        file && modeNote(file),
+      ].filter((note) => note !== undefined);
+      return notes.length > 0 ? notes.join(" · ") : undefined;
     },
     onSelectedLinesChange: (selection) => {
       const side = selection?.range.endSide ?? selection?.range.side;
@@ -408,11 +396,36 @@ function sameNotes(a: readonly Note[], b: readonly Note[]): boolean {
   );
 }
 
-/** The blobs fix a file's hunks; the interdiff, its header. */
+/** What `file`'s header says about its diff. */
+function contentNote(file: File): string | undefined {
+  switch (file.interdiff) {
+    case "unseparated":
+      return "Can't be told apart from the target's changes; whole diff shown";
+    case "dropped":
+      return "No longer changed";
+  }
+  switch (file.content.kind) {
+    case "binary":
+      // The mode note shows a submodule's commits instead.
+      return isSubmodule(file) ? undefined : "Binary file not shown";
+    case "too_large":
+      return "Too large to show";
+    case "gone":
+      return "Diff dropped when the item closed";
+    default:
+      return file.missing_pack
+        ? `No ${file.missing_pack} language pack`
+        : undefined;
+  }
+}
+
+/** The blobs fix a file's hunks; the interdiff and modes, its header. */
 function sameChange(a: File, b: File): boolean {
   return (
     a.old_blob === b.old_blob &&
     a.new_blob === b.new_blob &&
+    a.old_mode === b.old_mode &&
+    a.new_mode === b.new_mode &&
     a.interdiff === b.interdiff &&
     samePainting(a, b)
   );

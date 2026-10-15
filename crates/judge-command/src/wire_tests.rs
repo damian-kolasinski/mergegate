@@ -1,4 +1,4 @@
-use mergegate_core::item::ItemId;
+use mergegate_core::item::{FileMode, ItemId};
 use mergegate_core::judge::{Change, RequestFile};
 use mergegate_core::triage::Tier;
 use serde_json::json;
@@ -20,6 +20,8 @@ fn writes_the_whole_change() {
             deletions: Some(1),
             tier: Tier::Trusted,
             generated: false,
+            old_mode: Some(FileMode::Regular),
+            new_mode: Some(FileMode::Executable),
             diff: Some("@@ -1 +1 @@\n-a\n+b\n".into()),
         }],
     };
@@ -39,6 +41,8 @@ fn writes_the_whole_change() {
                 "deletions": 1,
                 "tier": "trusted",
                 "generated": false,
+                "old_mode": "100644",
+                "new_mode": "100755",
                 "diff": "@@ -1 +1 @@\n-a\n+b\n",
             }],
         })

@@ -1,7 +1,8 @@
 use super::*;
 use crate::diff::{Hunk, Line};
-use crate::item::ChangedFile;
+use crate::item::{ChangedFile, FileMode};
 use crate::triage::{Rule, RuleId};
+use FileMode::{Submodule, Symlink};
 
 /// A rule as `tier path [kind=K] [max=N] [diff=REGEX]`, `-` for no path.
 fn rule(n: u32, spec: &str) -> Rule {
@@ -29,7 +30,8 @@ fn rule(n: u32, spec: &str) -> Rule {
 }
 
 /// A file as `path [from=OLD] [added|deleted|generated|binary|large]
-/// [+N] [-N]`, its diff the lines given with it.
+/// [chmod|symlink|to-symlink|submodule] [+N] [-N]`, its diff the lines given
+/// with it.
 fn file(spec: &str) -> (FileStat, Option<Content>) {
     let mut words = spec.split(' ');
     let path = words.next().unwrap().to_owned();
@@ -39,6 +41,8 @@ fn file(spec: &str) -> (FileStat, Option<Content>) {
             old_path: None,
             old_blob: Some("old".into()),
             new_blob: Some("new".into()),
+            old_mode: Some(FileMode::Regular),
+            new_mode: Some(FileMode::Regular),
         },
         additions: Some(1),
         deletions: Some(1),
@@ -48,14 +52,20 @@ fn file(spec: &str) -> (FileStat, Option<Content>) {
     let mut content = Some(Content::Text(Vec::new()));
     for word in words {
         match word {
-            "added" => stat.file.old_blob = None,
-            "deleted" => stat.file.new_blob = None,
+            "added" => (stat.file.old_blob, stat.file.old_mode) = (None, None),
+            "deleted" => (stat.file.new_blob, stat.file.new_mode) = (None, None),
             "generated" => stat.generated = true,
             "binary" => {
                 (stat.additions, stat.deletions) = (None, None);
                 content = Some(Content::Binary);
             }
             "large" => content = Some(Content::TooLarge),
+            "chmod" => stat.file.new_mode = Some(FileMode::Executable),
+            "symlink" => (stat.file.old_mode, stat.file.new_mode) = (Some(Symlink), Some(Symlink)),
+            "to-symlink" => stat.file.new_mode = Some(Symlink),
+            "submodule" => {
+                (stat.file.old_mode, stat.file.new_mode) = (Some(Submodule), Some(Submodule));
+            }
             word if word.starts_with("from=") => stat.file.old_path = Some(word[5..].into()),
             word if word.starts_with('+') => stat.additions = Some(word[1..].parse().unwrap()),
             word if word.starts_with('-') => stat.deletions = Some(word[1..].parse().unwrap()),
@@ -333,6 +343,55 @@ const CASES: &[Case] = &[
         name: "diff_matches can't read a binary: review matches",
         rules: &["review **/*.bin diff=x", "trusted **"],
         file: "blob.bin binary",
+        diff: &[],
+        expect: "review R1",
+    },
+    Case {
+        name: "a trusted rule can't hide a mode change",
+        rules: &["trusted scripts/**"],
+        file: "scripts/run.sh chmod +0 -0",
+        diff: &[],
+        expect: "review",
+    },
+    Case {
+        name: "a trusted rule can't hide a type change",
+        rules: &["trusted docs/** kind=modified"],
+        file: "docs/a.md to-symlink",
+        diff: &[],
+        expect: "review",
+    },
+    Case {
+        name: "a trusted rule can't hide a symlink's new target",
+        rules: &["trusted docs/**"],
+        file: "docs/link symlink",
+        diff: &["-guide.md", "+/etc/passwd"],
+        expect: "review",
+    },
+    Case {
+        name: "a trusted rule can't hide a new symlink",
+        rules: &["trusted docs/** kind=added"],
+        file: "docs/link added to-symlink",
+        diff: &[],
+        expect: "review",
+    },
+    Case {
+        name: "a trusted rule can't hide a submodule",
+        rules: &["trusted vendor/**"],
+        file: "vendor/dep submodule binary",
+        diff: &[],
+        expect: "review",
+    },
+    Case {
+        name: "a mode change falls through to a later rule",
+        rules: &["trusted scripts/**", "review scripts/**"],
+        file: "scripts/run.sh chmod",
+        diff: &[],
+        expect: "review R2",
+    },
+    Case {
+        name: "a review rule still matches a mode change",
+        rules: &["review scripts/**", "trusted **"],
+        file: "scripts/run.sh chmod",
         diff: &[],
         expect: "review R1",
     },

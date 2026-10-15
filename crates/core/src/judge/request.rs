@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use crate::diff::{Content, LineKind};
-use crate::item::{ChangedFile, ItemId};
+use crate::item::{ChangedFile, FileMode, ItemId};
 use crate::triage::Tier;
 
 /// The whole change, as a judge sees it.
@@ -25,6 +25,10 @@ pub struct RequestFile {
     pub deletions: Option<u64>,
     pub tier: Tier,
     pub generated: bool,
+    /// Git's modes, as on [`ChangedFile`]: a changed exec bit or type
+    /// shows in no line of `diff`.
+    pub old_mode: Option<FileMode>,
+    pub new_mode: Option<FileMode>,
     /// Unified hunks; none when the change isn't text or is too large to
     /// keep.
     pub diff: Option<String>,

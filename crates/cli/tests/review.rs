@@ -86,6 +86,8 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "old_path": "src/old.rs",
                 "old_blob": blob("main:src/old.rs"),
                 "new_blob": blob("feature:src/new.rs"),
+                "old_mode": "100644",
+                "new_mode": "100644",
                 "additions": 1,
                 "deletions": 1,
                 "content": {"kind": "text", "hunks": [{
@@ -115,6 +117,8 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "old_path": null,
                 "old_blob": blob("main:README"),
                 "new_blob": blob("feature:README"),
+                "old_mode": "100644",
+                "new_mode": "100644",
                 "additions": 1,
                 "deletions": 1,
                 "content": {"kind": "text", "hunks": [{
@@ -142,6 +146,8 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "old_path": null,
                 "old_blob": null,
                 "new_blob": blob("feature:logo.bin"),
+                "old_mode": null,
+                "new_mode": "100644",
                 "additions": null,
                 "deletions": null,
                 "content": {"kind": "binary"},
@@ -165,6 +171,8 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "old_path": null,
                 "old_blob": blob("main:gone.txt"),
                 "new_blob": null,
+                "old_mode": "100644",
+                "new_mode": null,
                 "additions": 0,
                 "deletions": 1,
                 "content": {"kind": "text", "hunks": [{
@@ -261,4 +269,85 @@ fn f6_marks_files_viewed() {
     assert_eq!(json_of(&later)["error"]["code"], "revision_not_found");
     let missing = put(&env, "/api/items/app%232/viewed", &body);
     assert_eq!(json_of(&missing)["error"]["code"], "item_not_found");
+}
+
+/// Each file of `diff` by path, with what shows its mode: both modes, the
+/// content's kind and its hunk count.
+fn modes(diff: &Value) -> Value {
+    diff["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| {
+            let path = f["path"].as_str().unwrap().to_owned();
+            let hunks = f["content"]["hunks"].as_array().map_or(0, Vec::len);
+            let shown = json!([f["old_mode"], f["new_mode"], f["content"]["kind"], hunks]);
+            (path, shown)
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into()
+}
+
+#[test]
+fn f6_shows_mode_and_type_changes() {
+    let env = env();
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("run.sh", "echo hi\n"), ("a.txt", "hello\n")]);
+    env.mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    env.mg_at(repo.root(), &["--json", "init"]).assert_code(0);
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.git(["update-index", "--chmod=+x", "run.sh"]);
+    std::fs::remove_file(repo.root().join("a.txt")).unwrap();
+    std::os::unix::fs::symlink("b", repo.root().join("a.txt")).unwrap();
+    std::os::unix::fs::symlink("/etc/passwd", repo.root().join("evil")).unwrap();
+    // A gitlink needs no commit behind it, nor a .gitmodules.
+    let pinned = repo.rev("main");
+    repo.git([
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        &format!("160000,{pinned},vendor/dep"),
+    ]);
+    repo.git(["add", "a.txt", "evil"]);
+    repo.commit("Modes");
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+
+    let diff = json_of(&get(&env, "/api/items/app%231"));
+    assert_eq!(
+        modes(&diff),
+        json!({
+            // Only the mode changed: no lines, so the modes are all there is.
+            "run.sh": ["100644", "100755", "text", 0],
+            "a.txt": ["100644", "120000", "text", 1],
+            "evil": [null, "120000", "text", 1],
+            "vendor/dep": [null, "160000", "binary", 0],
+        })
+    );
+    let dep = diff["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["path"] == "vendor/dep")
+        .unwrap();
+    assert_eq!(dep["new_blob"], pinned);
+
+    // A revision that only flips the bit back drops the change, and shows
+    // the flip since the last one.
+    repo.git(["update-index", "--chmod=-x", "run.sh"]);
+    repo.commit("Not executable");
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    let since = json_of(&get(&env, "/api/items/app%231?since=1"));
+    let run = since["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["path"] == "run.sh")
+        .unwrap();
+    assert_eq!(run["interdiff"], "dropped");
+    assert_eq!(
+        json!([run["old_mode"], run["new_mode"]]),
+        json!(["100755", "100644"])
+    );
 }

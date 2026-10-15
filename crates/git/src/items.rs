@@ -3,7 +3,7 @@
 use std::ffi::{OsStr, OsString};
 
 use mergegate_core::git::{GitError, Remote, Upstream};
-use mergegate_core::item::{ChangedFile, ItemGit, Pushed, valid_commit};
+use mergegate_core::item::{ChangedFile, FileMode, ItemGit, Pushed, valid_commit};
 use mergegate_core::project::ProjectName;
 
 use crate::command::{run, run_optional};
@@ -193,12 +193,15 @@ fn arg(s: &str) -> &OsStr {
 
 /// Parses `git diff --raw -z --no-abbrev`: `:MODE MODE ID ID STATUS NUL
 /// path NUL` per file, with `old NUL new NUL` in place of `path NUL` for a
-/// rename. The ID on the side where the file doesn't exist is all zeros.
+/// rename. The mode and ID on the side where the file doesn't exist are all
+/// zeros.
 fn parse_raw(output: &str) -> Option<Vec<ChangedFile>> {
     let mut fields = output.split('\0');
     let mut files = Vec::new();
     while let Some(field) = fields.next().filter(|f| !f.is_empty()) {
-        let mut parts = field.strip_prefix(':')?.split(' ').skip(2);
+        let mut parts = field.strip_prefix(':')?.split(' ');
+        let old_mode = mode(parts.next()?)?;
+        let new_mode = mode(parts.next()?)?;
         let old_blob = object(parts.next()?)?;
         let new_blob = object(parts.next()?)?;
         let (path, old_path) = match parts.next()? {
@@ -213,9 +216,19 @@ fn parse_raw(output: &str) -> Option<Vec<ChangedFile>> {
             old_path,
             old_blob,
             new_blob,
+            old_mode,
+            new_mode,
         });
     }
     Some(files)
+}
+
+/// A file's mode, or `Some(None)` for the all-zero one.
+fn mode(mode: &str) -> Option<Option<FileMode>> {
+    match mode {
+        "000000" => Some(None),
+        mode => FileMode::parse(mode).map(Some),
+    }
 }
 
 /// An object ID, or `Some(None)` for the all-zero one.

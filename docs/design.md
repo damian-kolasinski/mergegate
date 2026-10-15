@@ -327,7 +327,7 @@ The files to review are ordered:
 
 That is the default, `--order guide`. With `mg judge set … --order judge` the operator, or their agent, lets the judge lead instead: its scores order every file to review, a file it skipped again counting as 50, then the guide's list breaks ties, then the heuristics and path. Nothing is "raised by the judge" then, since the judge places every file; until it has scored the revision, the order is the guide's.
 
-The trusted files come last, in path order. The heuristics read only paths and the diff, with no parse: lockfiles, generated files, tests, docs and pure deletions sink; migrations, changed declarations (a function, type or export) and config rise. A file nothing else explains shows the heuristic's hint ("ranked low: tests"). Promotion and order are applied when the item is read, so a rule change re-sorts without a new judge call.
+The trusted files come last, in path order. The heuristics read only paths, modes and the diff, with no parse: lockfiles, generated files, tests, docs and pure deletions sink; migrations, changed declarations (a function, type or export), config, symlinks, submodules and mode changes rise. A file nothing else explains shows the heuristic's hint ("ranked low: tests"). Promotion and order are applied when the item is read, so a rule change re-sorts without a new judge call.
 
 The asymmetry matters: the authoring agent grades its own work, and the judge can be wrong. Hiding a file is therefore always the result of a rule the operator approved.
 
@@ -349,11 +349,11 @@ mg rules propose --tier review  --path '**/*View.swift' --diff-matches 'Navigati
 - **A hand edit that loosens waits too** (tech-stack §7): one that only adds `review` rules or removes `trusted` ones applies, anything else waits as one pending change that approve accepts and reject reverts in the file. An invalid file is ignored, and its error shows in the UI and `mg rules list`.
 - **The preview** runs once, when a change arrives, over the project's open items and its last 20 merged ones.
 
-Matchers (v1): path glob (`*` stays within a directory), change kind (added / deleted / renamed / generated / modified), changed-line count (added + removed), diff-content regex over the added and removed lines. A rule matches when all its matchers do. Generated means `linguist-generated` as the item's base tree sets it. A matcher that can't be sure, as with a rename's two paths or a binary diff, gives whichever answer keeps the file in `review`. Rules are ordered, each has an ID (`R<n>`, never reused) and a reason that shows in the UI. When the approved rules change, every open item is triaged again.
+Matchers (v1): path glob (`*` stays within a directory), change kind (added / deleted / renamed / generated / modified), changed-line count (added + removed), diff-content regex over the added and removed lines. A rule matches when all its matchers do. Generated means `linguist-generated` as the item's base tree sets it. A matcher that can't be sure, as with a rename's two paths or a binary diff, gives whichever answer keeps the file in `review`. So no `trusted` rule matches a file whose mode or type changed, a symlink or a submodule: no matcher reads what changed there. Rules are ordered, each has an ID (`R<n>`, never reused) and a reason that shows in the UI. When the approved rules change, every open item is triaged again.
 
 ### 7.4 Judge providers
 
-Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
+Interface: `judge(change) → [{path, importance, reason, promote}]`. The judge sees the whole change at once: the item's title, the guide, every changed file (path, kind, +/−, tier, generated, modes) and the diffs, since a file's importance depends on what else changed. `importance` is 1–100, so files rarely tie. `promote` is the confidence, 0–1, that a rule-trusted file needs a look; it can only move a file to `review` (§7.2), there's no way to suggest `trusted`.
 
 | Provider | Notes |
 |---|---|
@@ -367,6 +367,7 @@ The command reads the change as JSON on stdin and prints its verdicts on stdout.
 stdin:  {"item": "app#42", "revision": 2, "title": "…", "guide": "…" | null,
          "files": [{"path", "old_path", "change": "added|deleted|renamed|modified",
                     "additions", "deletions", "tier": "review|trusted", "generated",
+                    "old_mode", "new_mode": "100644|100755|120000|160000" | null,
                     "diff": "unified hunks" | null}]}
 stdout: {"files": [{"path", "importance": 1-100, "reason"?: "one line", "promote"?: 0-1}]}
 ```
@@ -447,7 +448,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A viewed file collapses to its header and counts toward the viewed total.
+- **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A file's header names what its lines can't show: a changed mode or type ("Made executable (mode 100644 → 100755)"), a symlink, a submodule's commits. A viewed file collapses to its header and counts toward the viewed total.
 - **Revision selector** offers *All changes* (against the merge-base) and *Since rK* for each earlier revision, defaulting to since the last revision you reviewed, or all changes when that is the newest or there's none. A closed item shows all changes only.
 - **Since rK shows the interdiff only,** over a moved target: rK is replayed onto the newest revision's base and diffed against the newest, so what the target changed meanwhile drops out. A file the replay conflicts on can't be told apart from the target's changes, so it shows its whole own diff, marked as such. Files unchanged since rK fold away under the file list and can still be marked viewed; a file rK changed that the newest no longer does shows as *dropped*. The old side is a replay no revision has, so only the new side takes comments. Interdiffs from every earlier revision are computed when a revision is submitted, so switching is a read.
 - **Viewed marks follow a file while it's unchanged:** marking or unmarking it on rK applies to every later revision where it hasn't changed since rK, then and when a later revision arrives.

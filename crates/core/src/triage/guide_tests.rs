@@ -1,5 +1,5 @@
 use super::*;
-use crate::item::ChangedFile;
+use crate::item::{ChangedFile, FileMode};
 use crate::triage::{RuleId, Triage};
 
 fn files(guide: &Guide) -> Vec<(&str, Option<&str>)> {
@@ -17,6 +17,8 @@ fn stat(path: &str, tier: Tier) -> FileStat {
             old_path: None,
             old_blob: Some("old".into()),
             new_blob: Some("new".into()),
+            old_mode: Some(FileMode::Regular),
+            new_mode: Some(FileMode::Regular),
         },
         additions: Some(1),
         deletions: Some(0),

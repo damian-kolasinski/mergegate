@@ -226,3 +226,41 @@ fn schema_1_data_survives_the_external_review_rebuilds() {
         .unwrap();
     assert_eq!(event.cursor, 3);
 }
+
+#[test]
+fn a_file_recorded_before_modes_were_kept_has_none() {
+    use mergegate_core::item::{ItemId, ItemStore};
+
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("hub.db");
+    drop(open_with(&db, &MIGRATIONS[..12]).unwrap());
+    let (head, base, at) = ("a".repeat(40), "0".repeat(40), "2026-01-01T00:00:00.000Z");
+    Connection::open(&db)
+        .unwrap()
+        .execute_batch(&format!(
+            "INSERT INTO projects (id, name, backend, target, upstream)
+                 VALUES (1, 'app', 'local', 'main', '/src/app');
+             INSERT INTO items (id, project_id, number, branch, title, state, backend, target,
+                                created_at)
+                 VALUES (1, 1, 1, 'work', 'Work', 'needs_review', 'local', 'main', '{at}');
+             INSERT INTO revisions (item_id, number, head, base, files, additions, deletions,
+                                    submitted_at)
+                 VALUES (1, 1, '{head}', '{base}', 1, 0, 0, '{at}');
+             INSERT INTO revision_files (item_id, revision, position, path, old_blob, new_blob)
+                 VALUES (1, 1, 0, 'run.sh', '{base}', '{base}');"
+        ))
+        .unwrap();
+
+    let store = Store::open(&db).unwrap();
+    let files = store
+        .revision_files(&ItemId::parse("app#1").unwrap(), 1)
+        .unwrap();
+    assert_eq!(
+        (files[0].file.old_mode, files[0].file.new_mode),
+        (None, None)
+    );
+    let refused = store
+        .conn
+        .execute("UPDATE revision_files SET new_mode = '040000'", []);
+    assert!(refused.is_err(), "a tree isn't a file's mode");
+}

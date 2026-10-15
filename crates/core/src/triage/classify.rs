@@ -3,7 +3,7 @@
 use super::rules::Compiled;
 use super::{Guard, Kind, Rules, Tier, Triage, TriagedBy};
 use crate::diff::{Content, DiffStore, LineKind};
-use crate::item::FileStat;
+use crate::item::{ChangedFile, FileMode, FileStat};
 use crate::store::StoreError;
 
 pub const GITATTRIBUTES: &str = ".gitattributes";
@@ -14,6 +14,8 @@ pub const GITATTRIBUTES: &str = ".gitattributes";
 /// Where a matcher can't tell (a rename's two paths, lines it can't count or
 /// read), it answers whatever keeps the file in `review`: a `trusted` rule
 /// doesn't match and a `review` rule does. So uncertainty never hides a file.
+/// No `trusted` rule matches a mode or type change, a symlink or a
+/// submodule, which no matcher reads.
 pub fn classify<E>(
     rules: &Rules,
     file: &FileStat,
@@ -82,6 +84,9 @@ fn matches<E, F: FnOnce() -> Result<Option<Content>, E>>(
 ) -> Result<bool, E> {
     let rule = &compiled.rule;
     let unsure = rule.tier == Tier::Review;
+    if rule.tier == Tier::Trusted && unreadable_mode(&file.file) {
+        return Ok(false);
+    }
     if let Some(glob) = &compiled.path {
         let new = glob.is_match(&file.file.path);
         let matched = match &file.file.old_path {
@@ -133,6 +138,20 @@ fn matches<E, F: FnOnce() -> Result<Option<Content>, E>>(
         }
     }
     Ok(true)
+}
+
+/// Whether `file`'s modes say what no matcher reads: a changed exec bit or
+/// type shows in no line, a symlink's one line can point anywhere, and a
+/// submodule's diff is another repository's. A file recorded before modes
+/// were kept has none, and is matched by its lines as it was then.
+fn unreadable_mode(file: &ChangedFile) -> bool {
+    let sides = [file.old_mode, file.new_mode];
+    let changed = matches!(sides, [Some(old), Some(new)] if old != new);
+    changed
+        || sides
+            .iter()
+            .flatten()
+            .any(|m| matches!(m, FileMode::Symlink | FileMode::Submodule))
 }
 
 fn is(kind: Kind, file: &FileStat) -> bool {

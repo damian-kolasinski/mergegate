@@ -1,4 +1,4 @@
-use mergegate_core::item::ItemId;
+use mergegate_core::item::{FileMode, ItemId};
 use mergegate_core::judge::{Change, RequestFile};
 
 use super::*;
@@ -12,6 +12,8 @@ fn file(path: &str, diff: Option<String>, tier: Tier) -> RequestFile {
         deletions: diff.as_ref().map(|_| 0),
         tier,
         generated: false,
+        old_mode: Some(FileMode::Regular),
+        new_mode: Some(FileMode::Regular),
         diff,
     }
 }
@@ -81,4 +83,29 @@ fn caps_the_files_a_part_asks_about() {
     let parts = parts(&request(files)).unwrap();
     assert_eq!(parts.len(), 2);
     assert_eq!(parts[1].files, [MAX_FILES]);
+}
+
+#[test]
+fn names_what_the_modes_change_where_no_line_shows_it() {
+    use FileMode::{Executable, Regular, Submodule, Symlink};
+    let moded = |path, (old_mode, new_mode), diff| RequestFile {
+        old_mode,
+        new_mode,
+        ..file(path, diff, Tier::Review)
+    };
+    let request = request(vec![
+        moded("a.txt", (Some(Regular), Some(Symlink)), diff(1)),
+        moded("dep", (None, Some(Submodule)), None),
+        moded("evil", (None, Some(Symlink)), diff(1)),
+        moded("run.sh", (Some(Regular), Some(Executable)), diff(1)),
+    ]);
+    let state = &parts(&request).unwrap()[0].state;
+    for line in [
+        "1. a.txt (modified, +1 -0, mode 100644 → 120000, a symlink: its line is its target)",
+        "2. dep (modified, a submodule: its object is a commit of another repository)",
+        "3. evil (modified, +1 -0, a symlink: its line is its target)",
+        "4. run.sh (modified, +1 -0, mode 100644 → 100755)",
+    ] {
+        assert!(state.contains(line), "{line:?} in:\n{state}");
+    }
 }
