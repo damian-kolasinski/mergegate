@@ -25,12 +25,15 @@ export function NextItem(props: {
     getJson<Inbox>("/api/inbox").catch(() => undefined),
   );
   decided.add(untrack(() => props.after));
-  // Once every item has had a decision, round again from the first.
+  // Once every item has had a decision, the one after this in line, so
+  // further rounds still go through them all.
   const next = () => {
     const waiting = inbox()?.needs_you ?? [];
+    const at = waiting.findIndex((item) => item.id === props.after);
+    const others = [...waiting.slice(at + 1), ...waiting.slice(0, at + 1)];
     return (
       waiting.find((item) => !decided.has(item.id)) ??
-      waiting.find((item) => item.id !== props.after)
+      others.find((item) => item.id !== props.after)
     );
   };
   const open = () => {

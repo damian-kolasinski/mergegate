@@ -103,9 +103,12 @@ test("f6 the way on after a review reaches every item that needs the operator", 
   await page.goto(`${hub.url}#/items/app%231`);
 
   // A comment leaves each item in Needs you, where the way on goes past it
-  // rather than back to it.
+  // rather than back to it, round after round.
   const review = page.getByRole("form", { name: "Review" });
   for (const [item, next] of [
+    ["app%231", "app#2"],
+    ["app%232", "app#3"],
+    ["app%233", "app#1"],
     ["app%231", "app#2"],
     ["app%232", "app#3"],
   ] as const) {
