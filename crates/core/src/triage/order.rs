@@ -55,9 +55,9 @@ pub struct Rank<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Placed {
     pub index: usize,
-    /// The judge's score put it ahead of where the guide, or the order
-    /// without that score, would have. Never set when the judge orders
-    /// every file.
+    /// The judge's score put it ahead of a file the guide, or the order
+    /// without that score, put first. Never set when the judge orders every
+    /// file.
     pub raised: bool,
 }
 
@@ -98,12 +98,22 @@ pub fn order(files: &[Rank], guide: &Guide, by: OrderBy) -> Vec<Placed> {
     for (at, &index) in before.iter().enumerate() {
         was[index] = at;
     }
+    // Raised past a file the usual order put ahead of it, which is still to
+    // come. Comparing places instead would miss a file raised behind
+    // another, and only the raised move ahead of anything.
+    let mut placed = vec![false; files.len()];
+    let mut first_unplaced = 0;
     after
         .into_iter()
-        .enumerate()
-        .map(|(at, index)| Placed {
-            index,
-            raised: at < was[index],
+        .map(|index| {
+            while placed[before[first_unplaced]] {
+                first_unplaced += 1;
+            }
+            placed[index] = true;
+            Placed {
+                index,
+                raised: first_unplaced < was[index],
+            }
         })
         .collect()
 }

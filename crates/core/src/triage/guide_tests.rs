@@ -108,6 +108,24 @@ fn warns_when_there_is_no_list() {
 }
 
 #[test]
+fn warns_when_the_list_names_no_files() {
+    // The list is the section's own bullets, so a sub-heading ends it.
+    for text in [
+        "## Files\nThe parser, then its tests.\n",
+        "## Files\n### Core\n- `z.rs` — the heart of it\n",
+    ] {
+        assert_eq!(
+            Guide::parse(text).warnings(text, &[]),
+            [
+                "the guide's `## Files` list names no `path` before the next heading, \
+                 so the files stay in path order"
+            ],
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn reads_a_numbered_list() {
     let guide = Guide::parse("## Files\n1. `b.rs` — first\n2) `a.rs`\n10. `c.rs`\n");
     assert_eq!(
@@ -140,4 +158,53 @@ fn a_refused_bullets_wrapped_text_belongs_to_no_file() {
         "## Files\n- `a.rs` — x\n- `a.rs` again\n  more\n- no path\n  still none\nProse.\n  not a reason\n",
     );
     assert_eq!(files(&guide), [("a.rs", Some("x"))]);
+}
+
+#[test]
+fn an_item_indented_short_of_the_text_above_is_its_sibling() {
+    type Listed<'a> = &'a [(&'a str, Option<&'a str>)];
+    let cases: [(&str, Listed); 8] = [
+        (
+            " - `a.rs` — x\n - `b.rs` — y\n",
+            &[("a.rs", Some("x")), ("b.rs", Some("y"))],
+        ),
+        (
+            "- `a.rs` — x\n - `b.rs`\n   - `c.rs`\n",
+            &[("a.rs", Some("x")), ("b.rs", Some("- `c.rs`"))],
+        ),
+        (
+            " 1. `a.rs`\n 2. `b.rs`\n",
+            &[("a.rs", None), ("b.rs", None)],
+        ),
+        // Indented to the text of the item above, as a sub-bullet is.
+        (" - `a.rs` — x\n   - more\n", &[("a.rs", Some("x - more"))]),
+        (
+            "1. `a.rs` — x\n   - more\n2. `b.rs`\n",
+            &[("a.rs", Some("x - more")), ("b.rs", None)],
+        ),
+        ("- no path\n - `a.rs`\n", &[("a.rs", None)]),
+        // Short of the text, but naming no path: a note on the item above.
+        (
+            "1. `a.rs` — x\n  - retries once\n2. `b.rs`\n",
+            &[("a.rs", Some("x - retries once")), ("b.rs", None)],
+        ),
+        (
+            "1. `a.rs` — x\n  - `b.rs` — y\n",
+            &[("a.rs", Some("x")), ("b.rs", Some("y"))],
+        ),
+    ];
+    for (list, expected) in cases {
+        let guide = Guide::parse(&format!("## Files\n{list}"));
+        assert_eq!(files(&guide), expected, "{list}");
+    }
+}
+
+#[test]
+fn warns_about_an_indented_item_it_cannot_place() {
+    let text = "## Files\n - `a.rs` — x\n - `gone.rs` — y\n";
+    let guide = Guide::parse(text);
+    assert_eq!(
+        guide.warnings(text, &[stat("a.rs", Tier::Review)]),
+        ["`gone.rs` isn't changed in this revision"]
+    );
 }

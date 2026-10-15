@@ -94,6 +94,7 @@ fn orders_files() {
             &["c.rs^", "b.rs", "a.rs", "d.rs"],
         ),
         (
+            // a.rs now leads b.rs, which the guide put first, so it rose too.
             "the files it raises go highest first",
             &[
                 rank("a.rs", Some(90), None),
@@ -101,6 +102,26 @@ fn orders_files() {
                 rank("c.rs", Some(99), None),
             ],
             GUIDE,
+            &["c.rs^", "a.rs^", "b.rs"],
+        ),
+        (
+            "a file raised behind another still rose past what the guide put first",
+            &[
+                rank("a.rs", Some(20), None),
+                rank("b.rs", Some(90), None),
+                rank("c.rs", Some(95), None),
+            ],
+            "## Files\n- `a.rs`\n- `b.rs`\n",
+            &["c.rs^", "b.rs^", "a.rs"],
+        ),
+        (
+            "a file ahead only of those raised past it isn't raised",
+            &[
+                rank("a.rs", Some(85), None),
+                rank("b.rs", Some(20), None),
+                rank("c.rs", Some(95), None),
+            ],
+            "## Files\n- `a.rs`\n- `b.rs`\n",
             &["c.rs^", "a.rs", "b.rs"],
         ),
         (

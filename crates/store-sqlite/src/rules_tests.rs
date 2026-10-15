@@ -287,10 +287,10 @@ fn keeps_one_held_edit_per_project() {
 #[test]
 fn numbers_a_new_rule_past_every_one_used() {
     let (_dir, mut store) = store();
-    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(1));
+    assert_eq!(store.next_rule_id(&app()).unwrap(), Some(RuleId::new(1)));
     let rules = Rules::new(vec![rule(3, Tier::Review)]).unwrap();
     store.set_applied_rules(&app(), &rules, None).unwrap();
-    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(4));
+    assert_eq!(store.next_rule_id(&app()).unwrap(), Some(RuleId::new(4)));
 
     let held = HeldEdit {
         rules: Rules::new(vec![rule(6, Tier::Trusted)]).unwrap(),
@@ -302,7 +302,7 @@ fn numbers_a_new_rule_past_every_one_used() {
     };
     store.set_held_edit(&app(), Some(&held)).unwrap();
     store.set_held_edit(&app(), None).unwrap();
-    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(7));
+    assert_eq!(store.next_rule_id(&app()).unwrap(), Some(RuleId::new(7)));
 
     let proposal = Proposal {
         rule: rule(7, Tier::Trusted),
@@ -314,9 +314,17 @@ fn numbers_a_new_rule_past_every_one_used() {
     store
         .set_applied_rules(&app(), &Rules::new(Vec::new()).unwrap(), Some(""))
         .unwrap();
-    assert_eq!(store.next_rule_id(&app()).unwrap(), RuleId::new(8));
+    assert_eq!(store.next_rule_id(&app()).unwrap(), Some(RuleId::new(8)));
     let web = ProjectName::parse("web").unwrap();
-    assert_eq!(store.next_rule_id(&web).unwrap(), RuleId::new(1));
+    assert_eq!(store.next_rule_id(&web).unwrap(), Some(RuleId::new(1)));
+}
+
+#[test]
+fn has_no_next_rule_past_the_last_number() {
+    let (_dir, mut store) = store();
+    let rules = Rules::new(vec![rule(u32::MAX, Tier::Review)]).unwrap();
+    store.set_applied_rules(&app(), &rules, None).unwrap();
+    assert_eq!(store.next_rule_id(&app()).unwrap(), None);
 }
 
 #[test]

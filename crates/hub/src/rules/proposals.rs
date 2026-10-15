@@ -136,6 +136,7 @@ pub(super) fn failure(e: ChangeError) -> Failure {
         ),
         E::NotPending(..) => (S::CONFLICT, "rule_decided", None),
         E::NoEdit => (S::NOT_FOUND, "no_held_edit", None),
+        E::NoIdLeft(_) => (S::CONFLICT, "no_rule_id_left", None),
         E::Rule(_) => (S::BAD_REQUEST, "invalid_rule", None),
         E::InvalidFile(_) => (S::CONFLICT, "rules_file_invalid", None),
         E::File(_) => (S::INTERNAL_SERVER_ERROR, "rules_file_failed", None),

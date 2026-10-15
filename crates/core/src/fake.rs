@@ -1052,10 +1052,9 @@ impl RulesStore for FakeStore {
         Ok(())
     }
 
-    fn next_rule_id(&self, project: &ProjectName) -> Result<RuleId, StoreError> {
-        Ok(RuleId::new(
-            self.last_rule.get(project).copied().unwrap_or(0) + 1,
-        ))
+    fn next_rule_id(&self, project: &ProjectName) -> Result<Option<RuleId>, StoreError> {
+        let last = self.last_rule.get(project).copied().unwrap_or(0);
+        Ok(last.checked_add(1).map(RuleId::new))
     }
 
     fn insert_proposal(

@@ -29,8 +29,9 @@ pub trait RulesStore {
     ) -> Result<(), StoreError>;
 
     /// One past every ID the project's applied rules, proposals and held
-    /// edits ever used, so no rule takes a retired one.
-    fn next_rule_id(&self, project: &ProjectName) -> Result<RuleId, StoreError>;
+    /// edits ever used, so no rule takes a retired one; none once a
+    /// hand-added rule used the largest.
+    fn next_rule_id(&self, project: &ProjectName) -> Result<Option<RuleId>, StoreError>;
 
     fn insert_proposal(
         &mut self,

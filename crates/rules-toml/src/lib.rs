@@ -97,14 +97,36 @@ fn insert(text: &str, rule: &Rule, at: Place) -> Result<String, String> {
         _ if text.trim().is_empty() => block,
         _ => format!("{}\n\n{block}", text.trim_end()),
     };
-    // A `[[rule]]` line inside a multi-line string would put it wrong.
     if parse(&spliced).ok() != Some(expected) {
+        // Splicing into an inline array would rewrite its layout, which the
+        // operator chose, so say how to write the file instead.
+        if assigns_rule(text) {
+            return Err(format!(
+                "couldn't add {} to the file's `rule = [...]` list; write its rules as \
+                 [[rule]] tables instead",
+                rule.id
+            ));
+        }
+        // A `[[rule]]` line inside a multi-line string would put it wrong.
         return Err(format!(
             "couldn't add {} to the file without changing its other rules",
             rule.id
         ));
     }
     Ok(spliced)
+}
+
+/// Whether `text` sets its rules as `rule = [...]`. `rule` is the only key
+/// a file that parses can have at its top level, and no rule has one, so a
+/// line starting with it sets that key (barring a multi-line string).
+fn assigns_rule(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim_start();
+        ["rule", "\"rule\"", "'rule'"].iter().any(|key| {
+            line.strip_prefix(key)
+                .is_some_and(|rest| rest.trim_start().starts_with('='))
+        })
+    })
 }
 
 fn render(rule: &Rule) -> String {
