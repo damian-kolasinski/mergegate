@@ -273,28 +273,11 @@ function Review(props: {
   let toggle: HTMLButtonElement | undefined;
   let view: DiffViewControl | undefined;
   const viewed = useViewed(() => props.diff);
-  // Since an earlier revision, files unchanged since then are left out of
-  // the diff, and dropped ones are in it but not the revision's own.
-  const changed = createMemo(() =>
-    props.diff.files.filter((file) => file.interdiff !== "unchanged"),
-  );
-  const unchanged = createMemo(() =>
-    props.diff.files.filter((file) => file.interdiff === "unchanged"),
-  );
+  // Dropped files are in the diff but not the revision's own.
   const own = createMemo(() =>
     props.diff.files.filter((file) => file.interdiff !== "dropped"),
   );
-  // Trusted files stay out of the diff until the operator opens their group.
-  const review = createMemo(() =>
-    changed().filter((file) => file.tier === "review"),
-  );
-  const trusted = createMemo(() =>
-    changed().filter((file) => file.tier === "trusted"),
-  );
   const [showTrusted, setShowTrusted] = createSignal(false);
-  const shown = createMemo(() =>
-    showTrusted() ? [...review(), ...trusted()] : review(),
-  );
   // A trusted file counts as viewed without a mark, but only a mark
   // collapses it, so an opened group shows its diffs.
   const done = createMemo(
@@ -338,6 +321,40 @@ function Review(props: {
       hideAll: () => void hideAll(),
       onScreen: onOwnSide,
     },
+  );
+  // Since an earlier revision, files unchanged since then are left out of
+  // the diff, unless they hold a thread waiting on the operator.
+  const changed = createMemo(() =>
+    props.diff.files.filter(
+      (file) =>
+        file.interdiff !== "unchanged" ||
+        comments.threads.unfolded().has(file.path),
+    ),
+  );
+  const unchanged = createMemo(() =>
+    props.diff.files.filter(
+      (file) =>
+        file.interdiff === "unchanged" &&
+        !comments.threads.unfolded().has(file.path),
+    ),
+  );
+  // Trusted files stay out of the diff until the operator opens their group.
+  const review = createMemo(() =>
+    changed().filter((file) => file.tier === "review"),
+  );
+  const trusted = createMemo(() =>
+    changed().filter((file) => file.tier === "trusted"),
+  );
+  const shown = createMemo(() =>
+    showTrusted() ? [...review(), ...trusted()] : review(),
+  );
+  // A viewed mark set before the thread came back would fold it away with
+  // its file, so the file opens until it's marked again.
+  createEffect(
+    on(comments.threads.unfolded, (paths, before) => {
+      const back = [...paths].filter((path) => !before?.has(path));
+      if (back.length) setOpened((open) => new Set([...open, ...back]));
+    }),
   );
   // A viewed file collapses to its header, but not over the open editor,
   // which would hold the review with nothing on screen to save or cancel.
@@ -656,7 +673,9 @@ function Review(props: {
                 ? props.diff.files.length
                   ? "Every file in this revision is trusted."
                   : "This revision changes no files."
-                : changed().length
+                : props.diff.files.some(
+                      (file) => file.interdiff !== "unchanged",
+                    )
                   ? `Every file changed since r${props.diff.since} is trusted.`
                   : `Nothing changed since r${props.diff.since}.`}
             </Empty>
