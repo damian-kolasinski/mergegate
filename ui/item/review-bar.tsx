@@ -4,7 +4,7 @@ import type { Merge } from "../api/Merge";
 import type { Review } from "../api/Review";
 import type { SubmitReview } from "../api/SubmitReview";
 import type { Verdict } from "../api/Verdict";
-import { postJson } from "../app/hub";
+import { HubError, postJson } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { Button, Meta, Mono, TextArea } from "../design-system";
 import styles from "./review-bar.module.css";
@@ -40,6 +40,8 @@ export function ReviewBar(props: {
   summary: string;
   onSummary: (summary: string) => void;
   onSubmitted: (review: Review) => void;
+  /** The hub held the review over drafts that can't move to this revision. */
+  onHeld: () => void;
   onMerged: (merge: Merge) => void;
 }) {
   const summary = () => props.summary;
@@ -49,11 +51,15 @@ export function ReviewBar(props: {
   const [confirming, setConfirming] = createSignal(false);
   let field: HTMLTextAreaElement | undefined;
 
-  const failed = (error: unknown) =>
+  const failed = (error: unknown) => {
     setStatus({
       text: error instanceof Error ? error.message : String(error),
       failed: true,
     });
+    if (error instanceof HubError && error.code === "drafts_unplaced") {
+      props.onHeld();
+    }
+  };
 
   const submit = (verdict: Verdict) => {
     const body: SubmitReview = {

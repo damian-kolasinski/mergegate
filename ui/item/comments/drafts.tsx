@@ -11,6 +11,7 @@ import { Button } from "../../design-system";
 import { isFlagged, sideOf } from "./anchor";
 import type { Comments } from "./comments";
 import type { CommentEditor } from "./editor";
+import { merged } from "./merge";
 import styles from "./drafts.module.css";
 
 export type Drafts = ReturnType<typeof useDrafts>;
@@ -59,6 +60,10 @@ export function useDrafts(
       id: comment.id,
       message: error instanceof Error ? error.message : String(error),
     });
+  /** Re-placing `comment` ends once it's moved or gone. */
+  const settled = (comment: Comment) => {
+    if (placing()?.id === comment.id) setPlacing(undefined);
+  };
   /** Puts `comment` on `span` of the revision on screen, keeping its body. */
   const move = (comment: Comment, span: Span) => {
     const body: MoveDraft = {
@@ -71,12 +76,17 @@ export function useDrafts(
     setFailure(undefined);
     return putJson<Comment>(`${url}/${comment.id}/anchor`, body).then(
       (moved) => {
+        settled(comment);
         setList((all) =>
           all.map((other) => (other.id === moved.id ? moved : other)),
         );
         options.reveal(span);
       },
-      failed(comment),
+      (error: unknown) => {
+        failed(comment)(error);
+        // Re-placing closed the list an outdated draft's card is in.
+        options.show(comment.id);
+      },
     );
   };
 
@@ -141,7 +151,9 @@ export function useDrafts(
             };
             return postJson<Comment>(url, body).then((comment) => {
               // A review that went out meanwhile may have sent it already.
-              if (!options.isSent(comment)) setList((all) => [...all, comment]);
+              // A refetch that adopted drafts may hold it already.
+              if (!options.isSent(comment))
+                setList((all) => merged(all, [comment]));
             });
           },
         });
@@ -174,14 +186,22 @@ export function useDrafts(
       setDeleting(comment.id);
       setFailure(undefined);
       deleteJson(`${url}/${comment.id}`)
-        .then(
-          () =>
-            setList((all) => all.filter((other) => other.id !== comment.id)),
-          failed(comment),
-        )
+        .then(() => {
+          settled(comment);
+          setList((all) => all.filter((other) => other.id !== comment.id));
+        }, failed(comment))
         .finally(() => setDeleting(undefined));
     },
     sent,
+    /** The hub's drafts, which another tab may have written. */
+    adopt(latest: Comment[]) {
+      setList((all) =>
+        merged(
+          all,
+          latest.filter((comment) => !options.isSent(comment)),
+        ),
+      );
+    },
     /** A review sent every draft the hub had for the item. */
     submitted(review: Review) {
       sent(review.comments);
