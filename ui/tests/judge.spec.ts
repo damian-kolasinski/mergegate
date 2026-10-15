@@ -57,6 +57,27 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     await expect(files.getByRole("button", { name: /^Trusted/ })).toHaveCount(
       0,
     );
+
+    // Led by the judge, its scores order every file, the guide breaking the
+    // tie between main.rs and the lockfile; the diff follows the same files
+    // into their new order.
+    hub.mg(["judge", "set", "jev", "--order", "judge"], app.dir);
+    await expect(files.getByRole("listitem")).toHaveText([
+      /^src\/session\.rs\s*judged 100\/100\s*\+1$/,
+      /^src\/main\.rs\s*wires the store in\s*judged 45\/100\s*\+1$/,
+      /^Cargo\.lock\s*judged 45\/100\s*promoted by the judge; trusted by R1: `\*\*\/\*\.lock` — regenerated\s*\+1$/,
+      /^README\.md\s*the new setting\s*judged 23\/100\s*\+3$/,
+    ]);
+    const diffs = page.getByRole("region", { name: "Diff" }).getByRole("code");
+    await expect(diffs).toHaveCount(4);
+    for (const [at, text] of [
+      "pub fn load() {}",
+      "fn main() { session::load() }",
+      "version = 4",
+      "sessions = disk",
+    ].entries()) {
+      await expect(diffs.nth(at)).toContainText(text);
+    }
   } finally {
     hub.stop();
     jev.stop();
