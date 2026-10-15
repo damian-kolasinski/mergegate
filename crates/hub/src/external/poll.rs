@@ -1,5 +1,5 @@
 //! Polls every open github item's pull request for comments, and hands what
-//! it holds to the agent once it's due (design §6.4).
+//! it holds to the agent once it's due (design §6.1).
 
 use std::collections::HashMap;
 use std::sync::Arc;

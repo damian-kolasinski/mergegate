@@ -2,7 +2,7 @@
 //! item's pull request. The hub polls them, shows them as they come, and
 //! hands them to the item's agent in batches once the reviewers have gone
 //! quiet; the operator can agree with the agent's rejection of one or
-//! override it (design §6.4).
+//! override it (design §6.3).
 
 mod due;
 mod error;

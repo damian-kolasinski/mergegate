@@ -55,7 +55,7 @@ crates/
   highlight/             tree-sitter + WASM grammar loader + language manager
   judge-anthropic/  judge-openai/  judge-command/  judge-jev/
   auth-tailscale/  auth-token/
-  hub/                   axum server, scheduler, hooks runner; composition root of the daemon
+  hub/                   axum server, scheduler, wake runner; composition root of the daemon
   cli/                   mg commands
   skill/                 SKILL.md + references, embedded
   testkit/               test harness: real hub, git repos and mg binaries in temp dirs
@@ -75,7 +75,7 @@ Ports (traits in `core`): `Git`, `Backend`, `Store`, `RulesFile`, `Highlighter`,
 - **Three ways to plug in:**
   - runtime, per project, via config: backend, judge;
   - build time via cargo features: optional adapters;
-  - out of process via JSON over stdio: judge `command` and hooks today, third-party backends later.
+  - out of process via JSON over stdio: judge `command` today, third-party backends later.
 
 ## 5. Git split
 
@@ -120,7 +120,7 @@ mg lang remove <name>
 - A file whose language isn't installed renders as plain text, with a hint naming the pack ("No swift language pack").
 - Adding a language highlights open items in the background, and open reviews repaint without reloading. Removing one drops its cache entries.
 
-With releases (roadmap row 18a):
+With releases (roadmap row 18):
 - packs become GitHub release assets of the mergegate repo, so there's no hosted infrastructure, and each `mg` version pins the index URL and the checksums it accepts;
 - `mg lang add <name>...`, `mg lang add --detect [<project>]`, `mg lang list --available`, and `mg lang update` to refresh packs to versions compatible with this `mg`;
 - `mg project add` scans the repo's file extensions and returns detected languages in its `needs_decision`, defaulting to installing them;
@@ -138,7 +138,7 @@ With releases (roadmap row 18a):
 | File triage | Pipeline: guards → rules (only stage that can hide) → rankers (agent guide, structural heuristics, judge) | `FileRanker` |
 | Inbox prioritization | Explicit priority → conflict pressure and stacked children → age → optional judge | `ItemRanker` |
 | Judge | Provider for both rankers | `Judge` |
-| Events & delivery | Event log, cursors, debounce, long-poll, `--wake`, hooks | in `hub` |
+| Events & delivery | Event log, cursors, debounce, long-poll, `--wake` | in `hub` |
 | Identity & transport | Listen modes, Tailscale whois, tokens | `Auth` |
 | Highlighting | Language packs, tokenization, cache | `Highlighter` |
 | Store | Schema, migrations, attachments | `Store` |
