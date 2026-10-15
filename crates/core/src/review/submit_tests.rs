@@ -25,6 +25,7 @@ fn requesting_changes_sends_the_item_back_with_an_event() {
     let mut store = FakeStore::with_item(1);
     let review = submit(
         &mut store,
+        &FakeGit::default(),
         request(
             1,
             Verdict::ChangesRequested,
@@ -58,23 +59,38 @@ fn a_review_sends_every_draft_on_the_item() {
         write_draft(&mut store, &git, draft).unwrap();
     }
 
-    let review = submit(&mut store, request(2, Verdict::ChangesRequested, "")).unwrap();
+    let review = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(2, Verdict::ChangesRequested, ""),
+    )
+    .unwrap();
     let sent: Vec<_> = review
         .comments
         .iter()
         .map(|c| (c.revision, c.body.as_str(), c.review))
         .collect();
-    assert_eq!(sent, [(1, "On r1.", Some(1)), (2, "On r2.", Some(1))]);
+    // The draft from r1 goes on r2, which didn't change its line.
+    assert_eq!(sent, [(2, "On r1.", Some(1)), (2, "On r2.", Some(1))]);
     let events = store.events(&id("app#1"), 0).unwrap();
     assert_eq!(events[0].kind, EventKind::ReviewSubmitted(review));
 
     // They went out with the first review.
-    let next = submit(&mut store, request(2, Verdict::Comment, "And?")).unwrap();
+    let next = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(2, Verdict::Comment, "And?"),
+    )
+    .unwrap();
     assert_eq!(next.comments, []);
     assert_eq!(
-        submit(&mut store, request(2, Verdict::Comment, ""))
-            .unwrap_err()
-            .to_string(),
+        submit(
+            &mut store,
+            &FakeGit::default(),
+            request(2, Verdict::Comment, "")
+        )
+        .unwrap_err()
+        .to_string(),
         "a review needs a summary, a comment or a reply"
     );
 }
@@ -82,11 +98,21 @@ fn a_review_sends_every_draft_on_the_item() {
 #[test]
 fn a_comment_leaves_the_item_where_it_is() {
     let mut store = FakeStore::with_item(1);
-    submit(&mut store, request(1, Verdict::Comment, "Looks close.")).unwrap();
+    submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, "Looks close."),
+    )
+    .unwrap();
     assert_eq!(state(&store), ItemState::NeedsReview);
 
     store.set_state(&id("app#1"), ItemState::ChangesRequested);
-    submit(&mut store, request(1, Verdict::Comment, "One more thing.")).unwrap();
+    submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, "One more thing."),
+    )
+    .unwrap();
     assert_eq!(state(&store), ItemState::ChangesRequested);
     assert_eq!(store.events(&id("app#1"), 0).unwrap().len(), 2);
 }
@@ -94,14 +120,23 @@ fn a_comment_leaves_the_item_where_it_is() {
 #[test]
 fn a_review_may_be_on_an_older_revision() {
     let mut store = FakeStore::with_item(2);
-    let review = submit(&mut store, request(1, Verdict::Comment, "Written on r1.")).unwrap();
+    let review = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, "Written on r1."),
+    )
+    .unwrap();
     assert_eq!(review.revision, 1);
 }
 
 #[test]
 fn refuses_reviews_that_cant_be_sent() {
     let mut store = FakeStore::with_item(1);
-    let mut err = |request| submit(&mut store, request).unwrap_err().to_string();
+    let mut err = |request| {
+        submit(&mut store, &FakeGit::default(), request)
+            .unwrap_err()
+            .to_string()
+    };
     let other = SubmitReview {
         id: id("app#2"),
         ..request(1, Verdict::Comment, "Hi")
@@ -125,7 +160,12 @@ fn refuses_reviews_that_cant_be_sent() {
         (ItemState::Abandoned, "app#1 is closed"),
     ] {
         store.set_state(&id("app#1"), closed);
-        let err = submit(&mut store, request(1, Verdict::Comment, "Hi")).unwrap_err();
+        let err = submit(
+            &mut store,
+            &FakeGit::default(),
+            request(1, Verdict::Comment, "Hi"),
+        )
+        .unwrap_err();
         assert_eq!(err.to_string(), message);
     }
     assert!(store.reviews().is_empty());

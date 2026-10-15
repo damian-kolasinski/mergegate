@@ -32,7 +32,7 @@ fn holds_every_revisions_comments_and_replies() {
         verdict: Verdict::ChangesRequested,
         summary: String::new(),
     };
-    submit(&mut store, review).unwrap();
+    submit(&mut store, &FakeGit::default(), review).unwrap();
     let question = WriteReply {
         comment: crate::review::CommentId(1),
         status: ReplyStatus::Question,
@@ -42,7 +42,9 @@ fn holds_every_revisions_comments_and_replies() {
     write_draft_reply(&mut store, crate::review::CommentId(1), "Both.".into()).unwrap();
     write_draft(&mut store, &git, draft(2, "And here?")).unwrap();
 
-    let found = conversation(&store, &id("app#1")).unwrap().unwrap();
+    let found = conversation(&store, &git, &id("app#1"), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(found.newest, 2);
     let comments: Vec<_> = found
         .comments
@@ -61,5 +63,8 @@ fn holds_every_revisions_comments_and_replies() {
 #[test]
 fn an_unknown_item_has_none() {
     let store = FakeStore::with_item(1);
-    assert_eq!(conversation(&store, &id("app#2")).unwrap(), None);
+    assert_eq!(
+        conversation(&store, &FakeGit::default(), &id("app#2"), None).unwrap(),
+        None
+    );
 }

@@ -11,6 +11,8 @@ import type { Sent } from "./sent";
  */
 export function useSync(
   item: string,
+  /** The revision on screen, which earlier revisions' threads are placed onto. */
+  revision: number,
   slices: {
     sent: Sent;
     drafts: Drafts;
@@ -19,10 +21,14 @@ export function useSync(
   },
 ) {
   let asked = 0;
-  const refresh = () => {
+  // Sticks until an answer applies it, as a newer ask supersedes this one.
+  let adopting = false;
+  /** With `drafts`, also takes the drafts this tab hasn't seen. */
+  const refresh = (drafts = false) => {
+    if (drafts) adopting = true;
     const ask = ++asked;
     getJson<Conversation>(
-      `/api/items/${encodeURIComponent(item)}/conversation`,
+      `/api/items/${encodeURIComponent(item)}/conversation?onto=${revision}`,
     ).then(
       (latest) => {
         // An older answer mustn't replace a newer one.
@@ -30,9 +36,14 @@ export function useSync(
         slices.replies.keep(latest.replies);
         slices.replyDrafts.sent(latest.replies);
         // Another tab may have sent drafts this one still shows. Drafts
-        // themselves stay as this tab has them, saves in flight included.
+        // themselves stay as this tab has them, saves in flight included,
+        // unless the hub held a review over drafts this tab hasn't seen.
         slices.sent.keep(latest.comments);
         slices.drafts.sent(latest.comments);
+        if (adopting) {
+          adopting = false;
+          slices.drafts.adopt(latest.drafts);
+        }
       },
       // What's shown stays until the next refetch.
       () => undefined,

@@ -1,6 +1,6 @@
 // F6 and F7 end to end: the operator comments on lines and requests changes,
 // the agent waits for it and answers, the operator answers back, and once the
-// agent's next revision is in, the Conversation list keeps r1's comments.
+// agent's next revision is in, r1's comments follow their lines into it.
 
 import { expect, test } from "./hub";
 
@@ -97,45 +97,59 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
       "fn login(password: &str) {\n    assert!(!password.is_empty());\n    check(password);\n}\n",
   });
 
-  // Open on r2, the diff no longer shows r1's comments; the list does.
+  // Open on r2, r1's comments sit on their unchanged lines, marked with the
+  // revision they were written on; the list keeps them as written.
   await page.reload();
   await expect(diff.getByText("assert!(!password.is_empty());")).toBeVisible();
   await expect(header.getByText("r2", { exact: true })).toBeVisible();
-  await expect(diff.getByRole("article")).toHaveCount(0);
+  await expect(diff.getByRole("article")).toHaveCount(2);
+  await expect(
+    diff.getByRole("article", { name: "Comment c_1" }),
+  ).toContainText("from r1");
+  const moved = diff.getByRole("article", { name: "Comment c_2" });
+  await expect(moved).toContainText("from r1");
   const toggle = header.getByRole("button", { name: "Conversation 2" });
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const list = page.getByRole("complementary", { name: "Conversation" });
   const sent = list.getByRole("listitem", { name: "c_1" });
   await expect(sent).toContainText("login.rs:1 @r1");
-  await expect(sent.getByText("Addressed in r2").first()).toBeVisible();
-  await expect(
-    sent.getByRole("list", { name: "Replies" }).getByRole("listitem"),
-  ).toHaveCount(3);
+  await expect(sent.getByText("Addressed in r2")).toBeVisible();
+  // The diff holds the thread; the list sums it up.
+  await expect(sent).toContainText("3 replies");
   const draft = list.getByRole("listitem", { name: "c_2" });
   await expect(draft).toContainText("login.rs:2 @r1");
   await expect(draft.getByText("Draft")).toBeVisible();
 
-  // r1's draft goes out with the review written on r2.
-  await draft.getByRole("button", { name: "Edit" }).click();
-  const field = draft.getByRole("textbox", { name: "Edit comment c_2" });
-  await field.fill("Log the failure, please.");
-  // The list stays open over what's typed in it.
+  // r1's draft goes out with the review written on r2, on r2's lines.
   await toggle.click();
-  await expect(field).toBeFocused();
+  await expect(list).toHaveCount(0);
+  await moved.getByRole("button", { name: "Edit" }).click();
+  await diff
+    .getByRole("textbox", { name: "Edit comment c_2" })
+    .fill("Log the failure, please.");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(draft).toContainText("Log the failure, please.");
+  await expect(moved).toContainText("Log the failure, please.");
   await review.getByRole("button", { name: "Request changes" }).click();
   await expect(
     review.getByText("Sent to the agent on r2 with 1 comment"),
   ).toBeVisible();
+  await toggle.click();
   await expect(draft.getByText("Sent")).toBeVisible();
+  await expect(draft).toContainText("login.rs:3 @r2");
   const third = hub.mg(["wait", "app#1"]) as Wait;
   expect(third.events).toMatchObject([
     {
       revision: 2,
       verdict: "changes_requested",
-      comments: [{ id: "c_2", revision: 1, body: "Log the failure, please." }],
+      comments: [
+        {
+          id: "c_2",
+          revision: 2,
+          quote: "    check(password);",
+          body: "Log the failure, please.",
+        },
+      ],
     },
   ]);
 

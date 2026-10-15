@@ -18,10 +18,17 @@ export function useSent(diff: ItemDiff) {
     add(comments: Comment[]) {
       setList((all) => merged(all, comments));
     },
-    /** One the hub changed, as agreeing with a rejection does. */
+    /**
+     * One the hub changed, as agreeing with a rejection does. Its answer
+     * isn't placed, and the lines the comment is on haven't changed.
+     */
     update(comment: Comment) {
       setList((all) =>
-        all.map((other) => (other.id === comment.id ? comment : other)),
+        all.map((other) => {
+          if (other.id !== comment.id) return other;
+          const placement = comment.placement ?? other.placement;
+          return placement ? { ...comment, placement } : comment;
+        }),
       );
     },
     /** The hub's list, which another tab's reviews may have added to. */

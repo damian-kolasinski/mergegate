@@ -27,7 +27,7 @@ fn reviewed() -> FakeStore {
         verdict: Verdict::ChangesRequested,
         summary: String::new(),
     };
-    submit(&mut store, review).unwrap();
+    submit(&mut store, &FakeGit::default(), review).unwrap();
     write_draft(&mut store, &git, draft()).unwrap();
     store
 }

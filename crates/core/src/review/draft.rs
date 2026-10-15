@@ -1,12 +1,13 @@
 //! Draft comments: written on lines of the diff, kept on the hub until the
 //! operator submits a review, which sends them all (design §9.2).
 
+use super::shown::Shown;
 use super::{
-    Comment, CommentId, NewComment, QUOTE_LINES, ReviewError, ReviewStore, Side, reviewable,
+    Anchor, Comment, CommentId, NewComment, QUOTE_LINES, ReviewError, ReviewStore, Side, reviewable,
 };
-use crate::diff::{Content, DiffGit, DiffStore, Hunk};
+use crate::diff::{DiffGit, DiffStore};
 use crate::git::GitError;
-use crate::interdiff::{Change, InterdiffStore};
+use crate::interdiff::InterdiffStore;
 use crate::item::{ItemId, ItemStore};
 use crate::store::StoreError;
 
@@ -74,46 +75,120 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore + InterdiffStore>(
         line,
         body,
     } = request;
-    let item = store
-        .item(&id)?
-        .ok_or_else(|| ReviewError::NoItem(id.clone()))?;
-    reviewable(&item)?;
-    if revision == 0 || revision > item.revision.number {
-        return Err(ReviewError::NoRevision { id, revision }.into());
-    }
     let body = body.trim().to_owned();
     if body.is_empty() {
         return Err(DraftError::Empty);
     }
+    let lines = Lines {
+        revision,
+        path,
+        side,
+        start_line,
+        line,
+    };
+    let quote = commentable(store, git, &id, &lines)?;
+    let comment = NewComment {
+        item: id,
+        revision: lines.revision,
+        path: lines.path,
+        side: lines.side,
+        start_line: lines.start_line,
+        line: lines.line,
+        body,
+        quote,
+    };
+    Ok(store.insert_draft(comment)?)
+}
+
+/// Re-places a draft: puts it on other lines, of any revision, as if it were
+/// written there, keeping its ID and body. It's how a draft that can't move
+/// with a review on its own gets onto the review's revision (F13).
+pub fn move_draft<S: ItemStore + DiffStore + ReviewStore + InterdiffStore>(
+    store: &mut S,
+    git: &impl DiffGit,
+    request: MoveDraft,
+) -> Result<Comment, DraftError> {
+    let MoveDraft { id, comment, lines } = request;
+    let mut found = draft(store, &id, comment)?;
+    let quote = commentable(store, git, &id, &lines)?;
+    let anchor = Anchor {
+        path: lines.path,
+        side: lines.side,
+        start_line: lines.start_line,
+        line: lines.line,
+        quote,
+    };
+    store.set_draft_anchor(comment, lines.revision, &anchor)?;
+    found.revision = lines.revision;
+    found.anchor = Some(anchor);
+    Ok(found)
+}
+
+/// Lines of one side of a file in a revision of an item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lines {
+    pub revision: u32,
+    pub path: String,
+    pub side: Side,
+    pub start_line: u32,
+    pub line: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MoveDraft {
+    pub id: ItemId,
+    pub comment: CommentId,
+    pub lines: Lines,
+}
+
+/// The quote of `lines` when a comment can go on them: the item takes
+/// reviews, the revision changes the file, and its diff shows the lines.
+fn commentable<S: ItemStore + DiffStore + InterdiffStore>(
+    store: &S,
+    git: &impl DiffGit,
+    id: &ItemId,
+    lines: &Lines,
+) -> Result<String, DraftError> {
+    let Lines {
+        revision,
+        path,
+        side,
+        start_line,
+        line,
+    } = lines.clone();
+    let item = store
+        .item(id)?
+        .ok_or_else(|| ReviewError::NoItem(id.clone()))?;
+    reviewable(&item)?;
+    if revision == 0 || revision > item.revision.number {
+        return Err(ReviewError::NoRevision {
+            id: id.clone(),
+            revision,
+        }
+        .into());
+    }
     let Some(file) = store
-        .revision_files(&id, revision)?
+        .revision_files(id, revision)?
         .into_iter()
         .map(|stat| stat.file)
         .find(|file| file.path == path)
     else {
-        return Err(DraftError::NoFile { id, revision, path });
+        return Err(DraftError::NoFile {
+            id: id.clone(),
+            revision,
+            path,
+        });
     };
-    // Submitting a revision caches every file's diff, which calls a file
-    // binary as git does and shows it no lines.
-    let diff = store
-        .diff(file.old_blob.as_deref(), file.new_blob.as_deref())?
-        .ok_or_else(|| StoreError::new(format!("{id} has no cached diff for {path}")))?;
     let no_lines = || DraftError::NoLines {
         path: path.clone(),
         side,
         start_line,
         line,
     };
-    // The UI puts a comment under its line, so one on a line the diff
-    // doesn't show, as in an expanded gap, would be sent but never seen.
-    let hunks = match &diff.content {
-        Content::Binary => return Err(DraftError::NotText(path)),
-        Content::Text(hunks) => hunks.as_slice(),
-        Content::TooLarge => &[],
+    let Some(shown) = Shown::read(store, id, revision, &file)? else {
+        return Err(DraftError::NotText(path));
     };
-    if !shown(hunks, side, start_line, line)
-        && !(side == Side::New && since_shows(store, &id, revision, &path, start_line, line)?)
-    {
+    if !shown.shows(side, start_line, line) {
         return Err(no_lines());
     }
     let blob = match side {
@@ -126,59 +201,7 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore + InterdiffStore>(
         .pop()
         .flatten()
         .ok_or_else(|| GitError::Failed(format!("{id} has no blob {blob} for {path}")))?;
-    let quote = quote(&String::from_utf8_lossy(&bytes), start_line, line).ok_or_else(no_lines)?;
-    let comment = NewComment {
-        item: id,
-        revision,
-        path,
-        side,
-        start_line,
-        line,
-        body,
-        quote,
-    };
-    Ok(store.insert_draft(comment)?)
-}
-
-/// Whether an interdiff into `revision` shows its lines `start_line..=line`
-/// of `path`. Its new side is the revision's file, so a comment there is on
-/// the revision as much as one on its own diff.
-fn since_shows<S: DiffStore + InterdiffStore>(
-    store: &S,
-    id: &ItemId,
-    revision: u32,
-    path: &str,
-    start_line: u32,
-    line: u32,
-) -> Result<bool, StoreError> {
-    for from in store.interdiffs_to(id, revision)? {
-        let file = store
-            .interdiff(id, from, revision)?
-            .into_iter()
-            .flatten()
-            .find(|file| file.stat.file.path == path && file.change == Change::Changed);
-        let Some(file) = file else { continue };
-        let file = file.stat.file;
-        let diff = store.diff(file.old_blob.as_deref(), file.new_blob.as_deref())?;
-        if let Some(Content::Text(hunks)) = diff.map(|diff| diff.content)
-            && shown(&hunks, Side::New, start_line, line)
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// Whether one hunk shows lines `start_line..=line` of `side`.
-pub(crate) fn shown(hunks: &[Hunk], side: Side, start_line: u32, line: u32) -> bool {
-    hunks.iter().any(|hunk| {
-        let (first, count) = match side {
-            Side::Old => (hunk.old_start, hunk.old_lines),
-            Side::New => (hunk.new_start, hunk.new_lines),
-        };
-        // A side without lines starts at the line before the hunk.
-        count > 0 && first <= start_line && start_line <= line && line < first + count
-    })
+    quote(&String::from_utf8_lossy(&bytes), start_line, line).ok_or_else(no_lines)
 }
 
 /// The last [`QUOTE_LINES`] of `text`'s lines `start_line..=line`, each cut

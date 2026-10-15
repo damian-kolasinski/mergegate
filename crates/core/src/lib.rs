@@ -18,6 +18,7 @@ pub mod interdiff;
 pub mod item;
 pub mod merge;
 pub mod project;
+pub mod remap;
 pub mod resume;
 pub mod review;
 pub mod settings;

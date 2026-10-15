@@ -60,6 +60,27 @@ pub struct Comment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub external: Option<ExternalComment>,
+    /// Where it shows on the revision the conversation was read onto, when
+    /// it's on lines of an earlier one; absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub placement: Option<Placement>,
+}
+
+/// Where a comment from an earlier revision is on a later one.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Placement {
+    /// On the same lines, unchanged, at these numbers. A draft placed so
+    /// moves there when a review is submitted on that revision.
+    Moved { start_line: u32, line: u32 },
+    /// On the lines that replaced its lines, or hold what's left of them. A
+    /// draft placed so holds the submit until it's re-placed or dropped.
+    Changed { start_line: u32, line: u32 },
+    /// Nowhere the revision's diff shows; as a draft, it holds the submit
+    /// too.
+    Outdated,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -112,6 +133,19 @@ pub struct WriteDraft {
     pub start_line: u32,
     pub line: u32,
     pub body: String,
+}
+
+/// `PUT /api/items/{id}/drafts/{comment}/anchor`: re-places a draft on lines
+/// of a revision, checked as a new draft's are. Answered with the
+/// [`Comment`].
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MoveDraft {
+    pub revision: u32,
+    pub path: String,
+    pub side: Side,
+    pub start_line: u32,
+    pub line: u32,
 }
 
 /// `PUT /api/items/{id}/drafts/{comment}`, answered with the [`Comment`].

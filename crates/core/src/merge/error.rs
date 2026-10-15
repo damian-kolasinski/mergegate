@@ -1,5 +1,6 @@
 use crate::item::{ItemError, ItemId};
 use crate::project::{Backend, ProjectError};
+use crate::review::ReviewError;
 use crate::store::StoreError;
 
 #[derive(Debug, thiserror::Error)]
@@ -24,6 +25,9 @@ pub enum MergeError {
     Project(#[from] ProjectError),
     #[error(transparent)]
     Item(#[from] ItemError),
+    /// The review approving it can't be sent, as when a draft can't move.
+    #[error(transparent)]
+    Review(#[from] ReviewError),
     #[error(transparent)]
     Store(#[from] StoreError),
 }

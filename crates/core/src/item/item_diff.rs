@@ -176,7 +176,9 @@ pub fn item_diff<S: ItemStore + DiffStore + ViewedStore + ReviewStore + Interdif
         Tier::Review => (0, parsed.position(&f.file.path).unwrap_or(usize::MAX)),
         Tier::Trusted => (1, 0),
     });
-    let conversation = review::read_conversation(store, id, newest)?;
+    let mut conversation = review::read_conversation(store, id, newest)?;
+    conversation.placements =
+        review::placements(store, git, &item, newest, &conversation.comments)?;
     Ok(Some(ItemDiff {
         item,
         since,

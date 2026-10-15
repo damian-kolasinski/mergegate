@@ -51,7 +51,13 @@ fn agreeing_marks_the_rejection_and_sends_nothing() {
 #[test]
 fn an_override_reopens_the_thread_at_once() {
     let mut store = answered(ReplyStatus::Rejected);
-    let threads = |store: &FakeStore| open_threads(&conversation(store, &id()).unwrap().unwrap());
+    let threads = |store: &FakeStore| {
+        open_threads(
+            &conversation(store, &FakeGit::default(), &id(), None)
+                .unwrap()
+                .unwrap(),
+        )
+    };
     assert!(threads(&store).is_empty());
 
     let (reply, event) =

@@ -58,6 +58,7 @@ fn review(item: &str, revision: u32, summary: &str) -> NewReview {
         revision,
         verdict: Verdict::ChangesRequested,
         summary: summary.into(),
+        moved: Vec::new(),
     }
 }
 

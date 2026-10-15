@@ -11,6 +11,7 @@ fn review(store: &mut crate::fake::FakeStore, revision: u32) {
         revision,
         verdict: Verdict::ChangesRequested,
         summary: String::new(),
+        moved: Vec::new(),
     };
     store
         .insert_review(review, ItemState::ChangesRequested)
