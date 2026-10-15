@@ -13,6 +13,7 @@ mod reply;
 mod shown;
 mod store;
 mod submit;
+mod waiting;
 
 pub use comment::{Anchor, Comment, CommentId, QUOTE_LINES, Side};
 pub use conversation::{Conversation, conversation};
@@ -31,6 +32,7 @@ pub use reply::{Author, Reply, ReplyError, ReplyStatus, WriteReply, reply};
 pub(crate) use shown::{Shown, shown};
 pub use store::{NewComment, NewReply, NewReview, ReviewStore};
 pub use submit::{SubmitReview, submit};
+pub use waiting::{Waiting, waiting};
 
 use crate::item::{Item, ItemId, ItemState};
 
