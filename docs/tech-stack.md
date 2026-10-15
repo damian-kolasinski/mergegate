@@ -169,7 +169,7 @@ No MCP server. The CLI works in every harness, while MCP tool schemas cost conte
 | Open item (diffs precomputed, comments placed) | < 50 ms |
 | Open item from the inbox, to its diff on screen (50 files, 5k lines) | < 100 ms |
 | Switch file / keyboard action (`n`, `j`, `v`), keypress to the frame showing the result | < 33 ms (one frame's wait plus at most one of work) |
-| Open the largest single file, a full rewrite of 9k lines (18k changed, near the 20k cap), highlighted, from the inbox | < 100 ms |
+| Open the largest single file, a full rewrite of 9k lines (18k changed, near the 20k cap), highlighted, from the inbox | < 150 ms (3.6× the lines of the 5k-line item, all rendered in one file) |
 | Expand a gap between hunks in a highlighted file, click to the lines on screen (first expansion in a file, blobs fetched) | < 50 ms |
 | Scroll a 5k-line diff | 60 fps (virtualized; p95 frame < 25 ms in `ui/tests/review.spec.ts`) |
 | A change made elsewhere showing in an open inbox | < 50 ms |

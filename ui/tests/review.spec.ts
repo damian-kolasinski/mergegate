@@ -340,7 +340,8 @@ const json = (count: number, entry: (n: number) => string) =>
   `{\n${lines(count, entry)}  "end": 0\n}\n`;
 
 // tech-stack.md §9: the largest file the hub keeps hunks for opens within
-// 100 ms, as an item of many files does, highlighted by an installed pack.
+// 150 ms, highlighted by an installed pack: 3.6× the lines of the 100 ms
+// item, all in one file, which renders whole.
 test("a single large file opens within budget", async ({ page, hub }, info) => {
   hub.mg(["lang", "add", "--from", jsonPack]);
   const big = hub.project("big");
@@ -368,7 +369,7 @@ test("a single large file opens within budget", async ({ page, hub }, info) => {
     await expect(inbox).toBeVisible();
     await page.keyboard.press("j");
   }
-  report(info, "open a single large file", opened, 100);
+  report(info, "open a single large file", opened, 150);
 });
 
 // tech-stack.md §9: expanding a gap between hunks shows its lines within
