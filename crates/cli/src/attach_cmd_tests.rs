@@ -90,7 +90,38 @@ fn a_refusal_that_a_retry_cannot_fix_keeps_the_hubs_hint() {
     let error = unsent(closed(), "app#1", &[attached("a.png")], &[rest("b.png")]);
     assert_eq!(
         error.body.message,
-        "app#1 is abandoned (a.png attached before it)"
+        "app#1 is abandoned (a.png attached before it; b.png not sent)"
     );
     assert_eq!(error.body.hint, None);
+
+    let too_large = CliError::new("attachment_too_large", "b.webm is over the limit");
+    let error = unsent(
+        too_large,
+        "app#1",
+        &[attached("a.png")],
+        &[rest("b.webm"), rest("c.png")],
+    );
+    assert_eq!(
+        error.body.message,
+        "b.webm is over the limit (a.png attached before it; b.webm, c.png not sent)"
+    );
+    assert_eq!(error.body.hint, None);
+}
+
+#[test]
+fn a_local_file_that_went_missing_is_not_retried() {
+    // The hub never answers an upload with attachment_unreadable; only this
+    // mg does, when a checked file can't be read any more.
+    let vanished = CliError::new("attachment_unreadable", "reading b.png failed");
+    let error = unsent(
+        vanished,
+        "app#1",
+        &[attached("a.png")],
+        &[rest("b.png"), rest("c.png")],
+    );
+    assert_eq!(error.body.hint, None);
+    assert_eq!(
+        error.body.message,
+        "reading b.png failed (a.png attached before it; b.png, c.png not sent)"
+    );
 }
