@@ -269,6 +269,15 @@ fn f8_only_the_newest_revision_of_an_open_item_is_approved() {
     let stale = approve(&env, 1, "");
     assert_eq!(stale.status, 409, "{}", stale.body);
     assert_eq!(json_of(&stale)["error"]["code"], "stale_revision");
+    for missing in [0, 3] {
+        let reply = approve(&env, missing, "");
+        assert_eq!(reply.status, 404, "{}", reply.body);
+        assert_eq!(
+            json_of(&reply)["error"]["message"],
+            format!("app#1 has no revision {missing}")
+        );
+        assert_eq!(json_of(&reply)["error"]["code"], "revision_not_found");
+    }
 
     // The reviews route doesn't merge.
     let body = json!({ "revision": 2, "verdict": "approved" });

@@ -150,6 +150,7 @@ fn failure(e: MergeError) -> Failure {
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
         E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::NotMerging(_) => (S::CONFLICT, "not_merging", None),
+        E::NoRevision { .. } => (S::NOT_FOUND, "revision_not_found", None),
         E::Stale { .. } => (S::CONFLICT, "stale_revision", None),
         E::NoBackend { .. } => (S::CONFLICT, "backend_unavailable", None),
     };
