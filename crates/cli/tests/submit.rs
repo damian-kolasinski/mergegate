@@ -450,3 +450,25 @@ fn f4_names_the_open_branch_a_new_one_nests_with() {
     );
     assert_eq!(under["error"]["hint"], "git branch -m NAME");
 }
+
+#[test]
+fn f4_names_the_open_branch_a_new_one_nests_with_once_refs_are_packed() {
+    let (env, repo) = hub_with_app();
+    repo.git(["switch", "--quiet", "-c", "auth"]);
+    repo.commit_files("Auth", &[("auth.rs", "1\n")]);
+    assert_eq!(submit(&env, repo.root())["item"]["id"], "app#1");
+    // Receive-pack's `gc --auto` packs staging's refs, and git words the
+    // refusal differently for a packed one.
+    git(&staging(&env, "app"), ["pack-refs", "--all"]);
+
+    repo.git(["switch", "--quiet", "--detach", "main"]);
+    repo.git(["branch", "-D", "auth"]);
+    repo.git(["switch", "--quiet", "-c", "auth/login"]);
+    repo.commit_files("Login", &[("login.rs", "1\n")]);
+    let under = submit(&env, repo.root());
+    assert_eq!(error_code(&under), "branch_nested", "{under}");
+    assert_eq!(
+        under["error"]["message"],
+        "the hub has a branch auth, so it can't take auth/login: one branch name can't nest in another"
+    );
+}

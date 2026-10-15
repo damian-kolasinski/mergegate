@@ -127,14 +127,20 @@ pub fn run(
 }
 
 /// Git can't hold two branches whose names nest (`a` and `a/b`), and the hub
-/// keeps every open item's. Its refusal names the other branch in
-/// `cannot lock ref '…': 'refs/heads/a' exists`.
+/// keeps every open item's. Its refusal names the other branch, worded
+/// `cannot lock ref '…': 'refs/heads/a' exists` while that branch is a loose
+/// ref and `'refs/heads/a' exists; cannot create '…'` once it is packed. The
+/// hub's git runs with `LC_ALL=C`, so neither is translated.
 fn nested(branch: &str, error: CliError) -> CliError {
-    let taken = error
-        .body
-        .message
+    let message = &error.body.message;
+    let taken = message
         .split_once("': 'refs/heads/")
         .and_then(|(_, rest)| rest.split_once("' exists"))
+        .or_else(|| {
+            message
+                .split_once("'refs/heads/")
+                .and_then(|(_, rest)| rest.split_once("' exists; cannot create"))
+        })
         .map(|(taken, _)| taken.to_owned());
     match taken {
         Some(taken) => CliError::new(
