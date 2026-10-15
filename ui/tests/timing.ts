@@ -183,10 +183,10 @@ export function report(
 ) {
   const sorted = [...samples].sort((a, b) => a - b);
   const at = (q: number) => sorted[Math.floor((sorted.length - 1) * q)] ?? 0;
-  info.annotations.push({
-    type: what,
-    description: `median ${at(0.5).toFixed(1)} ms, p95 ${at(0.95).toFixed(1)} ms, max ${at(1).toFixed(1)} ms over ${sorted.length}; budget ${budget} ms`,
-  });
+  const description = `median ${at(0.5).toFixed(1)} ms, p95 ${at(0.95).toFixed(1)} ms, max ${at(1).toFixed(1)} ms over ${sorted.length}; budget ${budget} ms`;
+  info.annotations.push({ type: what, description });
+  // CI keeps the report only on failure; its log keeps a passing margin.
+  console.log(`${what}: ${description}`);
   if (process.env.MG_ENFORCE_BUDGETS === "1") {
     expect(at(0.5), what).toBeLessThan(budget);
   }

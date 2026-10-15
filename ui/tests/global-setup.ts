@@ -12,7 +12,9 @@ const BINS = {
  * Builds the `mg` under test, with the UI this checkout holds: `MG_REQUIRE_UI`
  * fails the build instead of embedding the stub page. Also builds testkit's
  * `fake-github` and `fake-jev`. A binary's variable, as `MG_BIN`, skips its
- * build and tests that binary instead.
+ * build and tests that binary instead. Enforced budgets build in release, as
+ * mg ships: a debug hub serves a near-cap file's 1 MB diff ten times slower,
+ * and the UI budgets time that request.
  */
 export default function globalSetup() {
   const missing = Object.entries(BINS)
@@ -24,6 +26,7 @@ export default function globalSetup() {
     [
       "build",
       "--quiet",
+      ...(process.env.MG_ENFORCE_BUDGETS === "1" ? ["--release"] : []),
       ...missing.flatMap((bin) => ["--bin", bin]),
       "--message-format=json",
     ],

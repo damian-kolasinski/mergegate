@@ -10,6 +10,7 @@ import type { BlobHighlights } from "../api/BlobHighlights";
 import type { File } from "../api/File";
 import type { Span } from "../api/Span";
 import type { Tag } from "../api/Tag";
+import { withPlainText } from "./plain-text";
 
 /**
  * The hub's spans for a file, by the line numbers of each side. A context
@@ -121,7 +122,7 @@ renderer.renderDiffWithHighlighter = function (diff, highlighter, plain) {
   ) {
     return last.rendered;
   }
-  const rendered = render.call(this, diff, highlighter, plain);
+  const rendered = render.call(this, diff, withPlainText(highlighter), plain);
   const painting = paintings.get(diff.name);
   if (painting) {
     paintLines(rendered.result.code.deletionLines, painting.deletions);

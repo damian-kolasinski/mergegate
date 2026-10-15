@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # `pnpm typecheck` generates the API types with cargo, and `pnpm e2e`
-      # builds the mg it tests.
+      # builds the mg it tests, in release since it enforces the budgets.
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
