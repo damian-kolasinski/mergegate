@@ -188,4 +188,27 @@ fn f11_a_guide_whose_intent_names_the_review_is_warned() {
         ),
         "{text}"
     );
+
+    // Rewritten at the same head, it replaces the guide, and says so.
+    fs::write(
+        &guide,
+        "Tests the parser.\n\n## Files\n\n- `src/parser.rs` — the test\n",
+    )
+    .unwrap();
+    let text = env
+        .mg_at(repo.root(), &["submit", "--guide", guide.to_str().unwrap()])
+        .assert_code(0)
+        .stdout;
+    let head = repo.rev("HEAD");
+    assert_eq!(
+        text,
+        format!(
+            "app#1 r2 is already at {}: Add the parser\n  its guide is now the one sent\n",
+            &head[..12]
+        )
+    );
+    assert_eq!(
+        item(&env, "app#1")["guide"],
+        "Tests the parser.\n\n## Files\n\n- `src/parser.rs` — the test\n"
+    );
 }

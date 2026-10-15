@@ -108,7 +108,7 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
             "[1] review.submitted app#1 r1: the operator approved\n  Ship it.\n\n\
              [2] item.merged app#1 r1: the operator merged it as {commit}\n\n  \
              Clean up feature as agreed with the operator; by default:\n    \
-             git fetch mergegate\n    git switch --detach mergegate/main\n    \
+             git fetch --prune mergegate\n    git switch --detach mergegate/main\n    \
              git branch -D feature\n\n\
              cursor 2\n\napp#1 is merged"
         )
@@ -128,7 +128,7 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     assert_eq!(
         replay["events"][0]["commands"],
         json!([
-            "git fetch mergegate",
+            "git fetch --prune mergegate",
             "git switch --detach mergegate/main",
             "git branch -D feature",
         ])
@@ -390,7 +390,7 @@ fn f8_an_approval_carries_to_a_revision_with_the_same_diff() {
              Approved again: the diff is unchanged since r1.\n\n\
              [4] item.merged app#1 r2: the operator merged it as {commit}\n\n  \
              Clean up feature as agreed with the operator; by default:\n    \
-             git fetch mergegate\n    git switch --detach mergegate/main\n    \
+             git fetch --prune mergegate\n    git switch --detach mergegate/main\n    \
              git branch -D feature\n\n\
              cursor 4\n\n\
              app#1 is merged"

@@ -91,6 +91,18 @@ test("f7 a new revision shows what changed since the review", async ({
   // is r1's addition, context since r1.
   const added = diff.locator('[data-line-type="change-addition"]');
   await expect(added.filter({ hasText: /^mod login;$/ })).toHaveCount(1);
+  await expect(screen.getByLabel("Compare")).toHaveValue("all");
+
+  // The picker says what the diff is against, though a new diff, as a
+  // refetch brings, renders its options anew.
+  const compare = screen.getByLabel("Compare");
+  await compare.selectOption("1");
+  await expect(files.getByText("1 unchanged since r1")).toBeVisible();
+  await expect(compare).toHaveValue("1");
+  const refetched = page.waitForResponse((r) => r.url().endsWith("?since=1"));
+  await compare.selectOption("1");
+  await refetched;
+  await expect(compare).toHaveValue("1");
 });
 
 test("f7 the inbox counts what changed since the review", async ({

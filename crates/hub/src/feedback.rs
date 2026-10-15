@@ -192,12 +192,14 @@ pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedb
                 ],
             },
             // Detaching in place would leave the worktree on the pre-squash
-            // commit, behind the target the item just landed on.
+            // commit, behind the target the item just landed on. The hub
+            // deletes merged items' branches, which a plain fetch would keep
+            // as stale `mergegate/*` refs.
             NoticeKind::Merged { commit } => api::feedback::EventBody::ItemMerged {
                 commit,
                 branch: item.branch.clone(),
                 commands: vec![
-                    "git fetch mergegate".to_owned(),
+                    "git fetch --prune mergegate".to_owned(),
                     format!("git switch --detach mergegate/{target}"),
                     format!("git branch -D {}", item.branch),
                 ],

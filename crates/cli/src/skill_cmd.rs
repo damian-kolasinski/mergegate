@@ -31,7 +31,7 @@ struct Installed {
 
 const NEXT: &str = "Copy or link the folder to where you load skills from. Then ask your \
 operator what to do with an item's branch after it merges: mergegate squash-merges, so git \
-still sees the branch as unmerged. The default is `git fetch mergegate`, `git switch --detach \
+still sees the branch as unmerged. The default is `git fetch --prune mergegate`, `git switch --detach \
 mergegate/<target>`, then `git branch -D <branch>`, which leaves the clone on the updated target. \
 Record what you agree where you keep your standing instructions.";
 
