@@ -166,7 +166,10 @@ pub enum FeedbackError {
     Store(#[from] StoreError),
 }
 
-/// `id`'s events after `since`, or after the delivered cursor.
+/// `id`'s events after `since`, or after the delivered cursor. A `since`
+/// past `id`'s newest event reads from that event instead, so the cursor
+/// returned is one the item has reached: a later event of the item may be
+/// logged below the one given, which cursors being hub-wide allows.
 pub fn feedback<S: ItemStore + FeedbackStore>(
     store: &S,
     id: &ItemId,
@@ -176,7 +179,7 @@ pub fn feedback<S: ItemStore + FeedbackStore>(
         .item(id)?
         .ok_or_else(|| FeedbackError::NoItem(id.clone()))?;
     let since = match since {
-        Some(cursor) => cursor,
+        Some(cursor) => cursor.min(store.last_cursor(id)?),
         None => store.delivered(id)?,
     };
     let events = store.events(id, since)?;
