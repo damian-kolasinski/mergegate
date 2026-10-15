@@ -61,7 +61,17 @@ fn line(i: &InboxItem) -> String {
         None => String::new(),
     };
     let changed = match &i.changed_since {
-        Some(since) => format!(" · {} changed since r{}", since.files, since.revision),
+        // An approval that stands yet didn't carry: something changed, if
+        // only a trusted file or one the rebase conflicted on.
+        Some(since) if since.approved && since.files == 0 => {
+            format!(" · changed since approved r{}", since.revision)
+        }
+        Some(since) => format!(
+            " · {} changed since {}r{}",
+            since.files,
+            if since.approved { "approved " } else { "" },
+            since.revision
+        ),
         None => String::new(),
     };
     let mut out = format!(

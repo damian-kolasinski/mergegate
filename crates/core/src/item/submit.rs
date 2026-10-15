@@ -41,6 +41,9 @@ pub struct Submit {
 pub struct Submitted {
     pub item: Item,
     pub new_revision: bool,
+    /// The submit gave an existing item a new title, which a merge would
+    /// land as its commit message.
+    pub retitled: bool,
     /// What the agent should fix in the revision's guide, and a priority or
     /// note it sent that the item ignored.
     pub warnings: Vec<String>,
@@ -127,6 +130,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         return Ok(Submitted {
             item,
             new_revision: false,
+            retitled: retitle.is_some(),
             warnings,
         });
     }
@@ -240,6 +244,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
         interdiffs,
         viewed,
     };
+    let retitled = existing.as_ref().is_some_and(|item| item.title != title);
     let item = match existing {
         Some(item) => store.add_revision(&item.id, &title, ItemState::NeedsReview, revision)?,
         None => store.insert_item(NewItem {
@@ -259,6 +264,7 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore
     Ok(Submitted {
         item,
         new_revision: true,
+        retitled,
         warnings,
     })
 }

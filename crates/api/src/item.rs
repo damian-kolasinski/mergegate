@@ -196,4 +196,6 @@ pub struct ChangedSince {
     pub revision: u32,
     /// The files changed since it.
     pub files: u32,
+    /// The operator approved that revision and still stands by it.
+    pub approved: bool,
 }

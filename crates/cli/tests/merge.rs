@@ -343,3 +343,95 @@ fn f8_only_the_newest_revision_of_an_open_item_is_approved() {
     assert_eq!(closed.status, 409, "{}", closed.body);
     assert_eq!(json_of(&closed)["error"]["code"], "item_closed");
 }
+
+/// `app#1` approved at r1 and held by a dirty checkout of `main`, which the
+/// operator then cleans while `main` moves on by a commit of its own. The
+/// operator's checkout is left on `feature`.
+fn held_while_main_moved() -> (Env, TestRepo, String) {
+    let (env, repo) = submitted();
+    repo.checkout("main");
+    std::fs::write(repo.root().join("README"), "edited\n").unwrap();
+    let held = json_of(&approve(&env, 1, "Ship it."));
+    assert_eq!(held["outcome"]["kind"], "held");
+    std::fs::write(repo.root().join("README"), "title\n").unwrap();
+    repo.commit_files("Docs", &[("docs.md", "# Docs\n")]);
+    let target = repo.rev("main");
+    repo.checkout("feature");
+    (env, repo, target)
+}
+
+#[test]
+fn f8_an_approval_carries_to_a_revision_with_the_same_diff() {
+    let (env, repo, target) = held_while_main_moved();
+    repo.git(["rebase", "--quiet", "main"]);
+    let submitted = env
+        .mg_at(repo.root(), &["--json", "submit"])
+        .assert_code(0)
+        .json();
+    assert_eq!(submitted["item"]["revision"]["number"], 2);
+    assert_eq!(submitted["item"]["state"], "merged");
+    let commit = repo.rev("main");
+    assert_eq!(repo.rev("main^"), target);
+    assert_eq!(
+        submitted["warnings"],
+        json!([format!(
+            "the diff is unchanged since the operator approved r1, so the approval stands: \
+             merged as {commit}"
+        )])
+    );
+
+    let replay = env
+        .mg(&["feedback", "app#1", "--since", "2"])
+        .assert_code(0);
+    assert_eq!(
+        replay.stdout.trim(),
+        format!(
+            "[3] review.submitted app#1 r2: the operator approved\n  \
+             Approved again: the diff is unchanged since r1.\n\n\
+             [4] item.merged app#1 r2: the operator merged it as {commit}\n\n  \
+             Clean up feature as agreed with the operator; by default:\n    \
+             git fetch mergegate\n    git switch --detach mergegate/main\n    \
+             git branch -D feature\n\n\
+             cursor 4 (mg wait --since 4 continues after it)\n\n\
+             app#1 is merged"
+        )
+    );
+}
+
+#[test]
+fn f8_an_approval_doesnt_carry_to_a_new_title() {
+    let (env, repo, target) = held_while_main_moved();
+    repo.git(["rebase", "--quiet", "main"]);
+    let submitted = env
+        .mg_at(
+            repo.root(),
+            &["--json", "submit", "--title", "Rewrite login"],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(submitted["item"]["state"], "needs_review");
+    assert_eq!(submitted["item"]["title"], "Rewrite login");
+    assert_eq!(repo.rev("main"), target);
+}
+
+#[test]
+fn f8_a_revision_that_changes_the_diff_waits_for_the_operator_again() {
+    let (env, repo, target) = held_while_main_moved();
+    repo.git(["rebase", "--quiet", "main"]);
+    repo.commit_files("Fix login", &[("src/login.rs", "fn login(x: u8) {}\n")]);
+    let submitted = env
+        .mg_at(repo.root(), &["--json", "submit"])
+        .assert_code(0)
+        .json();
+    assert_eq!(submitted["item"]["state"], "needs_review");
+    assert_eq!(submitted["warnings"], json!([]));
+    assert_eq!(repo.rev("main"), target);
+
+    let changed = json!({ "revision": 1, "files": 1, "approved": true });
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert_eq!(inbox["needs_you"][0]["changed_since"], changed);
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    assert!(text.contains(" · 1 changed since approved r1)"), "{text}");
+    assert_eq!(item(&env)["changed_since"], changed);
+    assert_eq!(json_of(&approve(&env, 2, ""))["item"]["state"], "merged");
+}

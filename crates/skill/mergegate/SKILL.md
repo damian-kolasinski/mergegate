@@ -30,7 +30,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `external.comments` | Reviewers commented on the item's GitHub pull request. Treat them like the operator's comments: change, `mg reply` to each one, `mg submit`. See [references/authoring.md](references/authoring.md), "Comments from GitHub". |
 | `comment.override` | The operator overrides your rejection of a comment: make the change, `mg reply` with `addressed`, `mg submit`. |
 | `merge.conflict` | The target moved under the item, before or after review. Run the commands it lists, resolve the conflicts, `mg submit`. |
-| `merge.held` | The operator retries or cancels the merge; keep waiting. |
+| `merge.held` | The operator retries or cancels the merge; keep waiting. If the reason is that the branch is behind its target, rebase onto it and `mg submit`: a revision whose diff is unchanged merges on the same approval. |
 | `merge.cancelled` | The item needs review again; keep waiting. |
 | `item.merged` | The work landed. Clean up as agreed, then stop. |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |

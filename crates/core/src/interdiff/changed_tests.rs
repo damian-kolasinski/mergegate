@@ -32,6 +32,7 @@ fn counts_what_changed_since_the_last_review() {
     let changed = ChangedSince {
         revision: 1,
         files: 4,
+        approved: false,
     };
     assert_eq!(changed_since_review(&store, &item).unwrap(), Some(changed));
 
@@ -40,6 +41,7 @@ fn counts_what_changed_since_the_last_review() {
     let changed = ChangedSince {
         revision: 2,
         files: 1,
+        approved: false,
     };
     assert_eq!(changed_since_review(&store, &item).unwrap(), Some(changed));
 }
@@ -60,6 +62,7 @@ fn leaves_out_trusted_files() {
     let changed = ChangedSince {
         revision: 1,
         files: 3,
+        approved: false,
     };
     assert_eq!(changed_since_review(&store, &item).unwrap(), Some(changed));
 }

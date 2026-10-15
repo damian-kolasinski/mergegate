@@ -1,5 +1,6 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import type { Approve } from "../api/Approve";
+import type { ChangedSince } from "../api/ChangedSince";
 import type { ItemState } from "../api/ItemState";
 import type { Merge } from "../api/Merge";
 import type { Review } from "../api/Review";
@@ -34,6 +35,11 @@ export function ReviewBar(props: {
   blocked: "held" | "conflict" | undefined;
   /** A newer revision was submitted: only it can be approved. */
   behind: boolean;
+  /**
+   * What changed since the last review; when that was an approval that
+   * stands, the bar says so, so approving again is the one step left.
+   */
+  changed: ChangedSince | null;
   /** Files not marked viewed, which the confirm step warns about. */
   unviewed: number;
   drafts: number;
@@ -141,6 +147,8 @@ export function ReviewBar(props: {
     setSent(undefined);
     setConfirming(true);
   };
+  const approvedBefore = () =>
+    props.changed?.approved ? props.changed : undefined;
   const unlessWriting = (action: () => void) => () => {
     if (!props.writing) action();
   };
@@ -204,6 +212,9 @@ export function ReviewBar(props: {
             {(lead) => <NextItem after={props.item} lead={`${lead()}.`} />}
           </Show>
         </p>
+        <Show when={approvedBefore()}>
+          {(changed) => <Meta>{approvedLabel(changed())}</Meta>}
+        </Show>
         <Show when={props.drafts}>
           <Meta>{plural(props.drafts, "draft comment")}</Meta>
         </Show>
@@ -329,6 +340,13 @@ export function ReviewBar(props: {
       </div>
     </form>
   );
+}
+
+function approvedLabel(changed: ChangedSince): string {
+  // It stands yet didn't carry, so something changed even when no file to
+  // review did: a trusted one, or one the rebase conflicted on.
+  const files = changed.files ? `${plural(changed.files, "file")} ` : "";
+  return `Approved r${changed.revision} · ${files}changed since`;
 }
 
 function plural(count: number, noun: string): string {
