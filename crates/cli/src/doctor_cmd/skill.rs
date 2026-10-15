@@ -24,9 +24,26 @@ pub(super) fn loaded() -> Vec<PathBuf> {
         .collect()
 }
 
+/// Whether `root` is the home `mg` uses with `MERGEGATE_HOME` unset, the
+/// installed `mg`'s, which the copies agents load belong to.
+pub(super) fn is_default(root: &Path) -> bool {
+    hub::Home::default_root().is_ok_and(|default| same(&default, root))
+}
+
+/// Whether both paths name one file once links are followed.
+fn same(a: &Path, b: &Path) -> bool {
+    a == b || matches!((fs::canonicalize(a), fs::canonicalize(b)), (Ok(a), Ok(b)) if a == b)
+}
+
 /// `files` as `skill::FILES` lists them; `installed` is the home's folder,
-/// `loaded` where agents may load it from.
-pub(super) fn check(installed: &Path, loaded: &[PathBuf], files: &[(&str, &str)]) -> Check {
+/// `default` whether that home is the default one, `loaded` where agents may
+/// load it from.
+pub(super) fn check(
+    installed: &Path,
+    default: bool,
+    loaded: &[PathBuf],
+    files: &[(&str, &str)],
+) -> Check {
     let current = |path: &Path| {
         files.iter().all(|(file, text)| {
             fs::read(path.join(file)).is_ok_and(|on_disk| on_disk == text.as_bytes())
@@ -39,8 +56,15 @@ pub(super) fn check(installed: &Path, loaded: &[PathBuf], files: &[(&str, &str)]
         fix,
     };
     let install = || Some("mg skill install".to_owned());
-    // Agents read that copy, whatever the home holds.
-    if let Some(stale) = loaded.iter().find(|path| path.exists() && !current(path)) {
+    // Agents read that copy, whatever the home holds. From another home, as
+    // a dev or test hub's, only a copy linked to it is its to fix: any other
+    // is the default home's, and linking it here would hand every agent
+    // session a scratch home's skill.
+    let ours = |path: &Path| default || same(path, installed);
+    if let Some(stale) = loaded
+        .iter()
+        .find(|path| path.exists() && !current(path) && ours(path))
+    {
         let fix = match current(installed) {
             true => Some(format!(
                 "ln -sfn {} {}",

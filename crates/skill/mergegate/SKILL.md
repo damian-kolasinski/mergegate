@@ -19,7 +19,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 ## The loop
 
-1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)).
+1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)). Start it from the target as the hub has it, `git fetch mergegate` then `git switch -c <branch> mergegate/<target>`: nothing keeps the clone's own `<target>` branch current.
 2. `mg submit --title "Short summary" --guide guide.md`, the guide saying what the change is for and which files to read first ([references/authoring.md](references/authoring.md)). It prints the item's ID, as in `app#3`. Running it again from the same branch adds a revision.
 3. Wait for the item's events, for example `mg wait app#3`.
 4. Act on them (table below), then go back to 2 or 3.
@@ -48,6 +48,8 @@ git fetch mergegate
 git switch --detach mergegate/<target>
 git branch -D <branch>
 ```
+
+It leaves the clone's own `<target>` branch where it was, as it may hold the operator's work or be checked out in another worktree. Start the next branch from `mergegate/<target>` (step 1 of the loop), not from `<target>`.
 
 ## Picking up an item again
 

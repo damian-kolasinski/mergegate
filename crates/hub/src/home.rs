@@ -52,15 +52,18 @@ impl Home {
                 }
                 Ok(Self { root })
             }
-            None => {
-                let home = std::env::var_os("HOME")
-                    .filter(|v| !v.is_empty())
-                    .ok_or(HomeError::Unset)?;
-                Ok(Self {
-                    root: Path::new(&home).join(".mergegate"),
-                })
-            }
+            None => Ok(Self {
+                root: Self::default_root()?,
+            }),
         }
+    }
+
+    /// Where the home is with `MERGEGATE_HOME` unset: the installed hub's.
+    pub fn default_root() -> Result<PathBuf, HomeError> {
+        let home = std::env::var_os("HOME")
+            .filter(|v| !v.is_empty())
+            .ok_or(HomeError::Unset)?;
+        Ok(Path::new(&home).join(".mergegate"))
     }
 
     pub fn root(&self) -> &Path {

@@ -217,7 +217,7 @@ fn f7_the_operators_replies_go_out_with_the_next_review() {
         "[2] review.submitted app#1 r1: the operator commented\n\n  \
          c_2 src/login.rs:1\n    > fn login() {}\n    Check the password.\n\n  \
          reply to c_1\n    Both, please.\n\n\
-         cursor 2 (mg wait --since 2 continues after it)"
+         cursor 2 (mg feedback app#1 --since 2 continues after it)"
     );
     let shown = item(&env);
     assert_eq!(shown["draft_replies"], json!([]));

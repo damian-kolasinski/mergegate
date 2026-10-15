@@ -98,7 +98,7 @@ fn f14_the_agent_abandons_its_item() {
     assert_eq!(
         wait.stdout.trim(),
         "[1] item.abandoned app#1 r1: its agent abandoned it\n  Moved to app#2.\n\n\
-         cursor 1 (mg wait --since 1 continues after it)\n\napp#1 is abandoned"
+         cursor 1\n\napp#1 is abandoned"
     );
 }
 
@@ -167,7 +167,7 @@ fn f14_an_abandoned_item_stays_closed() {
     assert_eq!(
         text.stdout.trim(),
         "[1] item.abandoned app#1 r1: the operator abandoned it\n\n\
-         cursor 1 (mg wait --since 1 continues after it)\n\napp#1 is abandoned"
+         cursor 1\n\napp#1 is abandoned"
     );
     let again = env.mg(&["--json", "feedback", "app#1"]).assert_code(3);
     assert_eq!(again.json()["events"], json!([]));
