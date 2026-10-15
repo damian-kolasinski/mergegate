@@ -151,7 +151,7 @@ test("f6 v marks the current file viewed and moves on", async ({
   await page.keyboard.press("v");
   await expect(current).toContainText("gone.txt");
   await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
-  await expect(screen.getByText("1/4 viewed")).toBeVisible();
+  await expect(screen.getByText("1 of 4 reviewed")).toBeVisible();
   // Collapsed to its header, and out of the cursor's way.
   await expect(changed).toHaveCount(0);
   const cursor = page.locator("[data-line][data-selected-line]");
@@ -170,7 +170,7 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(screen.getByLabel("Viewed a.txt")).not.toBeChecked();
   await expect(changed).toBeVisible();
   await expect(current).toContainText("a.txt");
-  await expect(screen.getByText("0/4 viewed")).toBeVisible();
+  await expect(screen.getByText("0 of 4 reviewed")).toBeVisible();
 });
 
 test("f6 a file's checkbox marks it viewed", async ({ page, hub }) => {
@@ -179,7 +179,7 @@ test("f6 a file's checkbox marks it viewed", async ({ page, hub }) => {
 
   const files = page.getByRole("navigation", { name: "Files" });
   await files.getByLabel("Viewed new.txt").check();
-  await expect(page.getByText("1/4 viewed")).toBeVisible();
+  await expect(page.getByText("1 of 4 reviewed")).toBeVisible();
   await expect(page.getByText("hello", { exact: true })).toHaveCount(0);
   // The checkbox doesn't keep the keys.
   await page.keyboard.press("n");

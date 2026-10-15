@@ -21,11 +21,11 @@ test("f8 approving merges the item", async ({ page, hub }) => {
   // `a` asks first, and Escape backs out without leaving the item.
   await page.keyboard.press("a");
   const confirm = page.getByRole("group", { name: "Confirm merge" });
-  await expect(confirm.getByText("1 file unviewed")).toBeVisible();
+  await expect(confirm.getByText("1 file not reviewed yet")).toBeVisible();
   await expect(confirm.getByRole("button", { name: "Merge" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(confirm).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/items\/app%231$/);
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
 
   await page.getByRole("textbox", { name: "Review summary" }).fill("Ship it.");
   await page.getByRole("button", { name: "Approve & merge" }).click();
@@ -87,7 +87,7 @@ test("f8 a held merge waits for a retry or a cancel", async ({ page, hub }) => {
   await page.getByRole("button", { name: "Merge", exact: true }).click();
 
   const held = screen.getByRole("region", { name: "Merge held" });
-  await expect(held.getByText(/refused main/)).toBeVisible();
+  await expect(held).toContainText("refused main");
   await expect(screen.getByText("Merging", { exact: true })).toBeVisible();
   await expect(page.getByRole("form", { name: "Review" })).toHaveCount(0);
 
@@ -96,7 +96,7 @@ test("f8 a held merge waits for a retry or a cancel", async ({ page, hub }) => {
   await expect
     .poll(() => events(hub).filter((e) => e.type === "merge.held").length)
     .toBe(2);
-  await expect(held.getByText(/refused main/)).toBeVisible();
+  await expect(held).toContainText("refused main");
 
   writeFileSync(join(app.dir, "README"), "hello\n");
   await held.getByRole("button", { name: "Retry merge" }).click();

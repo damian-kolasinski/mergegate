@@ -37,7 +37,12 @@ export function Button(props: {
     >
       {props.children}
       <Show when={props.keyHint}>
-        {(key) => <kbd class={styles.key}>{key()}</kbd>}
+        {/* aria-keyshortcuts says it; the name stays the action's. */}
+        {(key) => (
+          <kbd class={styles.key} aria-hidden="true">
+            {key()}
+          </kbd>
+        )}
       </Show>
     </button>
   );

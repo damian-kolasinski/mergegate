@@ -96,7 +96,8 @@ export function ReviewBar(props: {
           review.replies.length && plural(review.replies.length, "reply"),
         ].filter(Boolean);
         setSent(
-          `${verdict === "changes_requested" ? "Changes requested" : "Sent"} on r${body.revision}` +
+          // The header's state says whether changes were requested.
+          `Sent to the agent on r${body.revision}` +
             (parts.length ? ` with ${parts.join(" and ")}` : ""),
         );
         props.onSubmitted(review);
@@ -300,7 +301,7 @@ export function ReviewBar(props: {
                 </Show>
                 <Show when={props.unviewed}>
                   <Meta tone="removed">
-                    {plural(props.unviewed, "file")} not viewed yet.
+                    {plural(props.unviewed, "file")} not reviewed yet.
                   </Meta>
                 </Show>
                 <Show when={props.conflictsWith.length}>

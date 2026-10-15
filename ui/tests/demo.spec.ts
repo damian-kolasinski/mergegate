@@ -1,5 +1,5 @@
-// The review-screen part of F16: what an agent attaches shows as a strip
-// above the diff, opens full size, and marks its row in the inbox.
+// The review-screen part of F16: what an agent attaches shows as a chip in
+// the item's header, opens full size, and marks its row in the inbox.
 
 import { fileURLToPath } from "node:url";
 import { expect, test } from "./hub";
@@ -7,7 +7,7 @@ import { expect, test } from "./hub";
 const screen = fileURLToPath(new URL("fixtures/screen.png", import.meta.url));
 const flow = fileURLToPath(new URL("fixtures/flow.webm", import.meta.url));
 
-test("f16 attachments show above the diff and open full size", async ({
+test("f16 attachments show in the header and open full size", async ({
   page,
   hub,
 }) => {
@@ -16,11 +16,10 @@ test("f16 attachments show above the diff and open full size", async ({
     .submit("parser", "Add the parser", { "p.rs": "p\n" }, [screen, flow]);
   await page.goto(`${hub.url}#/items/app%231`);
 
-  const strip = page.getByRole("region", { name: "Demo" });
-  await expect(strip.getByRole("button")).toHaveCount(2);
-  await expect(strip).not.toContainText("from r");
+  const chip = page.getByRole("button", { name: /^Demo \(/ });
+  await expect(chip).toHaveText("▶Demo (2)");
 
-  await strip.getByRole("button", { name: "Open screen.png" }).click();
+  await chip.click();
   const viewer = page.getByRole("dialog");
   await expect(viewer).toHaveAccessibleName("screen.png");
   await expect(viewer.getByRole("img", { name: "screen.png" })).toBeVisible();
@@ -35,10 +34,8 @@ test("f16 attachments show above the diff and open full size", async ({
   // Escape closes the viewer, not the review.
   await page.keyboard.press("Escape");
   await expect(viewer).toBeHidden();
-  await expect(page).toHaveURL(/#\/items\/app%231$/);
-  await expect(
-    strip.getByRole("button", { name: "Open screen.png" }),
-  ).toBeFocused();
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
+  await expect(chip).toBeFocused();
 });
 
 test("f16 a revision without attachments shows the last ones, labeled", async ({
@@ -50,9 +47,8 @@ test("f16 a revision without attachments shows the last ones, labeled", async ({
   app.revise("Fix a typo", { "p.rs": "q\n" });
   await page.goto(`${hub.url}#/items/app%231`);
 
-  const strip = page.getByRole("region", { name: "Demo" });
-  await expect(strip).toContainText("from r1");
-  await expect(strip.getByRole("button")).toHaveCount(1);
+  const chip = page.getByRole("button", { name: /^Demo \(/ });
+  await expect(chip).toHaveText("▶Demo (1)from r1");
 });
 
 test("f16 an attach shows without a reload", async ({ page, hub }) => {
@@ -60,13 +56,12 @@ test("f16 an attach shows without a reload", async ({ page, hub }) => {
   app.submit("parser", "Add the parser", { "p.rs": "p\n" });
   await page.goto(`${hub.url}#/items/app%231`);
   await expect(page.getByRole("region", { name: "app#1" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Demo" })).toHaveCount(0);
+  const chip = page.getByRole("button", { name: /^Demo \(/ });
+  await expect(chip).toHaveCount(0);
 
   hub.mg(["attach", "app#1", flow], app.dir);
-  const strip = page.getByRole("region", { name: "Demo" });
-  await expect(
-    strip.getByRole("button", { name: "Open flow.webm" }),
-  ).toBeVisible();
+  await chip.click();
+  await expect(page.getByRole("dialog")).toHaveAccessibleName("flow.webm");
 });
 
 test("f16 the inbox marks items with a demo", async ({ page, hub }) => {

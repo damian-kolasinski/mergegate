@@ -400,7 +400,7 @@ The hub polls each open github item's pull request comments every 30s, with ETag
 
 ## 9. UX
 
-Colours and type come from the Academy Figma; light and dark follow the OS. Status shows as solid badges or tinted rows, and every text-on-fill pair keeps at least 4.5:1 contrast in both themes. The UI updates live: the hub pushes what changed over SSE and the page refetches it.
+Colours and type come from the Academy Figma; light and dark follow the OS, the diff's syntax theme with them. Colour is spent on what needs the operator: a status that waits on them (a question, a rejection, a held merge, `p0`) is a solid badge, and the rest are tinted, so a screen has one or two loud things on it. Every text-on-fill pair keeps at least 4.5:1 contrast in both themes. Motion is short and says that something happened (a merge's check, a panel opening), and stops under `prefers-reduced-motion`. The UI updates live: the hub pushes what changed over SSE and the page refetches it. The tab's title names the screen and, on the inbox, how many items need you; `?` lists the screen's keys anywhere.
 
 ### 9.1 Inbox
 
@@ -416,7 +416,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 │                                                                                │
 │ WITH AGENTS (7)        app#44 addressing your review (r2→r3) · app#39 conflict │
 │ MERGING (1)            app#40 held: main checkout has uncommitted changes      │
-│ MERGED TODAY (9)                                                               │
+│ ▸ Closed today (9)                                                             │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -424,17 +424,18 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 - When rules trust some files, the file count shows the ones left to review next to the total ("9 of 14 files"). That is the real cost of the item.
 - A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
 - An item the operator reviewed on an earlier revision shows how many of its files changed since then ("2 changed since r1").
-- Keyboard-first: `j/k` move, `enter` open, `p` set priority and note (`0`–`3`, `n` none, `enter` saves).
+- An agent waiting on the operator, with a question or a rejected comment, puts its item in Needs you with a solid badge saying so; one with changes requested reads "waiting for rN+1".
+- Items merged or abandoned today fold under *Closed today*. With nothing to review, the inbox says so and how many items the agents are working on.
+- Keyboard-first: `j/k` move, `enter` open, `p` set priority and note (`0`–`3`, `n` none, `enter` or `⌘↩` saves). Rows are links, so a modifier-click opens one in a new tab.
 
 ### 9.2 Review screen
 
 ```
-┌ app#42 Token refresh on 401 ── r1 r2● [since last review ▾] ─ p0 [Conversation 3] ┐
-│ ┌ Intent (authoring agent) ─────────────────┐ ┌ Demo ───────────────────────────┐ │
-│ │ Retries once on 401 using refresh token…  │ │ [▶ recording.mp4] [img] [img]   │ │
-│ │ Risk: logout race. Self-review: …         │ └─────────────────────────────────┘ │
-│ └───────────────────────────────────────────┘                                     │
-├─ Files · 0/18 viewed ─────────┬─ Diff ────────────────────────────────────────────┤
+┌ app#42 Token refresh on 401                                                       ┐
+│ r2 · Needs review · p0 · 0 of 4 reviewed · 14 trusted  [since r1 ▾] [▶ Demo (3)]  │
+│                                                       [Conversation 3] [⋯]        │
+│ ▸ Intent  Retries once on 401 using the refresh token…                            │
+├─ Files ───────────────────────┬─ Diff ────────────────────────────────────────────┤
 │ REVIEW                        │ Sources/Auth/TokenStore.swift ──────────────── +3 │
 │ ☐ TokenStore.swift            │  85   func refresh() async throws {               │
 │   ↳ core logic, logout race   │  86 +   guard !isLoggingOut else { return }       │
@@ -443,26 +444,28 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 │ ☐ TokenStoreTests.swift       │     ┌ codex-bot ─────────────────────────────────┐│
 │ ☐ Localizable+Plural.swift    │     │ store() can run after logout completes.    ││
 │ TRUSTED (14) auto-viewed ▸    │     │ agent: rejected r2 — "guarded on line 86"  ││
-│                               │     │ [agree] [override → must fix]              ││
+│                               │     │ [Accept rejection] [Override — must fix]   ││
 │                               │     └────────────────────────────────────────────┘│
 │                               │  ⋯ 40 unmodified lines                            │
 │                               │ Sources/Net/APIClient.swift ────────────── +12 −4 │
 │                               │  31   func send(_ r: Request) async throws {      │
 ├───────────────────────────────┴───────────────────────────────────────────────────┤
-│ 2 draft comments            [Comment]  [Request changes]  [Approve & merge]       │
+│ 2 draft comments      [Send comments ⌘↩]  [Request changes]  [Approve & merge a]  │
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+- **The header** is two lines: the title, then the revision, state, priority, how many of the files to review are reviewed and how many are trusted, with the screen's controls at the end. Rare actions (Fetch GitHub comments, Abandon…) sit under `⋯`, out of the line the operator reads. A closed item says so under the header ("Merged into main" or "Abandoned") with the item that needs the operator next.
+- **The URL keeps the cursor** (`?file=…&line=…`), so a reload or a shared link opens on the same line; the review's summary and an abandon's reason are kept per tab until sent, and leaving with them unsent asks first.
 - **The diff is one continuous scroll, like GitHub's:** every file in order under a sticky header, the file list beside it following the scroll. Three lines of context show around each hunk, and the gaps between hunks expand. Binary files and files over 20k changed lines show a one-line placeholder. A file's header names what its lines can't show: a changed mode or type ("Made executable (mode 100644 → 100755)"), a symlink, a submodule's commits. A viewed file collapses to its header and counts toward the viewed total.
 - **Revision selector** offers *All changes* (against the merge-base) and *Since rK* for each earlier revision, defaulting to since the last revision you reviewed, or all changes when that is the newest or there's none. A closed item shows all changes only.
 - **Since rK shows the interdiff only,** over a moved target: rK is replayed onto the newest revision's base and diffed against the newest, so what the target changed meanwhile drops out. A file the replay conflicts on can't be told apart from the target's changes, so it shows its whole own diff, marked as such. Files unchanged since rK fold away under the file list and can still be marked viewed; a file rK changed that the newest no longer does shows as *dropped*. The old side is a replay no revision has, so only the new side takes comments. Interdiffs from every earlier revision are computed when a revision is submitted, so switching is a read.
 - **Viewed marks follow a file while it's unchanged:** marking or unmarking it on rK applies to every later revision where it hasn't changed since rK, then and when a later revision arrives.
-- **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can agree, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. Sync GitHub refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
+- **External comments (bots and humans) show inline with the agent's response** (addressed in rN / rejected + reason / open), marked with their author, a Bot badge, a link to GitHub and whether they are still held from the agent; one on no line is in the Conversation list. While the agent's rejection is the latest reply you can accept it, which only records your assent, or override it with an optional note, which reopens the thread and reaches the agent at once as `comment.override`. Neither goes to GitHub. *Fetch GitHub comments*, under `⋯`, refetches the pull request's comments and sends the held ones. External review runs in parallel to yours: the agent decides validity and you audit those decisions.
 - **Stacked items** show the stack in the header (`app#41 ▸ app#42● ▸ app#43`) to move between its items. The diff is against the parent revision the item is built on.
-- **Intent panel** under the header, above the demo: the agent's guide as plain text, as written, folding away. Each file to review carries the guide's reason for it, the judge's score and reason ("raised by the judge 92/100: …"), and each trusted or promoted one the rule ("trusted by R3: `glob` — reason", "promoted by the judge; trusted by R3: …"); a file with none of these shows its heuristic hint.
-- **Demo panel** under the header: thumbnails of the screenshots and recordings attached with `mg submit --attach` or `mg attach`. A click opens one full size, videos with controls; ←/→ step through them and Escape closes the viewer. Attachments belong to a revision: the panel shows the newest revision's, or, while it has none, the newest earlier revision's, labeled "from rN", so a small fix needn't be recorded again; with the revision selector it follows the selected revision. Only PNG, JPEG, GIF, WebP, MP4 and WebM up to 100 MB, typed by their bytes, since the hub serves them from its own origin. GitHub items keep theirs in mergegate: GitHub has no upload API. An attach updates the screen and the inbox's `▶ demo` marker live; it tells the agent nothing.
-- **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Comment notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested.
-- **Approve & merge** asks first, showing how many files are still unviewed without blocking on them; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge shows the upstream's reason under the header with Retry and Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.
+- **Intent** under the header: the agent's guide, folded to its first line so the diff keeps the screen. Open, a little Markdown renders (headings, lists, code, bold), all as text; its `## Files` section is left out, since the file list carries it. Each file to review carries the guide's reason for it, the judge's score and reason ("raised by the judge 92/100: …"), and each trusted or promoted one the rule ("trusted by R3: `glob` — reason", "promoted by the judge; trusted by R3: …"); a file with none of these shows its heuristic hint.
+- **Demo chip** in the header, `▶ Demo (N)`, for the screenshots and recordings attached with `mg submit --attach` or `mg attach`, so the diff keeps its height. A click opens them full size, videos with controls; ←/→ step through them and Escape closes the viewer. Attachments belong to a revision: the chip shows the newest revision's, or, while it has none, the newest earlier revision's, labeled "from rN", so a small fix needn't be recorded again; with the revision selector it follows the selected revision. Only PNG, JPEG, GIF, WebP, MP4 and WebM up to 100 MB, typed by their bytes, since the hub serves them from its own origin. GitHub items keep theirs in mergegate: GitHub has no upload API. An attach updates the screen and the inbox's `▶ demo` marker live; it tells the agent nothing.
+- **Pending review model** (like GitHub): comments are drafts until you submit. Submit sends one `review.submitted` event. Drafts live on the hub, so a reload or a second tab keeps them, and a sent comment can't be edited. A review needs a summary, a comment or a draft reply. Send comments (`⌘↩` from the summary) notifies the agent and leaves the item in Needs you; Request changes moves it to Changes requested. A review written against a revision that is no longer the newest is refused, so it can't land on code the operator hasn't seen.
+- **Approve & merge** asks first, saying what will happen (squash rN onto main, or squash-merge the pull request on GitHub and delete its branch), how many files aren't reviewed yet without blocking on them, and which open items it conflicts with; Enter merges and Escape backs out. It sends the drafts as an `approved` review, then squashes the revision onto the target. A held merge says why in plain words under the header, git's own output under *Details*, with Retry and a red Cancel; a conflict shows its paths there while the agent rebases. The inbox row carries the same badge.
 - **Replies thread under each comment:** the agent's, with their status (addressed in rN, rejected, question), and yours, drafted like comments and sent with the next review. "Addressed in rN" is the first revision submitted after the reply. Replies show as they arrive: the UI's stream carries `item.changed` pings and the screen rereads the item's conversation, as it does on reconnect.
 - **Conversation list** in the header: every comment as `path:line @rN`, where it was written, with its latest status and replies. One the diff shows sums up there with *Show in diff*; the rest are answered there.
 - **Threads follow their lines** onto later revisions, the operator's and GitHub's alike: a comment from rK shows on the revision on screen at the lines its own became, through a line diff of its file between the two revisions (base to base for the old side). One whose lines changed sits on the lines that replaced them, marked *changed since rK*. One whose lines were deleted outright, that the diff doesn't show, whose file was renamed (files match by path), or that is in a binary or too large file is *outdated* and shows only in the Conversation list. The agent still sees each sent comment where it was sent.

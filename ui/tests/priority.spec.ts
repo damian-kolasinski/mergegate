@@ -104,7 +104,7 @@ test("f10 shift-p sets the priority from the item's header", async ({
   await expect(picker.getByRole("radio", { name: "none" })).toBeChecked();
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/items\/app%231$/);
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
   await expect(header).toContainText("p2");
 
   // What the operator's agent sets shows without a reopen, and the picker
