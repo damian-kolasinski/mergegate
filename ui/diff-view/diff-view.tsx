@@ -313,6 +313,8 @@ export function DiffView(props: {
     const observer = new MutationObserver(sweep);
     observer.observe(root, { childList: true, subtree: true });
     const onScroll = (top: number) => {
+      if (movedFrom !== undefined && Math.abs(top - movedFrom) < 1) return;
+      movedFrom = undefined;
       if (movedTo !== undefined && inView(movedTo, top)) return;
       movedTo = undefined;
       const path = fileAt(top);
@@ -329,7 +331,7 @@ export function DiffView(props: {
     });
     props.control({
       showFile: (path) => {
-        movedTo = path;
+        moveTo(path);
         view.scrollTo({ type: "item", id: path, behavior: "instant" });
       },
       showRow: (row) => {
@@ -347,6 +349,16 @@ export function DiffView(props: {
   // like one of the operator's, and the file at the top then is often the
   // one before it.
   let movedTo: string | undefined;
+  // Where the view was when the operator moved. CodeView scrolls a frame
+  // after it's asked, and the browser reports the scroll before that one a
+  // frame after it happened, so a move soon after another hears of the
+  // first move's scroll before its own lands: that report says where the
+  // view still is, not that the operator scrolled away.
+  let movedFrom: number | undefined;
+  const moveTo = (path: string) => {
+    movedTo = path;
+    movedFrom = view.getScrollTop();
+  };
   const inView = (path: string, top: number) => {
     const start = view.getTopForItem(path);
     if (start === undefined) return false;
@@ -357,7 +369,7 @@ export function DiffView(props: {
   };
 
   const selectRow = (row: Row) => {
-    movedTo = row.path;
+    moveTo(row.path);
     const range = {
       start: row.line,
       end: row.line,
