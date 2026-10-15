@@ -56,6 +56,24 @@ fn summarises_the_whole_change_in_each_part() {
 }
 
 #[test]
+fn a_diff_that_names_a_secret_stays_on_the_machine() {
+    let request = request(vec![
+        file(
+            ".env",
+            Some("@@ -0,0 +1 @@\n+DATABASE_PASSWORD=hunter2\n".into()),
+            Tier::Review,
+        ),
+        file("src/login.rs", diff(10), Tier::Review),
+    ]);
+    let parts = parts(&request).unwrap();
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].files, [1], "the .env goes unjudged");
+    let state = &parts[0].state;
+    assert!(state.contains("1. .env (modified, +1 -0)"), "{state}");
+    assert!(!state.contains("hunter2"), "{state}");
+}
+
+#[test]
 fn splits_a_large_change_into_parts_of_whole_files() {
     // Three diffs of a third of the budget each (a token is 3 bytes), then
     // one over it.

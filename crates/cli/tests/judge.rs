@@ -141,7 +141,7 @@ fn submit(env: &Env, repo: &TestRepo) {
         &[
             ("src/a.rs", "fn form() {}\n"),
             ("src/b.rs", "fn wire() {}\n"),
-            ("src/c.rs", "fn check_password() {}\n"),
+            ("src/c.rs", "fn check_session() {}\n"),
             ("Cargo.lock", "a\nb\n"),
             ("config/prod.toml", "auth = false\n"),
         ],
