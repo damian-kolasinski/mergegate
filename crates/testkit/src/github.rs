@@ -245,6 +245,14 @@ impl FakeGithub {
         );
     }
 
+    /// Deletes comment `id`, as its author does.
+    pub fn delete_comment(&self, id: u64) {
+        let mut state = self.state();
+        let before = state.comments.len();
+        state.comments.retain(|c| c.id != id);
+        assert!(state.comments.len() < before, "no comment {id}");
+    }
+
     pub fn comments(&self) -> Vec<Comment> {
         self.state().comments.clone()
     }

@@ -229,6 +229,54 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
 }
 
 #[test]
+fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
+    let (_dir, mut store) = store();
+    let sent = store
+        .insert_external(external(1, "ana", "Leaks", false), 100)
+        .unwrap();
+    store.release(&app(), 1).unwrap();
+    store.edit_external(sent.id, "Leaks a handle", 200).unwrap();
+    let drafted = store
+        .insert_external(external(2, "ana", "Why?", false), 200)
+        .unwrap();
+    store
+        .insert_reply(reply(drafted.id, Author::Operator, None, "Draft"))
+        .unwrap();
+    let answered = store
+        .insert_external(external(3, "ana", "Rename it", false), 200)
+        .unwrap();
+    store
+        .insert_reply(reply(
+            answered.id,
+            Author::Agent,
+            Some(ReplyStatus::Addressed),
+            "",
+        ))
+        .unwrap();
+
+    for comment in [&sent, &drafted, &answered] {
+        store.withdraw_external(comment.id).unwrap();
+    }
+    assert_eq!(store.held(&app()).unwrap(), None);
+    let left: Vec<_> = store
+        .comments(&app())
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.id, c.body, c.external.unwrap().pending))
+        .collect();
+    assert_eq!(
+        left,
+        [
+            (sent.id, "Leaks".into(), false),
+            (answered.id, "Rename it".into(), false)
+        ]
+    );
+    let replies = store.replies(&app()).unwrap();
+    assert_eq!(replies.len(), 1);
+    assert_eq!(replies[0].comment, answered.id);
+}
+
+#[test]
 fn an_override_goes_out_at_once_and_isnt_a_draft() {
     let (_dir, mut store) = store();
     let comment = store

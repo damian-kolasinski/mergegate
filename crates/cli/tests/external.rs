@@ -334,3 +334,59 @@ fn a_wait_for_the_operator_leaves_held_comments_held() {
         "a read the agent gets takes it: {feedback}"
     );
 }
+
+/// Polls the item's conversation until `done` holds for its comments.
+fn until(env: &Env, what: &str, done: impl Fn(&Value) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !done(&conversation(env)["comments"]) {
+        assert!(Instant::now() < deadline, "{what}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    let doomed = github.comment(ACME, 1, GithubNewComment::issue("alice", "Typo here."));
+    let kept = github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    until(&env, "the poller never saw them", |c| {
+        c.as_array().unwrap().len() == 2
+    });
+
+    github.delete_comment(doomed);
+    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
+    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 1 }));
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    let bodies: Vec<_> = feedback["events"][0]["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["body"].clone())
+        .collect();
+    assert_eq!(bodies, [json!("Needs a test.")], "{feedback}");
+    let comments = conversation(&env)["comments"].clone();
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
+
+    // One a batch carried stays, as the agent got it: its held edit is
+    // withdrawn with it.
+    github.edit_comment(kept, "Needs two tests.");
+    until(&env, "the poller never saw the edit", |c| {
+        c[0]["body"] == "Needs two tests."
+    });
+    github.delete_comment(kept);
+    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
+    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 0 }));
+    let comments = conversation(&env)["comments"].clone();
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
+    assert_eq!(comments[0]["body"], "Needs a test.");
+    assert_eq!(comments[0]["external"]["pending"], false);
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["events"], json!([]), "{feedback}");
+}

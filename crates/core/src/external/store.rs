@@ -15,6 +15,12 @@ pub trait ExternalStore {
     /// batch again.
     fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError>;
 
+    /// Withdraws held comment `id`, which GitHub no longer has. One no batch
+    /// carried and no one answered is deleted, with the operator's draft
+    /// replies on it, so it never reaches the agent; any other stops waiting
+    /// with the body the agent last got, as the agent may have acted on it.
+    fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError>;
+
     /// What `id` holds back from its agent; none when nothing waits.
     fn held(&self, id: &ItemId) -> Result<Option<Held>, StoreError>;
 

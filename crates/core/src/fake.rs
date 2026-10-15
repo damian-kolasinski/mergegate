@@ -1996,6 +1996,38 @@ impl ExternalStore for FakeStore {
         Ok(())
     }
 
+    fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        let answered = self
+            .replies
+            .iter()
+            .any(|r| r.comment == id && !r.is_draft());
+        if !self.batched.contains(&id) && !answered {
+            self.comments.retain(|c| c.id != id);
+            self.replies.retain(|r| r.comment != id);
+            self.external.remove(&id);
+            return Ok(());
+        }
+        let sent = self
+            .events
+            .iter()
+            .rev()
+            .find_map(|(_, event)| match &event.kind {
+                EventKind::ExternalComments(batch) => batch
+                    .comments
+                    .iter()
+                    .find(|d| d.comment.id == id)
+                    .map(|d| d.comment.body.clone()),
+                _ => None,
+            });
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        if let Some(body) = sent {
+            comment.body = body;
+        }
+        comment.external.as_mut().unwrap().pending = false;
+        self.external.get_mut(&id).unwrap().1 = None;
+        Ok(())
+    }
+
     fn held(&self, id: &ItemId) -> Result<Option<Held>, StoreError> {
         let item = self.item(id)?.unwrap();
         let pushed = Self::millis(&item.revision.submitted_at);

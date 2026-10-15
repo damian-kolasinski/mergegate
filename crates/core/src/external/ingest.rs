@@ -1,7 +1,8 @@
 //! Bringing a pull request's comments in: a new one is placed on a revision
-//! and held for the next batch, an edited one held again.
+//! and held for the next batch, an edited one held again, and a held one
+//! GitHub no longer has withdrawn.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{ExternalError, ExternalStore, NewExternal};
 use crate::diff::{Content, DiffGit, DiffStore};
@@ -14,11 +15,13 @@ use crate::review::{Anchor, CommentId, ReviewError, ReviewStore, Side, quote, sh
 pub struct Ingested {
     pub new: usize,
     pub edited: usize,
+    /// Held ones GitHub no longer has.
+    pub withdrawn: usize,
 }
 
 impl Ingested {
     pub fn changed(self) -> bool {
-        self.new + self.edited > 0
+        self.new + self.edited + self.withdrawn > 0
     }
 }
 
@@ -48,8 +51,13 @@ pub fn fetch(
         .collect())
 }
 
-/// Records what `comments` adds to `id`'s and holds it for the next batch.
-/// A comment GitHub no longer has stays: the agent may have answered it.
+/// Records what `comments`, all of the pull request's that [`fetch`] keeps,
+/// adds to `id`'s and holds it for the next batch. A held comment missing
+/// from them is withdrawn ([`ExternalStore::withdraw_external`]); one a batch
+/// carried and nothing holds stays as the agent got it, since the agent may
+/// have answered it. Missing counts after `fetch`'s filter, so a comment
+/// edited down to nothing is withdrawn too rather than sent with the body it
+/// had.
 pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     store: &mut S,
     git: &impl DiffGit,
@@ -63,20 +71,23 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     if matches!(item.state, ItemState::Merged | ItemState::Abandoned) {
         return Ok(Ingested::default());
     }
-    let known: BTreeMap<(PullCommentKind, u64), (CommentId, String)> = store
+    let known: BTreeMap<(PullCommentKind, u64), (CommentId, String, bool)> = store
         .comments(id)?
         .into_iter()
         .filter_map(|c| {
             let external = c.external?;
-            Some(((external.kind, external.github_id), (c.id, c.body)))
+            let key = (external.kind, external.github_id);
+            Some((key, (c.id, c.body, external.pending)))
         })
         .collect();
     let revisions = store.revisions(id)?;
     let mut ingested = Ingested::default();
+    let mut found = BTreeSet::new();
     for comment in comments {
+        found.insert((comment.kind, comment.id));
         match known.get(&(comment.kind, comment.id)) {
-            Some((_, body)) if *body == comment.body => {}
-            Some((known, _)) => {
+            Some((_, body, _)) if *body == comment.body => {}
+            Some((known, _, _)) => {
                 store.edit_external(*known, &comment.body, now)?;
                 ingested.edited += 1;
             }
@@ -100,6 +111,12 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
                 store.insert_external(new, now)?;
                 ingested.new += 1;
             }
+        }
+    }
+    for (key, (comment, _, pending)) in known {
+        if pending && !found.contains(&key) {
+            store.withdraw_external(comment)?;
+            ingested.withdrawn += 1;
         }
     }
     Ok(ingested)

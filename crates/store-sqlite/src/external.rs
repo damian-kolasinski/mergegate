@@ -81,6 +81,47 @@ impl ExternalStore for Store {
         tx.commit().map_err(StoreError::new)
     }
 
+    fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        let tx = self.conn.transaction().map_err(StoreError::new)?;
+        let id = id.0 as i64;
+        // A sent reply is in the agent's hands, or in a review's event, either
+        // way referring to the comment.
+        let kept: bool = tx
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM event_comments WHERE comment_id = ?1)
+                     OR EXISTS (SELECT 1 FROM replies WHERE comment_id = ?1
+                                AND (author = 'agent' OR review_id IS NOT NULL
+                                     OR override = 1))",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::new)?;
+        if kept {
+            tx.execute(
+                "UPDATE comments
+                 SET body = coalesce((SELECT body FROM event_comments WHERE comment_id = ?1
+                                      ORDER BY cursor DESC LIMIT 1), body)
+                 WHERE id = ?1 AND source = 'external'",
+                params![id],
+            )
+            .map_err(StoreError::new)?;
+            tx.execute(
+                "UPDATE external_comments SET pending_at = NULL WHERE comment_id = ?1",
+                params![id],
+            )
+            .map_err(StoreError::new)?;
+        } else {
+            for sql in [
+                "DELETE FROM replies WHERE comment_id = ?1",
+                "DELETE FROM external_comments WHERE comment_id = ?1",
+                "DELETE FROM comments WHERE id = ?1 AND source = 'external'",
+            ] {
+                tx.execute(sql, params![id]).map_err(StoreError::new)?;
+            }
+        }
+        tx.commit().map_err(StoreError::new)
+    }
+
     fn held(&self, id: &ItemId) -> Result<Option<Held>, StoreError> {
         let item = params![id.project().as_str(), id.number() as i64];
         let (first, last): (Option<i64>, Option<i64>) = self
