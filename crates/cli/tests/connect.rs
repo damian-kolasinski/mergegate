@@ -375,10 +375,22 @@ fn f2_a_denial_ends_a_wait_in_progress() {
     let (mut net, _repo) = with_an_item();
     net.tailscale.call_from("laptop", HUB_OWNER);
     net.connect().assert_code(0);
-    let wait = waiting(&net.worker);
+    let wait = waiting(&net.worker, &["wait", "app#1", "--timeout", "30"]);
     std::thread::sleep(Duration::from_millis(500));
     net.hub.mg(&["hub", "deny", "laptop"]).assert_code(0);
     let refused = finished(wait);
+    assert_eq!(refused["error"]["code"], "device_denied", "{refused}");
+}
+
+#[test]
+fn f2_a_denial_ends_an_event_stream_in_progress() {
+    let (mut net, _repo) = with_an_item();
+    net.tailscale.call_from("laptop", HUB_OWNER);
+    net.connect().assert_code(0);
+    let follow = waiting(&net.worker, &["events", "--follow"]);
+    std::thread::sleep(Duration::from_millis(500));
+    net.hub.mg(&["hub", "deny", "laptop"]).assert_code(0);
+    let refused = finished(follow);
     assert_eq!(refused["error"]["code"], "device_denied", "{refused}");
 }
 
@@ -387,7 +399,7 @@ fn f2_listen_local_ends_a_wait_in_progress() {
     let (mut net, _repo) = with_an_item();
     net.tailscale.call_from("laptop", HUB_OWNER);
     net.connect().assert_code(0);
-    let wait = waiting(&net.worker);
+    let wait = waiting(&net.worker, &["wait", "app#1", "--timeout", "30"]);
     std::thread::sleep(Duration::from_millis(500));
     net.hub
         .mg(&["hub", "set", "listen", "local"])
@@ -431,9 +443,11 @@ fn with_an_item() -> (Tailnet, TestRepo) {
 }
 
 /// `mg wait app#1` on the worker, answering in JSON.
-fn waiting(worker: &Env) -> std::process::Child {
+/// `mg --json` with `args`, left running on the worker.
+fn waiting(worker: &Env, args: &[&str]) -> std::process::Child {
     Command::new(env!("CARGO_BIN_EXE_mg"))
-        .args(["--json", "wait", "app#1", "--timeout", "30"])
+        .arg("--json")
+        .args(args)
         .current_dir(worker.home())
         .env("MERGEGATE_HOME", worker.home())
         .stdout(Stdio::piped())
@@ -441,11 +455,18 @@ fn waiting(worker: &Env) -> std::process::Child {
         .unwrap()
 }
 
-/// What a wait printed, once it ended well before its own timeout.
-fn finished(wait: std::process::Child) -> Value {
+/// What a wait printed, once it ended well before its own timeout. A
+/// `--follow` has none, so one still running is killed rather than waited on.
+fn finished(mut wait: std::process::Child) -> Value {
     let started = std::time::Instant::now();
+    while wait.try_wait().unwrap().is_none() {
+        if started.elapsed() > Duration::from_secs(15) {
+            wait.kill().unwrap();
+            panic!("still running: {:?}", wait.wait_with_output().unwrap());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
     let output = wait.wait_with_output().unwrap();
-    assert!(started.elapsed() < Duration::from_secs(15), "{output:?}");
     serde_json::from_slice(&output.stdout).unwrap_or_else(|e| panic!("{e}: {output:?}"))
 }
 
