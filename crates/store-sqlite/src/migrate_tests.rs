@@ -264,3 +264,56 @@ fn a_file_recorded_before_modes_were_kept_has_none() {
         .execute("UPDATE revision_files SET new_mode = '040000'", []);
     assert!(refused.is_err(), "a tree isn't a file's mode");
 }
+
+#[test]
+fn a_file_recorded_changed_since_a_revision_without_it_reads_as_added() {
+    use mergegate_core::interdiff::{Change, InterdiffStore};
+    use mergegate_core::item::ItemId;
+
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("hub.db");
+    drop(open_with(&db, &MIGRATIONS[..14]).unwrap());
+    let (base, at) = ("0".repeat(40), "2026-01-01T00:00:00.000Z");
+    let (r1, r2) = ("1".repeat(40), "2".repeat(40));
+    Connection::open(&db)
+        .unwrap()
+        .execute_batch(&format!(
+            "INSERT INTO projects (id, name, backend, target, upstream)
+                 VALUES (1, 'app', 'local', 'main', '/src/app');
+             INSERT INTO items (id, project_id, number, branch, title, state, backend, target,
+                                created_at)
+                 VALUES (1, 1, 1, 'work', 'Work', 'needs_review', 'local', 'main', '{at}');
+             INSERT INTO revisions (item_id, number, head, base, files, additions, deletions,
+                                    submitted_at)
+                 VALUES (1, 1, '{r1}', '{base}', 0, 0, 0, '{at}'),
+                        (1, 2, '{r2}', '{base}', 0, 0, 0, '{at}');
+             INSERT INTO interdiffs (item_id, from_revision, to_revision) VALUES (1, 1, 2);
+             INSERT INTO interdiff_files (item_id, from_revision, to_revision, position, path,
+                                          old_blob, new_blob, change)
+                 VALUES (1, 1, 2, 0, 'a.py', 'a1', 'a2', 'changed'),
+                        (1, 1, 2, 1, 'b.py', NULL, 'b2', 'changed'),
+                        (1, 1, 2, 2, 'c.py', 'c1', NULL, 'changed'),
+                        (1, 1, 2, 3, 'd.py', 'd1', NULL, 'dropped'),
+                        (1, 1, 2, 4, 'e.py', NULL, 'e2', 'unchanged');"
+        ))
+        .unwrap();
+
+    let store = Store::open(&db).unwrap();
+    let changes: Vec<_> = store
+        .interdiff(&ItemId::parse("app#1").unwrap(), 1, 2)
+        .unwrap()
+        .unwrap()
+        .into_iter()
+        .map(|f| (f.stat.file.path, f.change))
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            ("a.py".to_owned(), Change::Changed),
+            ("b.py".to_owned(), Change::Added),
+            ("c.py".to_owned(), Change::Deleted),
+            ("d.py".to_owned(), Change::Dropped),
+            ("e.py".to_owned(), Change::Unchanged),
+        ]
+    );
+}

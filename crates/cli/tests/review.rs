@@ -94,7 +94,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                     "old_start": 1, "old_lines": 4, "new_start": 1, "new_lines": 4,
                     "lines": [" fn a() {}", " fn b() {}", " fn c() {}", "-fn d() {}", "+fn e() {}"],
                     "spans": [[], [], [], [], []],
-                }]},
+                }], "lines_after": 0},
                 "viewed": false,
                 // No pack is installed; the header names the one that would
                 // highlight it.
@@ -125,7 +125,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                     "old_start": 1, "old_lines": 2, "new_start": 1, "new_lines": 2,
                     "lines": [" title", "-body", "\\ No newline at end of file", "+body"],
                     "spans": [[], [], [], []],
-                }]},
+                }], "lines_after": 0},
                 "viewed": false,
                 "grammar": null,
                 "missing_pack": null,
@@ -179,7 +179,7 @@ fn f6_serves_an_items_files_with_their_diffs() {
                     "old_start": 1, "old_lines": 1, "new_start": 0, "new_lines": 0,
                     "lines": ["-bye"],
                     "spans": [[]],
-                }]},
+                }], "lines_after": 0},
                 "viewed": false,
                 "grammar": null,
                 "missing_pack": null,

@@ -278,7 +278,7 @@ fn f7_a_comment_goes_on_lines_the_interdiff_shows() {
 }
 
 #[test]
-fn f7_a_file_moved_away_since_the_last_review_is_changed() {
+fn f7_a_file_moved_away_since_the_last_review_is_deleted_and_added() {
     let env = env();
     env.start_hub();
     let repo = TestRepo::new("app");
@@ -292,7 +292,8 @@ fn f7_a_file_moved_away_since_the_last_review_is_changed() {
     env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
     mark(&env, 1, "a.txt", true);
     // r2 moves r1's a.txt to b.txt: against the base that deletes a.txt and
-    // adds b.txt, though against r1 git sees a rename.
+    // adds b.txt, though against r1 git sees a rename. r1 had a.txt and no
+    // b.txt, so each reads as what r2 did to it since.
     repo.git(["mv", "a.txt", "b.txt"]);
     repo.git(["commit", "--quiet", "-m", "Move"]);
     env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
@@ -303,8 +304,8 @@ fn f7_a_file_moved_away_since_the_last_review_is_changed() {
     assert_eq!(
         shown,
         [
-            file("a.txt", json!("changed"), false),
-            file("b.txt", json!("changed"), false),
+            file("a.txt", json!("deleted"), false),
+            file("b.txt", json!("added"), false),
         ]
     );
     let a = diff["files"]

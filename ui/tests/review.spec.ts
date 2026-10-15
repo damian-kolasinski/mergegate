@@ -133,6 +133,26 @@ test("f6 a gap between hunks expands", async ({ page, hub }) => {
   await expect(line).toBeVisible();
 });
 
+test("f6 a hunk that holds the whole file offers nothing past it", async ({
+  page,
+  hub,
+}) => {
+  // Each hunk ends on three lines of context: short.txt's are its last.
+  const app = hub.project("app");
+  app.seed({ "short.txt": lines(7), "long.txt": lines(20) });
+  app.submit("work", "Change both", {
+    "short.txt": lines(7, (n) => (n === 4 ? "short" : `line ${n}`)),
+    "long.txt": lines(20, (n) => (n === 4 ? "long" : `line ${n}`)),
+  });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const file = (text: string) => page.locator("code").filter({ hasText: text });
+  const more = "More unchanged context may be available";
+  await expect(file("long").getByText(more).first()).toBeVisible();
+  await expect(file("short").getByText("line 7")).toBeVisible();
+  await expect(file("short").getByText(more)).toHaveCount(0);
+});
+
 test("f6 v marks the current file viewed and moves on", async ({
   page,
   hub,

@@ -191,7 +191,7 @@ fn shows_what_changed_since_an_earlier_revision() {
             ("src/db.rs", Some(Change::Unseparated)),
             ("src/lib.rs", Some(Change::Changed)),
             ("src/login.rs", Some(Change::Unchanged)),
-            ("src/token.rs", Some(Change::Changed)),
+            ("src/token.rs", Some(Change::Added)),
             ("src/api.rs", Some(Change::Dropped)),
         ]
     );

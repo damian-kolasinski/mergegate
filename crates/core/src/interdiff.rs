@@ -16,8 +16,9 @@ use crate::item::FileStat;
 /// One file of the interdiff from an earlier revision to a later one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterdiffFile {
-    /// `Changed` and `Dropped` files carry the diff from the earlier revision
-    /// to the later; the others the later revision's own diff.
+    /// `Changed`, `Added`, `Deleted` and `Dropped` files carry the diff from
+    /// the earlier revision to the later; the others the later revision's own
+    /// diff.
     pub stat: FileStat,
     pub change: Change,
 }
@@ -26,6 +27,10 @@ pub struct InterdiffFile {
 pub enum Change {
     /// The later revision changes the file, differently than the earlier did.
     Changed,
+    /// The later revision has the file, which the earlier didn't.
+    Added,
+    /// The later revision deletes the file, which the earlier had.
+    Deleted,
     /// The later revision changes the file as the earlier did.
     Unchanged,
     /// The earlier revision's change conflicts with the target's when
@@ -39,14 +44,18 @@ impl Change {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Changed => "changed",
+            Self::Added => "added",
+            Self::Deleted => "deleted",
             Self::Unchanged => "unchanged",
             Self::Unseparated => "unseparated",
             Self::Dropped => "dropped",
         }
     }
 
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 6] = [
         Self::Changed,
+        Self::Added,
+        Self::Deleted,
         Self::Unchanged,
         Self::Unseparated,
         Self::Dropped,

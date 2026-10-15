@@ -446,6 +446,13 @@ function contentNote(file: File): string | undefined {
       return "Too large to show";
     case "gone":
       return "Diff dropped when the item closed";
+  }
+  // Only a diff that shows says this: one that can't says why instead.
+  switch (file.interdiff) {
+    case "added":
+      return "Added since the earlier revision";
+    case "deleted":
+      return "Deleted since the earlier revision";
     default:
       return undefined;
   }

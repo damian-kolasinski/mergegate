@@ -29,6 +29,7 @@ fn round_trips_every_kind_of_diff_by_blob_pair() {
         additions: Some(30_000),
         deletions: Some(1),
         content: Content::TooLarge,
+        lines_after: None,
     };
     let entries = [
         (Some("a"), Some("b"), text),
