@@ -262,8 +262,14 @@ export function ReviewBar(props: {
                   {sending() === "review" ? "Sending…" : "Send comments"}
                 </Button>
                 <Button
-                  disabled={held() || empty()}
-                  title={disabledWhy()}
+                  // The hub refuses changes requested on a revision the
+                  // agent already replaced.
+                  disabled={held() || empty() || props.behind}
+                  title={
+                    props.behind
+                      ? `Show r${props.revision + 1} to request changes`
+                      : disabledWhy()
+                  }
                   onClick={() => submit("changes_requested")}
                 >
                   Request changes
