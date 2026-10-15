@@ -2,6 +2,7 @@
 
 pub(crate) mod probe;
 mod report;
+pub(crate) mod service;
 mod set;
 mod spawn;
 mod start;

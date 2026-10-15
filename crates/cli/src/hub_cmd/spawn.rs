@@ -8,7 +8,8 @@ use std::process::{Child, Command, Stdio};
 use hub::Home;
 
 use super::io_error;
-use crate::output::{CliError, exit};
+use super::report::exited;
+use crate::output::CliError;
 
 pub(super) struct Spawned {
     child: Child,
@@ -59,16 +60,7 @@ impl Spawned {
         let mut printed = Vec::new();
         let _ = self.outcome.seek(SeekFrom::Start(0));
         let _ = self.outcome.read_to_end(&mut printed);
-        Some(
-            match serde_json::from_slice::<api::error::ErrorEnvelope>(&printed) {
-                Ok(envelope) => CliError {
-                    exit: exit::ERROR,
-                    body: envelope.error,
-                },
-                Err(_) => CliError::new("hub_start_failed", "the hub exited while starting")
-                    .hint(format!("see {}", home.log().display())),
-            },
-        )
+        Some(exited(&printed, home))
     }
 
     pub fn abandon(&mut self) {

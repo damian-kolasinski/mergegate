@@ -6,6 +6,8 @@ The operator asks you to set mergegate up; you run every command. Anything that 
 
 `mg hub start` starts the hub in the background, or does nothing if it is running. It listens on 127.0.0.1 port 7800 unless given `--port N` (0 picks a free port); `--foreground` keeps it in the terminal. `mg hub status` says whether it is running and where, and `mg hub stop` stops it.
 
+With the default data directory, `mg hub start` runs the hub as a user service (launchd on macOS, systemd on Linux), so it starts again at login and after a crash; `mg hub stop` removes the service. If the start prints a warning that the hub runs without a service, tell the operator: the hub works, but won't come back after a reboot. After upgrading `mg`, run `mg hub stop && mg hub start` so the service runs the new one.
+
 `mg hub set attachment-ttl <duration>` sets how long a merged or abandoned item keeps its screenshots and recordings, as in `2d` (the default), `12h`, `30m`, or `0s` to drop them when it closes.
 
 The hub keeps its data in `~/.mergegate`, or in `MERGEGATE_HOME` when that is set to an absolute path. `mg` finds the hub through the same directory, so a command run with another `MERGEGATE_HOME` talks to another hub.
@@ -30,7 +32,7 @@ Every clone or worktree you work in needs `mg init` once. It adds a `mergegate` 
 
 ## Checking
 
-`mg doctor` checks the hub, git and every project, and prints the fix for anything wrong. Run it after setup and whenever a command fails in a way you don't understand.
+`mg doctor` checks the hub and its service, git, every project and the language packs its files use, this skill, and the `mergegate` remote of the clone you run it in, and prints the fix for anything wrong. Run it after setup and whenever a command fails in a way you don't understand.
 
 ## This skill
 

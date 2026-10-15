@@ -1,4 +1,10 @@
-//! `mg doctor`: whether the hub, git and every project are ready to work.
+//! `mg doctor`: whether the hub, its service, git, every project, the skill
+//! and this clone are ready to work.
+
+mod hub;
+mod remote;
+mod service;
+mod skill;
 
 use api::doctor::{Check, CheckStatus, Report};
 use serde::Serialize;
@@ -16,28 +22,32 @@ struct Doctor {
 pub fn run() -> Result<Outcome, CliError> {
     let home = crate::home()?;
     let mut checks = Vec::new();
-    // Everything else is checked by the hub, so a hub that can't be reached
-    // or understood ends the report.
-    match client::running(&home).and_then(|running| {
+    let connected = client::running(&home).and_then(|running| {
         let client = Client::to(&running)?;
         Ok((running, client))
-    }) {
-        Ok((running, client)) => {
-            checks.push(Check {
-                name: "hub".into(),
-                status: CheckStatus::Ok,
-                message: format!("running at {}", running.url()),
-                fix: None,
-            });
-            let report: Report = client.get("/api/doctor")?;
-            checks.extend(report.checks);
-        }
-        Err(e) => checks.push(Check {
+    });
+    checks.push(match &connected {
+        Ok((running, _)) => hub::check(&running.url(), &running.health.version),
+        Err(e) => Check {
             name: "hub".into(),
             status: CheckStatus::Fail,
-            message: e.body.message,
-            fix: e.body.hint,
-        }),
+            message: e.body.message.clone(),
+            fix: e.body.hint.clone(),
+        },
+    });
+    checks.extend(service::check(connected.is_ok()));
+    // The rest is checked by the hub, so a hub that can't be reached or
+    // understood skips it.
+    if let Ok((_, client)) = &connected {
+        let report: Report = client.get("/api/doctor")?;
+        checks.extend(report.checks);
+    }
+    checks.push(skill::check(
+        &home.root().join("skill").join(::skill::NAME),
+        ::skill::FILES,
+    ));
+    if let Ok((running, client)) = &connected {
+        checks.extend(remote::check(running, client)?);
     }
     let ok = !checks.iter().any(|c| c.status == CheckStatus::Fail);
     let text = text(&checks);

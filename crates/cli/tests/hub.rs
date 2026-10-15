@@ -163,6 +163,32 @@ fn stop_is_a_no_op_without_a_hub() {
 }
 
 #[test]
+fn a_hub_with_its_own_home_never_gets_a_service() {
+    let env = env();
+    // Where launchd and systemd units would go, were MERGEGATE_HOME unset.
+    let user = tempfile::tempdir().unwrap();
+    let config = user.path().join(".config");
+    let vars = [
+        ("HOME", user.path().to_str().unwrap()),
+        ("XDG_CONFIG_HOME", config.to_str().unwrap()),
+    ];
+    let started = env
+        .mg_with_env(&["--json", "hub", "start", "--port", "0"], &vars)
+        .assert_code(0)
+        .json();
+    assert_eq!(started["started"], true);
+    assert!(started.get("service").is_none(), "{started}");
+    assert!(started.get("warnings").is_none(), "{started}");
+    let stopped = env
+        .mg_with_env(&["--json", "hub", "stop"], &vars)
+        .assert_code(0)
+        .json();
+    assert!(stopped.get("service_removed").is_none(), "{stopped}");
+    assert!(!user.path().join("Library/LaunchAgents").exists());
+    assert!(!config.join("systemd").exists());
+}
+
+#[test]
 fn hub_survives_the_command_that_started_it() {
     let env = env();
     env.start_hub();

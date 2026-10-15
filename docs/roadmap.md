@@ -45,7 +45,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
 | 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | — |
-| 18 | Distribution | Full `mg doctor`, cargo-dist releases, launchd/systemd units, language packs as release assets (`mg lang add <name>`, `--available`, `--detect`, `update`, detection in `mg project add`); drop `## Stage` from AGENTS.md | F1 | — | — |
 | 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale | 10 |
 
 ## Why this order
@@ -54,11 +53,11 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **The whole loop runs on the `local` backend before GitHub** (PRs 1–8), so it is proven against real git with nothing faked.
 - **GitHub comes right after the skill**, so mergegate's own work keeps landing as GitHub PRs, cloud bots keep reviewing, and the switch happens early.
 - **Then the design's pain points:** triage for the flat file list, re-review for cheap revision cycles, stacks for oversized work, prioritization for many open items.
-- **Polish and reach come last in the list,** but 18 depends on nothing, so it can run alongside the rest; multi-machine waits until agents run on more than one machine.
+- **Reach comes last in the list:** multi-machine waits until agents run on more than one machine.
 - **Stacked items need re-review** (12b): keeping comments and approvals across a child's rebases relies on comment re-mapping, as viewed marks rely on interdiffs. Until PR 13 lands, agents submit the parts of a split one after another.
 
 ## Switching mergegate's own reviews to mergegate
 
 - **After PR 9:** agents submit through `mg` and the hub opens the GitHub PRs. Change `AGENTS.md` so agents ship with `mg submit` instead of the `ship` skill. If the hub breaks, the PRs are still on GitHub, so a fix can be reviewed there.
 - **After PR 10:** bot and teammate comments show in mergegate, and the GitHub web UI is no longer needed.
-- **From PR 9 on, the hub is in daily use:** run the latest release as the hub and dev builds next to it, as `.agents/prompts/install.md` sets up. Migrations only move forward, a migration is never edited once merged (until releases exist, `main` is what runs), and each one is tested by upgrading databases from every earlier schema version. Before PR 9 the database can be reset freely.
+- **From PR 9 on, the hub is in daily use:** run the latest release as the hub and dev builds next to it, as `.agents/prompts/install.md` sets up. Migrations only move forward, a migration is never edited once merged, and each one is tested by upgrading databases from every earlier schema version. Before PR 9 the database can be reset freely.

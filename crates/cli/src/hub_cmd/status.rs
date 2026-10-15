@@ -6,10 +6,16 @@ use crate::output::{CliError, Outcome};
 
 pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
     if let Some(running) = probe(home) {
-        return Ok(Outcome::done(
-            &running.status(home),
-            format!("hub running at {}", running.describe()),
-        ));
+        let status = running.status(home);
+        let mut text = format!("hub running at {}", running.describe());
+        if let Some(service) = &status.service {
+            text.push_str(&format!(
+                "\nruns as a {} service: {}",
+                service.manager.name(),
+                service.unit
+            ));
+        }
+        return Ok(Outcome::done(&status, text));
     }
     let unresponsive = home.is_locked();
     let status = HubStatus {

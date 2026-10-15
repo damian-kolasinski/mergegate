@@ -3,6 +3,7 @@
 use hub::Home;
 use serde::Serialize;
 
+use super::service::{self, Installed};
 use crate::output::{CliError, exit};
 
 #[derive(Serialize, Default)]
@@ -31,12 +32,21 @@ pub(super) struct HubStatus {
     /// A hub process holds the home's lock but doesn't answer.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub unresponsive: bool,
+    /// The service unit that runs the default home's hub.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service: Option<Installed>,
+    /// The unit this `stop` removed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_removed: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl HubStatus {
     pub fn new(home: &Home) -> Self {
         Self {
             home: home.root().display().to_string(),
+            service: service::applies().then(service::installed).flatten(),
             ..Self::default()
         }
     }
@@ -46,6 +56,22 @@ impl HubStatus {
             stopped: Some(stopped),
             ..Self::new(home)
         }
+    }
+}
+
+/// The error a hub started in the background printed as it exited.
+pub(super) fn exited(printed: &[u8], home: &Home) -> CliError {
+    // A service may have retried and printed one per attempt.
+    let first = serde_json::Deserializer::from_slice(printed)
+        .into_iter::<api::error::ErrorEnvelope>()
+        .next();
+    match first {
+        Some(Ok(envelope)) => CliError {
+            exit: exit::ERROR,
+            body: envelope.error,
+        },
+        _ => CliError::new("hub_start_failed", "the hub exited while starting")
+            .hint(format!("see {}", home.log().display())),
     }
 }
 
