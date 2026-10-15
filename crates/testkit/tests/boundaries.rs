@@ -12,7 +12,7 @@ use serde_json::Value;
 /// Everything `core` may depend on. Adding to it is an architecture decision:
 /// nothing here may do I/O, start a runtime or define a wire format. Wire
 /// types and the domain to wire mapping live in `hub` and `cli`.
-const CORE_ALLOWED: &[&str] = &["gix-imara-diff", "thiserror"];
+const CORE_ALLOWED: &[&str] = &["gix-imara-diff", "globset", "regex", "thiserror"];
 const ADAPTER_ALLOWED_WORKSPACE_DEPS: &[&str] = &["mergegate-core", "mergegate-api"];
 /// Crates allowed to depend on anything: the composition roots and the harness.
 const UNRESTRICTED: &[&str] = &["cli", "hub", "testkit"];

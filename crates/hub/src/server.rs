@@ -12,12 +12,13 @@ use backend_github::GithubClient;
 use git::HubGit;
 use highlight::Languages;
 use mergegate_core::highlight::Pack;
+use rules_toml::RulesToml;
 use store_sqlite::Store;
 
 use crate::{
     Home, HubError, HubInfo, abandon, attachments, comments, conversation, diff, doctor,
     draft_replies, events, external, feedback, git_http, guard, highlights, io, items, languages,
-    lifecycle, merge, projects, replies, reply, resume, reviews, settings, ui, viewed, wake,
+    lifecycle, merge, projects, replies, reply, resume, reviews, rules, settings, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -39,6 +40,7 @@ pub(crate) struct AppState {
     pub highlight: Notify,
     /// Asks the attachment pruner to look now.
     pub prune: Notify,
+    pub rules: rules::RulesFiles,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -135,6 +137,7 @@ pub(crate) async fn serve(
         known_packs: highlight::known(),
         highlight: Notify::new(),
         prune: Notify::new(),
+        rules: rules::RulesFiles::new(RulesToml::new(home.projects())),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
         github: GithubClient::from_env(),
@@ -142,6 +145,7 @@ pub(crate) async fn serve(
     let app = Router::new()
         .merge(lifecycle::routes())
         .merge(projects::routes())
+        .merge(rules::routes())
         .merge(items::routes())
         .merge(abandon::routes())
         .merge(merge::routes())
@@ -180,6 +184,7 @@ pub(crate) async fn serve(
     tokio::spawn(external::run(state.clone()));
     tokio::spawn(highlights::run(state.clone()));
     tokio::spawn(attachments::prune(state.clone()));
+    tokio::spawn(rules::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

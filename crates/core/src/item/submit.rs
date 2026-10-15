@@ -11,6 +11,7 @@ use crate::diff::{DiffGit, DiffStore};
 use crate::git::Upstream;
 use crate::github::Github;
 use crate::project::{Backend, ProjectError, ProjectStore, find};
+use crate::triage::{RulesStore, TriageGit, triage_files};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Submit {
@@ -33,15 +34,16 @@ pub struct Submitted {
 
 /// The branch must already be pushed to staging at `request.head`. The
 /// target is fetched fresh first, so the merge-base is current. Every file's
-/// diff is cached before the revision is recorded. A submit at the open
-/// item's head still records its worktree and wake.
+/// diff is cached and the file triaged by the applied rules before the
+/// revision is recorded. A submit at the open item's head still records its
+/// worktree and wake.
 ///
 /// A `github` item is published before it's recorded: its branch pushed and
 /// its pull request opened or retitled. If GitHub fails, the submit fails
 /// and nothing is recorded.
-pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
+pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore + RulesStore>(
     store: &mut S,
-    git: &(impl ItemGit + DiffGit),
+    git: &(impl ItemGit + DiffGit + TriageGit),
     github: &impl Github,
     request: Submit,
 ) -> Result<Submitted, ItemError> {
@@ -114,7 +116,25 @@ pub fn submit<S: ProjectStore + ItemStore + DiffStore + AgentStore>(
         return Err(ItemError::NothingToSubmit { branch, target });
     }
     let files = git.changed_files(&project.name, &base, &head)?;
-    let files = diff_files(store, git, &project.name, files)?;
+    let mut files = diff_files(store, git, &project.name, files)?;
+    // A rename counts as generated only when both its paths are, as code
+    // moved into a generated directory isn't.
+    let paths: Vec<&str> = files
+        .iter()
+        .flat_map(|f| std::iter::once(&f.file.path).chain(&f.file.old_path))
+        .map(String::as_str)
+        .collect();
+    // The base's attributes, so a revision can't mark its own files
+    // generated; the guard keeps a changed `.gitattributes` reviewed too.
+    let mut generated = git.generated(&project.name, &base, &paths)?.into_iter();
+    for file in &mut files {
+        let renamed = file.file.old_path.is_some();
+        let new = generated.next().unwrap_or(false);
+        let old = !renamed || generated.next().unwrap_or(false);
+        file.generated = new && old;
+    }
+    let rules = store.applied_rules(&project.name)?;
+    triage_files(store, &rules, &mut files)?;
     let title = match (title.as_deref().map(str::trim), &existing) {
         (Some(title), _) if !title.is_empty() => title.to_owned(),
         (_, Some(item)) => item.title.clone(),

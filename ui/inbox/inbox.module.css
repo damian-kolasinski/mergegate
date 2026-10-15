@@ -27,3 +27,10 @@
   text-align: right;
   white-space: nowrap;
 }
+
+.files {
+  flex: none;
+  width: 8em;
+  text-align: right;
+  white-space: nowrap;
+}

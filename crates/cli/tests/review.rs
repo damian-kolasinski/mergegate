@@ -94,6 +94,10 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "viewed": false,
                 "grammar": null,
                 "missing_pack": null,
+                "generated": false,
+                "tier": "review",
+                "rule": null,
+                "why": null,
             },
             {
                 "path": "gone.txt",
@@ -110,6 +114,10 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "viewed": false,
                 "grammar": null,
                 "missing_pack": null,
+                "generated": false,
+                "tier": "review",
+                "rule": null,
+                "why": null,
             },
             {
                 "path": "logo.bin",
@@ -122,6 +130,10 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 "viewed": false,
                 "grammar": null,
                 "missing_pack": null,
+                "generated": false,
+                "tier": "review",
+                "rule": null,
+                "why": null,
             },
             {
                 "path": "src/new.rs",
@@ -140,6 +152,10 @@ fn f6_serves_an_items_files_with_their_diffs() {
                 // highlight it.
                 "grammar": null,
                 "missing_pack": "rust",
+                "generated": false,
+                "tier": "review",
+                "rule": null,
+                "why": null,
             },
         ])
     );

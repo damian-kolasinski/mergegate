@@ -11,6 +11,7 @@ mod merge;
 mod publish;
 mod remote;
 mod staging;
+mod triage;
 mod trial;
 
 use std::path::{Path, PathBuf};

@@ -14,6 +14,7 @@ mod project_cmd;
 mod reply_cmd;
 mod repo;
 mod resume_cmd;
+mod rules_cmd;
 mod skill_cmd;
 mod submit_cmd;
 mod sync_cmd;
@@ -60,6 +61,9 @@ enum Command {
     /// Install and remove the language packs that highlight diffs
     #[command(subcommand)]
     Lang(lang_cmd::LangCommand),
+    /// The rules that sort a project's files into review and trusted
+    #[command(subcommand)]
+    Rules(rules_cmd::RulesCommand),
     /// In a clone: add the `mergegate` remote, pointing at its project
     Init {
         /// Project to push to [default: the one registered for this repo]
@@ -172,6 +176,7 @@ fn dispatch(command: Command) -> Result<Outcome, CliError> {
         Command::Hub(command) => hub_cmd::run(command),
         Command::Project(command) => project_cmd::run(command),
         Command::Lang(command) => lang_cmd::run(command),
+        Command::Rules(command) => rules_cmd::run(command),
         Command::Init { project } => init_cmd::run(project),
         Command::Submit {
             title,

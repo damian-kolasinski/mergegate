@@ -1,4 +1,4 @@
-import { createSignal, Show, untrack } from "solid-js";
+import { createMemo, createSignal, Show, untrack } from "solid-js";
 import type { Demo as DemoData } from "../api/Demo";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { ItemState } from "../api/ItemState";
@@ -111,8 +111,42 @@ function Review(props: {
   let toggle: HTMLButtonElement | undefined;
   let view: DiffViewControl | undefined;
   const viewed = useViewed(() => props.diff);
+  // The hub highlights in the background, and again as packs come and go;
+  // the same revision's files then bring their new spans. The screen keys
+  // the review by its diff, so the item is fixed for its life.
+  const [files, setFiles] = createSignal(untrack(() => props.diff.files));
+  const item = untrack(() => props.diff.item);
+  onHubEvent("highlights.changed", () => {
+    const revision = item.revision.number;
+    void getJson<ItemDiff>(`/api/items/${encodeURIComponent(item.id)}`).then(
+      (next) => {
+        if (next.item.revision.number === revision) setFiles(next.files);
+      },
+      () => undefined,
+    );
+  });
+  // Trusted files stay out of the diff until the operator opens their group.
+  const review = createMemo(() =>
+    files().filter((file) => file.tier === "review"),
+  );
+  const trusted = createMemo(() =>
+    files().filter((file) => file.tier === "trusted"),
+  );
+  const [showTrusted, setShowTrusted] = createSignal(false);
+  const shown = createMemo(() =>
+    showTrusted() ? [...review(), ...trusted()] : review(),
+  );
+  // A trusted file counts as viewed without a mark, but only a mark
+  // collapses it, so an opened group shows its diffs.
+  const done = createMemo(
+    () =>
+      new Set([
+        ...viewed.paths(),
+        ...trusted().map((file) => file.path),
+      ]) as ReadonlySet<string>,
+  );
   const nav = useNavigation({
-    files: () => props.diff.files,
+    files: shown,
     viewed: viewed.paths,
     view: () => view,
   });
@@ -121,7 +155,13 @@ function Review(props: {
     untrack(() => props.diff),
     {
       reviewable: () => reviewable(state()),
-      reveal: (spot) => view?.showLine(spot),
+      reveal: (spot) => {
+        // A comment on a trusted file opens its group, so the line is there.
+        if (trusted().some((file) => file.path === spot.path)) {
+          setShowTrusted(true);
+        }
+        view?.showLine(spot);
+      },
       showAll: () => setTalking(true),
     },
   );
@@ -145,28 +185,14 @@ function Review(props: {
     `/api/projects/${encodeURIComponent(project())}/blobs/${id}`;
   const highlightsUrl = (grammar: string, blob: string) =>
     `/api/highlights/${encodeURIComponent(grammar)}/${blob}`;
-  // The hub highlights in the background, and again as packs come and go;
-  // the same revision's files then bring their new spans. The screen keys
-  // the review by its diff, so the item is fixed for its life.
-  const [files, setFiles] = createSignal(untrack(() => props.diff.files));
-  const item = untrack(() => props.diff.item);
-  onHubEvent("highlights.changed", () => {
-    const revision = item.revision.number;
-    void getJson<ItemDiff>(`/api/items/${encodeURIComponent(item.id)}`).then(
-      (next) => {
-        if (next.item.revision.number === revision) setFiles(next.files);
-      },
-      () => undefined,
-    );
-  });
 
   /** Marking the current file viewed moves on to the next one. */
   const toggleViewed = () => {
     const file = nav.currentFile();
-    if (!file) return;
+    if (!file || file.tier === "trusted") return;
     const value = !viewed.paths().has(file.path);
     viewed.mark(file.path, value);
-    if (value && file !== props.diff.files.at(-1)) nav.stepFile(1);
+    if (value && file !== shown().at(-1)) nav.stepFile(1);
     else nav.showFile(file.path);
   };
   /** `c` comments on the cursor's line. */
@@ -208,7 +234,7 @@ function Review(props: {
         <ItemHeader
           item={props.diff.item}
           state={state()}
-          viewed={viewed.paths().size}
+          viewed={done().size}
           files={props.diff.files.length}
           failure={viewed.failure()}
         >
@@ -254,7 +280,16 @@ function Review(props: {
         </Show>
       </div>
       <FileList
-        files={props.diff.files}
+        files={review()}
+        trusted={trusted()}
+        expanded={showTrusted()}
+        onExpand={(expanded) => {
+          const leaving = !expanded && nav.currentFile()?.tier === "trusted";
+          setShowTrusted(expanded);
+          // The current file mustn't be one the diff no longer shows.
+          const last = review().at(-1);
+          if (leaving && last) nav.showFile(last.path);
+        }}
         viewed={viewed.paths()}
         current={nav.current()}
         onShow={nav.showFile}
@@ -262,11 +297,17 @@ function Review(props: {
       />
       <div class={styles.diff}>
         <Show
-          when={props.diff.files.length}
-          fallback={<Empty>This revision changes no files.</Empty>}
+          when={shown().length}
+          fallback={
+            <Empty>
+              {props.diff.files.length
+                ? "Every file in this revision is trusted."
+                : "This revision changes no files."}
+            </Empty>
+          }
         >
           <DiffView
-            files={files()}
+            files={shown()}
             viewed={viewed.paths()}
             blobUrl={blobUrl}
             highlightsUrl={highlightsUrl}
@@ -290,8 +331,7 @@ function Review(props: {
           revision={props.diff.item.revision.number}
           target={props.diff.item.target}
           unviewed={
-            props.diff.files.filter((file) => !viewed.paths().has(file.path))
-              .length
+            props.diff.files.filter((file) => !done().has(file.path)).length
           }
           drafts={comments.drafts.list().length}
           replies={comments.replyDrafts.list().length}

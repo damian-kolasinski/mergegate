@@ -5,6 +5,7 @@ use crate::highlight::Span;
 use crate::item::Item;
 use crate::merge::Blocked;
 use crate::review::Conversation;
+use crate::rules::Tier;
 
 /// `GET /api/items/{id}`: the item with its newest revision's files.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -36,7 +37,8 @@ pub struct File {
     pub additions: Option<u64>,
     pub deletions: Option<u64>,
     pub content: Content,
-    /// Marked viewed in this revision.
+    /// Marked viewed in this revision. A trusted file counts as viewed
+    /// without a mark.
     pub viewed: bool,
     /// The installed grammar that highlights the file, by its path; `GET
     /// /api/highlights/{grammar}/{blob}` reads a side's spans.
@@ -44,6 +46,15 @@ pub struct File {
     /// The language pack that would highlight the file, when it isn't
     /// installed.
     pub missing_pack: Option<String>,
+    /// `linguist-generated` as the revision's base sets it.
+    pub generated: bool,
+    pub tier: Tier,
+    /// The rule that set the tier, as in `R3`; null when nothing matched or
+    /// a guard kept the file in review.
+    pub rule: Option<String>,
+    /// Why the file is in its tier: the rule's matchers and reason when it
+    /// matched, or the guard's. Null when nothing matched.
+    pub why: Option<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

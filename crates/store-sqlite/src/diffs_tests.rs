@@ -96,6 +96,8 @@ fn changed(old: Option<&str>, new: &str) -> FileStat {
         },
         additions: None,
         deletions: None,
+        generated: false,
+        triage: Default::default(),
     }
 }
 

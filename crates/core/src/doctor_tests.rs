@@ -47,8 +47,8 @@ fn no_projects_is_a_warning() {
 #[test]
 fn old_or_missing_git_fails() {
     let cases = [
-        (Some("git version 2.37.9"), CheckStatus::Fail),
-        (Some("git version 2.38.0"), CheckStatus::Ok),
+        (Some("git version 2.39.5"), CheckStatus::Fail),
+        (Some("git version 2.40.0"), CheckStatus::Ok),
         (Some("something else"), CheckStatus::Warn),
         (None, CheckStatus::Fail),
     ];

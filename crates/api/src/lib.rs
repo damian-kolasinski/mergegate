@@ -15,6 +15,7 @@ pub mod merge;
 pub mod project;
 pub mod resume;
 pub mod review;
+pub mod rules;
 pub mod settings;
 pub mod viewed;
 

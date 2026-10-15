@@ -38,14 +38,14 @@ fn line(i: &InboxItem) -> String {
         Some(link) => format!(" · {}", link.label),
         None => String::new(),
     };
+    // Only when rules trusted some, so the total sets them apart.
+    let files = if i.review_files == i.files {
+        files(i.files)
+    } else {
+        format!("{} of {} to review", i.review_files, files(i.files))
+    };
     format!(
-        "  {} r{}  {}  ({}{link} · {}, +{} -{})",
-        i.id,
-        i.revision,
-        i.title,
-        i.branch,
-        files(i.files),
-        i.additions,
-        i.deletions
+        "  {} r{}  {}  ({}{link} · {files}, +{} -{})",
+        i.id, i.revision, i.title, i.branch, i.additions, i.deletions
     )
 }

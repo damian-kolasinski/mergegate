@@ -15,10 +15,11 @@ use mergegate_core::attachment;
 use mergegate_core::diff::{self, Content, LineKind};
 use mergegate_core::highlight::{self, FileHighlights, Highlighter, Span};
 use mergegate_core::item::{self, DiffedFile, ItemId};
+use mergegate_core::triage::TriagedBy;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{attachments, conversation, highlights, items, merge, projects};
+use crate::{attachments, conversation, highlights, items, merge, projects, rules};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -118,10 +119,17 @@ fn file_to_api(
             deletions,
             content,
             viewed,
+            generated,
+            triage,
         },
         spans,
     ): (DiffedFile, FileHighlights),
 ) -> api::diff::File {
+    let (rule, why) = match triage.by {
+        None => (None, None),
+        Some(TriagedBy::Guard(guard)) => (None, Some(guard.why().to_owned())),
+        Some(TriagedBy::Rule { id, why }) => (Some(id.to_string()), Some(why)),
+    };
     api::diff::File {
         path: file.path,
         old_path: file.old_path,
@@ -146,6 +154,10 @@ fn file_to_api(
         viewed,
         grammar: spans.grammar,
         missing_pack: spans.missing,
+        generated,
+        tier: rules::tier_to_api(triage.tier),
+        rule,
+        why,
     }
 }
 

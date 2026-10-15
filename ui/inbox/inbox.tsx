@@ -177,16 +177,27 @@ function Entry(props: {
           <Meta tone="removed">−{props.item.deletions}</Meta>
         </Show>
       </span>
-      <span class={styles.figure}>
-        <Meta>
-          {props.item.files} {props.item.files === 1 ? "file" : "files"}
-        </Meta>
+      <span class={styles.files} title={trusted(props.item)}>
+        <Meta>{files(props.item)}</Meta>
       </span>
       <span class={styles.figure} title={props.item.updated_at}>
         <Meta>{age(props.item.updated_at, props.now)}</Meta>
       </span>
     </Row>
   );
+}
+
+/** `4 of 6 files` when rules trusted some, so the total sets them apart. */
+function files(item: InboxItem): string {
+  const all = `${item.files} ${item.files === 1 ? "file" : "files"}`;
+  if (item.review_files === item.files) return all;
+  return `${item.review_files} of ${all}`;
+}
+
+function trusted(item: InboxItem): string | undefined {
+  const count = item.files - item.review_files;
+  if (!count) return undefined;
+  return `${item.review_files} to review, ${count} trusted by the rules`;
 }
 
 function why(blocked: Blocked): string {

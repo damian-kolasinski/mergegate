@@ -26,6 +26,7 @@ use crate::review::{
 };
 use crate::settings::SettingsStore;
 use crate::store::StoreError;
+use crate::triage::{Rule, RuleId, Rules, RulesStore, Tier, Triage, TriageGit};
 use crate::viewed::ViewedStore;
 
 /// A commit ID for tests: `n` as 40 hex digits.
@@ -57,6 +58,8 @@ pub(crate) struct FakeGit {
     fetched: RefCell<Vec<(String, String)>>,
     pins: RefCell<BTreeMap<String, String>>,
     blobs_read: RefCell<Vec<String>>,
+    /// Paths `linguist-generated` in every tree.
+    generated: BTreeSet<String>,
 }
 
 impl Default for FakeGit {
@@ -75,6 +78,7 @@ impl Default for FakeGit {
             fetched: RefCell::default(),
             pins: RefCell::default(),
             blobs_read: RefCell::default(),
+            generated: BTreeSet::new(),
         }
     }
 }
@@ -127,6 +131,11 @@ impl FakeGit {
 
     pub fn failing_unpin(mut self) -> Self {
         self.fail_unpin = true;
+        self
+    }
+
+    pub fn generated(mut self, paths: &[&str]) -> Self {
+        self.generated.extend(paths.iter().map(|p| (*p).to_owned()));
         self
     }
 
@@ -438,6 +447,17 @@ fn root_of(upstream: &Upstream) -> PathBuf {
     }
 }
 
+impl TriageGit for FakeGit {
+    fn generated(
+        &self,
+        _project: &ProjectName,
+        _commit: &str,
+        paths: &[&str],
+    ) -> Result<Vec<bool>, GitError> {
+        Ok(paths.iter().map(|p| self.generated.contains(*p)).collect())
+    }
+}
+
 impl DiffGit for FakeGit {
     fn blobs(
         &self,
@@ -481,6 +501,7 @@ pub(crate) struct FakeStore {
     external: BTreeMap<CommentId, (u64, Option<u64>)>,
     /// The external comments a batch carried.
     batched: BTreeSet<CommentId>,
+    rules: BTreeMap<ProjectName, Rules>,
     clock: u32,
     /// Every item's, oldest first.
     attachments: Vec<(ItemId, Attachment)>,
@@ -725,6 +746,59 @@ impl ItemStore for FakeStore {
         item.revision = revision;
         Ok(item.clone())
     }
+}
+
+impl RulesStore for FakeStore {
+    fn applied_rules(&self, project: &ProjectName) -> Result<Rules, StoreError> {
+        Ok(self.rules.get(project).cloned().unwrap_or_default())
+    }
+
+    fn set_applied_rules(
+        &mut self,
+        project: &ProjectName,
+        rules: &Rules,
+    ) -> Result<(), StoreError> {
+        self.rules.insert(project.clone(), rules.clone());
+        Ok(())
+    }
+
+    fn set_triage(
+        &mut self,
+        id: &ItemId,
+        revision: u32,
+        triage: &[(String, Triage)],
+    ) -> Result<(), StoreError> {
+        let files = self.files.get_mut(&(id.clone(), revision)).unwrap();
+        for (path, triage) in triage {
+            let file = files.iter_mut().find(|f| f.file.path == *path).unwrap();
+            file.triage = triage.clone();
+        }
+        let stat = DiffStat::of(files);
+        let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
+        if item.revision.number == revision {
+            item.revision.stat = stat;
+        }
+        Ok(())
+    }
+}
+
+/// Rules with `R1` first, from `(tier, path)` pairs.
+pub(crate) fn rules(rules: &[(Tier, &str)]) -> Rules {
+    Rules::new(
+        (1..)
+            .zip(rules)
+            .map(|(n, (tier, path))| Rule {
+                id: RuleId::new(n),
+                tier: *tier,
+                path: Some((*path).to_owned()),
+                kind: None,
+                max_lines: None,
+                diff_matches: None,
+                reason: format!("rule {n}"),
+            })
+            .collect(),
+    )
+    .unwrap()
 }
 
 impl DiffStore for FakeStore {

@@ -11,4 +11,6 @@ workspace = true
 
 [dependencies]
 gix-imara-diff = "0.3.1"
+globset = { version = "0.4.20", default-features = false }
+regex = { version = "1.13.1", default-features = false, features = ["std", "perf", "unicode"] }
 thiserror = "2.0.21"

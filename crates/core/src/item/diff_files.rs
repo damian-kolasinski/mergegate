@@ -4,12 +4,13 @@ use super::{ChangedFile, FileStat, ItemError};
 use crate::diff::{DiffGit, DiffStore, FileDiff, compute};
 use crate::git::GitError;
 use crate::project::ProjectName;
+use crate::triage::Triage;
 
 /// Files whose blobs are read at once: few enough git reads, and few enough
 /// blobs held in memory together.
 const BATCH: usize = 64;
 
-/// Counts each file's lines, diffing and caching the blob pairs the cache
+/// Counts each file's lines, leaving it untriaged, diffing and caching the blob pairs the cache
 /// doesn't have yet.
 pub(super) fn diff_files(
     store: &mut impl DiffStore,
@@ -42,6 +43,8 @@ pub(super) fn diff_files(
             file,
             additions,
             deletions,
+            generated: false,
+            triage: Triage::default(),
         })
         .collect())
 }
