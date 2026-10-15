@@ -80,9 +80,9 @@ fn line(i: &InboxItem) -> String {
             paths,
         }) => {
             let short = &target_commit[..target_commit.len().min(12)];
-            let paths = paths.join(", ");
             out.push_str(&format!(
-                "\n      conflicts with the target at {short}: {paths}"
+                "\n      conflicts with the target at {short}: {}",
+                listed(paths)
             ));
         }
         None => {}
@@ -94,7 +94,22 @@ fn line(i: &InboxItem) -> String {
     out
 }
 
+/// The first few paths, so a conflict over many keeps its item one screen
+/// line; `mg feedback` lists them all.
+fn listed(paths: &[String]) -> String {
+    const SHOWN: usize = 3;
+    let shown = paths[..paths.len().min(SHOWN)].join(", ");
+    match paths.len().saturating_sub(SHOWN) {
+        0 => shown,
+        more => format!("{shown} and {more} more"),
+    }
+}
+
 /// One line, so text written over several stays under its item.
 fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
+
+#[cfg(test)]
+#[path = "inbox_cmd_tests.rs"]
+mod tests;
