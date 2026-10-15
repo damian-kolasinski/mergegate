@@ -68,21 +68,33 @@ impl Pairing {
     }
 }
 
-/// Replaces the project's pairs with `tried`, and returns whether what the
-/// inbox shows changed. Pairs at heads that moved since they were tried show
-/// nothing, and the pass the move asked for tries them.
-pub fn save_pairs<S: ItemStore + ConflictStore>(
+/// Replaces the project's pairs with `tried`, and returns the items of every
+/// conflicting pair found or dropped, whose "conflicts with" an open page may
+/// still show as it was. Pairs at heads that moved since they were tried show
+/// nothing, and the pass the move asked for tries them; a page fetched before
+/// the move still names the other item, so a dropped stale pair counts too.
+pub fn save_pairs<S: ConflictStore>(
     store: &mut S,
     project: &ProjectName,
     tried: &[Pair],
-) -> Result<bool, ConflictError> {
+) -> Result<Vec<ItemId>, ConflictError> {
     let cached = store.pairs(Some(project))?;
     if tried == cached {
-        return Ok(false);
+        return Ok(Vec::new());
     }
     store.set_pairs(project, tried)?;
-    let open = store.open_items(Some(project))?;
-    Ok(conflicting(&open, &cached) != conflicting(&open, tried))
+    let only_in = |pairs: &[Pair], other: &[Pair]| -> Vec<ItemId> {
+        pairs
+            .iter()
+            .filter(|pair| pair.conflicts && !other.contains(pair))
+            .flat_map(|pair| [pair.item.clone(), pair.other.clone()])
+            .collect()
+    };
+    let mut changed = only_in(&cached, tried);
+    changed.extend(only_in(tried, &cached));
+    changed.sort();
+    changed.dedup();
+    Ok(changed)
 }
 
 /// The open items each of `open` conflicts with, by `pairs` tried at their
