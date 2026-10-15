@@ -90,6 +90,12 @@ impl Home {
         self.root.join("wakes")
     }
 
+    /// Ahead of the rest of a wake command's PATH: only a link to the `mg`
+    /// running the hub.
+    pub fn wake_bin(&self) -> PathBuf {
+        self.root.join("bin")
+    }
+
     /// What the hub's git commands see as `HOME`, so the settings of the user
     /// running the hub never apply to them.
     pub fn git_home(&self) -> PathBuf {

@@ -100,7 +100,7 @@ Or build from source (needs Rust, Node 22 and pnpm for the UI):
 MG_REQUIRE_UI=1 cargo install --locked --git https://github.com/damian-kolasinski/mergegate mg
 ```
 
-macOS ships an unrelated `/usr/bin/mg` text editor. Check that `command -v mg` finds mergegate's, and put its install directory ahead of `/usr/bin` on your `PATH` if it doesn't.
+macOS ships an unrelated `/usr/bin/mg` text editor. Both installs also put `mg` on your `PATH` as `mergegate`, which nothing else claims: `mergegate doctor` says which `mg` your `PATH` finds and prints the `export PATH=...` that puts mergegate's first.
 
 ## Quick start
 

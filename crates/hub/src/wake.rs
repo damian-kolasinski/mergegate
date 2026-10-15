@@ -8,10 +8,11 @@
 //! still running. Its exit makes the runner look again.
 
 use std::collections::{HashMap, HashSet};
+use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use mergegate_core::agent::{self, AgentStore, DueWake};
 use mergegate_core::item::ItemId;
@@ -25,6 +26,8 @@ use crate::server::AppState;
 pub(crate) struct Wakes {
     inner: Mutex<Inner>,
     changed: Notify,
+    /// The commands' PATH, set up by the first command this hub runs.
+    path: OnceLock<Option<OsString>>,
 }
 
 #[derive(Default)]
@@ -183,6 +186,9 @@ async fn run_command(state: &AppState, wake: &DueWake) {
     for name in agent::SESSION_MARKERS {
         command_line.env_remove(name);
     }
+    if let Some(path) = state.wakes.path.get_or_init(|| path_env(&state.wake_bin)) {
+        command_line.env("PATH", path);
+    }
     let spawned = command_line
         .arg("-c")
         .arg(&command)
@@ -213,6 +219,39 @@ async fn run_command(state: &AppState, wake: &DueWake) {
         ),
         Err(e) => tracing::warn!("waking {}: {e}", wake.item),
     }
+}
+
+/// The hub's PATH behind `bin`, which holds only a link to the `mg` running
+/// this hub. `mg` in a command is then this hub's whatever PATH the hub
+/// started with (a service manager's, or one where macOS's `/usr/bin/mg`
+/// editor comes first), and every other command resolves as it would have.
+fn path_env(bin: &Path) -> Option<OsString> {
+    let linked = std::env::current_exe()
+        .and_then(fs::canonicalize)
+        .and_then(|exe| link_mg(bin, &exe));
+    if let Err(e) = linked {
+        tracing::warn!("linking {}/mg to this hub's mg: {e}", bin.display());
+        return None;
+    }
+    own_first(bin, std::env::var_os("PATH").as_deref())
+}
+
+/// Points `bin/mg` at `exe`, over the link an older hub left, by renaming a
+/// new link onto it so a running command never finds `bin/mg` missing.
+fn link_mg(bin: &Path, exe: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(bin)?;
+    let staged = bin.join(format!(".mg.{}", std::process::id()));
+    let _ = fs::remove_file(&staged);
+    std::os::unix::fs::symlink(exe, &staged)?;
+    fs::rename(&staged, bin.join("mg"))
+}
+
+fn own_first(dir: &Path, path: Option<&OsStr>) -> Option<OsString> {
+    let rest = path
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .filter(|entry| entry != dir);
+    std::env::join_paths(std::iter::once(dir.to_owned()).chain(rest)).ok()
 }
 
 /// Truncated, so it holds the newest command's output only.

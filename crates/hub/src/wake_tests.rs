@@ -118,3 +118,25 @@ fn a_gone_worktree_is_skipped_for_good() {
     assert_eq!(store.woken.get(&id()), Some(&3));
     assert!(wakes.lock().running.is_empty());
 }
+
+#[test]
+fn the_bin_folder_comes_first_on_the_commands_path() {
+    let dir = Path::new("/opt/mg/bin");
+    let path = OsStr::new("/usr/bin:/opt/mg/bin:/bin");
+    assert_eq!(
+        own_first(dir, Some(path)).unwrap(),
+        "/opt/mg/bin:/usr/bin:/bin"
+    );
+    assert_eq!(own_first(dir, None).unwrap(), "/opt/mg/bin");
+}
+
+#[test]
+fn the_commands_mg_is_a_link_to_the_hubs_repointed_by_a_newer_hub() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    for exe in ["/opt/old/mg", "/opt/new/mg"] {
+        link_mg(&bin, Path::new(exe)).unwrap();
+        assert_eq!(fs::read_link(bin.join("mg")).unwrap(), Path::new(exe));
+    }
+    assert_eq!(fs::read_dir(&bin).unwrap().count(), 1);
+}

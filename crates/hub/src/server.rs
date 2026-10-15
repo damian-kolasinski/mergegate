@@ -32,6 +32,7 @@ pub(crate) struct AppState {
     pub events: events::Events,
     pub wakes: wake::Wakes,
     pub wake_logs: PathBuf,
+    pub wake_bin: PathBuf,
     /// Held across a pull of pull request comments, from asking GitHub to
     /// storing what it said, so a slower poll can't store older bodies over
     /// what a `mg sync` just brought in.
@@ -163,6 +164,7 @@ pub(crate) async fn serve(
         events: events::Events::new(),
         wakes: wake::Wakes::default(),
         wake_logs: home.wake_logs(),
+        wake_bin: home.wake_bin(),
         pulling: tokio::sync::Mutex::new(()),
         languages: Arc::new(languages),
         known_packs: highlight::known(),

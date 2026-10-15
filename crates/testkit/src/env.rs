@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
@@ -105,8 +106,24 @@ impl Env {
             .env_remove("MG_UI_DIR")
             .env_remove("MG_LANGUAGES_INDEX")
             .env_remove("MG_LANGUAGES_URL")
-            .envs(self.vars.iter().map(|(k, v)| (k, v)));
+            .envs(self.vars.iter().map(|(k, v)| (k, v)))
+            .env("PATH", self.path());
         cmd
+    }
+
+    /// The `mg` under test first on the PATH it would get otherwise, as an
+    /// installed one is, so whatever runs `mg` by name finds it.
+    fn path(&self) -> OsString {
+        let path = self
+            .vars
+            .iter()
+            .find(|(k, _)| k == "PATH")
+            .map(|(_, v)| OsString::from(v))
+            .or_else(|| std::env::var_os("PATH"))
+            .unwrap_or_default();
+        let dir = self.mg.parent().expect("mg is in a folder").to_owned();
+        std::env::join_paths(std::iter::once(dir).chain(std::env::split_paths(&path)))
+            .expect("PATH joins")
     }
 
     fn run(mut cmd: Command) -> Run {
