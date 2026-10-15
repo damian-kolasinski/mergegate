@@ -134,13 +134,17 @@ pub struct Revision {
     pub submitted_at: String,
 }
 
-/// `GET /api/inbox`: open items, each group by priority, then oldest first.
+/// `GET /api/inbox`: open items, each group by priority, then oldest first,
+/// and the items closed today, the latest closed first.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Inbox {
+    /// Items to review, and those whose agent waits on an answer.
     pub needs_you: Vec<InboxItem>,
     pub with_agents: Vec<InboxItem>,
     pub merging: Vec<InboxItem>,
+    #[serde(default)]
+    pub closed: Vec<InboxItem>,
     /// Projects with changes to their rules waiting for the operator.
     pub rules: Vec<crate::rules::PendingRules>,
 }
@@ -151,6 +155,7 @@ pub struct InboxItem {
     pub id: String,
     pub title: String,
     pub branch: String,
+    pub state: ItemState,
     /// The newest revision's number.
     pub revision: u32,
     pub files: u32,
@@ -173,6 +178,14 @@ pub struct InboxItem {
     /// The open items its head conflicts with, of its project and target,
     /// oldest first: landing one of them hands this one back.
     pub conflicts_with: Vec<String>,
+    /// Threads whose agent asked the operator something and waits on the
+    /// answer.
+    #[serde(default)]
+    pub questions: u32,
+    /// GitHub comments the agent rejected that the operator hasn't agreed
+    /// with or overridden.
+    #[serde(default)]
+    pub rejections: u32,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

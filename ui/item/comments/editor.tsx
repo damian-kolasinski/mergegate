@@ -1,5 +1,14 @@
-import { createSignal, onMount, Show } from "solid-js";
-import { Button, Meta, TextArea } from "../../design-system";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
+import { failureOf, type Failure } from "../../app/hub";
+import { isEditable, isSubmitKey } from "../../app/keys";
+import { Button, ErrorNote, TextArea } from "../../design-system";
 import styles from "./editor.module.css";
 
 /** An editor open somewhere on the page. */
@@ -24,7 +33,7 @@ export function useEditor() {
   const [open, setOpen] = createSignal<Open>();
   // Locked while it saves, so what comes back is its.
   const [saving, setSaving] = createSignal(false);
-  const [failure, setFailure] = createSignal<string>();
+  const [failure, setFailure] = createSignal<Failure>();
   // Each slice's own alerts, which go away with the editor's, as they did
   // when every failure shared one slot.
   const resets: (() => void)[] = [];
@@ -33,10 +42,45 @@ export function useEditor() {
     for (const clear of resets) clear();
   };
   let field: HTMLTextAreaElement | undefined;
+  // What's typed between opening an editor and its field taking focus, a
+  // few frames later once CodeView renders it: kept for the field rather
+  // than read as shortcuts or lost.
+  let typedAhead = "";
+  let waiting = false;
+  const flush = () => {
+    waiting = false;
+    const typed = typedAhead;
+    typedAhead = "";
+    if (!typed) return;
+    setOpen((open) => open && { ...open, text: open.text + typed });
+    if (field && document.activeElement === field) {
+      field.value = open()?.text ?? field.value;
+      field.setSelectionRange(field.value.length, field.value.length);
+    }
+  };
+  const opened = createMemo(() => open()?.key);
+  createEffect(() => {
+    if (opened() === undefined) return;
+    waiting = true;
+    const onKey = (event: KeyboardEvent) => {
+      if (!waiting || event.key.length !== 1) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isEditable(event.target)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      typedAhead += event.key;
+    };
+    window.addEventListener("keydown", onKey, true);
+    onCleanup(() => {
+      window.removeEventListener("keydown", onKey, true);
+      waiting = false;
+      typedAhead = "";
+    });
+  });
 
   const dirty = () => Boolean(open()?.text.trim());
   const focus = () => {
-    if (field?.isConnected) focusOnceShown(field);
+    if (field?.isConnected) focusOnceShown(field, flush);
     // CodeView dropped the note with its file, or the list was closed;
     // shown again, the editor focuses.
     else open()?.show();
@@ -77,6 +121,8 @@ export function useEditor() {
     field(element: HTMLTextAreaElement) {
       field = element;
     },
+    /** The field took focus: what was typed ahead goes into it. */
+    focused: flush,
     type(text: string) {
       setOpen((open) => open && { ...open, text });
     },
@@ -96,8 +142,7 @@ export function useEditor() {
         .save(editing.text)
         .then(
           () => setOpen(undefined),
-          (error: unknown) =>
-            setFailure(error instanceof Error ? error.message : String(error)),
+          (error: unknown) => setFailure(failureOf(error)),
         )
         .finally(() => setSaving(false));
     },
@@ -116,14 +161,14 @@ export function Editor(props: {
   action?: string;
 }) {
   let field: HTMLTextAreaElement | undefined;
-  onMount(() => field && focusOnceShown(field));
+  onMount(() => field && focusOnceShown(field, props.editor.focused));
   const empty = () => !props.editor.open()?.text.trim();
   const blocked = () => empty() && !props.editor.open()?.optional;
   return (
     <div
       class={styles.editor}
       onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        if (isSubmitKey(event)) {
           event.preventDefault();
           props.editor.save();
         } else if (event.key === "Escape" && empty()) {
@@ -148,11 +193,7 @@ export function Editor(props: {
       />
       <div class={styles.actions}>
         <Show when={props.editor.failure()}>
-          {(message) => (
-            <span role="alert">
-              <Meta tone="removed">{message()}</Meta>
-            </span>
-          )}
+          {(failure) => <ErrorNote failure={failure()} />}
         </Show>
         <Button
           disabled={props.editor.saving()}
@@ -162,10 +203,13 @@ export function Editor(props: {
         </Button>
         <Button
           variant="solid"
-          disabled={blocked() || props.editor.saving()}
+          disabled={blocked()}
+          busy={props.editor.saving()}
+          title={blocked() ? "Write something first" : undefined}
+          keyHint="⌘↩"
           onClick={() => props.editor.save()}
         >
-          {props.action ?? "Save draft"}
+          {props.editor.saving() ? "Saving…" : (props.action ?? "Save draft")}
         </Button>
       </div>
     </div>
@@ -174,13 +218,21 @@ export function Editor(props: {
 
 /**
  * CodeView puts a note on the page on its own schedule, after the note is
- * rendered, so focus waits for it a few frames.
+ * rendered, so focus waits for it a few frames. `onFocused` runs once it has,
+ * or once it gave up, so nothing typed meanwhile waits forever.
  */
-function focusOnceShown(element: HTMLElement, frames = 30) {
+function focusOnceShown(
+  element: HTMLElement,
+  onFocused: () => void,
+  frames = 30,
+) {
   if (element.isConnected) {
     element.focus({ preventScroll: true });
     element.scrollIntoView({ block: "nearest" });
+    onFocused();
   } else if (frames > 0) {
-    requestAnimationFrame(() => focusOnceShown(element, frames - 1));
+    requestAnimationFrame(() => focusOnceShown(element, onFocused, frames - 1));
+  } else {
+    onFocused();
   }
 }

@@ -48,10 +48,10 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     // Picked with the item open: its scores land without a reload.
     hub.mg(["judge", "set", "jev"], app.dir);
     await expect(files.getByRole("listitem")).toHaveText([
-      /^src\/session\.rs\s*raised by the judge 100\/100\s*\+1$/,
-      /^README\.md\s*the new setting\s*judged 23\/100\s*\+3$/,
-      /^src\/main\.rs\s*wires the store in\s*judged 45\/100\s*\+1$/,
-      /^Cargo\.lock\s*judged 45\/100\s*promoted by the judge; trusted by R1: `\*\*\/\*\.lock` — regenerated\s*\+1$/,
+      /^session\.rs\s*src\s*raised by the judge 100\/100\s*\+1$/,
+      /^README\.md\s*the new setting · judged 23\/100\s*\+3$/,
+      /^main\.rs\s*src\s*wires the store in · judged 45\/100\s*\+1$/,
+      /^Cargo\.lock\s*judged 45\/100 · promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1$/,
     ]);
     // Nothing is left trusted, so there is no group to open.
     await expect(files.getByRole("button", { name: /^Trusted/ })).toHaveCount(
@@ -63,10 +63,10 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     // into their new order.
     hub.mg(["judge", "set", "jev", "--order", "judge"], app.dir);
     await expect(files.getByRole("listitem")).toHaveText([
-      /^src\/session\.rs\s*judged 100\/100\s*\+1$/,
-      /^src\/main\.rs\s*wires the store in\s*judged 45\/100\s*\+1$/,
-      /^Cargo\.lock\s*judged 45\/100\s*promoted by the judge; trusted by R1: `\*\*\/\*\.lock` — regenerated\s*\+1$/,
-      /^README\.md\s*the new setting\s*judged 23\/100\s*\+3$/,
+      /^session\.rs\s*src\s*judged 100\/100\s*\+1$/,
+      /^main\.rs\s*src\s*wires the store in · judged 45\/100\s*\+1$/,
+      /^Cargo\.lock\s*judged 45\/100 · promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1$/,
+      /^README\.md\s*the new setting · judged 23\/100\s*\+3$/,
     ]);
     const diffs = page.getByRole("region", { name: "Diff" }).getByRole("code");
     await expect(diffs).toHaveCount(4);
@@ -97,7 +97,7 @@ test("f12 without a judge the heuristics explain the order", async ({
 
   const files = page.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^src\/session\.rs\s*ranked high: changes a declaration\s*\+1$/,
+    /^session\.rs\s*src\s*ranked high: changes a declaration\s*\+1$/,
     /^README\.md\s*ranked low: docs\s*\+1$/,
   ]);
 });

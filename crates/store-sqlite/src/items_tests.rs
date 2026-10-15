@@ -204,6 +204,43 @@ fn lists_every_projects_closed_items_oldest_first() {
 }
 
 #[test]
+fn lists_items_closed_since_midnight_latest_first() {
+    let (_dir, mut store) = store();
+    let ids: Vec<_> = ["a", "b", "c", "d"]
+        .into_iter()
+        .map(|branch| store.insert_item(new_item("app", branch)).unwrap().id)
+        .collect();
+    let close = |number: u32, state: &str, at: &str| {
+        store
+            .conn
+            .execute(
+                &format!("UPDATE items SET state = ?1, closed_at = {at} WHERE number = ?2"),
+                params![state, number],
+            )
+            .unwrap();
+    };
+    close(
+        1,
+        "merged",
+        "strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 second')",
+    );
+    close(2, "abandoned", "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
+    // Before the operator's midnight, whatever their timezone.
+    close(
+        4,
+        "merged",
+        "strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days')",
+    );
+    let closed: Vec<_> = store
+        .closed_today()
+        .unwrap()
+        .into_iter()
+        .map(|i| i.id)
+        .collect();
+    assert_eq!(closed, [ids[1].clone(), ids[0].clone()]);
+}
+
+#[test]
 fn adds_revisions_with_their_files() {
     let (_dir, mut store) = store();
     let first = store.insert_item(new_item("app", "a")).unwrap();

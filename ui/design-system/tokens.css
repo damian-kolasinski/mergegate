@@ -7,6 +7,10 @@
  * Features use the semantic tokens only. The `--ramp-*` properties exist to
  * define them, and tokens marked "derived" are ours, built from the ramps
  * where Figma has none.
+ *
+ * Blue is mergegate's one signature colour: the primary action, the
+ * selection, links. Status colours stay quiet (tinted) unless something needs
+ * the operator now, which is what the solid fills are kept for.
  */
 
 :root {
@@ -67,6 +71,8 @@
   /* Type. Figma defines no monospace face; ids and code use the system's. */
   --font-sans: "DM Sans", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Derived: the item title, the one heading that leads a screen. */
+  --type-h3: 600 19px / 24px var(--font-sans);
   --type-h4: 600 16px / 20px var(--font-sans);
   --type-h5: 600 14px / 16px var(--font-sans);
   --type-p3: 400 14px / 20px var(--font-sans);
@@ -87,6 +93,14 @@
   --radius-small: 4px;
   --radius-pill: 999px;
 
+  /* Derived: one speed for everything that moves. base.css stops it under
+     prefers-reduced-motion. `--motion-pop` is a whole `animation` value so
+     modules can use the global keyframes without CSS-modules renaming them. */
+  --motion-fast: 140ms ease-out;
+  --motion-pop: mg-pop-in var(--motion-fast);
+  --motion-arrive: mg-arrive 160ms ease-out;
+  --shadow-popover: 0 1px 3px rgb(5 32 51 / 10%), 0 6px 20px rgb(5 32 51 / 14%);
+
   --background-page: var(--ramp-grey-50);
   --background-subtle: var(--ramp-grey-100);
   --background-secondary: var(--ramp-grey-200);
@@ -97,14 +111,22 @@
   --background-success-hover: var(--ramp-green-800);
   --background-warning: var(--ramp-yellow-600);
   --background-warning-hover: var(--ramp-yellow-700);
-  /* Derived: a solid fill like the status ones, and the selected row. */
+  /* Derived: a solid fill like the status ones, the selected and hovered
+     row (≥ 1.2:1 on the page, so the fill shows without the bar), and the
+     pale fills behind tinted badges. */
   --background-brand: var(--ramp-blue-700);
   --background-brand-hover: var(--ramp-blue-800);
-  --background-selected: var(--ramp-blue-100);
+  --background-selected: var(--ramp-blue-200);
+  --background-hover: #e6ebef;
+  --background-tint-neutral: var(--ramp-grey-100);
+  --background-tint-brand: var(--ramp-blue-100);
+  --background-tint-success: var(--ramp-green-100);
+  --background-tint-warning: #fbf1dc;
+  --background-tint-error: var(--ramp-red-100);
 
   --border-container: var(--ramp-grey-400);
   --border-strong: var(--ramp-grey-500);
-  --border-inactive: var(--ramp-grey-200);
+  --border-inactive: var(--ramp-grey-300);
   --border-brand: var(--ramp-blue-500);
   --border-error: var(--ramp-red-400);
   --border-success: var(--ramp-green-400);
@@ -133,8 +155,14 @@
   --text-success-hover: var(--ramp-green-900);
   --text-warning: var(--ramp-yellow-800);
   --text-warning-hover: var(--ramp-yellow-900);
-  /* Derived: text on the solid fills (badges), ≥ 5.7:1 in both themes. */
+  /* Derived: text on the solid fills (badges), ≥ 5.7:1 in both themes, and
+     on the tinted ones, ≥ 7:1. */
   --text-on-fill: var(--background-page);
+  --text-tint-neutral: var(--ramp-grey-800);
+  --text-tint-brand: var(--ramp-blue-700);
+  --text-tint-success: var(--ramp-green-800);
+  --text-tint-warning: var(--ramp-yellow-800);
+  --text-tint-error: var(--ramp-red-700);
   /* Derived: added and removed line counts. Figma's success and error text
      sits at the ramps' darkest steps (lightest in dark), which reads as grey
      at meta size; these are the most saturated steps that keep ≥ 4.9:1 on
@@ -149,20 +177,28 @@
     --background-subtle: var(--ramp-grey-800);
     --background-secondary: var(--ramp-grey-700);
     --background-inactive: var(--ramp-grey-500);
-    --background-error: var(--ramp-red-300);
-    --background-error-hover: var(--ramp-red-400);
-    --background-success: var(--ramp-green-200);
-    --background-success-hover: var(--ramp-green-300);
-    --background-warning: var(--ramp-yellow-100);
+    /* Saturated mid steps with dark text: the pale steps Figma gives read
+       as near-white (brand) or grey beige (warning) on the dark page. */
+    --background-error: var(--ramp-red-400);
+    --background-error-hover: var(--ramp-red-300);
+    --background-success: var(--ramp-green-300);
+    --background-success-hover: var(--ramp-green-200);
+    --background-warning: var(--ramp-yellow-300);
     --background-warning-hover: var(--ramp-yellow-200);
-    --background-brand: var(--ramp-blue-100);
-    --background-brand-hover: var(--ramp-blue-200);
-    --background-selected: var(--ramp-blue-900);
+    --background-brand: var(--ramp-blue-400);
+    --background-brand-hover: var(--ramp-blue-300);
+    --background-selected: #16374e;
+    --background-hover: #2f3235;
+    --background-tint-neutral: var(--ramp-grey-800);
+    --background-tint-brand: var(--ramp-blue-900);
+    --background-tint-success: var(--ramp-green-900);
+    --background-tint-warning: #3a2f14;
+    --background-tint-error: var(--ramp-red-900);
 
     --border-container: var(--ramp-grey-500);
     --border-strong: var(--ramp-grey-500);
     --border-inactive: var(--ramp-grey-700);
-    --border-brand: var(--ramp-blue-200);
+    --border-brand: var(--ramp-blue-400);
     --border-error: var(--ramp-red-700);
     --border-success: var(--ramp-green-700);
     --border-warning: var(--ramp-yellow-700);
@@ -177,8 +213,8 @@
     --icon-warning: var(--ramp-yellow-100);
 
     --text-primary: var(--ramp-grey-100);
-    --text-secondary: var(--ramp-grey-200);
-    --text-subtle: var(--ramp-grey-300);
+    --text-secondary: var(--ramp-grey-300);
+    --text-subtle: var(--ramp-grey-400);
     --text-inactive: var(--ramp-grey-500);
     --text-brand: var(--ramp-blue-100);
     --text-brand-hover: var(--ramp-blue-200);
@@ -190,5 +226,14 @@
     --text-warning-hover: var(--ramp-yellow-200);
     --text-added: var(--ramp-green-400);
     --text-removed: var(--ramp-red-400);
+    --text-tint-neutral: var(--ramp-grey-200);
+    --text-tint-brand: var(--ramp-blue-300);
+    --text-tint-success: var(--ramp-green-300);
+    --text-tint-warning: var(--ramp-yellow-300);
+    --text-tint-error: var(--ramp-red-300);
+
+    /* A shadow barely shows on a dark page; the ring draws the edge. */
+    --shadow-popover:
+      0 0 0 1px var(--ramp-grey-700), 0 8px 24px rgb(0 0 0 / 50%);
   }
 }

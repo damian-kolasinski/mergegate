@@ -1,28 +1,40 @@
-import { createMemo, createSignal, Show, untrack } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+  untrack,
+} from "solid-js";
 import type { Demo as DemoData } from "../api/Demo";
 import type { Item } from "../api/Item";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { ItemState } from "../api/ItemState";
 import type { Review as SentReview } from "../api/Review";
-import { getJson, onHubEvent } from "../app/hub";
+import { type Failure, failureOf, getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
-import { go, inboxHref } from "../app/router";
+import { go, inboxHref, itemHref } from "../app/router";
+import { useTitle } from "../app/title";
 import {
   DiffView,
   type DiffViewControl,
   type Span,
 } from "../diff-view/diff-view";
-import { Empty } from "../design-system";
+import { Button, Empty, ErrorNote } from "../design-system";
 import { useComments } from "./comments/comments";
+import { DeletedDraft } from "./comments/drafts";
 import { ComparePicker } from "./compare";
 import { Conversation } from "./conversation";
 import { Thread } from "./comments/thread";
 import { FileList } from "./files";
 import { Abandon } from "./abandon";
+import { Closed } from "./closed";
 import { Demo } from "./demo/demo";
 import { Intent } from "./intent";
 import { ItemHeader } from "./header";
 import { MergeBlocked } from "./merge-blocked";
+import { MoreMenu } from "./more";
 import { NewerRevision } from "./newer-revision";
 import { PriorityPicker } from "../priority/priority";
 import styles from "./item.module.css";
@@ -30,6 +42,7 @@ import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
 import { SyncGithub } from "./sync-github";
 import { useViewed } from "./viewed";
+import { describe } from "./why";
 
 /**
  * An item's newest revision against its merge-base or an earlier revision:
@@ -39,14 +52,20 @@ import { useViewed } from "./viewed";
 export function ItemScreen(props: { id: string }) {
   const [diff, setDiff] = createSignal<ItemDiff>();
   // Follows the hub for the revision shown: an agent attaches after it
-  // submits, and a strip that waited for a reopen would miss it.
+  // submits, and a chip that waited for a reopen would miss it.
   const [demo, setDemo] = createSignal<DemoData | null>(null);
-  const [failure, setFailure] = createSignal<string>();
+  const [failure, setFailure] = createSignal<Failure>();
   // A revision submitted after the one on screen.
   const [newest, setNewest] = createSignal<number>();
-  // The review bar's summary, kept here so switching to a newer revision
-  // doesn't lose what's typed.
-  const [summary, setSummary] = createSignal("");
+  // main.tsx keys the route, so the id is fixed for the screen's life.
+  const id = untrack(() => props.id);
+  // What's typed for the review and for Abandon, kept here so switching to
+  // a newer revision doesn't lose it, and in the tab's session so leaving
+  // the item or reloading doesn't either.
+  const kept = readDraft(id);
+  const [summary, setSummary] = createSignal(kept.summary);
+  const [reason, setReason] = createSignal(kept.reason);
+  createEffect(() => writeDraft(id, { summary: summary(), reason: reason() }));
   // The review starts over on a new revision and on what's left of a closed
   // item; comparing against something else only changes the files shown.
   const shownKey = createMemo(() => {
@@ -54,10 +73,12 @@ export function ItemScreen(props: { id: string }) {
     return shown && `${shown.item.revision.number} ${closed(shown.item.state)}`;
   });
   // The item as the hub last gave it, for what changes without a new diff:
-  // its priority and note.
+  // its state, priority and note.
   const [latest, setLatest] = createSignal<Item>();
-  // main.tsx keys the route, so the id is fixed for the screen's life.
-  const id = untrack(() => props.id);
+  useTitle(() => {
+    const item = latest();
+    return item ? `${item.id} ${item.title}` : id;
+  });
   // What the operator picked to compare against: `all` or a revision. Until
   // they pick, the hub chooses.
   let since: string | undefined;
@@ -66,8 +87,7 @@ export function ItemScreen(props: { id: string }) {
       `/api/items/${encodeURIComponent(id)}` +
         (compare ? `?since=${encodeURIComponent(compare)}` : ""),
     );
-  const failed = (error: unknown) =>
-    setFailure(error instanceof Error ? error.message : String(error));
+  const failed = (error: unknown) => setFailure(failureOf(error));
   // The hub fills in the diff on screen after it arrives: the highlighter
   // its spans, the judge its scores. New files re-render the diff, and every
   // (re)connect refetches, so only a real change replaces them; nor does a
@@ -85,6 +105,7 @@ export function ItemScreen(props: { id: string }) {
     }
   };
   const show = (next: ItemDiff) => {
+    setFailure(undefined);
     setDiff(next);
     setDemo(next.demo);
     setLatest(next.item);
@@ -96,6 +117,7 @@ export function ItemScreen(props: { id: string }) {
   // since the revision stays and only what's sent and blocked moves.
   const reload = (replace = false) => {
     void fetchDiff().then((next) => {
+      setFailure(undefined);
       setLatest(next.item);
       const shown = diff();
       if (
@@ -138,7 +160,13 @@ export function ItemScreen(props: { id: string }) {
 
   return (
     <section class={styles.screen} aria-label={props.id}>
-      <Show when={failure()}>{(message) => <Empty>{message()}</Empty>}</Show>
+      <Show when={!diff() && failure()}>
+        {(current) => (
+          <Empty>
+            <ErrorNote failure={current()} />
+          </Empty>
+        )}
+      </Show>
       <Show when={shownKey()} keyed fallback={<Leave />}>
         <Show when={diff()}>
           {(current) => (
@@ -147,8 +175,12 @@ export function ItemScreen(props: { id: string }) {
               latest={latest() ?? current().item}
               demo={demo()}
               newest={newest()}
+              failure={failure()}
+              onRetry={() => reload()}
               summary={summary()}
               onSummary={setSummary}
+              reason={reason()}
+              onReason={setReason}
               onCompare={compare}
               onPrioritized={setLatest}
               onClosed={() => reload()}
@@ -177,17 +209,30 @@ function Review(props: {
   demo: DemoData | null;
   /** A revision newer than the one on screen. */
   newest: number | undefined;
+  /** The hub refused to say how the item stands now. */
+  failure: Failure | undefined;
+  onRetry: () => void;
   summary: string;
   onSummary: (summary: string) => void;
+  /** What's typed as the reason to abandon. */
+  reason: string;
+  onReason: (reason: string) => void;
   onCompare: (since: string) => void;
   onPrioritized: (item: Item) => void;
   onClosed: () => void;
   onMerge: () => void;
 }) {
-  // As the hub moves it: Request changes hands the item back, Comment keeps
-  // it with the operator.
+  // As the operator's review moved it, until the hub says where it is:
+  // Request changes hands the item back, Send comments keeps it.
   const [moved, setMoved] = createSignal<ItemState>();
-  const state = () => moved() ?? props.diff.item.state;
+  createEffect(
+    on(
+      () => props.latest.state,
+      () => setMoved(undefined),
+      { defer: true },
+    ),
+  );
+  const state = () => moved() ?? props.latest.state;
   // Every comment on the item, the older revisions' too, over the diff.
   const [talking, setTalking] = createSignal(false);
   const [abandoning, setAbandoning] = createSignal(false);
@@ -230,6 +275,9 @@ function Review(props: {
           .map((file) => file.path),
       ]) as ReadonlySet<string>,
   );
+  const toReview = createMemo(() =>
+    own().filter((file) => file.tier === "review"),
+  );
   // The old side of an interdiff is the earlier revision replayed onto the
   // newest's base, which no revision has, so only the new side takes
   // comments, and a dropped file isn't the newest's to comment on.
@@ -264,12 +312,12 @@ function Review(props: {
   // which would hold the review with nothing on screen to save or cancel.
   // Only the path: the editor's state changes with every key typed, and each
   // new set walks every file's lines again.
-  const writing = createMemo(() => comments.writing()?.path);
+  const writingIn = createMemo(() => comments.writing()?.path);
   const collapsed = createMemo(
     () =>
       new Set(
         [...viewed.paths()].filter(
-          (path) => path !== writing() && !opened().has(path),
+          (path) => path !== writingIn() && !opened().has(path),
         ),
       ) as ReadonlySet<string>,
   );
@@ -302,6 +350,52 @@ function Review(props: {
     if (review.verdict === "changes_requested") setMoved("changes_requested");
     comments.submitted(review);
   };
+  const writing = () => comments.editor.open() !== undefined;
+
+  // The browser asks before a tab closes on what isn't sent: the summary and
+  // reason outlive a reload in the session, but not a closed tab, and an
+  // open comment isn't kept anywhere until it's saved.
+  const dirty = () =>
+    Boolean(props.summary.trim()) ||
+    (abandoning() && Boolean(props.reason.trim())) ||
+    comments.editor.holding();
+  const onUnload = (event: BeforeUnloadEvent) => {
+    if (dirty()) event.preventDefault();
+  };
+  window.addEventListener("beforeunload", onUnload);
+  onCleanup(() => window.removeEventListener("beforeunload", onUnload));
+
+  // The address says which file and line are on screen, so a reload or a
+  // link pasted to another tab opens there.
+  const linked = spotOf(location.hash);
+  let restored = linked === undefined;
+  const restore = () => {
+    if (restored || !linked) return;
+    restored = true;
+    if (trusted().some((file) => file.path === linked.path)) {
+      setShowTrusted(true);
+    }
+    requestAnimationFrame(() =>
+      linked.line === undefined
+        ? nav.showFile(linked.path)
+        : nav.showSpot({ ...linked, line: linked.line }),
+    );
+  };
+  createEffect(() => {
+    const path = nav.current();
+    const line = nav.cursor();
+    if (!restored || path === undefined) return;
+    const params = new URLSearchParams({ file: path });
+    if (line && line.path === path) {
+      params.set("line", String(line.line));
+      if (line.side === "deletions") params.set("side", "old");
+    }
+    history.replaceState(
+      history.state,
+      "",
+      `${itemHref(props.diff.item.id)}?${params}`,
+    );
+  });
 
   // Ids are `<project>#<number>`, and blobs are read per project.
   const project = () => props.diff.item.id.split("#")[0] ?? "";
@@ -341,32 +435,47 @@ function Review(props: {
   // An open comment takes the keys: the editor focuses a few frames after
   // `c`, and what's typed before then mustn't move the cursor away from it.
   const unlessWriting = (action: () => void) => () => {
-    if (!comments.editor.open()) action();
+    if (!writing()) action();
   };
-  useKeys({
-    // Never leaves an open comment behind.
-    Escape: () => {
-      if (comments.editor.open()) comments.editor.escape();
-      else if (comments.drafts.placing()) comments.drafts.stopPlacing();
-      else if (abandoning()) setAbandoning(false);
-      // Focus was likely in the list, which takes it along when it closes.
-      else if (talking()) {
-        if (hideAll()) toggle?.focus();
-      } else leave();
+  useKeys(
+    {
+      // Never leaves an open comment behind; what's typed for the review is
+      // kept for when the operator comes back.
+      Escape: () => {
+        if (comments.editor.open()) comments.editor.escape();
+        else if (comments.drafts.placing()) comments.drafts.stopPlacing();
+        else if (abandoning()) setAbandoning(false);
+        // Focus was likely in the list, which takes it along when it closes.
+        else if (talking()) {
+          if (hideAll()) toggle?.focus();
+        } else leave();
+      },
+      c: unlessWriting(comment),
+      n: unlessWriting(() => nav.stepFile(1)),
+      p: unlessWriting(() => nav.stepFile(-1)),
+      j: unlessWriting(() => nav.stepLine(1)),
+      k: unlessWriting(() => nav.stepLine(-1)),
+      "]": unlessWriting(() => nav.stepHunk(1)),
+      "[": unlessWriting(() => nav.stepHunk(-1)),
+      v: unlessWriting(toggleViewed),
+      // `p` is the previous file here.
+      P: unlessWriting(() => {
+        if (open(state())) setPicking(true);
+      }),
     },
-    c: unlessWriting(comment),
-    n: unlessWriting(() => nav.stepFile(1)),
-    p: unlessWriting(() => nav.stepFile(-1)),
-    j: unlessWriting(() => nav.stepLine(1)),
-    k: unlessWriting(() => nav.stepLine(-1)),
-    "]": unlessWriting(() => nav.stepHunk(1)),
-    "[": unlessWriting(() => nav.stepHunk(-1)),
-    v: unlessWriting(toggleViewed),
-    // `p` is the previous file here.
-    P: unlessWriting(() => {
-      if (open(state())) setPicking(true);
-    }),
-  });
+    {
+      group: "Diff",
+      keys: [
+        ["j / k", "Next / previous line"],
+        ["n / p", "Next / previous file"],
+        ["] / [", "Next / previous change"],
+        ["c", "Comment on the line"],
+        ["v", "Mark the file viewed, then go on"],
+        ["P", "Set the priority"],
+        ["Esc", "Close what's open, then back to the inbox"],
+      ],
+    },
+  );
 
   return (
     <>
@@ -376,10 +485,16 @@ function Review(props: {
           state={state()}
           priority={priority()}
           note={note()}
-          viewed={done().size}
-          files={own().length}
+          reviewed={toReview().filter((file) => done().has(file.path)).length}
+          review={toReview().length}
+          trusted={own().length - toReview().length}
           failure={viewed.failure()}
         >
+          <Show when={props.demo}>
+            {(demo) => (
+              <Demo demo={demo()} revision={props.diff.item.revision.number} />
+            )}
+          </Show>
           <ComparePicker
             since={props.diff.since}
             interdiffs={props.diff.interdiffs}
@@ -395,22 +510,52 @@ function Review(props: {
               toggle = element;
             }}
           />
-          <Show when={props.diff.item.backend === "github"}>
-            <SyncGithub item={props.diff.item.id} />
-          </Show>
-          <Show when={open(state())}>
-            <Abandon
-              item={props.diff.item.id}
-              open={abandoning()}
-              onToggle={() => setAbandoning(!abandoning())}
-              onAbandoned={(item) => {
-                setAbandoning(false);
-                setMoved(item.state);
-                props.onClosed();
-              }}
-            />
+          <Show when={props.diff.item.backend === "github" || open(state())}>
+            <MoreMenu>
+              {(close) => (
+                <>
+                  <Show when={props.diff.item.backend === "github"}>
+                    <SyncGithub item={props.diff.item.id} />
+                  </Show>
+                  <Show when={open(state())}>
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        close();
+                        setAbandoning(true);
+                      }}
+                    >
+                      Abandon…
+                    </Button>
+                  </Show>
+                </>
+              )}
+            </MoreMenu>
           </Show>
         </ItemHeader>
+        <Show when={props.failure}>
+          {(failure) => (
+            <div class={styles.failure}>
+              <ErrorNote failure={failure()} />
+              <Button onClick={() => props.onRetry()}>Retry</Button>
+            </div>
+          )}
+        </Show>
+        <Show when={abandoning() && open(state())}>
+          <Abandon
+            item={props.diff.item.id}
+            pullRequest={pullRequest(props.diff.item)}
+            reason={props.reason}
+            onReason={props.onReason}
+            onCancel={() => setAbandoning(false)}
+            onAbandoned={(item) => {
+              setAbandoning(false);
+              props.onReason("");
+              setMoved(item.state);
+              props.onClosed();
+            }}
+          />
+        </Show>
         <Show when={picking()}>
           <PriorityPicker
             item={props.diff.item.id}
@@ -423,13 +568,11 @@ function Review(props: {
             }}
           />
         </Show>
+        <Show when={closed(props.diff.item.state)}>
+          <Closed item={props.diff.item} />
+        </Show>
         <Show when={props.diff.guide}>
           {(guide) => <Intent guide={guide()} />}
-        </Show>
-        <Show when={props.demo}>
-          {(demo) => (
-            <Demo demo={demo()} revision={props.diff.item.revision.number} />
-          )}
         </Show>
         <Show when={props.diff.blocked}>
           {(blocked) => (
@@ -493,6 +636,7 @@ function Review(props: {
             collapsed={collapsed()}
             blobUrl={blobUrl}
             highlightsUrl={highlightsUrl}
+            describe={describe}
             onFile={nav.scrolledTo}
             onRow={nav.clicked}
             commentable={reviewable(state())}
@@ -503,6 +647,7 @@ function Review(props: {
             }}
             control={(control) => {
               view = control;
+              restore();
             }}
           />
         </Show>
@@ -512,6 +657,10 @@ function Review(props: {
           item={props.diff.item.id}
           revision={props.diff.item.revision.number}
           target={props.diff.item.target}
+          state={state()}
+          pullRequest={pullRequest(props.diff.item)}
+          conflictsWith={props.diff.conflicts_with}
+          blocked={props.diff.blocked?.kind}
           behind={props.newest !== undefined}
           unviewed={own().filter((file) => !done().has(file.path)).length}
           drafts={comments.drafts.list().length}
@@ -520,6 +669,7 @@ function Review(props: {
           onStopPlacing={comments.drafts.stopPlacing}
           replies={comments.replyDrafts.list().length}
           holding={comments.editor.holding()}
+          writing={writing()}
           summary={props.summary}
           onSummary={props.onSummary}
           onSubmitted={reviewed}
@@ -527,8 +677,74 @@ function Review(props: {
           onMerged={props.onMerge}
         />
       </Show>
+      <DeletedDraft comments={comments} />
     </>
   );
+}
+
+/** An item on GitHub has a pull request, which merging or abandoning closes. */
+function pullRequest(
+  item: Item,
+): { label: string; branch: string } | undefined {
+  if (item.backend !== "github" || !item.link) return undefined;
+  return { label: item.link.label, branch: item.branch };
+}
+
+/** The file and line a link to the item names after its `?`. */
+function spotOf(
+  hash: string,
+):
+  | { path: string; side: "additions" | "deletions"; line: number | undefined }
+  | undefined {
+  const query = hash.split("?")[1];
+  if (!query) return undefined;
+  const params = new URLSearchParams(query);
+  const path = params.get("file");
+  if (!path) return undefined;
+  const line = Number(params.get("line"));
+  return {
+    path,
+    side: params.get("side") === "old" ? "deletions" : "additions",
+    line: Number.isInteger(line) && line > 0 ? line : undefined,
+  };
+}
+
+type Draft = { summary: string; reason: string };
+
+function draftKey(id: string): string {
+  return `mergegate:draft:${id}`;
+}
+
+// The session may be unavailable, as in a private window: then drafts live
+// only as long as the screen.
+function readDraft(id: string): Draft {
+  try {
+    const kept: unknown = JSON.parse(
+      sessionStorage.getItem(draftKey(id)) ?? "null",
+    );
+    if (kept && typeof kept === "object") {
+      const { summary, reason } = kept as Partial<Draft>;
+      return {
+        summary: typeof summary === "string" ? summary : "",
+        reason: typeof reason === "string" ? reason : "",
+      };
+    }
+  } catch {
+    // Unreadable is as good as none.
+  }
+  return { summary: "", reason: "" };
+}
+
+function writeDraft(id: string, draft: Draft): void {
+  try {
+    if (draft.summary || draft.reason) {
+      sessionStorage.setItem(draftKey(id), JSON.stringify(draft));
+    } else {
+      sessionStorage.removeItem(draftKey(id));
+    }
+  } catch {
+    // See `readDraft`.
+  }
 }
 
 /** The hub takes a review while the item is with the operator or its agent. */

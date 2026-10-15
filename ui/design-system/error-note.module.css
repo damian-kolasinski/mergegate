@@ -1,0 +1,30 @@
+.note {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font: var(--type-p4);
+  color: var(--text-error);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* A small solid disc, so the note reads as an error even in grey scale. */
+.icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--background-error);
+  color: var(--text-on-fill);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateY(2px);
+}
+
+.hint {
+  color: var(--text-secondary);
+}

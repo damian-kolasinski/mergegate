@@ -80,6 +80,10 @@ test("f12 rejecting a held edit writes the applied rules back", async ({
   await expect(held).toContainText("R1trusted`**`everything");
 
   await held.getByRole("button", { name: "Reject" }).click();
+  await expect(held).toContainText(
+    "Overwrite rules.toml with the 0 applied rules?",
+  );
+  await held.getByRole("button", { name: "Overwrite" }).click();
   await expect(held).toHaveCount(0);
   await expect(screen).toContainText("No rules, so every file is reviewed.");
 });

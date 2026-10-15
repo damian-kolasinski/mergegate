@@ -13,6 +13,12 @@ pub enum ReviewError {
     Closed(ItemId),
     #[error("{0} is merging")]
     Merging(ItemId),
+    #[error("{id} r{newest} came after r{revision}; request changes on r{newest}")]
+    Stale {
+        id: ItemId,
+        revision: u32,
+        newest: u32,
+    },
     #[error("approving merges the item; approve it instead")]
     Approval,
     #[error("a review needs a summary, a comment or a reply")]

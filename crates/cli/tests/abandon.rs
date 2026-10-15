@@ -75,10 +75,13 @@ fn f14_the_agent_abandons_its_item() {
     assert_eq!(files[0]["additions"], 1);
 
     // It left the inbox, and its branch can be submitted again as a new item.
-    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let mut inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let closed = inbox["closed"].take();
+    assert_eq!(closed[0]["id"], "app#1");
+    assert_eq!(closed[0]["state"], "abandoned");
     assert_eq!(
         inbox,
-        json!({ "needs_you": [], "with_agents": [], "merging": [], "rules": [] })
+        json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "rules": [] })
     );
     repo.commit_files("Again", &[("src/login.rs", "fn login() { }\n")]);
     let again = env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);

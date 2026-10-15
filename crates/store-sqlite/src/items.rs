@@ -86,6 +86,20 @@ impl ItemStore for Store {
         rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
+    fn closed_today(&self) -> Result<Vec<Item>, StoreError> {
+        // `closed_at` is UTC, and today starts at the operator's midnight.
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!(
+                "{SELECT} WHERE i.state IN ('merged', 'abandoned')
+                   AND i.closed_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'localtime', 'start of day', 'utc')
+                 ORDER BY i.closed_at DESC, i.id DESC"
+            ))
+            .map_err(StoreError::new)?;
+        let rows = stmt.query_map([], read).map_err(StoreError::new)?;
+        rows.map(|row| row.map_err(StoreError::new)?).collect()
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         self.conn
             .query_row(

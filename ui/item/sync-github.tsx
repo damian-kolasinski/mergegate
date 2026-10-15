@@ -1,7 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import type { Synced } from "../api/Synced";
-import { postJson } from "../app/hub";
-import { Button, Meta } from "../design-system";
+import { type Failure, failureOf, postJson } from "../app/hub";
+import { Button, ErrorNote, Meta } from "../design-system";
 import styles from "./sync-github.module.css";
 
 /**
@@ -11,35 +11,34 @@ import styles from "./sync-github.module.css";
  */
 export function SyncGithub(props: { item: string }) {
   const [syncing, setSyncing] = createSignal(false);
-  const [said, setSaid] = createSignal<{ text: string; failed: boolean }>();
+  const [said, setSaid] = createSignal<string>();
+  const [failure, setFailure] = createSignal<Failure>();
   const sync = () => {
     setSyncing(true);
     setSaid(undefined);
+    setFailure(undefined);
     postJson<Synced>(`/api/items/${encodeURIComponent(props.item)}/sync`, {})
       .then(
-        (synced) => setSaid({ text: summary(synced), failed: false }),
-        (error: unknown) =>
-          setSaid({
-            text: error instanceof Error ? error.message : String(error),
-            failed: true,
-          }),
+        (synced) => setSaid(summary(synced)),
+        (error: unknown) => setFailure(failureOf(error)),
       )
       .finally(() => setSyncing(false));
   };
   return (
     <span class={styles.sync}>
+      <Button busy={syncing()} onClick={sync}>
+        {syncing() ? "Fetching…" : "Fetch GitHub comments"}
+      </Button>
       <Show when={said()}>
         {(said) => (
-          <span role={said().failed ? "alert" : "status"}>
-            <Meta tone={said().failed ? "removed" : "subtle"}>
-              {said().text}
-            </Meta>
+          <span role="status">
+            <Meta>{said()}</Meta>
           </span>
         )}
       </Show>
-      <Button disabled={syncing()} onClick={sync}>
-        Sync GitHub
-      </Button>
+      <Show when={failure()}>
+        {(failure) => <ErrorNote failure={failure()} />}
+      </Show>
     </span>
   );
 }

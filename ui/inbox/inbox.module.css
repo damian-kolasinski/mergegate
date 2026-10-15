@@ -8,6 +8,17 @@
   white-space: nowrap;
 }
 
+/* Fixed even when empty, so titles start at one edge down the list. */
+.revision {
+  flex: none;
+  width: 4ch;
+}
+
+.priority {
+  flex: none;
+  width: 3.5em;
+}
+
 .title {
   flex: 1;
   min-width: 0;
@@ -15,6 +26,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-primary);
+  text-decoration: none;
+}
+
+.title:hover {
+  text-decoration: underline;
 }
 
 /* The priority's why, after the title and fainter than it. */
@@ -45,4 +61,24 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4) 0;
+}
+
+.failure {
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-container);
+  background: var(--background-tint-error);
+}
+
+/* Looking back, so quieter than the groups above it. */
+.closed > summary {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  font: var(--type-h5);
+  letter-spacing: var(--tracking-heading);
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.closed > ul {
+  opacity: 0.75;
 }

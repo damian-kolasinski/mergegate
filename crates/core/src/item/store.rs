@@ -14,6 +14,10 @@ pub trait ItemStore {
     /// Merged and abandoned items of every project, oldest first.
     fn closed_items(&self) -> Result<Vec<Item>, StoreError>;
 
+    /// Items merged or abandoned since local midnight, the latest closed
+    /// first.
+    fn closed_today(&self) -> Result<Vec<Item>, StoreError>;
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError>;
 
     /// Any item, open or closed.

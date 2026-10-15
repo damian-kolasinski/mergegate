@@ -2,7 +2,7 @@
 //! then push that one commit to the operator's repo.
 
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use mergegate_core::git::{GitError, Upstream};
 use mergegate_core::item::Item;
@@ -91,8 +91,9 @@ impl HubGit {
             Pushed::Done => {}
             Pushed::Moved => return Ok(None),
             Pushed::Refused(reason) => {
+                let home = std::env::var_os("HOME").map(PathBuf::from);
                 return Ok(Some(Landing::Held {
-                    reason: format!("{} refused {target}: {reason}", project.upstream.display()),
+                    reason: held(&project.upstream, home.as_deref(), target, &reason),
                 }));
             }
         }
@@ -103,6 +104,32 @@ impl HubGit {
         let _ = staging::advance(&self.home, &dir, target, &commit, &target_commit);
         Ok(Some(Landing::Merged { commit }))
     }
+}
+
+/// What to do about a refused push first, then git's own words after a blank
+/// line, which the UI folds away under Details.
+fn held(upstream: &Path, home: Option<&Path>, target: &str, why: &str) -> String {
+    let path = home
+        .and_then(|home| upstream.strip_prefix(home).ok())
+        .map_or_else(
+            || upstream.display().to_string(),
+            |rest| format!("~/{}", rest.display()),
+        );
+    let lower = why.to_lowercase();
+    let dirty = ["unstaged", "uncommitted", "not clean", "working directory"]
+        .iter()
+        .any(|hint| lower.contains(hint));
+    let advice = if dirty {
+        format!(
+            "{path} has {target} checked out with uncommitted changes. \
+             Commit or stash them, then retry the merge."
+        )
+    } else {
+        format!(
+            "{path} turned down the merge into {target}. Fix what it says below, then retry the merge."
+        )
+    };
+    format!("{advice}\n\ngit: {path} refused {target}: {why}")
 }
 
 enum Pushed {

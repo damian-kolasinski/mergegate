@@ -130,6 +130,23 @@ fn a_review_may_be_on_an_older_revision() {
 }
 
 #[test]
+fn changes_are_requested_on_the_newest_revision_only() {
+    let mut store = FakeStore::with_item(2);
+    let err = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::ChangesRequested, "Fix r1."),
+    )
+    .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "app#1 r2 came after r1; request changes on r2"
+    );
+    assert_eq!(state(&store), ItemState::NeedsReview);
+    assert!(store.reviews().is_empty());
+}
+
+#[test]
 fn refuses_reviews_that_cant_be_sent() {
     let mut store = FakeStore::with_item(1);
     let mut err = |request| {

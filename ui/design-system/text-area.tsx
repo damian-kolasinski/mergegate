@@ -1,8 +1,9 @@
+import { isSubmitKey } from "../app/keys";
 import styles from "./text-area.module.css";
 
 /**
  * Multi-line text the operator writes: a summary, a comment. `Escape` gives
- * the keys back to the page's shortcuts.
+ * the keys back to the page's shortcuts; `⌘↩` sends it when `onSubmit` is set.
  */
 export function TextArea(props: {
   label: string;
@@ -11,6 +12,7 @@ export function TextArea(props: {
   rows?: number;
   disabled?: boolean;
   onInput: (value: string) => void;
+  onSubmit?: () => void;
   ref?: (element: HTMLTextAreaElement) => void;
 }) {
   return (
@@ -25,6 +27,10 @@ export function TextArea(props: {
       onInput={(event) => props.onInput(event.currentTarget.value)}
       onKeyDown={(event) => {
         if (event.key === "Escape") event.currentTarget.blur();
+        else if (props.onSubmit && isSubmitKey(event)) {
+          event.preventDefault();
+          props.onSubmit();
+        }
       }}
     />
   );

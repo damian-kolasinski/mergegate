@@ -2,22 +2,72 @@
   border-bottom: 1px solid var(--border-container);
 }
 
+/* Folded, the guide's first line stands in for it. */
 .summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
   padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+
+.summary:hover {
+  background: var(--background-hover);
+}
+
+.label {
+  flex: none;
   font: var(--type-h5);
   letter-spacing: var(--tracking-heading);
   text-transform: uppercase;
   color: var(--text-secondary);
-  cursor: pointer;
+}
+
+.preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-p3);
+  color: var(--text-primary);
+}
+
+.intent[open] .preview {
+  visibility: hidden;
 }
 
 /* A long guide scrolls in place rather than push the diff off the screen. */
 .text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 80ch;
   max-height: 30vh;
   overflow-y: auto;
   padding: 0 var(--space-4) var(--space-3);
   font: var(--type-p3);
   color: var(--text-primary);
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.heading {
+  font: var(--type-h5);
+  margin-top: var(--space-1);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-5);
+  list-style: disc;
+}
+
+.code {
+  padding: var(--space-2);
+  border-radius: var(--radius-small);
+  background: var(--background-subtle);
+  font: var(--type-mono);
+  white-space: pre-wrap;
 }

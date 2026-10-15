@@ -1,9 +1,16 @@
-import { createMemo, Match, Switch } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from "solid-js";
 import { render } from "solid-js/web";
 import { InboxScreen } from "../inbox/inbox";
 import { ItemScreen } from "../item/item";
 import { RulesScreen } from "../rules/rules";
-import { useRoute } from "./router";
+import { inboxHref, itemHref, useRoute } from "./router";
 import { Shell } from "./shell";
 
 function App() {
@@ -16,14 +23,40 @@ function App() {
     const current = route();
     return current.screen === "rules" ? current.project : undefined;
   });
+  // The item the operator last had open, so its project's rules lead back
+  // to it rather than to the inbox.
+  const [lastItem, setLastItem] = createSignal<string>();
+  createEffect(() => {
+    const id = item();
+    if (id !== undefined) setLastItem(id);
+  });
+  const back = () => {
+    const id = lastItem();
+    return id?.split("#")[0] === project() ? id : undefined;
+  };
   return (
-    <Shell fill={item() !== undefined}>
+    <Shell
+      fill={item() !== undefined}
+      trail={
+        <Show when={item() ?? project()}>
+          <a href={inboxHref}>Inbox</a>
+          <span aria-hidden="true">/</span>
+          <Show when={item()} fallback={<span>{project()} rules</span>}>
+            {(id) => (
+              <a href={itemHref(id())} aria-current="page">
+                {id()}
+              </a>
+            )}
+          </Show>
+        </Show>
+      }
+    >
       <Switch fallback={<InboxScreen />}>
         <Match when={item()} keyed>
           {(id) => <ItemScreen id={id} />}
         </Match>
         <Match when={project()} keyed>
-          {(name) => <RulesScreen project={name} />}
+          {(name) => <RulesScreen project={name} back={back()} />}
         </Match>
       </Switch>
     </Shell>

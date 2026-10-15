@@ -4,7 +4,13 @@ import type { ItemDiff } from "../../api/ItemDiff";
 import type { Reply } from "../../api/Reply";
 import type { Review } from "../../api/Review";
 import type { WriteDraftReply } from "../../api/WriteDraftReply";
-import { deleteJson, postJson, putJson } from "../../app/hub";
+import {
+  deleteJson,
+  type Failure,
+  failureOf,
+  postJson,
+  putJson,
+} from "../../app/hub";
 import { Button } from "../../design-system";
 import type { Comments } from "./comments";
 import type { CommentEditor } from "./editor";
@@ -30,7 +36,7 @@ export function useReplyDrafts(
   const { editor } = options;
   const [list, setList] = createSignal(diff.draft_replies);
   const [deleting, setDeleting] = createSignal<number>();
-  const [failure, setFailure] = createSignal<{ id: number; message: string }>();
+  const [failure, setFailure] = createSignal<{ id: number } & Failure>();
   editor.onReset(() => setFailure(undefined));
   const replyKey = (comment: string) => `reply to ${comment}`;
   const editKey = (reply: Reply) => `edit reply ${reply.id}`;
@@ -57,7 +63,7 @@ export function useReplyDrafts(
     /** Why deleting `reply` failed. */
     failure: (reply: Reply) => {
       const failed = failure();
-      return failed?.id === reply.id ? failed.message : undefined;
+      return failed?.id === reply.id ? failed : undefined;
     },
     replying: (comment: Comment) => editor.isOpen(replyKey(comment.id)),
     editing: (reply: Reply) => editor.isOpen(editKey(reply)),
@@ -103,7 +109,7 @@ export function useReplyDrafts(
           (error: unknown) =>
             setFailure({
               id: reply.id,
-              message: error instanceof Error ? error.message : String(error),
+              ...failureOf(error),
             }),
         )
         .finally(() => setDeleting(undefined));

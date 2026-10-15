@@ -1,0 +1,58 @@
+.more {
+  position: relative;
+  display: inline-flex;
+}
+
+.toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-container);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  color: var(--text-secondary);
+  font: var(--type-h4);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.toggle:hover,
+.toggle[aria-expanded="true"] {
+  border-color: var(--border-strong);
+  background: var(--background-hover);
+  color: var(--text-primary);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* Catches the click that closes the menu, so it doesn't land behind. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 240px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  box-shadow: var(--shadow-popover);
+  animation: var(--motion-pop);
+}

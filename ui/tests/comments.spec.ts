@@ -141,7 +141,7 @@ test("an open comment keeps what's typed in it", async ({ page, hub }) => {
   await expect(editor).not.toBeFocused();
   await page.keyboard.press("Escape");
   await expect(editor).toBeFocused();
-  await expect(page).toHaveURL(/#\/items\/app%231$/);
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
 
   // Another line's `+` and the shortcuts leave it be.
   const notes = diff.getByRole("code").filter({ hasText: "three" });
@@ -186,7 +186,7 @@ test("a file marked viewed stays open while a comment is written on it", async (
     .getByRole("navigation", { name: "Files" })
     .getByLabel("Viewed login.rs")
     .check();
-  await expect(page.getByText("1/2 viewed")).toBeVisible();
+  await expect(page.getByText("1 of 2 reviewed")).toBeVisible();
   await expect(editor).toBeVisible();
   await expect(editor).toHaveValue("Half a thought");
 

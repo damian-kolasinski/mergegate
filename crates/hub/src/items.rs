@@ -13,6 +13,7 @@ use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::interdiff::{self, ChangedSince};
 use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemId, ItemState, Submit};
 use mergegate_core::project::{ProjectName, ProjectStore};
+use mergegate_core::review::Waiting;
 use mergegate_core::store::StoreError;
 
 use crate::guard::Caller;
@@ -122,7 +123,8 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
                         let with = inbox.conflicts.get(&item.id).map_or(&[][..], Vec::as_slice);
-                        Ok(inbox_entry(item, blocked, demo, changed, with))
+                        let waiting = inbox.waiting.get(&item.id).copied().unwrap_or_default();
+                        Ok(inbox_entry(item, blocked, demo, changed, with, waiting))
                     })
                     .collect()
             };
@@ -140,6 +142,7 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                 needs_you: entries(&inbox.needs_you)?,
                 with_agents: entries(&inbox.with_agents)?,
                 merging: entries(&inbox.merging)?,
+                closed: entries(&inbox.closed)?,
                 rules: pending,
             })
         })
@@ -191,12 +194,14 @@ fn inbox_entry(
     demo: bool,
     changed: Option<ChangedSince>,
     conflicts_with: &[ItemId],
+    waiting: Waiting,
 ) -> api::item::InboxItem {
     let revision = &item.revision;
     api::item::InboxItem {
         id: item.id.to_string(),
         title: item.title.clone(),
         branch: item.branch.clone(),
+        state: state_to_api(item.state),
         revision: revision.number,
         files: revision.stat.files,
         additions: revision.stat.additions,
@@ -214,6 +219,8 @@ fn inbox_entry(
         priority: item.priority.map(priority::to_api),
         note: item.note.clone(),
         conflicts_with: conflicts_with.iter().map(ToString::to_string).collect(),
+        questions: waiting.questions,
+        rejections: waiting.rejections,
     }
 }
 

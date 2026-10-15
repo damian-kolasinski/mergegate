@@ -1,10 +1,19 @@
-import type { JSX } from "solid-js";
+import { Show, type JSX } from "solid-js";
 import styles from "./button.module.css";
 
-/** An action. `solid` is the one a screen leads with; the rest are `outline`. */
+/**
+ * An action. `solid` is the one a screen leads with, `danger` one that throws
+ * work away; the rest are `outline`. While `busy` the button stays disabled
+ * but says so, so a slow action doesn't look like a forbidden one.
+ */
 export function Button(props: {
-  variant?: "solid" | "outline";
-  disabled?: boolean;
+  variant?: "solid" | "outline" | "danger";
+  disabled?: boolean | undefined;
+  busy?: boolean | undefined;
+  /** Why it's disabled, or what it does; shown on hover. */
+  title?: string | undefined;
+  /** The shortcut that does the same, shown after the label. */
+  keyHint?: string | undefined;
   onClick: () => void;
   /** For a button that opens a panel: whether it's open, and the panel's id. */
   expanded?: boolean;
@@ -17,13 +26,24 @@ export function Button(props: {
       type="button"
       class={styles.button}
       data-variant={props.variant ?? "outline"}
-      disabled={props.disabled}
+      disabled={props.disabled || props.busy}
+      aria-busy={props.busy ? "true" : undefined}
       aria-expanded={props.expanded}
       aria-controls={props.controls}
+      aria-keyshortcuts={props.keyHint}
+      title={props.title}
       ref={(element) => props.ref?.(element)}
       onClick={() => props.onClick()}
     >
       {props.children}
+      <Show when={props.keyHint}>
+        {/* aria-keyshortcuts says it; the name stays the action's. */}
+        {(key) => (
+          <kbd class={styles.key} aria-hidden="true">
+            {key()}
+          </kbd>
+        )}
+      </Show>
     </button>
   );
 }
