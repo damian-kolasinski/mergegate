@@ -23,6 +23,7 @@ use crate::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
     NewRevision, Priority, Pushed, Revision, Submit, submit,
 };
+use crate::judge::{JudgeSetting, JudgeStore, Verdict};
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
@@ -709,6 +710,9 @@ pub(crate) struct FakeStore {
     settings: BTreeMap<String, String>,
     pairs: BTreeMap<ProjectName, Vec<Pair>>,
     devices: BTreeMap<DeviceId, Record>,
+    judges: BTreeMap<ProjectName, JudgeSetting>,
+    /// By item and revision: the judge's key and its verdicts.
+    verdicts: BTreeMap<(ItemId, u32), (String, Vec<Verdict>)>,
 }
 
 impl FakeStore {
@@ -1618,6 +1622,49 @@ impl DeviceStore for FakeStore {
 
     fn put_device(&mut self, record: &Record) -> Result<(), StoreError> {
         self.devices.insert(record.id.clone(), record.clone());
+        Ok(())
+    }
+}
+
+impl JudgeStore for FakeStore {
+    fn judge_setting(&self, project: &ProjectName) -> Result<Option<JudgeSetting>, StoreError> {
+        Ok(self.judges.get(project).cloned())
+    }
+
+    fn set_judge_setting(
+        &mut self,
+        project: &ProjectName,
+        setting: Option<&JudgeSetting>,
+    ) -> Result<(), StoreError> {
+        match setting {
+            Some(setting) => self.judges.insert(project.clone(), setting.clone()),
+            None => self.judges.remove(project),
+        };
+        Ok(())
+    }
+
+    fn verdicts(
+        &self,
+        id: &ItemId,
+        revision: u32,
+        key: &str,
+    ) -> Result<Option<Vec<Verdict>>, StoreError> {
+        Ok(self
+            .verdicts
+            .get(&(id.clone(), revision))
+            .filter(|(by, _)| by == key)
+            .map(|(_, verdicts)| verdicts.clone()))
+    }
+
+    fn insert_verdicts(
+        &mut self,
+        id: &ItemId,
+        revision: u32,
+        key: &str,
+        verdicts: &[Verdict],
+    ) -> Result<(), StoreError> {
+        self.verdicts
+            .insert((id.clone(), revision), (key.into(), verdicts.to_vec()));
         Ok(())
     }
 }

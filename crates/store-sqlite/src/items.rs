@@ -13,18 +13,37 @@ use crate::projects::backend_named;
 use crate::rules::{columns, read_triage};
 use crate::{Store, interdiffs, viewed};
 
+/// The files to review in revision `r` of item `i`: those in the review
+/// tier, and the trusted ones the project's judge promotes.
+macro_rules! review_files {
+    () => {
+        "(SELECT count(*) FROM revision_files f
+          WHERE f.item_id = i.id AND f.revision = r.number
+            AND (f.tier = 'review' OR EXISTS (
+                SELECT 1 FROM judged d
+                JOIN judges j ON j.project_id = i.project_id AND j.key = d.judged_by
+                JOIN judged_files jf ON jf.item_id = d.item_id
+                    AND jf.revision = d.revision AND jf.path = f.path
+                WHERE d.item_id = f.item_id AND d.revision = f.revision
+                  AND jf.promote >= j.threshold)))"
+    };
+}
+
 /// An item with its newest revision. Callers add a `WHERE` and `ORDER BY`.
-const SELECT: &str = "
+const SELECT: &str = concat!(
+    "
     SELECT p.name, i.number, i.branch, i.title, i.state, i.backend, i.target, i.created_at,
            r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
            i.github, i.pull_number, i.pull_url,
-           (SELECT count(*) FROM revision_files
-            WHERE item_id = i.id AND revision = r.number AND tier = 'review'),
+           ",
+    review_files!(),
+    ",
            i.priority, i.note
     FROM items i
     JOIN projects p ON p.id = i.project_id
     JOIN revisions r ON r.item_id = i.id
-        AND r.number = (SELECT max(number) FROM revisions WHERE item_id = i.id)";
+        AND r.number = (SELECT max(number) FROM revisions WHERE item_id = i.id)"
+);
 
 /// Matches the `items_open_branch` index.
 const OPEN: &str = "i.state IN ('needs_review', 'changes_requested', 'merging')";
@@ -85,16 +104,17 @@ impl ItemStore for Store {
     fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError> {
         let mut stmt = self
             .conn
-            .prepare_cached(
-                "SELECT r.number, r.head, r.base, r.files, r.additions, r.deletions, r.submitted_at,
-                        (SELECT count(*) FROM revision_files
-                         WHERE item_id = r.item_id AND revision = r.number AND tier = 'review')
+            .prepare_cached(concat!(
+                "SELECT r.number, r.head, r.base, r.files, r.additions, r.deletions,
+                        r.submitted_at, ",
+                review_files!(),
+                "
                  FROM revisions r
                  JOIN items i ON i.id = r.item_id
                  JOIN projects p ON p.id = i.project_id
                  WHERE p.name = ?1 AND i.number = ?2
-                 ORDER BY r.number",
-            )
+                 ORDER BY r.number"
+            ))
             .map_err(StoreError::new)?;
         let rows = stmt
             .query_map(params![id.project().as_str(), id.number() as i64], |row| {

@@ -9,6 +9,7 @@ const lines = (count: number, line = (n: number) => `line ${n}`) =>
 /**
  * app#1: `a.txt` changes lines 10 and 50, leaving 33 lines between its two
  * hunks; `gone.txt` is deleted, `logo.png` is binary, `new.txt` is new.
+ * The heuristics rank the text files low as docs, so `logo.png` comes first.
  */
 function submitChange(hub: Hub) {
   const app = hub.project("app");
@@ -31,10 +32,10 @@ test("f6 an item shows every changed file", async ({ page, hub }) => {
   await expect(screen.getByRole("heading")).toHaveText("Change things");
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^a\.txt\s*\+2\s*−2$/,
-    /^gone\.txt\s*−1$/,
     /^logo\.png$/,
-    /^new\.txt\s*\+1$/,
+    /^a\.txt\s*ranked low: docs\s*\+2\s*−2$/,
+    /^gone\.txt\s*ranked low: docs\s*−1$/,
+    /^new\.txt\s*ranked low: docs\s*\+1$/,
   ]);
 
   const diff = screen.getByRole("region", { name: "Diff" });
@@ -54,17 +55,25 @@ test("f6 n and p move between files", async ({ page, hub }) => {
   const current = page
     .getByRole("navigation", { name: "Files" })
     .locator("li[aria-current=true]");
-  await expect(current).toContainText("a.txt");
-  await page.keyboard.press("n");
-  await expect(current).toContainText("gone.txt");
-  await page.keyboard.press("n");
-  await page.keyboard.press("n");
-  await expect(current).toContainText("new.txt");
-  // The last file stays current.
-  await page.keyboard.press("n");
-  await expect(current).toContainText("new.txt");
-  await page.keyboard.press("p");
+  // The diff reports the scroll a key caused a frame later; the next key
+  // waits for it, as the operator would.
+  const press = async (key: string, file: string) => {
+    await page.keyboard.press(key);
+    await expect(current).toContainText(file);
+    await page.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        ),
+    );
+  };
   await expect(current).toContainText("logo.png");
+  await press("n", "a.txt");
+  await press("n", "gone.txt");
+  await press("n", "new.txt");
+  // The last file stays current.
+  await press("n", "new.txt");
+  await press("p", "gone.txt");
 });
 
 test("f6 j, k, ] and [ move the line cursor", async ({ page, hub }) => {
@@ -134,6 +143,8 @@ test("f6 v marks the current file viewed and moves on", async ({
     .locator("li[aria-current=true]");
   const changed = page.getByText("changed 10", { exact: true });
   await expect(changed).toBeVisible();
+  await page.keyboard.press("n");
+  await expect(current).toContainText("a.txt");
   await page.keyboard.press("v");
   await expect(current).toContainText("gone.txt");
   await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
@@ -151,6 +162,7 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(page.getByText("bye", { exact: true })).toBeVisible();
   await expect(changed).toHaveCount(0);
 
+  await screen.getByRole("listitem").filter({ hasText: "a.txt" }).click();
   await page.keyboard.press("v");
   await expect(screen.getByLabel("Viewed a.txt")).not.toBeChecked();
   await expect(changed).toBeVisible();
@@ -168,9 +180,7 @@ test("f6 a file's checkbox marks it viewed", async ({ page, hub }) => {
   await expect(page.getByText("hello", { exact: true })).toHaveCount(0);
   // The checkbox doesn't keep the keys.
   await page.keyboard.press("n");
-  await expect(files.locator("li[aria-current=true]")).toContainText(
-    "gone.txt",
-  );
+  await expect(files.locator("li[aria-current=true]")).toContainText("a.txt");
 
   await page.reload();
   await expect(files.getByLabel("Viewed new.txt")).toBeChecked();

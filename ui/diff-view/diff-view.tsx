@@ -209,6 +209,18 @@ export function DiffView(props: {
         items.set(file.path, changed);
         view.updateItem(changed);
       }
+      // A judge's scores re-sort the same files: the view takes them in the
+      // new order, each still cached at its version.
+      const order = [...items.keys()];
+      if (files.some((file, at) => file.path !== order[at])) {
+        const sorted = files.flatMap((file) => {
+          const item = items.get(file.path);
+          return item ? [item] : [];
+        });
+        items.clear();
+        for (const item of sorted) items.set(item.id, item);
+        view.setItems(sorted);
+      }
       return;
     }
     // The view caches a render by id and version, and a path can come back

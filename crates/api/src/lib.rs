@@ -11,6 +11,7 @@ pub mod feedback;
 pub mod highlight;
 pub mod hub;
 pub mod item;
+pub mod judge;
 pub mod lang;
 pub mod merge;
 pub mod project;

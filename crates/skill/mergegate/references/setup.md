@@ -36,6 +36,14 @@ Diffs are highlighted by language packs installed on the hub; without one a file
 
 `mg lang list --available` prints the released packs, `mg lang add <name>...` installs them, and `mg lang list` prints what is installed and which files each pack highlights. `mg lang add --from PATH` installs a pack archive (`.tar.gz`), or every archive in the folder `PATH`. After mg is upgraded, `mg lang update` downloads again the packs built for the old one; `mg doctor` says when that is needed. `mg lang remove <name>` removes a pack. Two packs can't claim the same grammar: remove the installed one first.
 
+## The judge
+
+A judge scores how much each file of a submitted revision needs the operator, ranking the files to review, and may pull a file a rule trusted back into review. It is off until the operator picks one, and only they decide which, since it sends their code to a model. `mg judge set jev` uses Jev, which reads its key from `TYPESAFE_API_KEY` in the hub's environment (`--model NAME` pins another version). `mg judge set command --command 'CMD'` runs the operator's own command in the project's repo, reading the change as JSON on stdin and printing `{"files": [{"path", "importance", "reason", "promote"}]}`; importance is 1 to 100, promote a trusted file's 0 to 1 confidence that it needs a look. `--threshold N` sets the confidence from which it promotes (default 0.8), `--project NAME` the project, and `mg judge set none` turns it off.
+
+By default the guide's list leads the order of the files to review, and the judge only puts the files it scores 80 or more ahead of it. When the operator would rather the judge decide, `--order judge` lets its scores order every file, the guide only breaking ties; `--order guide` goes back. Changing the order or the threshold judges nothing again.
+
+`mg judge show` prints the project's judge, whether it can run, and the revisions it failed on; setting the judge again retries them.
+
 ## Clones
 
 Every clone or worktree you work in needs `mg init` once. It adds a `mergegate` remote pointing at the project; `--project NAME` picks the project when the clone isn't the registered repo.

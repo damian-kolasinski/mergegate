@@ -87,6 +87,7 @@ async fn submit(
         state.highlight.notify_one();
         // Submitting fetched the target, which may have moved.
         state.conflicts.notify_one();
+        state.judge.notify_one();
         state.events.send(UiEvent::InboxChanged);
         state.events.send(UiEvent::ItemChanged {
             item: submitted.item.id.to_string(),

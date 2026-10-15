@@ -21,6 +21,8 @@ store-sqlite = { path = "crates/store-sqlite", package = "mergegate-store-sqlite
 highlight = { path = "crates/highlight", package = "mergegate-highlight" }
 lang-release = { path = "crates/lang-release", package = "mergegate-lang-release" }
 tailscale = { path = "crates/tailscale", package = "mergegate-tailscale" }
+judge-command = { path = "crates/judge-command", package = "mergegate-judge-command" }
+judge-jev = { path = "crates/judge-jev", package = "mergegate-judge-jev" }
 hub = { path = "crates/hub", package = "mergegate-hub" }
 skill = { path = "crates/skill", package = "mergegate-skill" }
 testkit = { path = "crates/testkit", package = "mergegate-testkit" }

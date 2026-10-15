@@ -18,6 +18,7 @@ mod guard;
 mod highlights;
 mod home;
 mod items;
+mod judge;
 mod languages;
 mod lifecycle;
 mod merge;
@@ -36,6 +37,7 @@ mod viewed;
 mod wake;
 
 use std::io::IsTerminal;
+use std::time::Duration;
 
 pub use home::{Connection, HOME_ENV, Home, HomeError, HubInfo};
 pub use store_sqlite::{SCHEMA_VERSION, StoreError};
@@ -77,8 +79,16 @@ pub fn run(home: Home, port: u16) -> Result<(), HubError> {
         .enable_all()
         .build()
         .map_err(io("starting the async runtime"))?;
-    runtime.block_on(server::serve(&home, port, schema_version, store))
+    let served = runtime.block_on(server::serve(&home, port, schema_version, store));
+    // Dropping the runtime would wait out every blocking task, a judge call
+    // too, which can run for minutes; serve set `stopping` for those that
+    // can stop.
+    runtime.shutdown_timeout(SHUTDOWN);
+    served
 }
+
+/// How long a stopping hub waits for work off the runtime to finish.
+const SHUTDOWN: Duration = Duration::from_secs(10);
 
 /// Logs to stderr, which a backgrounded hub sends to its `hub.log`.
 pub fn init_logging() {

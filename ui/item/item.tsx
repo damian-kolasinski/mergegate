@@ -68,6 +68,22 @@ export function ItemScreen(props: { id: string }) {
     );
   const failed = (error: unknown) =>
     setFailure(error instanceof Error ? error.message : String(error));
+  // The hub fills in the diff on screen after it arrives: the highlighter
+  // its spans, the judge its scores. New files re-render the diff, and every
+  // (re)connect refetches, so only a real change replaces them; nor does a
+  // diff the operator compared away from, or of another revision.
+  const follow = (shown: ItemDiff, next: ItemDiff) => {
+    const same =
+      next.item.revision.number === shown.item.revision.number &&
+      next.since === shown.since;
+    if (
+      diff() === shown &&
+      same &&
+      JSON.stringify(next.files) !== JSON.stringify(shown.files)
+    ) {
+      setDiff(next);
+    }
+  };
   const show = (next: ItemDiff) => {
     setDiff(next);
     setDemo(next.demo);
@@ -95,6 +111,7 @@ export function ItemScreen(props: { id: string }) {
         setNewest(next.item.revision.number);
       } else if (next.item.revision.number === shown?.item.revision.number) {
         setDemo(next.demo);
+        follow(shown, next);
       }
     }, failed);
   };
@@ -109,18 +126,12 @@ export function ItemScreen(props: { id: string }) {
   onHubEvent("item.changed", (event) => {
     if (!event || event.item === id) reload();
   });
-  // The hub highlights in the background, and again as packs come and go;
-  // the diff on screen then brings its new spans.
+  // The hub highlights in the background, and again as packs come and go.
   onHubEvent("highlights.changed", () => {
     const shown = untrack(diff);
     if (!shown) return;
     void fetchDiff(shown.since === null ? "all" : String(shown.since)).then(
-      (next) => {
-        // Unless the operator compared otherwise meanwhile, or the hub
-        // answered with a newer revision.
-        const same = next.item.revision.number === shown.item.revision.number;
-        if (diff() === shown && same) setDiff(next);
-      },
+      (next) => follow(shown, next),
       () => undefined,
     );
   });

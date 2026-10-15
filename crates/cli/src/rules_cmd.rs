@@ -5,7 +5,7 @@ use clap::{Subcommand, ValueEnum};
 
 use crate::client::{Client, Reply, segment};
 use crate::output::{CliError, Outcome};
-use crate::project_cmd::{project_here, route};
+use crate::project_cmd::{named, route};
 
 #[derive(Subcommand)]
 pub enum RulesCommand {
@@ -113,13 +113,6 @@ pub fn run(command: RulesCommand) -> Result<Outcome, CliError> {
             let text = show(&proposal);
             Ok(Outcome::done(&proposal, text))
         }
-    }
-}
-
-fn named(client: &Client, project: Option<String>) -> Result<String, CliError> {
-    match project {
-        Some(project) => Ok(project),
-        None => Ok(project_here(client)?.name),
     }
 }
 

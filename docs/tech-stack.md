@@ -53,7 +53,8 @@ crates/
   store-sqlite/
   rules-toml/            RulesFile port impl: reads and writes the operator's rules.toml
   highlight/             tree-sitter + WASM grammar loader + language manager
-  judge-anthropic/  judge-openai/  judge-command/  judge-jev/
+  judge-jev/             Judge port impl: TypeSafe AI's Jev over HTTP
+  judge-command/         Judge port impl: the operator's command, JSON over stdio
   tailscale/             Tailnet port impl: the tailscale CLI
   hub/                   axum server, scheduler, wake runner; composition root of the daemon
   cli/                   mg commands

@@ -166,6 +166,14 @@ fn show_here(client: &Client) -> Result<Outcome, CliError> {
     }
 }
 
+/// `project`, or the one at the current directory.
+pub(crate) fn named(client: &Client, project: Option<String>) -> Result<String, CliError> {
+    match project {
+        Some(project) => Ok(project),
+        None => Ok(project_here(client)?.name),
+    }
+}
+
 pub(crate) fn project_here(client: &Client) -> Result<Project, CliError> {
     let cwd = std::env::current_dir()
         .map_err(|e| CliError::new("io_error", format!("reading the current directory: {e}")))?;

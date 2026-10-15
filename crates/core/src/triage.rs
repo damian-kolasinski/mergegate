@@ -6,7 +6,9 @@ mod edit;
 mod file;
 mod git;
 mod guide;
+mod heuristic;
 mod loosens;
+mod order;
 mod preview;
 mod propose;
 mod rules;
@@ -18,7 +20,9 @@ pub use edit::{HeldEdit, decide_edit};
 pub use file::{Place, RulesFile, RulesFileError, RulesText};
 pub use git::TriageGit;
 pub use guide::{Guide, GuideFile};
+pub use heuristic::{Hint, hint};
 pub use loosens::loosens;
+pub use order::{OrderBy, Placed, RAISE_AT, Rank, order};
 pub use preview::{Hidden, MERGED, Preview, preview};
 pub use propose::{
     ChangeError, Decision, NewRule, Proposal, ProposalState, Proposed, decide_proposal, propose,

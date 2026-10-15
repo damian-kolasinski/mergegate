@@ -20,6 +20,7 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0009_priority.sql"),
     include_str!("../migrations/0010_conflicts.sql"),
     include_str!("../migrations/0011_devices.sql"),
+    include_str!("../migrations/0012_judge.sql"),
 ];
 
 /// The schema version this build migrates databases to.

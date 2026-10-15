@@ -1,5 +1,6 @@
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use axum::middleware;
@@ -20,8 +21,8 @@ use store_sqlite::Store;
 use crate::{
     Home, HubError, HubInfo, abandon, attachments, comments, conflicts, conversation, devices,
     diff, doctor, draft_replies, event_log, events, external, feedback, git_http, guard,
-    highlights, io, items, languages, lifecycle, merge, priority, projects, replies, reply, resume,
-    reviews, rules, settings, tailnet, ui, viewed, wake,
+    highlights, io, items, judge, languages, lifecycle, merge, priority, projects, replies, reply,
+    resume, reviews, rules, settings, tailnet, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -47,6 +48,12 @@ pub(crate) struct AppState {
     pub prune: Notify,
     /// Asks the conflict watch to test-merge now, after its current pass.
     pub conflicts: Notify,
+    /// Wakes the background judge pass, as [`Self::highlight`] does its own.
+    pub judge: Notify,
+    pub judge_failures: judge::Failures,
+    /// Set once the hub starts stopping, for work off the runtime that
+    /// would hold up its exit: a judge call runs for minutes.
+    pub stopping: Arc<AtomicBool>,
     pub rules: rules::RulesFiles,
     pub tailnet: tailnet::Tailnet,
     /// Held for a whole request, which also keeps two requests from syncing
@@ -163,6 +170,9 @@ pub(crate) async fn serve(
         highlight: Notify::new(),
         prune: Notify::new(),
         conflicts: Notify::new(),
+        judge: Notify::new(),
+        judge_failures: judge::Failures::default(),
+        stopping: Arc::default(),
         rules: rules::RulesFiles::new(RulesToml::new(home.projects())),
         tailnet: tailnet::Tailnet::from_env(),
         store: Mutex::new(store),
@@ -173,6 +183,7 @@ pub(crate) async fn serve(
         .merge(lifecycle::routes())
         .merge(projects::routes())
         .merge(rules::routes())
+        .merge(judge::routes())
         .merge(items::routes())
         .merge(abandon::routes())
         .merge(priority::routes())
@@ -223,6 +234,7 @@ pub(crate) async fn serve(
     tokio::spawn(attachments::prune(state.clone()));
     tokio::spawn(rules::run(state.clone()));
     tokio::spawn(conflicts::run(state.clone()));
+    tokio::spawn(judge::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {
@@ -231,6 +243,7 @@ pub(crate) async fn serve(
                 _ = sigterm.recv() => {}
             }
             tracing::info!("hub stopping");
+            state.stopping.store(true, Ordering::Relaxed);
             state.events.stop();
             tailnet::apply(&state, Listen::Local).await;
         })

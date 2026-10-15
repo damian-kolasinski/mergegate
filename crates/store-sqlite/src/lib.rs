@@ -12,6 +12,7 @@ mod feedback;
 mod highlights;
 mod interdiffs;
 mod items;
+mod judges;
 mod migrate;
 mod projects;
 mod replies;
