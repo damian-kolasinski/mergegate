@@ -177,6 +177,29 @@ fn lists_a_projects_last_merged_items_newest_first() {
 }
 
 #[test]
+fn lists_every_projects_closed_items_oldest_first() {
+    let (_dir, mut store) = store();
+    let a = store.insert_item(new_item("app", "a")).unwrap().id;
+    store.insert_item(new_item("app", "b")).unwrap();
+    let web = store.insert_item(new_item("web", "a")).unwrap().id;
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged' WHERE branch = 'a'", [])
+        .unwrap();
+    store
+        .conn
+        .execute("UPDATE items SET state = 'abandoned' WHERE id = 1", [])
+        .unwrap();
+    let closed: Vec<_> = store
+        .closed_items()
+        .unwrap()
+        .into_iter()
+        .map(|i| i.id)
+        .collect();
+    assert_eq!(closed, [a, web]);
+}
+
+#[test]
 fn adds_revisions_with_their_files() {
     let (_dir, mut store) = store();
     let first = store.insert_item(new_item("app", "a")).unwrap();

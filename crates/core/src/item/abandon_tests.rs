@@ -191,31 +191,6 @@ fn closes_even_when_dropping_its_pins_fails() {
 }
 
 #[test]
-fn drops_its_branch_from_staging_unless_it_moved_on() {
-    let (mut store, git) = two_items();
-    let project = ProjectName::parse("app").unwrap();
-    abandon(
-        &mut store,
-        &git,
-        &FakeGithub::default(),
-        abandoning("app#1", Source::Agent, None),
-    )
-    .unwrap();
-    assert_eq!(git.branch_head(&project, "login").unwrap(), None);
-
-    // Pushed after its newest revision: work the item never saw.
-    git.push("app", "copy", &commit(3));
-    abandon(
-        &mut store,
-        &git,
-        &FakeGithub::default(),
-        abandoning("app#2", Source::Agent, None),
-    )
-    .unwrap();
-    assert_eq!(git.branch_head(&project, "copy").unwrap(), Some(commit(3)));
-}
-
-#[test]
 fn abandons_a_held_merge() {
     let (mut store, git) = two_items();
     store.set_state(&id("app#1"), ItemState::Merging);

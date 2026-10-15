@@ -77,6 +77,15 @@ impl ItemStore for Store {
         rows.map(|row| row.map_err(StoreError::new)?).collect()
     }
 
+    fn closed_items(&self) -> Result<Vec<Item>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("{SELECT} WHERE NOT {OPEN} ORDER BY i.id"))
+            .map_err(StoreError::new)?;
+        let rows = stmt.query_map([], read).map_err(StoreError::new)?;
+        rows.map(|row| row.map_err(StoreError::new)?).collect()
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         self.conn
             .query_row(

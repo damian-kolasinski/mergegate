@@ -56,6 +56,7 @@ pub(crate) struct FakeGit {
     version: Option<String>,
     fail_sync: bool,
     fail_unpin: bool,
+    fail_drop: bool,
     /// The paths every trial merge conflicts on, if it does.
     conflicts: Option<Vec<String>>,
     /// The paths two commits conflict on, by the pair in order; any other
@@ -89,6 +90,7 @@ impl Default for FakeGit {
             version: Some("git version 2.50.1".into()),
             fail_sync: false,
             fail_unpin: false,
+            fail_drop: false,
             conflicts: None,
             between: RefCell::default(),
             merged: RefCell::default(),
@@ -162,6 +164,11 @@ impl FakeGit {
 
     pub fn failing_unpin(mut self) -> Self {
         self.fail_unpin = true;
+        self
+    }
+
+    pub fn failing_drop(mut self) -> Self {
+        self.fail_drop = true;
         self
     }
 
@@ -455,6 +462,9 @@ impl ItemGit for FakeGit {
     }
 
     fn drop_branch(&self, project: &ProjectName, branch: &str, head: &str) -> Result<(), GitError> {
+        if self.fail_drop {
+            return Err(GitError::Failed("update-ref failed".into()));
+        }
         if let Some(branches) = self.staging.borrow_mut().get_mut(project.as_str())
             && branches.get(branch).is_some_and(|found| found == head)
         {
@@ -932,6 +942,15 @@ impl ItemStore for FakeStore {
             .collect())
     }
 
+    fn closed_items(&self) -> Result<Vec<Item>, StoreError> {
+        Ok(self
+            .items
+            .iter()
+            .filter(|i| !i.state.is_open())
+            .cloned()
+            .collect())
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         Ok(self
             .open_items(Some(project))?
@@ -1024,6 +1043,7 @@ impl ItemStore for FakeStore {
         };
         Ok(())
     }
+
     fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError> {
         let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
         item.title = title.into();

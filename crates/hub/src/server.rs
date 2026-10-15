@@ -19,8 +19,8 @@ use rules_toml::RulesToml;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, abandon, attachments, comments, conflicts, conversation, devices,
-    diff, doctor, draft_replies, event_log, events, external, feedback, git_http, guard,
+    Home, HubError, HubInfo, abandon, attachments, branches, comments, conflicts, conversation,
+    devices, diff, doctor, draft_replies, event_log, events, external, feedback, git_http, guard,
     highlights, io, items, judge, languages, lifecycle, merge, priority, projects, replies, reply,
     resume, reviews, rules, settings, tailnet, ui, viewed, wake,
 };
@@ -228,6 +228,7 @@ pub(crate) async fn serve(
         home.root().display()
     );
 
+    branches::sweep(&state).await;
     tokio::spawn(wake::run(state.clone()));
     tokio::spawn(external::run(state.clone()));
     tokio::spawn(highlights::run(state.clone()));
