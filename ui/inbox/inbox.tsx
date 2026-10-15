@@ -1,5 +1,6 @@
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import type { Blocked } from "../api/Blocked";
+import type { ChangedSince } from "../api/ChangedSince";
 import type { Inbox } from "../api/Inbox";
 import type { InboxItem } from "../api/InboxItem";
 import { type Failure, failureOf, getJson, onHubEvent } from "../app/hub";
@@ -328,7 +329,8 @@ function Entry(props: {
         {(changed) => (
           <span class={styles.flag}>
             <Meta>
-              {changed().files} changed since r{changed().revision}
+              {changedCount(changed())}changed since{" "}
+              {changed().approved ? "approved " : ""}r{changed().revision}
             </Meta>
           </span>
         )}
@@ -387,6 +389,15 @@ function trusted(item: InboxItem): string | undefined {
   const count = item.files - item.review_files;
   if (!count) return undefined;
   return `${item.review_files} to review, ${count} trusted by the rules`;
+}
+
+/**
+ * `3 ` of `3 changed since`, or nothing for an approval that stands yet
+ * didn't carry: something changed, if only a trusted file or one the rebase
+ * conflicted on.
+ */
+function changedCount(changed: ChangedSince): string {
+  return changed.approved && !changed.files ? "" : `${changed.files} `;
 }
 
 function why(blocked: Blocked): string {

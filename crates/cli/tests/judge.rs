@@ -141,7 +141,7 @@ fn submit(env: &Env, repo: &TestRepo) {
         &[
             ("src/a.rs", "fn form() {}\n"),
             ("src/b.rs", "fn wire() {}\n"),
-            ("src/c.rs", "fn check_password() {}\n"),
+            ("src/c.rs", "fn check_session() {}\n"),
             ("Cargo.lock", "a\nb\n"),
             ("config/prod.toml", "auth = false\n"),
         ],
@@ -428,6 +428,35 @@ fn f12_a_command_judges_from_the_projects_repo() {
             "diff": "@@ -0,0 +1,2 @@\n+a\n+b\n",
         })
     );
+}
+
+#[test]
+fn f12_a_command_runs_outside_the_agent_session_that_started_the_hub() {
+    let jev = FakeJev::start();
+    let mut vars = jev.env();
+    vars.extend([
+        ("CLAUDECODE".into(), "1".into()),
+        ("CLAUDE_CODE_SESSION_ID".into(), "s".into()),
+        ("CLAUDE_CONFIG_DIR".into(), "/claude".into()),
+    ]);
+    let env = Env::new(env!("CARGO_BIN_EXE_mg")).with_vars(vars);
+    let repo = project(&env);
+    let seen = tempfile::tempdir().unwrap();
+    let markers = seen.path().join("markers");
+    let command = format!(
+        "printf '%s %s %s' \"${{CLAUDECODE-unset}}\" \"${{CLAUDE_CODE_SESSION_ID-unset}}\" \
+         \"${{CLAUDE_CONFIG_DIR-unset}}\" > '{}'; printf '{{\"files\": []}}'",
+        markers.display()
+    );
+    env.mg_at(
+        repo.root(),
+        &["--json", "judge", "set", "command", "--command", &command],
+    )
+    .assert_code(0);
+    submit(&env, &repo);
+
+    item_when(&env, |_| markers.exists());
+    assert_eq!(fs::read_to_string(&markers).unwrap(), "unset unset /claude");
 }
 
 #[test]

@@ -663,6 +663,7 @@ function Review(props: {
           blocked={props.diff.blocked?.kind}
           behind={props.newest !== undefined}
           unviewed={own().filter((file) => !done().has(file.path)).length}
+          changed={props.diff.changed_since}
           drafts={comments.drafts.list().length}
           unplaced={comments.drafts.flagged().length}
           placing={comments.drafts.placing()?.id}

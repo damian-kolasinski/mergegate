@@ -38,7 +38,10 @@ fn review(env: &Env, summary: &str) {
 
 /// A hub with the `app` project and a clone on `feature`, nothing submitted.
 fn setup() -> (Env, TestRepo) {
-    let env = env();
+    setup_in(env())
+}
+
+fn setup_in(env: Env) -> (Env, TestRepo) {
     env.start_hub();
     let repo = TestRepo::new("app");
     repo.commit_files("Base", &[("README", "title\n")]);
@@ -185,4 +188,25 @@ fn f3_a_wake_commands_stderr_goes_to_a_log_in_the_home() {
         std::thread::sleep(Duration::from_millis(20));
     }
     assert_eq!(std::fs::read_to_string(&log).unwrap(), "no session\n");
+}
+
+#[test]
+fn f3_the_wake_runs_outside_the_agent_session_that_started_the_hub() {
+    // A hub started from an agent's shell inherits its session's markers,
+    // and a harness that sees them won't start a session of its own.
+    let (env, repo) = setup_in(env().with_vars(vec![
+        ("CLAUDECODE".into(), "1".into()),
+        ("CODEX_THREAD_ID".into(), "t".into()),
+        ("CODEX_HOME".into(), "/codex".into()),
+    ]));
+    let log = log_path(&env);
+    let wake = format!(
+        "printf '%s %s %s\\n' \"${{CLAUDECODE-unset}}\" \"${{CODEX_THREAD_ID-unset}}\" \
+         \"${{CODEX_HOME-unset}}\" >> {}",
+        log.display()
+    );
+    env.mg_at(repo.root(), &["submit", "--wake", &wake])
+        .assert_code(0);
+    review(&env, "First.");
+    assert_eq!(await_lines(&log, 1), ["unset unset /codex"]);
 }

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::attachment::Demo;
 use crate::highlight::Span;
-use crate::item::Item;
+use crate::item::{ChangedSince, Item};
 use crate::merge::Blocked;
 use crate::review::Conversation;
 use crate::rules::Tier;
@@ -22,6 +22,9 @@ pub struct ItemDiff {
     pub since: Option<u32>,
     /// The newest revision the operator submitted a review on.
     pub last_reviewed: Option<u32>,
+    /// What the newest revision changes since that review, as the inbox
+    /// counts it.
+    pub changed_since: Option<ChangedSince>,
     /// The earlier revisions `since` may name, ascending; none once the item
     /// is closed.
     pub interdiffs: Vec<u32>,

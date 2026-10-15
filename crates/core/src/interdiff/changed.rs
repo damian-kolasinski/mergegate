@@ -3,7 +3,9 @@
 use std::collections::BTreeSet;
 
 use super::{Change, InterdiffStore};
+use crate::feedback::FeedbackStore;
 use crate::item::{Item, ItemStore};
+use crate::merge::standing_approval;
 use crate::review::ReviewStore;
 use crate::store::StoreError;
 use crate::triage::Tier;
@@ -15,11 +17,13 @@ pub struct ChangedSince {
     /// Files to review that the newest revision changes since then, or no
     /// longer changes.
     pub files: u32,
+    /// The operator approved that revision and still stands by it.
+    pub approved: bool,
 }
 
 /// None until the operator reviewed a revision older than the newest, or
 /// when there's no interdiff from it.
-pub fn changed_since_review<S: InterdiffStore + ReviewStore + ItemStore>(
+pub fn changed_since_review<S: InterdiffStore + ReviewStore + ItemStore + FeedbackStore>(
     store: &S,
     item: &Item,
 ) -> Result<Option<ChangedSince>, StoreError> {
@@ -47,6 +51,7 @@ pub fn changed_since_review<S: InterdiffStore + ReviewStore + ItemStore>(
     Ok(Some(ChangedSince {
         revision,
         files: u32::try_from(files).unwrap_or(u32::MAX),
+        approved: standing_approval(store, &item.id)? == Some(revision),
     }))
 }
 

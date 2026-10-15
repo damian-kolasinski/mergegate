@@ -11,7 +11,9 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::interdiff::{self, ChangedSince};
-use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemId, ItemState, Submit};
+use mergegate_core::item::{
+    self, Item, ItemBackend, ItemError, ItemId, ItemState, ItemStore, Submit,
+};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::review::Waiting;
 use mergegate_core::store::StoreError;
@@ -63,7 +65,7 @@ async fn submit(
         note: request.note,
     };
     let app = state.clone();
-    let (moved, submitted) = state
+    let (moved, submitted, carried) = state
         .blocking_github(move |store, git, github| {
             // So a rule the operator just wrote applies to this revision
             // without waiting for the next poll.
@@ -75,13 +77,31 @@ async fn submit(
             };
             // The moves stand even when the submit fails, so the UI hears
             // of them either way.
-            let submitted = item::submit(store, git, github, request);
-            Ok::<_, ItemError>((moved, submitted))
+            let mut submitted = item::submit(store, git, github, request);
+            let mut carried = false;
+            // The operator approved the diff, not a title it would land under.
+            if let Ok(done) = &mut submitted
+                && done.new_revision
+                && !done.retitled
+                && let Some(warning) = merge::carry(store, git, github, &done.item.id)
+            {
+                carried = true;
+                done.warnings.push(warning);
+                // The merge happened: failing to re-read it mustn't fail the
+                // submit, whose item then shows the state before it.
+                if let Ok(Some(item)) = store.item(&done.item.id) {
+                    done.item = item;
+                }
+            }
+            Ok::<_, ItemError>((moved, submitted, carried))
         })
         .await
         .map_err(failure)?;
     rules::changed(&state, &moved);
     let submitted = submitted.map_err(failure)?;
+    if carried {
+        merge::changed(&state, &submitted.item.id);
+    }
     // A new wake command may be due for events already logged.
     state.wakes.recheck();
     if submitted.new_revision {
@@ -212,15 +232,20 @@ fn inbox_entry(
         blocked,
         link: link(&item.backend),
         demo,
-        changed_since: changed.map(|changed| api::item::ChangedSince {
-            revision: changed.revision,
-            files: changed.files,
-        }),
+        changed_since: changed.map(changed_to_api),
         priority: item.priority.map(priority::to_api),
         note: item.note.clone(),
         conflicts_with: conflicts_with.iter().map(ToString::to_string).collect(),
         questions: waiting.questions,
         rejections: waiting.rejections,
+    }
+}
+
+pub(crate) fn changed_to_api(changed: ChangedSince) -> api::item::ChangedSince {
+    api::item::ChangedSince {
+        revision: changed.revision,
+        files: changed.files,
+        approved: changed.approved,
     }
 }
 

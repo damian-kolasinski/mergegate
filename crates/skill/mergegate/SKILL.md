@@ -10,6 +10,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 ## Rules
 
 - Never `git push` and never `gh pr create`. `mg submit` pushes the branch to the hub and puts it up for review.
+- Reach the hub only through `mg`. Never open its UI or call its HTTP API, not even to read: the UI is the operator's, and the hub can't tell your requests from theirs, so one could approve your own work.
 - Wait for feedback the cheapest way your environment allows: see [references/waiting.md](references/waiting.md).
 - Answer every comment with `mg reply`: `addressed` once your next revision has the change, `rejected` with a `--body` saying why, or `question` with a `--body` that asks.
 - Weigh each comment before acting on it. Reject one that would make the code worse, and say why.
@@ -29,7 +30,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `external.comments` | Reviewers commented on the item's GitHub pull request. Treat them like the operator's comments: change, `mg reply` to each one, `mg submit`. See [references/authoring.md](references/authoring.md), "Comments from GitHub". |
 | `comment.override` | The operator overrides your rejection of a comment: make the change, `mg reply` with `addressed`, `mg submit`. |
 | `merge.conflict` | The target moved under the item, before or after review. Run the commands it lists, resolve the conflicts, `mg submit`. |
-| `merge.held` | The operator retries or cancels the merge; keep waiting. |
+| `merge.held` | The operator retries or cancels the merge; keep waiting. If the reason is that the branch is behind its target, rebase onto it and `mg submit`: a revision whose diff is unchanged merges on the same approval. |
 | `merge.cancelled` | The item needs review again; keep waiting. |
 | `item.merged` | The work landed. Clean up as agreed, then stop. |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |

@@ -3,6 +3,7 @@
 
 mod ask;
 mod client;
+mod secrets;
 mod state;
 
 use std::sync::Arc;

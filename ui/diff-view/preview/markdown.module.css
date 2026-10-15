@@ -1,0 +1,92 @@
+/* A rendered document at a reading width, in the page's own type. */
+.doc {
+  max-width: 80ch;
+  margin: 0 auto;
+  font: var(--type-p3);
+  color: var(--text-primary);
+}
+
+.doc :is(h1, h2, h3, h4, h5, h6) {
+  margin: var(--space-6) 0 var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.doc h1 {
+  font-size: 24px;
+}
+
+.doc h2 {
+  font-size: 20px;
+}
+
+.doc h3 {
+  font-size: 16px;
+}
+
+.doc :is(h4, h5, h6) {
+  font-size: 14px;
+}
+
+.doc :is(p, ul, ol, blockquote, pre, table) {
+  margin: 0 0 var(--space-3);
+}
+
+.doc :is(ul, ol) {
+  padding-left: var(--space-6);
+}
+
+.doc li > :is(ul, ol, p) {
+  margin-bottom: 0;
+}
+
+.doc blockquote {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border-container);
+  color: var(--text-secondary);
+}
+
+.doc code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-small);
+  background: var(--background-subtle);
+  font: var(--type-mono);
+}
+
+.doc pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-small);
+  background: var(--background-subtle);
+}
+
+.doc pre code {
+  padding: 0;
+  background: none;
+}
+
+.doc table {
+  border-collapse: collapse;
+}
+
+.doc :is(th, td) {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-container);
+  text-align: left;
+}
+
+.doc hr {
+  border: 0;
+  border-top: 1px solid var(--border-container);
+}
+
+/* A link the preview doesn't open: marked as one, with its target on hover. */
+.link {
+  text-decoration: underline dotted;
+}
+
+.image {
+  color: var(--text-subtle);
+  font-style: italic;
+}

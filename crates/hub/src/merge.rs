@@ -9,10 +9,13 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
+use backend_github::GithubClient;
 use git::HubGit;
 use mergegate_core::feedback::FeedbackStore;
 use mergegate_core::item::{Item, ItemId};
-use mergegate_core::merge::{self, Approve, Blocked, GithubBackend, Landing, Merge, MergeError};
+use mergegate_core::merge::{
+    self, Approve, Blocked, Carried, GithubBackend, Landing, Merge, MergeError,
+};
 use mergegate_core::store::StoreError;
 use store_sqlite::Store;
 
@@ -83,6 +86,37 @@ async fn cancel(
     Ok(Json(items::to_api(&item)))
 }
 
+/// Lands a new revision of `id` on the operator's standing approval when
+/// it changes nothing since the approved one; a warning for its agent says
+/// what came of it.
+pub(crate) fn carry(
+    store: &mut Store,
+    git: &HubGit,
+    github: &GithubClient,
+    id: &ItemId,
+) -> Option<String> {
+    let github = GithubBackend::new(git, github);
+    let (from, merge) = match merge::carry(store, git, &[git, &github], id) {
+        Ok(None) => return None,
+        Ok(Some(Carried { from, merge })) => (from, Ok(merge)),
+        Err(e) => (0, Err(e)),
+    };
+    let landing = match dropped(store, git, merge) {
+        Ok(merge) => merge.landing,
+        Err(e) => return Some(format!("the earlier approval couldn't carry over: {e}")),
+    };
+    let outcome = match landing {
+        Landing::Merged { commit } => format!("merged as {commit}"),
+        Landing::Held { reason } => format!("the merge is held: {reason}"),
+        Landing::Conflict { paths, .. } => {
+            format!("the merge conflicts in {}", paths.join(", "))
+        }
+    };
+    Some(format!(
+        "the diff is unchanged since the operator approved r{from}, so the approval stands: {outcome}"
+    ))
+}
+
 /// Drops a merged item's branch from staging.
 fn dropped(
     store: &Store,
@@ -102,7 +136,7 @@ fn dropped(
 /// Every outcome logs an event for the agent and moves the item. So can a
 /// failure: one after the approval was recorded must still reach them, and
 /// a wake with nothing new only costs a re-read.
-fn changed(state: &AppState, id: &ItemId) {
+pub(crate) fn changed(state: &AppState, id: &ItemId) {
     state.events.logged();
     // A merge closes the item, which starts its attachments' time to live.
     state.prune.notify_one();

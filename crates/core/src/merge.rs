@@ -6,6 +6,7 @@
 mod approve;
 mod backend;
 mod blocked;
+mod carry;
 mod error;
 mod git;
 mod github;
@@ -15,6 +16,7 @@ mod land;
 pub use approve::{Approve, approve};
 pub use backend::{Landing, MergeBackend};
 pub use blocked::{Blocked, blocked};
+pub use carry::{Carried, carry, standing_approval, unchanged_since_approval};
 pub use error::MergeError;
 pub use git::{MergeGit, Trial};
 pub use github::GithubBackend;

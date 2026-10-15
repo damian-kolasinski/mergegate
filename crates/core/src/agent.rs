@@ -62,6 +62,23 @@ pub(crate) fn record<S: AgentStore>(
     store.set_agent(id, &agent)
 }
 
+/// Variables a coding agent's harness sets for its own session. Commands the
+/// hub runs drop them: a hub started from an agent's shell inherits them, and
+/// a harness that sees them takes itself for a session nested in that one,
+/// which some refuse to start. Config locations like `CODEX_HOME` stay.
+pub const SESSION_MARKERS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SSE_PORT",
+    "CLAUDE_PID",
+    "CODEX_THREAD_ID",
+    "CODEX_SESSION_ID",
+    "CODEX_APP_TOOLS_PIPE_PATH",
+    "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+];
+
 /// `command` with `{item}` replaced by the item's ID. IDs are a project name,
 /// `#` and a number, so the result needs no quoting.
 pub fn wake_command(command: &str, item: &ItemId) -> String {

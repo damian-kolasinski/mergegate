@@ -9,6 +9,8 @@ use mergegate_core::item::FileMode;
 use mergegate_core::judge::{JudgeError, Request};
 use mergegate_core::triage::Tier;
 
+use crate::secrets::looks_secret;
+
 /// Tokens a state may take. Jev's limit is 32k for the state and its longest
 /// question; a question takes a few hundred.
 pub(crate) const BUDGET: usize = 30_000;
@@ -30,8 +32,9 @@ pub(crate) struct Part {
 }
 
 /// Files with no diff, or whose diff alone is over the budget, are in no
-/// part: they go unjudged rather than judged on a cut diff. Files stay in
-/// path order, so a directory's travel together.
+/// part: they go unjudged rather than judged on a cut diff. So do files whose
+/// diff looks like it holds a secret, which only the summary names. Files
+/// stay in path order, so a directory's travel together.
 pub(crate) fn parts(request: &Request) -> Result<Vec<Part>, JudgeError> {
     let summary = summary(request);
     let room = BUDGET.saturating_sub(tokens(&summary));
@@ -43,7 +46,9 @@ pub(crate) fn parts(request: &Request) -> Result<Vec<Part>, JudgeError> {
     }
     let mut parts: Vec<(String, Vec<usize>)> = Vec::new();
     for (index, file) in request.files.iter().enumerate() {
-        let Some(diff) = &file.diff else { continue };
+        let Some(diff) = file.diff.as_deref().filter(|d| !looks_secret(d)) else {
+            continue;
+        };
         let section = format!("\n### File {}: {}\n{diff}", index + 1, file.path);
         if tokens(&section) > room {
             continue;

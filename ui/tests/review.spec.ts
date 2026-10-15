@@ -12,8 +12,8 @@ const lines = (count: number, line = (n: number) => `line ${n}`) =>
 
 /**
  * app#1: `a.txt` changes lines 10 and 50, leaving 33 lines between its two
- * hunks; `gone.txt` is deleted, `logo.png` is binary, `new.txt` is new.
- * The heuristics rank the text files low as docs, so `logo.png` comes first.
+ * hunks; `gone.txt` is deleted, `blob.bin` is binary, `new.txt` is new.
+ * The heuristics rank the text files low as docs, so `blob.bin` comes first.
  */
 function submitChange(hub: Hub) {
   const app = hub.project("app");
@@ -23,7 +23,7 @@ function submitChange(hub: Hub) {
       n === 10 || n === 50 ? `changed ${n}` : `line ${n}`,
     ),
     "gone.txt": null,
-    "logo.png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 1]),
+    "blob.bin": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 1]),
     "new.txt": "hello\n",
   });
 }
@@ -36,7 +36,7 @@ test("f6 an item shows every changed file", async ({ page, hub }) => {
   await expect(screen.getByRole("heading")).toHaveText("Change things");
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^logo\.png$/,
+    /^blob\.bin$/,
     /^a\.txt\s*ranked low: docs\s*\+2\s*−2$/,
     /^gone\.txt\s*ranked low: docs\s*−1$/,
     /^new\.txt\s*ranked low: docs\s*\+1$/,
@@ -71,7 +71,7 @@ test("f6 n and p move between files", async ({ page, hub }) => {
         ),
     );
   };
-  await expect(current).toContainText("logo.png");
+  await expect(current).toContainText("blob.bin");
   await press("n", "a.txt");
   await press("n", "gone.txt");
   await press("n", "new.txt");
@@ -169,6 +169,14 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(changed).toBeVisible();
   await page.keyboard.press("n");
   await expect(current).toContainText("a.txt");
+  // `n`'s scroll is reported a frame later, and would move the current
+  // file back to a.txt after `v` moved on.
+  await page.evaluate(
+    () =>
+      new Promise((done) =>
+        requestAnimationFrame(() => requestAnimationFrame(done)),
+      ),
+  );
   await page.keyboard.press("v");
   await expect(current).toContainText("gone.txt");
   await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
