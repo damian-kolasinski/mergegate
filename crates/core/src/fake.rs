@@ -20,8 +20,8 @@ use crate::highlight::{
 };
 use crate::interdiff::{InterdiffFile, InterdiffGit, InterdiffStore, Replay};
 use crate::item::{
-    ChangedFile, DiffStat, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore, NewItem,
-    NewRevision, Priority, Pushed, Revision, Submit, submit,
+    ChangedFile, DiffStat, FileMode, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore,
+    NewItem, NewRevision, Priority, Pushed, Revision, Submit, submit,
 };
 use crate::judge::{JudgeSetting, JudgeStore, Verdict};
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
@@ -483,11 +483,16 @@ impl ItemGit for FakeGit {
         Ok(paths
             .into_iter()
             .filter(|path| blob(base, path) != blob(head, path))
-            .map(|path| ChangedFile {
-                old_blob: blob(base, &path),
-                new_blob: blob(head, &path),
-                old_path: None,
-                path,
+            .map(|path| {
+                let (old_blob, new_blob) = (blob(base, &path), blob(head, &path));
+                ChangedFile {
+                    old_mode: old_blob.as_ref().map(|_| FileMode::Regular),
+                    new_mode: new_blob.as_ref().map(|_| FileMode::Regular),
+                    old_blob,
+                    new_blob,
+                    old_path: None,
+                    path,
+                }
             })
             .collect())
     }

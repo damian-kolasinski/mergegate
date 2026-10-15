@@ -1,7 +1,7 @@
 use super::unpaired;
 use crate::fake::{FakeStore, commit, rebased, submit_login};
 use crate::interdiff::{Change, InterdiffStore};
-use crate::item::{ChangedFile, FileStat, ItemId};
+use crate::item::{ChangedFile, FileMode, FileStat, ItemId};
 use crate::triage::Triage;
 use crate::viewed::ViewedStore;
 
@@ -146,6 +146,8 @@ fn moved(path: &str, from: Option<&str>, old: Option<&str>, new: Option<&str>) -
         old_path: from.map(Into::into),
         old_blob: old.map(Into::into),
         new_blob: new.map(Into::into),
+        old_mode: old.map(|_| FileMode::Regular),
+        new_mode: new.map(|_| FileMode::Regular),
     }
 }
 
@@ -174,6 +176,30 @@ fn a_rename_away_from_an_own_file_splits() {
         [
             moved("a.txt", None, Some("r1"), None),
             moved("b.txt", None, None, Some("r1")),
+        ]
+    );
+}
+
+#[test]
+fn a_split_rename_keeps_each_sides_mode() {
+    let own = own(&[
+        moved("a.txt", None, Some("base"), None),
+        moved("b.sh", None, None, Some("r1")),
+    ]);
+    let rename = ChangedFile {
+        old_mode: Some(FileMode::Symlink),
+        new_mode: Some(FileMode::Executable),
+        ..moved("b.sh", Some("a.txt"), Some("r1"), Some("r1"))
+    };
+    let modes: Vec<_> = unpaired(rename, &own)
+        .into_iter()
+        .map(|f| (f.path, f.old_mode, f.new_mode))
+        .collect();
+    assert_eq!(
+        modes,
+        [
+            ("a.txt".into(), Some(FileMode::Symlink), None),
+            ("b.sh".into(), None, Some(FileMode::Executable)),
         ]
     );
 }

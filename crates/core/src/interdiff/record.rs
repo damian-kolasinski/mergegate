@@ -121,12 +121,16 @@ fn unpaired(file: ChangedFile, own: &[FileStat]) -> Vec<ChangedFile> {
             old_path: None,
             old_blob: file.old_blob,
             new_blob: None,
+            old_mode: file.old_mode,
+            new_mode: None,
         },
         ChangedFile {
             path: file.path,
             old_path: None,
             old_blob: None,
             new_blob: file.new_blob,
+            old_mode: None,
+            new_mode: file.new_mode,
         },
     ]
 }

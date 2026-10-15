@@ -1,6 +1,6 @@
 use mergegate_core::interdiff::{Change, InterdiffFile, NewInterdiff};
 use mergegate_core::item::{
-    ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
+    ChangedFile, FileMode, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
 };
 use mergegate_core::project::{Backend, Project, ProjectName, ProjectStore};
 
@@ -112,6 +112,8 @@ fn changed(old: Option<&str>, new: &str) -> FileStat {
             old_path: None,
             old_blob: old.map(Into::into),
             new_blob: Some(new.into()),
+            old_mode: old.map(|_| FileMode::Regular),
+            new_mode: Some(FileMode::Regular),
         },
         additions: Some(1),
         deletions: Some(0),

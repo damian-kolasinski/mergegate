@@ -1,5 +1,5 @@
 use mergegate_core::item::{
-    ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
+    ChangedFile, FileMode, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
 };
 use mergegate_core::project::{Backend, Project, ProjectStore};
 use mergegate_core::triage::{OrderBy, Tier, Triage};
@@ -17,6 +17,8 @@ fn file(path: &str, tier: Tier) -> FileStat {
             old_path: None,
             old_blob: None,
             new_blob: Some("1".repeat(40)),
+            old_mode: None,
+            new_mode: Some(FileMode::Regular),
         },
         additions: Some(1),
         deletions: Some(0),

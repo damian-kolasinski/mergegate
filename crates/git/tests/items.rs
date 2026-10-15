@@ -3,7 +3,7 @@ use std::process::Stdio;
 
 use mergegate_core::diff::DiffGit;
 use mergegate_core::git::{Git, Upstream};
-use mergegate_core::item::{ChangedFile, ItemGit};
+use mergegate_core::item::{ChangedFile, FileMode, ItemGit};
 use mergegate_core::project::ProjectName;
 use mergegate_git::{HttpRequest, HubGit};
 use tempfile::TempDir;
@@ -82,9 +82,12 @@ fn file(
     old: Option<String>,
     new: Option<String>,
 ) -> ChangedFile {
+    // The fixture's files are all regular ones.
     ChangedFile {
         path: path.into(),
         old_path: old_path.map(Into::into),
+        old_mode: old.as_ref().map(|_| FileMode::Regular),
+        new_mode: new.as_ref().map(|_| FileMode::Regular),
         old_blob: old,
         new_blob: new,
     }

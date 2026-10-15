@@ -14,6 +14,7 @@ mod interdiffs;
 mod items;
 mod judges;
 mod migrate;
+mod modes;
 mod projects;
 mod replies;
 mod reviews;

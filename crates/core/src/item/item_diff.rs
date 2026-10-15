@@ -202,7 +202,7 @@ pub fn item_diff<
             hint: (change != Some(Change::Unchanged))
                 .then(|| {
                     triage::hint(
-                        &stat.file.path,
+                        &stat.file,
                         stat.generated,
                         stat.additions,
                         stat.deletions,

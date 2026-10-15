@@ -1,7 +1,9 @@
 // The viewing part of F6: open an item, see every changed file in one
 // column, walk it with `n/p`, `j/k` and `]/[`, expand the gaps between hunks.
 
-import { expect, type Hub, test } from "./hub";
+import { chmodSync, mkdirSync, symlinkSync } from "node:fs";
+import { join } from "node:path";
+import { expect, git, type Hub, test } from "./hub";
 
 const lines = (count: number, line = (n: number) => `line ${n}`) =>
   Array.from({ length: count }, (_, i) => `${line(i + 1)}\n`).join("");
@@ -239,4 +241,32 @@ test("a 5k-line diff scrolls within budget", async ({ page, hub }, info) => {
   expect(sorted.length).toBeGreaterThan(100);
   // A frame dropped at 60 fps takes two refreshes, 33 ms.
   if (process.env.MG_ENFORCE_BUDGETS === "1") expect(at(0.95)).toBeLessThan(25);
+});
+
+test("f6 a mode or type change says so in the file's header", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ "run.sh": "echo hi\n" });
+  git(app.dir, "switch", "--quiet", "-c", "modes", "main");
+  chmodSync(join(app.dir, "run.sh"), 0o755);
+  symlinkSync("/etc/passwd", join(app.dir, "evil"));
+  // A gitlink needs no commit behind it, and its empty directory is an
+  // unpopulated submodule to `git add`, not a deletion.
+  mkdirSync(join(app.dir, "dep"));
+  const pinned = "1".repeat(40);
+  git(app.dir, "update-index", "--add", "--cacheinfo", `160000,${pinned},dep`);
+  app.revise("Modes", {});
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const diff = page.getByRole("region", { name: "Diff" });
+  // Only the mode changed, so the header is all there is to see.
+  await expect(
+    diff.getByText("Made executable (mode 100644 → 100755)"),
+  ).toBeVisible();
+  await expect(diff.getByText("Symlink", { exact: true })).toBeVisible();
+  await expect(diff.getByText("/etc/passwd", { exact: true })).toBeVisible();
+  await expect(diff.getByText("Submodule at 1111111")).toBeVisible();
+  await expect(diff.getByText("Binary file not shown")).toHaveCount(0);
 });

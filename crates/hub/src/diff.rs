@@ -15,7 +15,7 @@ use mergegate_core::attachment;
 use mergegate_core::diff::{self, Content, LineKind};
 use mergegate_core::highlight::{self, FileHighlights, Highlighter, Span};
 use mergegate_core::interdiff::Change;
-use mergegate_core::item::{self, Compare, DiffedFile, ItemId};
+use mergegate_core::item::{self, Compare, DiffedFile, FileMode, ItemId};
 use mergegate_core::triage::TriagedBy;
 use serde::Deserialize;
 
@@ -168,6 +168,8 @@ fn file_to_api(
         old_path: file.old_path,
         old_blob: file.old_blob,
         new_blob: file.new_blob,
+        old_mode: file.old_mode.map(mode_to_api),
+        new_mode: file.new_mode.map(mode_to_api),
         additions,
         deletions,
         content: match content {
@@ -203,6 +205,15 @@ fn file_to_api(
         promoted,
         raised,
         hint: hint.map(|h| h.describe().to_owned()),
+    }
+}
+
+fn mode_to_api(mode: FileMode) -> api::diff::Mode {
+    match mode {
+        FileMode::Regular => api::diff::Mode::Regular,
+        FileMode::Executable => api::diff::Mode::Executable,
+        FileMode::Symlink => api::diff::Mode::Symlink,
+        FileMode::Submodule => api::diff::Mode::Submodule,
     }
 }
 

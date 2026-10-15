@@ -6,7 +6,7 @@ use mergegate_core::store::StoreError;
 use mergegate_core::triage::Triage;
 use rusqlite::{OptionalExtension, Transaction, params};
 
-use crate::Store;
+use crate::{Store, modes};
 
 impl InterdiffStore for Store {
     fn interdiff(
@@ -37,7 +37,8 @@ impl InterdiffStore for Store {
         let mut stmt = self
             .conn
             .prepare_cached(
-                "SELECT path, old_path, old_blob, new_blob, additions, deletions, change
+                "SELECT path, old_path, old_blob, new_blob, additions, deletions, change,
+                        old_mode, new_mode
                  FROM interdiff_files
                  WHERE item_id = ?1 AND from_revision = ?2 AND to_revision = ?3
                  ORDER BY position",
@@ -45,12 +46,18 @@ impl InterdiffStore for Store {
             .map_err(StoreError::new)?;
         let rows = stmt
             .query_map(params![item_id, from, to], |row| {
+                let [old_mode, new_mode] = match modes::read(row, 7)? {
+                    Ok(modes) => modes,
+                    Err(e) => return Ok(Err(e)),
+                };
                 let stat = FileStat {
                     file: ChangedFile {
                         path: row.get(0)?,
                         old_path: row.get(1)?,
                         old_blob: row.get(2)?,
                         new_blob: row.get(3)?,
+                        old_mode,
+                        new_mode,
                     },
                     additions: row.get::<_, Option<i64>>(4)?.map(|n| n as u64),
                     deletions: row.get::<_, Option<i64>>(5)?.map(|n| n as u64),
@@ -58,11 +65,11 @@ impl InterdiffStore for Store {
                     generated: false,
                     triage: Triage::default(),
                 };
-                Ok((stat, row.get::<_, String>(6)?))
+                Ok(Ok((stat, row.get::<_, String>(6)?)))
             })
             .map_err(StoreError::new)?;
         rows.map(|row| {
-            let (stat, change) = row.map_err(StoreError::new)?;
+            let (stat, change) = row.map_err(StoreError::new)??;
             let change = Change::ALL
                 .into_iter()
                 .find(|c| c.as_str() == change)
@@ -110,8 +117,8 @@ pub(crate) fn insert(
         .prepare_cached(
             "INSERT INTO interdiff_files
                  (item_id, from_revision, to_revision, position, path, old_path, old_blob,
-                  new_blob, additions, deletions, change)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                  new_blob, additions, deletions, change, old_mode, new_mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )
         .map_err(StoreError::new)?;
     for new in interdiffs {
@@ -119,6 +126,7 @@ pub(crate) fn insert(
             .execute(params![item_id, new.from, to])
             .map_err(StoreError::new)?;
         for (position, f) in new.files.iter().enumerate() {
+            let [old_mode, new_mode] = modes::columns(&f.stat.file);
             file.execute(params![
                 item_id,
                 new.from,
@@ -131,6 +139,8 @@ pub(crate) fn insert(
                 f.stat.additions.map(|n| n as i64),
                 f.stat.deletions.map(|n| n as i64),
                 f.change.as_str(),
+                old_mode,
+                new_mode,
             ])
             .map_err(StoreError::new)?;
         }

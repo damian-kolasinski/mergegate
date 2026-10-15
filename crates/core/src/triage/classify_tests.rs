@@ -1,6 +1,6 @@
 use super::*;
 use crate::diff::{Hunk, Line};
-use crate::item::ChangedFile;
+use crate::item::{ChangedFile, FileMode};
 use crate::triage::{Rule, RuleId};
 
 /// A rule as `tier path [kind=K] [max=N] [diff=REGEX]`, `-` for no path.
@@ -39,6 +39,8 @@ fn file(spec: &str) -> (FileStat, Option<Content>) {
             old_path: None,
             old_blob: Some("old".into()),
             new_blob: Some("new".into()),
+            old_mode: Some(FileMode::Regular),
+            new_mode: Some(FileMode::Regular),
         },
         additions: Some(1),
         deletions: Some(1),
