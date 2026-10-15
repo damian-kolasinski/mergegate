@@ -1,10 +1,20 @@
-import { createResource, Show } from "solid-js";
+import { createResource, Show, untrack } from "solid-js";
 import type { Inbox } from "../api/Inbox";
+import type { InboxItem } from "../api/InboxItem";
 import { getJson } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { go, itemHref } from "../app/router";
 import { Mono } from "../design-system";
 import styles from "./next.module.css";
+
+// The items decided on since the page loaded, each as it stood after the
+// decision. A comment leaves its item in Needs you, as likely first in line
+// as before, so without these the way on bounces between the first two
+// items and never reaches the rest. An item that changed since, with a new
+// revision or a question, waits on the operator afresh.
+const decided = new Map<string, string>();
+const asked = (item: InboxItem) =>
+  `${item.revision}/${item.questions}/${item.rejections}`;
 
 /**
  * After a decision, the item that needs the operator next, which `Enter`
@@ -16,10 +26,28 @@ export function NextItem(props: {
   /** What the decision was, before the way on. */
   lead?: string;
 }) {
+  const after = untrack(() => props.after);
   const [inbox] = createResource(() =>
-    getJson<Inbox>("/api/inbox").catch(() => undefined),
+    getJson<Inbox>("/api/inbox").then(
+      (inbox) => {
+        const own = inbox.needs_you.find((item) => item.id === after);
+        if (own) decided.set(after, asked(own));
+        return inbox;
+      },
+      () => undefined,
+    ),
   );
-  const next = () => inbox()?.needs_you.find((item) => item.id !== props.after);
+  // Once every item has had a decision, the one after this in line, so
+  // further rounds still go through them all.
+  const next = () => {
+    const waiting = inbox()?.needs_you ?? [];
+    const at = waiting.findIndex((item) => item.id === props.after);
+    const others = [...waiting.slice(at + 1), ...waiting.slice(0, at + 1)];
+    return (
+      waiting.find((item) => decided.get(item.id) !== asked(item)) ??
+      others.find((item) => item.id !== props.after)
+    );
+  };
   const open = () => {
     const item = next();
     if (item) go(itemHref(item.id));

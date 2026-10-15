@@ -37,6 +37,28 @@ test("f9 items that conflict with each other are flagged and first", async ({
   });
 });
 
+test("f9 an open item's page follows the items it conflicts with", async ({
+  page,
+}) => {
+  await watching(async (hub) => {
+    const app = hub.project("app");
+    app.submit("greet", "Greet", { README: "hello\n" });
+    await page.goto(`${hub.url}#/items/app%231`);
+    const screen = page.getByRole("region", { name: "app#1" });
+    await expect(screen.getByText("Needs review")).toBeVisible();
+    await page.keyboard.press("a");
+    const confirm = page.getByRole("group", { name: "Confirm merge" });
+    await expect(confirm).toBeVisible();
+    await expect(confirm).not.toContainText("Conflicts with");
+
+    app.submit("wave", "Wave", { README: "hey\n" });
+    await expect(confirm).toContainText("Conflicts with app#2");
+
+    app.revise("Wave elsewhere", { README: null, "wave.txt": "hey\n" });
+    await expect(confirm).not.toContainText("Conflicts with");
+  });
+});
+
 test("f9 a target moved under an item sends it back before review", async ({
   page,
 }) => {

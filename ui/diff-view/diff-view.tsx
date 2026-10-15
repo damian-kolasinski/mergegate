@@ -27,7 +27,7 @@ import {
 } from "./highlight";
 import { isLfsPointer } from "./lfs";
 import { isSubmodule, modeNote } from "./mode";
-import { type Row, toFileDiff } from "./patch";
+import { type Row, shows, toFileDiff } from "./patch";
 import { previewLabel, previewOf } from "./preview/kind";
 import { PreviewDialog } from "./preview/preview";
 import previewStyles from "./preview/preview.module.css";
@@ -114,12 +114,11 @@ export function DiffView(props: {
       const start =
         (range.side ?? side) === side ? Math.min(range.start, range.end) : 0;
       const line = Math.max(range.start, range.end);
-      props.onComment({
-        path: context.item.id,
-        side,
-        line,
-        start: start || line,
-      });
+      const span = { path: context.item.id, side, line, start: start || line };
+      // The `+` is hidden on lines an expanded gap shows, but a drag from a
+      // hunk can still end on one.
+      const file = byPath.get(span.path);
+      if (file && shows(file, span)) props.onComment(span);
     },
     renderAnnotation: (note, context) => {
       if (!("side" in note)) return undefined;
@@ -345,6 +344,8 @@ export function DiffView(props: {
     const observer = new MutationObserver(sweep);
     observer.observe(root, { childList: true, subtree: true });
     const onScroll = (top: number) => {
+      if (movedFrom !== undefined && Math.abs(top - movedFrom) < 1) return;
+      movedFrom = undefined;
       if (movedTo !== undefined && inView(movedTo, top)) return;
       movedTo = undefined;
       const path = fileAt(top);
@@ -361,7 +362,7 @@ export function DiffView(props: {
     });
     props.control({
       showFile: (path) => {
-        movedTo = path;
+        moveTo(path);
         view.scrollTo({ type: "item", id: path, behavior: "instant" });
       },
       showRow: (row) => {
@@ -379,6 +380,16 @@ export function DiffView(props: {
   // like one of the operator's, and the file at the top then is often the
   // one before it.
   let movedTo: string | undefined;
+  // Where the view was when the operator moved. CodeView scrolls a frame
+  // after it's asked, and the browser reports the scroll before that one a
+  // frame after it happened, so a move soon after another hears of the
+  // first move's scroll before its own lands: that report says where the
+  // view still is, not that the operator scrolled away.
+  let movedFrom: number | undefined;
+  const moveTo = (path: string) => {
+    movedTo = path;
+    movedFrom = view.getScrollTop();
+  };
   const inView = (path: string, top: number) => {
     const start = view.getTopForItem(path);
     if (start === undefined) return false;
@@ -389,7 +400,7 @@ export function DiffView(props: {
   };
 
   const selectRow = (row: Row) => {
-    movedTo = row.path;
+    moveTo(row.path);
     const range = {
       start: row.line,
       end: row.line,
@@ -534,9 +545,11 @@ async function text(url: string): Promise<string> {
 }
 
 // The header's counts read `+3 −1` as everywhere else on the page, and a
-// long reason gives way to the file's name.
+// long reason gives way to the file's name. Lines an expanded gap shows
+// aren't part of the change, and the hub takes no comment on them.
 const headerCSS = `
 [data-additions-count] { order: -1; }
+[data-line-type="context-expanded"] [data-gutter-utility-slot] { display: none; }
 .mg-header-note {
   max-width: 56ch;
   overflow: hidden;

@@ -200,3 +200,41 @@ test("a file marked viewed stays open while a comment is written on it", async (
     review.getByRole("button", { name: "Request changes" }),
   ).toBeEnabled();
 });
+
+// The hub drafts only on lines a hunk shows, where the comment shows under
+// its line; one on a line an expanded gap shows would never be seen.
+test("a line shown by expanding a gap offers no comment", async ({
+  page,
+  hub,
+}) => {
+  const lines = (changed: number[]) =>
+    Array.from({ length: 60 }, (_, i) =>
+      changed.includes(i + 1) ? `changed ${i + 1}\n` : `line ${i + 1}\n`,
+    ).join("");
+  const app = hub.project("app");
+  app.seed({ "a.txt": lines([]) });
+  app.submit("work", "Change things", { "a.txt": lines([10, 50]) });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const diff = page.getByRole("region", { name: "Diff" });
+  await diff
+    .locator("[data-separator]", { hasText: "33 unmodified lines" })
+    .getByRole("button")
+    .first()
+    .click();
+  const file = diff.getByRole("code").filter({ hasText: "changed 10" });
+  await file.getByText("line 20", { exact: true }).hover();
+  await expect(file.locator("[data-utility-button]")).toBeHidden();
+
+  // Selected, the line pins no `+` either, and `c` stays where the cursor is.
+  await file.getByText("line 20", { exact: true }).click();
+  await expect(file.locator("[data-utility-button]")).toBeHidden();
+  await page.keyboard.press("c");
+  await expect(page.getByRole("textbox", { name: /line 20$/ })).toHaveCount(0);
+
+  // A hunk's line still offers it.
+  await file.getByText("line 12", { exact: true }).hover();
+  await file.locator("[data-utility-button]").click();
+  await expect(
+    page.getByRole("textbox", { name: "Comment on a.txt line 12" }),
+  ).toBeFocused();
+});

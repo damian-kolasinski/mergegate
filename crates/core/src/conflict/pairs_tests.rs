@@ -33,7 +33,7 @@ fn pairs(
     store: &mut FakeStore,
     git: &FakeGit,
     project: &ProjectName,
-) -> Result<bool, ConflictError> {
+) -> Result<Vec<ItemId>, ConflictError> {
     let tried = Pairing::read(store, project)?.try_all(git)?;
     save_pairs(store, project, &tried)
 }
@@ -56,7 +56,10 @@ fn tries_each_pair_with_one_target_once_per_heads() {
     store.set_state(&c, ItemState::Merging);
     git.conflict_between(&commit(2), &commit(4), &["src/login.rs"]);
 
-    assert!(pairs(&mut store, &git, &app()).unwrap());
+    assert_eq!(
+        pairs(&mut store, &git, &app()).unwrap(),
+        [a.clone(), c.clone()]
+    );
     assert_eq!(git.merged().len(), 3);
     assert_eq!(
         shown(&store),
@@ -64,7 +67,7 @@ fn tries_each_pair_with_one_target_once_per_heads() {
     );
 
     // Nothing moved: nothing merged, nothing to show.
-    assert!(!pairs(&mut store, &git, &app()).unwrap());
+    assert!(pairs(&mut store, &git, &app()).unwrap().is_empty());
     assert_eq!(git.merged().len(), 3);
 
     // b's new head is tried against a and c only.
@@ -84,7 +87,10 @@ fn tries_each_pair_with_one_target_once_per_heads() {
         )
         .unwrap();
     git.conflict_between(&commit(6), &commit(4), &["src/b.rs"]);
-    assert!(pairs(&mut store, &git, &app()).unwrap());
+    assert_eq!(
+        pairs(&mut store, &git, &app()).unwrap(),
+        [b.clone(), c.clone()]
+    );
     assert_eq!(git.merged().len(), 5);
     assert_eq!(shown(&store)[&c], [a.clone(), b.clone()]);
 }
@@ -94,16 +100,45 @@ fn a_closed_item_conflicts_with_nothing() {
     let mut store = FakeStore::default();
     let git = FakeGit::default();
     let a = add(&mut store, "a", 2, "main");
-    add(&mut store, "b", 3, "main");
+    let b = add(&mut store, "b", 3, "main");
     git.conflict_between(&commit(2), &commit(3), &["x"]);
     pairs(&mut store, &git, &app()).unwrap();
 
     // Before the next pass, the cached pair is stale but shows nothing.
     store.set_state(&a, ItemState::Merged);
     assert!(shown(&store).is_empty());
-    // The pass drops it without changing what shows.
-    assert!(!pairs(&mut store, &git, &app()).unwrap());
+    // The pass drops it, naming both for a page fetched before the merge.
+    assert_eq!(pairs(&mut store, &git, &app()).unwrap(), [a, b]);
     assert!(store.pairs(None).unwrap().is_empty());
+}
+
+#[test]
+fn a_pair_that_stops_conflicting_names_both_items() {
+    let mut store = FakeStore::default();
+    let git = FakeGit::default();
+    let a = add(&mut store, "a", 2, "main");
+    let b = add(&mut store, "b", 3, "main");
+    add(&mut store, "c", 4, "main");
+    git.conflict_between(&commit(2), &commit(3), &["x"]);
+    pairs(&mut store, &git, &app()).unwrap();
+    store
+        .add_revision(
+            &b,
+            "Work on b",
+            ItemState::NeedsReview,
+            NewRevision {
+                head: commit(5),
+                base: commit(1),
+                files: Vec::new(),
+                guide: None,
+                interdiffs: Vec::new(),
+                viewed: Vec::new(),
+            },
+        )
+        .unwrap();
+
+    // c's pairs with b were tried again too, and conflicted neither time.
+    assert_eq!(pairs(&mut store, &git, &app()).unwrap(), [a, b]);
 }
 
 #[test]

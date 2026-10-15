@@ -75,6 +75,11 @@ export function ItemScreen(props: { id: string }) {
   // The item as the hub last gave it, for what changes without a new diff:
   // its state, priority and note.
   const [latest, setLatest] = createSignal<Item>();
+  // The open items the revision on screen conflicts with, kept apart from
+  // the diff so the watch finding or dropping one doesn't re-render it.
+  const [conflicts, setConflicts] = createSignal<readonly string[]>([], {
+    equals: (a, b) => a.join() === b.join(),
+  });
   useTitle(() => {
     const item = latest();
     return item ? `${item.id} ${item.title}` : id;
@@ -91,14 +96,15 @@ export function ItemScreen(props: { id: string }) {
   // The hub fills in the diff on screen after it arrives: the highlighter
   // its spans, the judge its scores. New files re-render the diff, and every
   // (re)connect refetches, so only a real change replaces them; nor does a
-  // diff the operator compared away from, or of another revision.
-  const follow = (shown: ItemDiff, next: ItemDiff) => {
-    const same =
-      next.item.revision.number === shown.item.revision.number &&
-      next.since === shown.since;
+  // diff the operator compared away from, or of another revision. It's
+  // checked against the diff on screen when the answer arrives, which an
+  // earlier answer may have filled in since this one was asked for.
+  const follow = (next: ItemDiff) => {
+    const shown = diff();
     if (
-      diff() === shown &&
-      same &&
+      shown &&
+      next.item.revision.number === shown.item.revision.number &&
+      next.since === shown.since &&
       JSON.stringify(next.files) !== JSON.stringify(shown.files)
     ) {
       setDiff(next);
@@ -109,8 +115,16 @@ export function ItemScreen(props: { id: string }) {
     setDiff(next);
     setDemo(next.demo);
     setLatest(next.item);
+    setConflicts(next.conflicts_with);
   };
-  void fetchDiff().then(show, failed);
+  // A highlights refetch answered before the first diff, which it's newer
+  // than: the hub may have served the first one before it had the spans.
+  let early: ItemDiff | undefined;
+  void fetchDiff().then((next) => {
+    show(next);
+    if (early) follow(early);
+    early = undefined;
+  }, failed);
   // A closed item's diffs are gone, so its review gives way to what's left.
   // A new revision waits for the operator to switch to it rather than move
   // the diff under them; the operator's own merge actions `replace` it,
@@ -133,7 +147,8 @@ export function ItemScreen(props: { id: string }) {
         setNewest(next.item.revision.number);
       } else if (next.item.revision.number === shown?.item.revision.number) {
         setDemo(next.demo);
-        follow(shown, next);
+        setConflicts(next.conflicts_with);
+        follow(next);
       }
     }, failed);
   };
@@ -148,12 +163,25 @@ export function ItemScreen(props: { id: string }) {
   onHubEvent("item.changed", (event) => {
     if (!event || event.item === id) reload();
   });
-  // The hub highlights in the background, and again as packs come and go.
-  onHubEvent("highlights.changed", () => {
+  // The hub highlights in the background, and again as packs come and go,
+  // saying so each time; the refetches are numbered so an answer arriving
+  // after a newer one's doesn't put older spans back.
+  let asked = 0;
+  let answered = 0;
+  onHubEvent("highlights.changed", (event) => {
     const shown = untrack(diff);
-    if (!shown) return;
-    void fetchDiff(shown.since === null ? "all" : String(shown.since)).then(
-      (next) => follow(shown, next),
+    // The stream opens while a large first diff is still on its way, and
+    // asking for it again then would slow it down.
+    if (!shown && !event) return;
+    const number = ++asked;
+    const compared = shown && (shown.since === null ? "all" : `${shown.since}`);
+    void fetchDiff(compared).then(
+      (next) => {
+        if (number < answered) return;
+        answered = number;
+        if (diff()) follow(next);
+        else early = next;
+      },
       () => undefined,
     );
   });
@@ -173,6 +201,7 @@ export function ItemScreen(props: { id: string }) {
             <Review
               diff={current()}
               latest={latest() ?? current().item}
+              conflictsWith={conflicts()}
               demo={demo()}
               newest={newest()}
               failure={failure()}
@@ -206,6 +235,8 @@ function leave() {
 function Review(props: {
   diff: ItemDiff;
   latest: Item;
+  /** The open items the revision on screen conflicts with. */
+  conflictsWith: readonly string[];
   demo: DemoData | null;
   /** A revision newer than the one on screen. */
   newest: number | undefined;
@@ -659,9 +690,9 @@ function Review(props: {
           target={props.diff.item.target}
           state={state()}
           pullRequest={pullRequest(props.diff.item)}
-          conflictsWith={props.diff.conflicts_with}
+          conflictsWith={props.conflictsWith}
           blocked={props.diff.blocked?.kind}
-          behind={props.newest !== undefined}
+          newest={props.newest}
           unviewed={own().filter((file) => !done().has(file.path)).length}
           changed={props.diff.changed_since}
           drafts={comments.drafts.list().length}

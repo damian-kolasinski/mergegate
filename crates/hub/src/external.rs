@@ -69,6 +69,8 @@ async fn agree(
     state.events.send(UiEvent::ItemChanged {
         item: agreed.item.to_string(),
     });
+    // The rejection no longer waits on the operator in the inbox.
+    state.events.send(UiEvent::InboxChanged);
     Ok(Json(comments::to_api(&agreed)))
 }
 

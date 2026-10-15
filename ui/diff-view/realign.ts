@@ -30,6 +30,47 @@ function realignBlock(
   block: ChangeContent,
 ): ChangeContent[] | undefined {
   const { deletions, additions, deletionLineIndex, additionLineIndex } = block;
+  const parts = alignedParts(
+    Array.from(
+      { length: deletions },
+      (_, i) => diff.deletionLines[deletionLineIndex + i] ?? "",
+    ),
+    Array.from(
+      { length: additions },
+      (_, i) => diff.additionLines[additionLineIndex + i] ?? "",
+    ),
+  );
+  return parts?.map((part) => ({
+    type: "change",
+    deletions: part.deletions,
+    additions: part.additions,
+    deletionLineIndex: deletionLineIndex + part.deletion,
+    additionLineIndex: additionLineIndex + part.addition,
+  }));
+}
+
+/**
+ * A piece of a split change block: `deletions` of its removed lines from the
+ * `deletion`th, then `additions` of its added ones from the `addition`th.
+ */
+export type Part = {
+  deletions: number;
+  additions: number;
+  deletion: number;
+  addition: number;
+};
+
+/**
+ * The pieces `realign` splits a change block of `deleted` and `added` lines
+ * into, in display order; undefined when it leaves the block whole. The
+ * line cursor walks the same pieces, so it moves in the order lines show.
+ */
+export function alignedParts(
+  deleted: readonly string[],
+  added: readonly string[],
+): Part[] | undefined {
+  const deletions = deleted.length;
+  const additions = added.length;
   const pairs = Math.min(deletions, additions);
   const surplus = Math.abs(additions - deletions);
   if (
@@ -39,12 +80,8 @@ function realignBlock(
   ) {
     return undefined;
   }
-  const deleted = Array.from({ length: deletions }, (_, i) =>
-    stripWhitespace(diff.deletionLines[deletionLineIndex + i] ?? ""),
-  );
-  const added = Array.from({ length: additions }, (_, i) =>
-    stripWhitespace(diff.additionLines[additionLineIndex + i] ?? ""),
-  );
+  const deletedText = deleted.map(stripWhitespace);
+  const addedText = added.map(stripWhitespace);
   const addsLonger = additions > deletions;
   let bestOffset = 0;
   let bestScore = -1;
@@ -52,8 +89,8 @@ function realignBlock(
     let score = 0;
     for (let pair = 0; pair < pairs; pair++) {
       score += similarity(
-        deleted[pair + (addsLonger ? 0 : offset)] ?? "",
-        added[pair + (addsLonger ? offset : 0)] ?? "",
+        deletedText[pair + (addsLonger ? 0 : offset)] ?? "",
+        addedText[pair + (addsLonger ? offset : 0)] ?? "",
       );
     }
     if (offset === 0) bestScore = score + pairs * MIN_IMPROVEMENT_PER_PAIR;
@@ -63,40 +100,27 @@ function realignBlock(
     }
   }
   if (bestOffset === 0) return undefined;
-  const blocks: ChangeContent[] = [];
+  const parts: Part[] = [];
   const push = (dels: number, adds: number, delAt: number, addAt: number) => {
     if (dels > 0 || adds > 0) {
-      blocks.push({
-        type: "change",
+      parts.push({
         deletions: dels,
         additions: adds,
-        deletionLineIndex: delAt,
-        additionLineIndex: addAt,
+        deletion: delAt,
+        addition: addAt,
       });
     }
   };
-  const del = deletionLineIndex;
-  const add = additionLineIndex;
   if (addsLonger) {
-    push(0, bestOffset, del, add);
-    push(pairs, pairs, del, add + bestOffset);
-    push(
-      0,
-      additions - pairs - bestOffset,
-      del + pairs,
-      add + bestOffset + pairs,
-    );
+    push(0, bestOffset, 0, 0);
+    push(pairs, pairs, 0, bestOffset);
+    push(0, additions - pairs - bestOffset, pairs, bestOffset + pairs);
   } else {
-    push(bestOffset, 0, del, add);
-    push(pairs, pairs, del + bestOffset, add);
-    push(
-      deletions - pairs - bestOffset,
-      0,
-      del + bestOffset + pairs,
-      add + pairs,
-    );
+    push(bestOffset, 0, 0, 0);
+    push(pairs, pairs, bestOffset, 0);
+    push(deletions - pairs - bestOffset, 0, bestOffset + pairs, pairs);
   }
-  return blocks;
+  return parts;
 }
 
 function stripWhitespace(line: string) {

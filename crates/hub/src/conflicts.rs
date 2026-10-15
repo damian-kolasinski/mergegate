@@ -117,18 +117,26 @@ async fn pass(
             }
             Err(e) => {
                 report(failing, &name, WITH_EACH_OTHER, vec![e.to_string()]);
-                false
+                Vec::new()
             }
         };
         if failed || !handed_back.is_empty() {
             state.events.logged();
-            for id in &handed_back {
-                state.events.send(UiEvent::ItemChanged {
-                    item: id.to_string(),
-                });
-            }
         }
-        if failed || paired || !handed_back.is_empty() {
+        // An open item's page shows what it conflicts with, as the inbox does.
+        let mut changed = handed_back.clone();
+        changed.extend(
+            paired
+                .iter()
+                .filter(|id| !handed_back.contains(id))
+                .cloned(),
+        );
+        for id in &changed {
+            state.events.send(UiEvent::ItemChanged {
+                item: id.to_string(),
+            });
+        }
+        if failed || !changed.is_empty() {
             state.events.send(UiEvent::InboxChanged);
         }
     }

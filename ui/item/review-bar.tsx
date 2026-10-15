@@ -33,8 +33,8 @@ export function ReviewBar(props: {
   conflictsWith: readonly string[];
   /** The newest revision's merge is held or conflicts. */
   blocked: "held" | "conflict" | undefined;
-  /** A newer revision was submitted: only it can be approved. */
-  behind: boolean;
+  /** The newer revision submitted, if any: only it can be approved. */
+  newest: number | undefined;
   /**
    * What changed since the last review; when that was an approval that
    * stands, the bar says so, so approving again is the one step left.
@@ -116,10 +116,11 @@ export function ReviewBar(props: {
   // can't move to this revision.
   const held = () =>
     sending() !== undefined || props.holding || props.unplaced > 0;
+  const behind = () => props.newest !== undefined;
   // Either can come after the confirm opens, which then stays without its
   // Merge: a comment started from it, or a newer revision. A held merge
   // waits on Retry or Cancel above, not on a second approve.
-  const mergeable = () => !held() && !props.behind && props.blocked !== "held";
+  const mergeable = () => !held() && !behind() && props.blocked !== "held";
 
   const approve = () => {
     if (!mergeable()) return;
@@ -188,8 +189,8 @@ export function ReviewBar(props: {
           ? "Write a summary or a comment first"
           : undefined;
   const approveWhy = () =>
-    props.behind
-      ? `Show r${props.revision + 1} to approve it`
+    behind()
+      ? `Show r${props.newest} to approve it`
       : props.blocked === "held"
         ? "The merge is held: retry or cancel it above"
         : props.blocked === "conflict"
@@ -273,8 +274,14 @@ export function ReviewBar(props: {
                   {sending() === "review" ? "Sending…" : "Send comments"}
                 </Button>
                 <Button
-                  disabled={held() || empty()}
-                  title={disabledWhy()}
+                  // The hub refuses changes requested on a revision the
+                  // agent already replaced.
+                  disabled={held() || empty() || behind()}
+                  title={
+                    behind()
+                      ? `Show r${props.newest} to request changes`
+                      : disabledWhy()
+                  }
                   onClick={() => submit("changes_requested")}
                 >
                   Request changes

@@ -16,8 +16,8 @@ export function NewerRevision(props: {
     <section class={styles.notice} aria-label="Newer revision">
       <Badge tone="brand">r{props.newest} submitted</Badge>
       <Meta>
-        Comments and reviews still go to r{props.shown}; approving waits for the
-        newest.
+        Comments still go to r{props.shown}; requesting changes and approving
+        wait for the newest.
       </Meta>
       <span class={styles.actions}>
         <Button

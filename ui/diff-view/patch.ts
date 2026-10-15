@@ -7,7 +7,7 @@ import {
 } from "@pierre/diffs";
 import type { File } from "../api/File";
 import type { Hunk } from "../api/Hunk";
-import { realign } from "./realign";
+import { alignedParts, realign } from "./realign";
 
 /**
  * CodeView's model of `file`, parsed from the hunks the hub computed so the
@@ -44,8 +44,9 @@ export type Row = {
 
 /**
  * The cursor's stops in `file`, in display order: each hunk line, a context
- * line numbered on the new side. Lines shown by expanding a gap aren't
- * stops; they aren't part of the change.
+ * line numbered on the new side, a change's lines in the pieces `realign`
+ * splits it into. Lines shown by expanding a gap aren't stops; they aren't
+ * part of the change.
  */
 export function rowsOf(file: File): Row[] {
   const rows: Row[] = [];
@@ -53,26 +54,71 @@ export function rowsOf(file: File): Row[] {
     let old = hunk.old_start;
     let current = hunk.new_start;
     let hunkStart = true;
+    let deleted: string[] = [];
+    let added: string[] = [];
+    const push = (side: Row["side"], line: number) => {
+      rows.push({ path: file.path, side, line, hunkStart });
+      hunkStart = false;
+    };
+    const endChange = () => {
+      const parts = alignedParts(deleted, added) ?? [
+        {
+          deletions: deleted.length,
+          additions: added.length,
+          deletion: 0,
+          addition: 0,
+        },
+      ];
+      for (const part of parts) {
+        for (let i = 0; i < part.deletions; i++) {
+          push("deletions", old + part.deletion + i);
+        }
+        for (let i = 0; i < part.additions; i++) {
+          push("additions", current + part.addition + i);
+        }
+      }
+      old += deleted.length;
+      current += added.length;
+      deleted = [];
+      added = [];
+    };
     for (const line of hunk.lines) {
       const prefix = line[0];
-      if (prefix === "\\") continue;
-      if (prefix === "-") {
-        rows.push({ path: file.path, side: "deletions", line: old, hunkStart });
+      if (prefix === "-") deleted.push(line.slice(1));
+      else if (prefix === "+") added.push(line.slice(1));
+      else if (prefix === " ") {
+        endChange();
+        push("additions", current);
         old++;
-      } else {
-        rows.push({
-          path: file.path,
-          side: "additions",
-          line: current,
-          hunkStart,
-        });
         current++;
-        if (prefix === " ") old++;
       }
-      hunkStart = false;
     }
+    endChange();
   }
   return rows;
+}
+
+/**
+ * Whether one of `file`'s hunks shows lines `start..line` of `side`: the
+ * hub drafts a comment only there, as one in an expanded gap would show
+ * under no line once the diff is reloaded.
+ */
+export function shows(
+  file: File,
+  span: { side: Row["side"]; start: number; line: number },
+): boolean {
+  return hunksOf(file).some((hunk) => {
+    const [first, count] =
+      span.side === "deletions"
+        ? [hunk.old_start, hunk.old_lines]
+        : [hunk.new_start, hunk.new_lines];
+    return (
+      count > 0 &&
+      first <= span.start &&
+      span.start <= span.line &&
+      span.line < first + count
+    );
+  });
 }
 
 /**
