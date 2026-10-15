@@ -1024,6 +1024,12 @@ impl ItemStore for FakeStore {
         };
         Ok(())
     }
+    fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError> {
+        let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
+        item.title = title.into();
+        Ok(())
+    }
+
     fn set_priority(
         &mut self,
         id: &ItemId,

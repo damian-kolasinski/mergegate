@@ -45,6 +45,8 @@ pub trait ItemStore {
         guide: Option<&str>,
     ) -> Result<(), StoreError>;
 
+    fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError>;
+
     fn set_priority(
         &mut self,
         id: &ItemId,

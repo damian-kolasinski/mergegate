@@ -201,6 +201,34 @@ fn the_same_head_again_returns_the_current_revision() {
 }
 
 #[test]
+fn the_same_head_with_a_title_retitles_the_item() {
+    let (mut store, git) = setup();
+    git.push("app", "login", &commit(3));
+    submit(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        request("app", "login", 3),
+    )
+    .unwrap();
+    let retitled = Submit {
+        title: Some(" Login page ".into()),
+        ..request("app", "login", 3)
+    };
+    let again = submit(&mut store, &git, &FakeGithub::default(), retitled).unwrap();
+    assert!(!again.new_revision);
+    assert_eq!(again.item.title, "Login page");
+    assert_eq!(store.items(), [again.item]);
+
+    let blank = Submit {
+        title: Some(" ".into()),
+        ..request("app", "login", 3)
+    };
+    let again = submit(&mut store, &git, &FakeGithub::default(), blank).unwrap();
+    assert_eq!(again.item.title, "Login page");
+}
+
+#[test]
 fn records_the_agents_worktree_and_wake_even_at_the_same_head() {
     use crate::agent::{Agent, AgentStore};
     let (mut store, git) = setup();
@@ -448,6 +476,24 @@ fn a_new_revision_pushes_again_and_retitles_the_pull_request() {
     let pulls = github.pulls();
     assert_eq!(pulls.len(), 1);
     assert_eq!(pulls[0].title, "Login page");
+}
+
+#[test]
+fn retitling_at_the_same_head_retitles_the_pull_request() {
+    let (mut store, git) = on_github();
+    let github = FakeGithub::default();
+    git.push("app", "login", &commit(2));
+    submit(&mut store, &git, &github, request("app", "login", 2)).unwrap();
+    let retitled = Submit {
+        title: Some("Login page".into()),
+        ..request("app", "login", 2)
+    };
+    let item = submit(&mut store, &git, &github, retitled).unwrap().item;
+    assert_eq!(
+        (item.revision.number, item.title.as_str()),
+        (1, "Login page")
+    );
+    assert_eq!(github.pulls()[0].title, "Login page");
 }
 
 #[test]

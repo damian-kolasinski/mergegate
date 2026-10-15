@@ -263,6 +263,16 @@ fn keeps_each_revisions_guide() {
 }
 
 #[test]
+fn retitles_one_item() {
+    let (_dir, mut store) = store();
+    let item = store.insert_item(new_item("app", "a")).unwrap();
+    let other = store.insert_item(new_item("web", "a")).unwrap();
+    store.set_title(&item.id, "Login page").unwrap();
+    assert_eq!(store.item(&item.id).unwrap().unwrap().title, "Login page");
+    assert_eq!(store.item(&other.id).unwrap().unwrap().title, other.title);
+}
+
+#[test]
 fn keeps_an_items_priority_and_note() {
     let (_dir, mut store) = store();
     let item = store

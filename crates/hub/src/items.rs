@@ -88,11 +88,12 @@ async fn submit(
         // Submitting fetched the target, which may have moved.
         state.conflicts.notify_one();
         state.judge.notify_one();
-        state.events.send(UiEvent::InboxChanged);
-        state.events.send(UiEvent::ItemChanged {
-            item: submitted.item.id.to_string(),
-        });
     }
+    // Even at the same head, the title or guide may have changed.
+    state.events.send(UiEvent::InboxChanged);
+    state.events.send(UiEvent::ItemChanged {
+        item: submitted.item.id.to_string(),
+    });
     let opened = submitted.new_revision && submitted.item.revision.number == 1;
     let status = if opened {
         StatusCode::CREATED

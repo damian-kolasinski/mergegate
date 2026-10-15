@@ -248,6 +248,17 @@ impl ItemStore for Store {
         self.written(id)
     }
 
+    fn set_title(&mut self, id: &ItemId, title: &str) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE items SET title = ?3
+                 WHERE number = ?2 AND project_id = (SELECT id FROM projects WHERE name = ?1)",
+                params![id.project().as_str(), id.number() as i64, title],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
+    }
+
     fn set_priority(
         &mut self,
         id: &ItemId,

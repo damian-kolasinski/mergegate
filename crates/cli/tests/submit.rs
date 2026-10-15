@@ -411,6 +411,25 @@ fn f4_submits_a_branch_a_tag_shares_its_name_with() {
 }
 
 #[test]
+fn f4_retitles_an_item_without_new_commits() {
+    let (env, repo) = hub_with_app();
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Feature", &[("f", "1\n")]);
+    submit(&env, repo.root());
+    let again = env
+        .mg_at(
+            repo.root(),
+            &["--json", "submit", "--title", " Login page "],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(again["new_revision"], false, "{again}");
+    assert_eq!(again["item"]["title"], "Login page");
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert_eq!(inbox["needs_you"][0]["title"], "Login page", "{inbox}");
+}
+
+#[test]
 fn f4_names_the_open_branch_a_new_one_nests_with() {
     let (env, repo) = hub_with_app();
     repo.git(["switch", "--quiet", "-c", "auth"]);
