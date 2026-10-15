@@ -59,6 +59,11 @@ test("f16 Enter on the viewer's Close button closes it, not the item", async ({
   await page.keyboard.press("Enter");
   await expect(viewer).toBeHidden();
   await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
+
+  // Closed, the viewer hands focus back to its chip, and Enter moves on.
+  await page.keyboard.press("Enter");
+  await expect(viewer).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/items\/app%232(\?.*)?$/);
 });
 
 test("f16 a revision without attachments shows the last ones, labeled", async ({

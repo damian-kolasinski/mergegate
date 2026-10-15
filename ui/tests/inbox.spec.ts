@@ -80,6 +80,26 @@ test("f6 clicking a row opens its item", async ({ page, hub }) => {
   await expect(page).toHaveURL(/#\/items\/app%231$/);
 });
 
+test("f6 enter opens the selected item while a clicked link keeps focus", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("first", "First change", { "a.txt": "a\n" });
+  app.submit("second", "Second change", { "b.txt": "b\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  // Back by the name in the bar, which keeps focus as the inbox shows.
+  const name = page.getByRole("link", { name: "mergegate" });
+  await name.click();
+  await expect(page.getByRole("region", { name: "Needs you" })).toBeVisible();
+  await expect(name).toBeFocused();
+  await page.keyboard.press("j");
+  await expect(page.locator("li[aria-current=true]")).toContainText("app#2");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/items\/app%232(\?.*)?$/);
+});
+
 // tech-stack.md §9: first paint under 100 ms. Measured everywhere, enforced
 // with MG_ENFORCE_BUDGETS=1, which CI sets on Ubuntu only.
 test("the inbox paints within budget", async ({ page, hub }, info) => {
