@@ -137,7 +137,14 @@ export function DiffView(props: {
     },
     renderHeaderMetadata: (diff) => {
       if (items.get(diff.name)?.collapsed) return "Viewed";
-      switch (byPath.get(diff.name)?.content.kind) {
+      const file = byPath.get(diff.name);
+      switch (file?.interdiff) {
+        case "unseparated":
+          return "Can't be told apart from the target's changes; whole diff shown";
+        case "dropped":
+          return "No longer changed";
+      }
+      switch (file?.content.kind) {
         case "binary":
           return "Binary file not shown";
         case "too_large":
@@ -179,9 +186,9 @@ export function DiffView(props: {
     if (painting) paintSide(painting, side, spans);
   };
 
-  // The same files again bring new spans, as the hub highlights them: only
-  // the files whose spans changed render again. Any other files rebuild the
-  // view.
+  // The same files again bring new spans, as the hub highlights them, or,
+  // compared against another revision, new changes: only the files whose
+  // spans or changes differ render again. Any other files rebuild the view.
   createEffect(() => {
     const files = props.files;
     const same =
@@ -192,7 +199,7 @@ export function DiffView(props: {
         const shown = byPath.get(file.path);
         byPath.set(file.path, file);
         const item = items.get(file.path);
-        if (!item || (shown && samePainting(shown, file))) continue;
+        if (!item || (shown && sameChange(shown, file))) continue;
         paint(file);
         const changed = {
           ...item,
@@ -204,6 +211,11 @@ export function DiffView(props: {
       }
       return;
     }
+    // The view caches a render by id and version, and a path can come back
+    // with other changes, so versions only go up.
+    const versions = new Map(
+      [...items].map(([path, item]) => [path, item.version ?? 0]),
+    );
     byPath.clear();
     items.clear();
     paintings.clear();
@@ -218,6 +230,7 @@ export function DiffView(props: {
         fileDiff: toFileDiff(file),
         collapsed: viewed.has(file.path),
         annotations: notes.get(file.path) ?? [],
+        version: (versions.get(file.path) ?? 0) + 1,
       });
     }
     view.setItems([...items.values()]);
@@ -370,6 +383,16 @@ function sameNotes(a: readonly Note[], b: readonly Note[]): boolean {
   return (
     a.length === b.length &&
     a.every((note, index) => note.metadata === b[index]?.metadata)
+  );
+}
+
+/** The blobs fix a file's hunks; the interdiff, its header. */
+function sameChange(a: File, b: File): boolean {
+  return (
+    a.old_blob === b.old_blob &&
+    a.new_blob === b.new_blob &&
+    a.interdiff === b.interdiff &&
+    samePainting(a, b)
   );
 }
 

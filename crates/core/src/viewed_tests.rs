@@ -1,6 +1,6 @@
 use super::*;
-use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
-use crate::item::{Submit, item_diff, submit};
+use crate::fake::{FakeGit, FakeGithub, FakeStore, commit, rebased, submit_login};
+use crate::item::{Compare, Submit, item_diff, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
 /// `app#1` r1 changes `README.md` and `src/login.rs`; r2 adds `src/token.rs`.
@@ -61,7 +61,7 @@ fn marking(revision: u32, path: &str, viewed: bool) -> Mark {
 }
 
 fn viewed_in_diff(store: &FakeStore) -> Vec<String> {
-    let diff = item_diff(store, &FakeGit::default(), &id("app#1"))
+    let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::Default)
         .unwrap()
         .unwrap();
     diff.files
@@ -84,8 +84,37 @@ fn marks_and_unmarks_a_file() {
 }
 
 #[test]
-fn a_mark_holds_for_its_revision_only() {
+fn a_mark_moves_to_later_revisions_the_file_is_unchanged_in() {
+    let (mut store, git) = rebased();
+    for head in [2, 4, 5] {
+        submit_login(&mut store, &git, head);
+    }
+    let viewed = |store: &FakeStore, revision| -> Vec<String> {
+        store
+            .viewed(&id("app#1"), revision)
+            .unwrap()
+            .into_iter()
+            .collect()
+    };
+    mark(&mut store, marking(1, "src/login.rs", true)).unwrap();
+    mark(&mut store, marking(1, "src/lib.rs", true)).unwrap();
+    assert_eq!(viewed(&store, 1), ["src/lib.rs", "src/login.rs"]);
+    assert_eq!(viewed(&store, 2), ["src/login.rs"]);
+    assert_eq!(viewed(&store, 3), ["src/login.rs"]);
+
+    mark(&mut store, marking(2, "src/lib.rs", true)).unwrap();
+    assert_eq!(viewed(&store, 3), ["src/lib.rs", "src/login.rs"]);
+    mark(&mut store, marking(1, "src/login.rs", false)).unwrap();
+    assert_eq!(viewed(&store, 3), ["src/lib.rs"]);
+    // Marking a later revision leaves earlier ones alone.
+    mark(&mut store, marking(3, "src/token.rs", true)).unwrap();
+    assert_eq!(viewed(&store, 2), ["src/lib.rs"]);
+}
+
+#[test]
+fn a_mark_without_interdiffs_holds_for_its_revision_only() {
     let mut store = revised();
+    store.forget_interdiffs();
     mark(&mut store, marking(1, "README.md", true)).unwrap();
     assert_eq!(viewed_in_diff(&store), Vec::<String>::new());
     let r1: Vec<String> = store.viewed(&id("app#1"), 1).unwrap().into_iter().collect();

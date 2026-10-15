@@ -23,9 +23,16 @@ export function useNavigation(options: {
     () => new Map(options.files().map((file, index) => [file.path, index])),
   );
   const [cursor, setCursor] = createSignal<Line>();
-  // The file at the top of the diff, or the one last moved to.
+  // The file at the top of the diff, or the one last moved to. Comparing
+  // another way or a refresh can stop showing it, and then the first file
+  // shown is current.
   const [scrolled, setCurrent] = createSignal<string>();
-  const current = () => scrolled() ?? options.files()[0]?.path;
+  const current = () => {
+    const path = scrolled();
+    return path !== undefined && order().has(path)
+      ? path
+      : options.files()[0]?.path;
+  };
 
   const moveCursor = (index: number) => {
     const line = lines()[index];

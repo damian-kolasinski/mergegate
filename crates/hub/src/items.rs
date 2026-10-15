@@ -10,6 +10,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use mergegate_core::attachment::AttachmentStore;
+use mergegate_core::interdiff::{self, ChangedSince};
 use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, Submit};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::store::StoreError;
@@ -93,7 +94,8 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                     .map(|item| {
                         let blocked = merge::blocked(store, item)?;
                         let demo = !store.attachments(&item.id)?.is_empty();
-                        Ok(inbox_entry(item, blocked, demo))
+                        let changed = interdiff::changed_since_review(store, item)?;
+                        Ok(inbox_entry(item, blocked, demo, changed))
                     })
                     .collect()
             };
@@ -158,6 +160,7 @@ fn inbox_entry(
     item: &Item,
     blocked: Option<api::merge::Blocked>,
     demo: bool,
+    changed: Option<ChangedSince>,
 ) -> api::item::InboxItem {
     let revision = &item.revision;
     api::item::InboxItem {
@@ -174,6 +177,10 @@ fn inbox_entry(
         blocked,
         link: link(&item.backend),
         demo,
+        changed_since: changed.map(|changed| api::item::ChangedSince {
+            revision: changed.revision,
+            files: changed.files,
+        }),
     }
 }
 

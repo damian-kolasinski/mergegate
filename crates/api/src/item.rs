@@ -135,4 +135,15 @@ pub struct InboxItem {
     pub link: Option<Link>,
     /// Some revision has attachments.
     pub demo: bool,
+    /// Set when a revision was submitted since the last reviewed one.
+    pub changed_since: Option<ChangedSince>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangedSince {
+    /// The last reviewed revision.
+    pub revision: u32,
+    /// The files changed since it.
+    pub files: u32,
 }

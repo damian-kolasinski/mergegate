@@ -1,3 +1,4 @@
+use mergegate_core::interdiff::{Change, InterdiffFile, NewInterdiff};
 use mergegate_core::item::{
     ChangedFile, FileStat, ItemBackend, ItemState, ItemStore, NewItem, NewRevision,
 };
@@ -125,6 +126,8 @@ fn revision(files: Vec<FileStat>) -> NewRevision {
         base: "0".repeat(40),
         files,
         guide: None,
+        interdiffs: Vec::new(),
+        viewed: Vec::new(),
     }
 }
 
@@ -150,16 +153,42 @@ fn prunes_the_blobs_of_a_closed_item_no_open_item_has() {
         target: "main".into(),
         revision: revision(files),
     };
-    // app#1 has x→a, then b and x→c; app#2 (open) has x→b; app#3 (merged) c.
+    // r2 of a changes r1's, replayed to `old`, to `new`.
+    let since_r1 = |files, old: &str, new: &str| NewRevision {
+        interdiffs: vec![NewInterdiff {
+            from: 1,
+            files: vec![InterdiffFile {
+                stat: changed(Some(old), new),
+                change: Change::Changed,
+            }],
+        }],
+        ..revision(files)
+    };
+    // app#1 has x→a, then b and x→c, r→c since r1; app#2 (open) has x→b, then
+    // q→b since r1; app#3 (merged) c.
     let one = store
         .insert_item(item("one", vec![changed(Some("x"), "a")]))
         .unwrap();
     let files = vec![changed(None, "b"), changed(Some("x"), "c")];
     store
-        .add_revision(&one.id, "one", ItemState::NeedsReview, revision(files))
+        .add_revision(
+            &one.id,
+            "one",
+            ItemState::NeedsReview,
+            since_r1(files, "r", "c"),
+        )
         .unwrap();
-    store
+    let two = store
         .insert_item(item("two", vec![changed(Some("x"), "b")]))
+        .unwrap();
+    let files = vec![changed(Some("x"), "b")];
+    store
+        .add_revision(
+            &two.id,
+            "two",
+            ItemState::NeedsReview,
+            since_r1(files, "q", "b"),
+        )
         .unwrap();
     let three = store
         .insert_item(item("three", vec![changed(None, "c")]))
@@ -168,7 +197,7 @@ fn prunes_the_blobs_of_a_closed_item_no_open_item_has() {
         .conn
         .execute("UPDATE items SET state = 'merged' WHERE number = 3", [])
         .unwrap();
-    for blob in ["a", "b", "c", "x", "z"] {
+    for blob in ["a", "b", "c", "q", "r", "x", "z"] {
         store
             .insert_highlights(blob, "rust", "1", &Highlights::default())
             .unwrap();
@@ -180,6 +209,8 @@ fn prunes_the_blobs_of_a_closed_item_no_open_item_has() {
     assert!(kept(&store, "b"), "app#2's new side");
     assert!(!kept(&store, "c"));
     assert!(kept(&store, "x"), "app#2's old side");
+    assert!(!kept(&store, "r"), "app#1's replayed old side");
+    assert!(kept(&store, "q"), "app#2's replayed old side");
     assert!(kept(&store, "z"), "not any item's");
     store.prune_highlights(&three.id).unwrap();
     store

@@ -40,9 +40,8 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 | # | PR | Delivers | Flows | Faked | After |
 |---|---|---|---|---|---|
-| 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with 12a's interdiffs | F7, F12 | — | 10, 12a |
-| 12a | Interdiffs | Interdiffs over a moved base, viewed marks across revisions, the new-revision banner | F7, F13 | — | — |
-| 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions | F7, F13 | — | 10, 12a |
+| 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with interdiffs (`interdiff_files`) | F7, F12 | — | 10 |
+| 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions; until then a draft on an older revision shows only in the Conversation list | F7, F13 | — | 10 |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
 | 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | — |
@@ -57,7 +56,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **GitHub comes right after the skill**, so mergegate's own work keeps landing as GitHub PRs, cloud bots keep reviewing, and the switch happens early.
 - **Then the design's pain points:** triage for the flat file list, re-review for cheap revision cycles, stacks for oversized work, prioritization for many open items.
 - **Polish and reach come last in the list,** but 18a depends on nothing, so it can run alongside the rest; multi-machine waits until agents run on more than one machine.
-- **Stacked items need re-review** (12a and 12b): keeping viewed marks and approvals across a child's rebases relies on its interdiffs and comment re-mapping. Until PR 13 lands, agents submit the parts of a split one after another.
+- **Stacked items need re-review** (12b): keeping comments and approvals across a child's rebases relies on comment re-mapping, as viewed marks rely on interdiffs. Until PR 13 lands, agents submit the parts of a split one after another.
 
 ## Switching mergegate's own reviews to mergegate
 

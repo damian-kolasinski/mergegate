@@ -10,6 +10,9 @@ pub trait ReviewStore {
     /// nothing: an agent never misses a review the operator saw go through.
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError>;
 
+    /// The newest revision of `id` the operator submitted a review on.
+    fn last_reviewed(&self, id: &ItemId) -> Result<Option<u32>, StoreError>;
+
     fn insert_draft(&mut self, comment: NewComment) -> Result<Comment, StoreError>;
 
     /// Every comment on `id`, drafts and sent ones, oldest first.

@@ -6,8 +6,10 @@ import { Counts } from "./counts";
 import styles from "./files.module.css";
 
 /**
- * The revision's files beside the diff, the current one selected: those to
- * review, then the trusted ones folded into a group of their own.
+ * The files the diff shows beside it, the current one selected: those to
+ * review, then the trusted ones folded into a group of their own. Since an
+ * earlier revision, the ones unchanged since then follow, folded away, so
+ * they can still be marked viewed.
  */
 export function FileList(props: {
   /** Whose rules sorted the files, linked from the trusted group. */
@@ -17,6 +19,8 @@ export function FileList(props: {
   /** Whether the trusted group is open, and its files in the diff. */
   expanded: boolean;
   onExpand: (expanded: boolean) => void;
+  unchanged: File[];
+  since: number | null;
   viewed: ReadonlySet<string>;
   current: string | undefined;
   onShow: (path: string) => void;
@@ -67,6 +71,28 @@ export function FileList(props: {
           <ul aria-label="Trusted files">{entries(props.trusted)}</ul>
         </Show>
       </Show>
+      <Show when={props.unchanged.length}>
+        <details class={styles.unchanged}>
+          <summary>
+            <Meta>
+              {props.unchanged.length} unchanged since r{props.since}
+            </Meta>
+          </summary>
+          <ul>
+            <For each={props.unchanged}>
+              {(file) => (
+                <li class={styles.still}>
+                  <FileEntry
+                    file={file}
+                    viewed={props.viewed.has(file.path)}
+                    onViewed={(value) => props.onViewed(file.path, value)}
+                  />
+                </li>
+              )}
+            </For>
+          </ul>
+        </details>
+      </Show>
     </nav>
   );
 }
@@ -80,20 +106,27 @@ function FileEntry(props: {
   const trusted = () => props.file.tier === "trusted";
   return (
     <>
-      <input
-        type="checkbox"
-        class={styles.viewed}
-        checked={props.viewed || trusted()}
-        disabled={trusted()}
-        aria-label={`Viewed ${props.file.path}`}
-        // The row would show the file too.
-        onClick={(event) => event.stopPropagation()}
-        onChange={(event) => {
-          props.onViewed(event.currentTarget.checked);
-          // A focused field keeps keys from the shortcuts.
-          event.currentTarget.blur();
-        }}
-      />
+      {/* The newest revision doesn't change a dropped file, so it has no
+          mark to set. */}
+      <Show
+        when={props.file.interdiff !== "dropped"}
+        fallback={<span class={styles.viewed} />}
+      >
+        <input
+          type="checkbox"
+          class={styles.viewed}
+          checked={props.viewed || trusted()}
+          disabled={trusted()}
+          aria-label={`Viewed ${props.file.path}`}
+          // The row would show the file too.
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            props.onViewed(event.currentTarget.checked);
+            // A focused field keeps keys from the shortcuts.
+            event.currentTarget.blur();
+          }}
+        />
+      </Show>
       <span class={styles.entry}>
         <span class={styles.path} title={props.file.path}>
           <Mono>{props.file.path}</Mono>
@@ -113,6 +146,7 @@ function FileEntry(props: {
           )}
         </Show>
       </span>
+      <Show when={label(props.file)}>{(text) => <Meta>{text()}</Meta>}</Show>
       <Counts
         additions={props.file.additions}
         deletions={props.file.deletions}
@@ -125,4 +159,15 @@ function FileEntry(props: {
 function tier(file: File, why: string): string {
   if (!file.rule) return `kept in review: ${why}`;
   return `${file.tier === "trusted" ? "trusted" : "reviewed"} by ${file.rule}: ${why}`;
+}
+
+function label(file: File): string | undefined {
+  switch (file.interdiff) {
+    case "unseparated":
+      return "whole diff";
+    case "dropped":
+      return "dropped";
+    default:
+      return undefined;
+  }
 }

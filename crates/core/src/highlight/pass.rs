@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 use super::{HighlightStore, Highlighter, Highlights, Installed, grammar_for};
 use crate::diff::DiffGit;
 use crate::git::GitError;
+use crate::interdiff::InterdiffStore;
 use crate::item::ItemStore;
 use crate::project::ProjectName;
 use crate::store::StoreError;
@@ -25,10 +26,10 @@ pub struct Pending {
 }
 
 /// Drops the spans computed with other packs installed, then lists the blobs of
-/// every open item's newest revision that lack spans. Both sides of a file
-/// take the grammar of its new path. Files whose change isn't text are
-/// skipped: they're never shown as lines.
-pub fn pending<S: ItemStore + HighlightStore>(
+/// every open item's newest revision, and of the interdiffs to it, that lack
+/// spans. Both sides of a file take the grammar of its new path. Files whose
+/// change isn't text are skipped: they're never shown as lines.
+pub fn pending<S: ItemStore + InterdiffStore + HighlightStore>(
     store: &mut S,
     installed: &Installed,
 ) -> Result<Vec<Pending>, StoreError> {
@@ -38,7 +39,16 @@ pub fn pending<S: ItemStore + HighlightStore>(
     let mut seen = BTreeSet::new();
     let mut pending = Vec::new();
     for item in store.open_items(None)? {
-        for stat in store.revision_files(&item.id, item.revision.number)? {
+        let newest = item.revision.number;
+        let mut stats = store.revision_files(&item.id, newest)?;
+        // An interdiff's old side is an earlier revision replayed onto the
+        // newest's base, and a dropped file's new side is that base's: blobs
+        // no revision's own files have.
+        for from in store.interdiffs_to(&item.id, newest)? {
+            let files = store.interdiff(&item.id, from, newest)?;
+            stats.extend(files.into_iter().flatten().map(|f| f.stat));
+        }
+        for stat in stats {
             if stat.additions.is_none() {
                 continue;
             }

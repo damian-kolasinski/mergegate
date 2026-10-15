@@ -13,6 +13,7 @@ pub mod feedback;
 pub mod git;
 pub mod github;
 pub mod highlight;
+pub mod interdiff;
 pub mod item;
 pub mod merge;
 pub mod project;

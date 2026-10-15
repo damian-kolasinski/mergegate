@@ -6,6 +6,7 @@ mod command;
 mod diff;
 mod http;
 mod inspect;
+mod interdiff;
 mod items;
 mod merge;
 mod publish;

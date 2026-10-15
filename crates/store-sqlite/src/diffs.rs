@@ -76,22 +76,32 @@ impl DiffStore for Store {
     }
 
     fn prune_diffs(&mut self, id: &ItemId) -> Result<(), StoreError> {
-        // Every revision of `id` counts, and every revision of the open items
-        // other than `id`, which the caller has already closed or is closing.
+        // Every revision and interdiff of `id` counts, and every one of the
+        // open items other than `id`, which the caller has already closed or
+        // is closing.
         self.conn
             .prepare_cached(
                 "WITH closing AS (
                      SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
                      WHERE p.name = ?1 AND i.number = ?2
-                 )
-                 DELETE FROM diffs WHERE (old_blob, new_blob) IN (
-                     SELECT coalesce(f.old_blob, ''), coalesce(f.new_blob, '')
-                     FROM revision_files f WHERE f.item_id = (SELECT id FROM closing)
-                     EXCEPT
-                     SELECT coalesce(f.old_blob, ''), coalesce(f.new_blob, '')
-                     FROM revision_files f JOIN items i ON i.id = f.item_id
+                 ),
+                 kept AS (
+                     SELECT i.id FROM items i
                      WHERE i.id <> (SELECT id FROM closing)
                          AND i.state IN ('needs_review', 'changes_requested', 'merging')
+                 )
+                 DELETE FROM diffs WHERE (old_blob, new_blob) IN (
+                     SELECT coalesce(old_blob, ''), coalesce(new_blob, '')
+                     FROM revision_files WHERE item_id = (SELECT id FROM closing)
+                     UNION
+                     SELECT coalesce(old_blob, ''), coalesce(new_blob, '')
+                     FROM interdiff_files WHERE item_id = (SELECT id FROM closing)
+                     EXCEPT
+                     SELECT coalesce(old_blob, ''), coalesce(new_blob, '')
+                     FROM revision_files WHERE item_id IN kept
+                     EXCEPT
+                     SELECT coalesce(old_blob, ''), coalesce(new_blob, '')
+                     FROM interdiff_files WHERE item_id IN kept
                  )",
             )
             .map_err(StoreError::new)?

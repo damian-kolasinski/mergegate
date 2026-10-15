@@ -6,6 +6,7 @@ use super::{
 };
 use crate::diff::{Content, DiffGit, DiffStore, Hunk};
 use crate::git::GitError;
+use crate::interdiff::{Change, InterdiffStore};
 use crate::item::{ItemId, ItemStore};
 use crate::store::StoreError;
 
@@ -59,7 +60,7 @@ pub enum DraftError {
 /// Drafts a comment on lines of one hunk of the revision's diff, on one side.
 /// The comment quotes them from the file, so it reads the same whatever the
 /// diff showed.
-pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
+pub fn write_draft<S: ItemStore + DiffStore + ReviewStore + InterdiffStore>(
     store: &mut S,
     git: &impl DiffGit,
     request: WriteDraft,
@@ -105,10 +106,15 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
     };
     // The UI puts a comment under its line, so one on a line the diff
     // doesn't show, as in an expanded gap, would be sent but never seen.
-    match &diff.content {
+    let hunks = match &diff.content {
         Content::Binary => return Err(DraftError::NotText(path)),
-        Content::Text(hunks) if shown(hunks, side, start_line, line) => {}
-        Content::Text(_) | Content::TooLarge => return Err(no_lines()),
+        Content::Text(hunks) => hunks.as_slice(),
+        Content::TooLarge => &[],
+    };
+    if !shown(hunks, side, start_line, line)
+        && !(side == Side::New && since_shows(store, &id, revision, &path, start_line, line)?)
+    {
+        return Err(no_lines());
     }
     let blob = match side {
         Side::Old => file.old_blob,
@@ -132,6 +138,35 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore>(
         quote,
     };
     Ok(store.insert_draft(comment)?)
+}
+
+/// Whether an interdiff into `revision` shows its lines `start_line..=line`
+/// of `path`. Its new side is the revision's file, so a comment there is on
+/// the revision as much as one on its own diff.
+fn since_shows<S: DiffStore + InterdiffStore>(
+    store: &S,
+    id: &ItemId,
+    revision: u32,
+    path: &str,
+    start_line: u32,
+    line: u32,
+) -> Result<bool, StoreError> {
+    for from in store.interdiffs_to(id, revision)? {
+        let file = store
+            .interdiff(id, from, revision)?
+            .into_iter()
+            .flatten()
+            .find(|file| file.stat.file.path == path && file.change == Change::Changed);
+        let Some(file) = file else { continue };
+        let file = file.stat.file;
+        let diff = store.diff(file.old_blob.as_deref(), file.new_blob.as_deref())?;
+        if let Some(Content::Text(hunks)) = diff.map(|diff| diff.content)
+            && shown(&hunks, Side::New, start_line, line)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Whether one hunk shows lines `start_line..=line` of `side`.

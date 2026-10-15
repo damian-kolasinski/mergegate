@@ -91,7 +91,7 @@ Everything goes through the single `Git` port, so any operation can move between
 
 The `local` backend's push into the operator's repo is the exception. The receiving side runs in that repo, so its config and hooks apply, which is intended because it's the operator's repo. `-c` overrides don't reach a local `receive-pack`, so the hub passes `--receive-pack="git -c receive.denyCurrentBranch=updateInstead receive-pack"` instead of changing the operator's repo config.
 
-**Interdiff after the base moved.** If the target advanced between r1 and r2, a raw r1→r2 diff includes upstream changes. The diff engine compares each revision against its own merge-base (range-diff semantics) and shows only the item's own changes.
+**Interdiff after the base moved.** If the target advanced between r1 and r2, a raw r1→r2 diff includes upstream changes. The hub replays r1 onto r2's base (`git merge-tree --write-tree --merge-base=<r1 base> <r2 base> <r1 head>`) and diffs that tree against r2's head, so only the item's own changes show; with an unmoved base it diffs head against head. A file the replay conflicts on shows its whole own diff in r2. Each replayed tree is pinned under the item's refs until the item closes, and interdiff file diffs share the blob-pair cache.
 
 ## 6. Syntax highlighting and language packs
 
@@ -132,7 +132,7 @@ With releases (roadmap row 18a):
 |---|---|---|
 | Git operations | Staging repos, receive, test-merge, merge, push upstream | `Git` |
 | Backend | `github` / `local`: open/update/merge, external comment sync, polling | `Backend` |
-| Diff engine | Merge-base diffs, interdiffs (range-diff semantics), viewed-state carry-over | in `core`, over `Git` |
+| Diff engine | Merge-base diffs, interdiffs (replayed onto the newest base), viewed-state carry-over | in `core`, over `Git` |
 | Stacks | Parent links, own-diff base, `parent.*` events, landing order, retargeting | in `core`, over `Git` and `Backend` |
 | Comment anchoring | Re-map drafts and old comments onto new revisions; flag unmappable ones | in `core` |
 | File triage | Pipeline: guards → rules (only stage that can hide) → rankers (agent guide, structural heuristics, judge) | `FileRanker` |
