@@ -43,13 +43,14 @@ impl Tailnet for TailscaleCli {
     }
 
     fn whois(&self, ip: IpAddr) -> Result<Device, TailnetError> {
-        let mut cache = self.whois.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((at, device)) = cache.get(&ip)
+        let cache = || self.whois.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((at, device)) = cache().get(&ip)
             && at.elapsed() < self.whois_ttl
         {
             return Ok(device.clone());
         }
-        // Failures aren't cached: a device that just joined, or Tailscale
+        // Unlocked while the CLI runs, so one slow answer doesn't hold every
+        // other caller's request. Failures aren't cached: a device that just joined, or Tailscale
         // that just came up, is let in on the next request.
         let device = match run::tailscale(&["whois", "--json", &ip.to_string()]) {
             Ok(json) => parse::whois(&json)?,
@@ -59,6 +60,7 @@ impl Tailnet for TailscaleCli {
             Err(e) => return Err(e),
         };
         if !self.whois_ttl.is_zero() {
+            let mut cache = cache();
             cache.retain(|_, (at, _)| at.elapsed() < self.whois_ttl);
             cache.insert(ip, (Instant::now(), device.clone()));
         }
