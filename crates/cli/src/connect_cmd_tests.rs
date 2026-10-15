@@ -34,6 +34,11 @@ fn refuses_anything_else() {
         "http://:7800",
         "[]",
         "[fd7a::1",
+        "mac-mini::7800",
+        "a:b:c",
+        "[mac-mini]",
+        "[mac-mini]:7801",
+        "[]:7801",
     ] {
         let err = url(hub).unwrap_err();
         assert_eq!(err.body.code, "invalid_hub", "{hub}");

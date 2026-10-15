@@ -1,6 +1,8 @@
 //! `mg connect`: points this machine's `mg` at a hub on another machine,
 //! over the tailnet, or back at its own.
 
+use std::net::Ipv6Addr;
+
 use api::device::{Caller, Trust, Via, WhoAmI};
 use hub::Connection;
 use serde::Serialize;
@@ -87,15 +89,17 @@ fn url(hub: &str) -> Result<String, CliError> {
     let (host, port) = address.rsplit_once(':').unwrap_or((&address, ""));
     // Left to the request, a malformed host would read as a hub that's
     // unreachable, which is worth retrying; it never is.
-    let name = match host.strip_prefix('[') {
-        Some(bracketed) => bracketed.strip_suffix(']'),
-        None => Some(host),
+    // Brackets, ours or the operator's, hold only an IPv6 address.
+    let valid_host = match host.strip_prefix('[') {
+        Some(bracketed) => bracketed
+            .strip_suffix(']')
+            .is_some_and(|ip| ip.parse::<Ipv6Addr>().is_ok()),
+        None => {
+            !host.is_empty()
+                && !host.contains(['[', ']', ':'])
+                && !host.chars().any(|c| c.is_whitespace() || c.is_control())
+        }
     };
-    let valid_host = name.is_some_and(|name| {
-        !name.is_empty()
-            && !name.contains(['[', ']'])
-            && !name.chars().any(|c| c.is_whitespace() || c.is_control())
-    });
     if !valid_host {
         return Err(invalid("isn't a host, host:port or hub URL"));
     }
