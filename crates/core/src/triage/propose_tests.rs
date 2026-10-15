@@ -167,6 +167,22 @@ fn a_rule_without_a_reason_or_matcher_is_refused() {
 }
 
 #[test]
+fn no_rule_is_proposed_once_the_largest_id_is_used() {
+    let mut store = FakeStore::with_item(1);
+    let file = FakeRulesFile::default();
+    file.edit([&rule(u32::MAX, Tier::Review, "src/**")]);
+    let refused = propose(&mut store, &file, &app(), new_rule(Tier::Review, "a"));
+    assert!(
+        matches!(refused, Err(ChangeError::NoIdLeft(id)) if id == RuleId::new(u32::MAX)),
+        "{refused:?}"
+    );
+    assert_eq!(
+        refused.unwrap_err().to_string(),
+        "every rule ID up to R4294967295 is used, so no rule can be added"
+    );
+}
+
+#[test]
 fn a_broken_file_waits_to_be_fixed() {
     let mut store = FakeStore::with_item(1);
     let file = FakeRulesFile::default();

@@ -23,6 +23,7 @@ fn rule_ids_have_one_spelling() {
         ("R", None),
         ("R1a", None),
         ("R+1", None),
+        ("R4294967295", Some(u32::MAX)),
         ("R99999999999", None),
     ] {
         assert_eq!(RuleId::parse(id).map(RuleId::number), parsed, "{id}");
