@@ -69,12 +69,12 @@ fn a_missing_gh_says_so() {
 }
 
 #[test]
-fn opens_finds_retitles_and_closes_a_pull_request() {
+fn opens_finds_edits_and_closes_a_pull_request() {
     let (github, client, _repo) = setup();
     assert_eq!(client.find_pull(&acme(), "login", "main").unwrap(), None);
 
     let pull = client
-        .open_pull(&acme(), "login", "main", "Add login")
+        .open_pull(&acme(), "login", "main", "Add login", "Signs users in.")
         .unwrap();
     let expected = Pull {
         number: 1,
@@ -92,19 +92,25 @@ fn opens_finds_retitles_and_closes_a_pull_request() {
     };
     assert_eq!(
         (opened.body.as_str(), opened.draft, opened.base.as_str()),
-        ("", false, "main")
+        ("Signs users in.", false, "main")
     );
 
     let err = client
-        .open_pull(&acme(), "login", "main", "Again")
+        .open_pull(&acme(), "login", "main", "Again", "")
         .unwrap_err();
     assert_eq!(
         err.to_string(),
         "GitHub refused: Validation Failed: A pull request already exists for acme:login."
     );
 
-    client.retitle_pull(&acme(), 1, "Sign in").unwrap();
-    assert_eq!(github.pulls()[0].title, "Sign in");
+    client
+        .edit_pull(&acme(), 1, "Sign in", "Signs users in, safely.")
+        .unwrap();
+    let edited = &github.pulls()[0];
+    assert_eq!(
+        (edited.title.as_str(), edited.body.as_str()),
+        ("Sign in", "Signs users in, safely.")
+    );
     client.close_pull(&acme(), 1).unwrap();
     assert_eq!(github.pulls()[0].state, GithubPullState::Closed);
     assert_eq!(client.find_pull(&acme(), "login", "main").unwrap(), None);
@@ -114,13 +120,13 @@ fn opens_finds_retitles_and_closes_a_pull_request() {
 fn squash_merges_only_the_approved_head() {
     let (github, client, repo) = setup();
     client
-        .open_pull(&acme(), "login", "main", "Add login")
+        .open_pull(&acme(), "login", "main", "Add login", "")
         .unwrap();
     let head = repo.rev("login");
     assert_eq!(client.merged(&acme(), 1, &head).unwrap(), None);
 
     let err = client
-        .squash_merge(&acme(), 1, "Add login (app#1)", &repo.rev("main"))
+        .squash_merge(&acme(), 1, "Add login (app#1)", "", &repo.rev("main"))
         .unwrap_err();
     assert!(
         matches!(&err, GithubError::Refused(m) if m.starts_with("Head branch was modified")),
@@ -128,7 +134,7 @@ fn squash_merges_only_the_approved_head() {
     );
 
     let commit = client
-        .squash_merge(&acme(), 1, "Add login (app#1)", &head)
+        .squash_merge(&acme(), 1, "Add login (app#1)", "Signs users in.", &head)
         .unwrap();
     assert_eq!(
         github.rev("acme/app", "main").as_deref(),
@@ -136,7 +142,7 @@ fn squash_merges_only_the_approved_head() {
     );
     assert_eq!(
         github.git("acme/app", ["log", "-1", "--format=%s%n%b|%an", "main"]),
-        "Add login (app#1)\n|Operator\n"
+        "Add login (app#1)\nSigns users in.\n|Operator\n"
     );
     assert_eq!(github.rev("acme/app", "main^").unwrap(), repo.rev("main"));
 
@@ -148,7 +154,7 @@ fn squash_merges_only_the_approved_head() {
     // A retry after the merge went through finds it.
     assert_eq!(
         client
-            .squash_merge(&acme(), 1, "Add login (app#1)", &head)
+            .squash_merge(&acme(), 1, "Add login (app#1)", "", &head)
             .unwrap(),
         commit
     );
@@ -158,11 +164,11 @@ fn squash_merges_only_the_approved_head() {
 fn a_refused_merge_says_why() {
     let (github, client, repo) = setup();
     client
-        .open_pull(&acme(), "login", "main", "Add login")
+        .open_pull(&acme(), "login", "main", "Add login", "")
         .unwrap();
     github.refuse_merges(Some("Required status check \"ci\" is expected."));
     let err = client
-        .squash_merge(&acme(), 1, "Add login (app#1)", &repo.rev("login"))
+        .squash_merge(&acme(), 1, "Add login (app#1)", "", &repo.rev("login"))
         .unwrap_err();
     assert_eq!(
         err.to_string(),
@@ -202,7 +208,7 @@ fn git_reaches_the_repository_with_the_remote() {
 fn with_pull() -> (FakeGithub, GithubClient, TestRepo) {
     let (github, client, repo) = setup();
     client
-        .open_pull(&acme(), "login", "main", "Add login")
+        .open_pull(&acme(), "login", "main", "Add login", "")
         .unwrap();
     (github, client, repo)
 }

@@ -858,8 +858,24 @@ impl FakeStore {
         }
     }
 
+    /// Stamps a close as the store does: a second close keeps the first's
+    /// time, and reopening clears it.
     pub fn set_state(&mut self, id: &ItemId, state: ItemState) {
-        self.items.iter_mut().find(|i| i.id == *id).unwrap().state = state;
+        let closed = self
+            .items
+            .iter()
+            .find(|i| i.id == *id)
+            .unwrap()
+            .closed_at
+            .clone();
+        let closed_at = match (state.is_open(), closed) {
+            (true, _) => None,
+            (false, Some(at)) => Some(at),
+            (false, None) => Some(self.now()),
+        };
+        let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
+        item.state = state;
+        item.closed_at = closed_at;
     }
 
     fn now(&mut self) -> String {
@@ -1053,19 +1069,18 @@ impl ItemStore for FakeStore {
             .unwrap_or_default())
     }
 
+    fn next_id(&self, project: &ProjectName) -> Result<ItemId, StoreError> {
+        let taken = self.items.iter().filter(|i| i.id.project() == project);
+        Ok(ItemId::new(project.clone(), taken.count() as u64 + 1))
+    }
+
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
         assert!(
             self.open_item(&item.project, &item.branch)?.is_none(),
             "{} already has an open item",
             item.branch
         );
-        let number = self
-            .items
-            .iter()
-            .filter(|i| *i.id.project() == item.project)
-            .count() as u64
-            + 1;
-        let id = ItemId::new(item.project, number);
+        let id = self.next_id(&item.project)?;
         let revision = self.revision(&id, 1, item.revision);
         let item = Item {
             id,
@@ -1075,6 +1090,7 @@ impl ItemStore for FakeStore {
             backend: item.backend,
             target: item.target,
             created_at: revision.submitted_at.clone(),
+            closed_at: None,
             revision,
             priority: item.priority,
             note: item.note,
@@ -2271,6 +2287,7 @@ pub(crate) struct FakePull {
     pub branch: String,
     pub target: String,
     pub title: String,
+    pub body: String,
     pub state: PullState,
 }
 
@@ -2278,10 +2295,11 @@ pub(crate) struct FakePull {
 pub(crate) enum PullState {
     Open,
     Closed,
-    /// Squash-merged at this head, with this title.
+    /// Squash-merged at this head, with this title and message.
     Merged {
         head: String,
         title: String,
+        message: String,
     },
 }
 
@@ -2319,7 +2337,7 @@ impl FakeGithub {
     /// What someone opening a pull request on GitHub does.
     pub fn open(&self, repo: &str, branch: &str, title: &str) -> Pull {
         let repo = GithubRepo::parse(repo).unwrap();
-        self.open_pull(&repo, branch, "main", title).unwrap()
+        self.open_pull(&repo, branch, "main", title, "").unwrap()
     }
 
     pub fn pulls(&self) -> Vec<FakePull> {
@@ -2428,6 +2446,7 @@ impl Github for FakeGithub {
         branch: &str,
         target: &str,
         title: &str,
+        body: &str,
     ) -> Result<Pull, GithubError> {
         self.check_access(repo)?;
         let mut pulls = self.pulls.borrow_mut();
@@ -2437,15 +2456,23 @@ impl Github for FakeGithub {
             branch: branch.into(),
             target: target.into(),
             title: title.into(),
+            body: body.into(),
             state: PullState::Open,
         };
         pulls.push(pull.clone());
         Ok(pull_of(&pull))
     }
 
-    fn retitle_pull(&self, repo: &GithubRepo, number: u64, title: &str) -> Result<(), GithubError> {
+    fn edit_pull(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        title: &str,
+        body: &str,
+    ) -> Result<(), GithubError> {
         self.pull(repo, number, |pull| {
             pull.title = title.into();
+            pull.body = body.into();
             Ok(())
         })
     }
@@ -2455,6 +2482,7 @@ impl Github for FakeGithub {
         repo: &GithubRepo,
         number: u64,
         title: &str,
+        message: &str,
         head: &str,
     ) -> Result<String, GithubError> {
         let refusal = self.refusal.borrow().clone();
@@ -2470,6 +2498,7 @@ impl Github for FakeGithub {
             pull.state = PullState::Merged {
                 head: head.into(),
                 title: title.into(),
+                message: message.into(),
             };
             Ok(commit(8))
         })

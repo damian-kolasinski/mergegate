@@ -455,7 +455,59 @@ fn a_github_item_pushes_its_branch_and_opens_a_pull_request() {
         ("login", "main")
     );
     assert_eq!(opened.title, "Add login");
+    assert_eq!(opened.body, "Reviewed in mergegate as app#1.");
     assert_eq!(store.items(), [item]);
+}
+
+#[test]
+fn the_pull_request_describes_the_item_by_its_guide() {
+    let (mut store, git) = on_github();
+    let git = git.commit(&commit(5), Some(&commit(3)), "Remember", &["src/login.rs"]);
+    let github = FakeGithub::default();
+    git.push("app", "login", &commit(2));
+    let guided = |head, guide: &str| Submit {
+        guide: Some(guide.into()),
+        ..request("app", "login", head)
+    };
+    let guide = "Signs users in.\n\n## Files\n- `src/login.rs` — the form\n";
+    submit(&mut store, &git, &github, guided(2, guide)).unwrap();
+    assert_eq!(
+        github.pulls()[0].body,
+        format!("Reviewed in mergegate as app#1.\n\n{}", guide.trim())
+    );
+
+    // A new guide describes it again, at the same head or a new one.
+    submit(
+        &mut store,
+        &git,
+        &github,
+        guided(2, "Signs users in, again."),
+    )
+    .unwrap();
+    assert_eq!(
+        github.pulls()[0].body,
+        "Reviewed in mergegate as app#1.\n\nSigns users in, again."
+    );
+    git.push("app", "login", &commit(3));
+    submit(&mut store, &git, &github, guided(3, "Remembers them too.")).unwrap();
+    assert_eq!(
+        github.pulls()[0].body,
+        "Reviewed in mergegate as app#1.\n\nRemembers them too."
+    );
+
+    // Until the guide changes, an edit made on GitHub stands.
+    let repo = GithubRepo::parse("acme/app").unwrap();
+    github
+        .edit_pull(&repo, 1, "Add login", "Edited on GitHub")
+        .unwrap();
+    submit(&mut store, &git, &github, guided(3, "Remembers them too.")).unwrap();
+    git.push("app", "login", &commit(5));
+    submit(&mut store, &git, &github, request("app", "login", 5)).unwrap();
+    assert_eq!(github.pulls()[0].body, "Edited on GitHub");
+
+    // A blank guide removes it from the description.
+    submit(&mut store, &git, &github, guided(5, " ")).unwrap();
+    assert_eq!(github.pulls()[0].body, "Reviewed in mergegate as app#1.");
 }
 
 #[test]

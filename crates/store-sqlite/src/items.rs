@@ -38,7 +38,7 @@ const SELECT: &str = concat!(
            ",
     review_files!(),
     ",
-           i.priority, i.note
+           i.priority, i.note, i.closed_at
     FROM items i
     JOIN projects p ON p.id = i.project_id
     JOIN revisions r ON r.item_id = i.id
@@ -201,6 +201,19 @@ impl ItemStore for Store {
             )
             .map_err(StoreError::new)?;
         rows.map(|row| row.map_err(StoreError::new)?).collect()
+    }
+
+    fn next_id(&self, project: &ProjectName) -> Result<ItemId, StoreError> {
+        let number: i64 = self
+            .conn
+            .query_row(
+                "SELECT (SELECT coalesce(max(number), 0) + 1 FROM items WHERE project_id = p.id)
+                 FROM projects p WHERE p.name = ?1",
+                [project.as_str()],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::new)?;
+        Ok(ItemId::new(project.clone(), number as u64))
     }
 
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError> {
@@ -435,6 +448,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
     let pull_url: Option<String> = row.get(17)?;
     let priority: Option<String> = row.get(19)?;
     let note: Option<String> = row.get(20)?;
+    let closed_at: Option<String> = row.get(21)?;
     let pull = pull_number.zip(pull_url).map(|(number, url)| Pull {
         number: number as u64,
         url,
@@ -474,6 +488,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             target,
             revision,
             created_at,
+            closed_at,
             priority,
             note,
         })

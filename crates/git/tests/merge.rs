@@ -72,6 +72,7 @@ impl Hub {
                 submitted_at: String::new(),
             },
             created_at: String::new(),
+            closed_at: None,
             priority: None,
             note: None,
         }

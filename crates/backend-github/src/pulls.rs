@@ -28,20 +28,20 @@ pub(crate) fn find(
         .transpose()
 }
 
-/// Ready for review, with no description: the item's review happens in
-/// mergegate.
+/// Ready for review: the item's review happens in mergegate.
 pub(crate) fn open(
     api: &Api,
     repo: &GithubRepo,
     branch: &str,
     target: &str,
     title: &str,
+    description: &str,
 ) -> Result<Pull, GithubError> {
     let body = json!({
         "title": title,
         "head": branch,
         "base": target,
-        "body": "",
+        "body": description,
         "draft": false,
     });
     let reply = api.send(Method::POST, &format!("/repos/{repo}/pulls"), body)?;
@@ -51,13 +51,15 @@ pub(crate) fn open(
     pull(&reply.body)
 }
 
-pub(crate) fn retitle(
+pub(crate) fn edit(
     api: &Api,
     repo: &GithubRepo,
     number: u64,
     title: &str,
+    description: &str,
 ) -> Result<(), GithubError> {
-    update(api, repo, number, json!({ "title": title }))
+    let body = json!({ "title": title, "body": description });
+    update(api, repo, number, body)
 }
 
 pub(crate) fn close(api: &Api, repo: &GithubRepo, number: u64) -> Result<(), GithubError> {
@@ -72,12 +74,13 @@ pub(crate) fn squash_merge(
     repo: &GithubRepo,
     number: u64,
     title: &str,
+    message: &str,
     head: &str,
 ) -> Result<String, GithubError> {
     let body = json!({
         "merge_method": "squash",
         "commit_title": title,
-        "commit_message": "",
+        "commit_message": message,
         "sha": head,
     });
     let reply = api.send(

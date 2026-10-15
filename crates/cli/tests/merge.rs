@@ -71,6 +71,10 @@ fn commit_on_main(repo: &TestRepo, message: &str, files: &[(&str, &str)]) {
 fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     let (env, repo) = submitted();
     let base = repo.rev("main");
+    let guide = repo.sibling("guide.md");
+    std::fs::write(&guide, "Signs users in.\n\n## Files\n- `src/login.rs`\n").unwrap();
+    env.mg_at(repo.root(), &["submit", "--guide", guide.to_str().unwrap()])
+        .assert_code(0);
     let reply = approve(&env, 1, "Ship it.");
     assert_eq!(reply.status, 200, "{}", reply.body);
     let merge = json_of(&reply);
@@ -81,10 +85,11 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     );
     assert_eq!(merge["item"]["state"], "merged");
 
-    let show = repo.git(["show", "-s", "--format=%an <%ae>|%s|%P", "main"]);
+    // The commit says what the change is for, without the guide's files.
+    let show = repo.git(["show", "-s", "--format=%an <%ae>|%s|%b|%P", "main"]);
     assert_eq!(
         show.trim(),
-        format!("Operator <operator@example.com>|Add login (app#1)|{base}")
+        format!("Operator <operator@example.com>|Add login (app#1)|Signs users in.\n|{base}")
     );
     assert_eq!(repo.rev("main^{tree}"), repo.rev("feature^{tree}"));
 
@@ -116,6 +121,12 @@ fn f8_approving_squashes_the_item_onto_the_target_and_tells_its_agent() {
     let closed = inbox["closed"].take();
     assert_eq!(closed[0]["id"], "app#1");
     assert_eq!(closed[0]["state"], "merged");
+    // Its time is the merge's, not the submit's.
+    let closed_at = closed[0]["updated_at"].as_str().unwrap();
+    assert!(
+        closed_at > closed[0]["created_at"].as_str().unwrap(),
+        "{closed}"
+    );
     assert_eq!(
         inbox,
         json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "rules": [] })

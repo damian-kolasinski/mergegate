@@ -79,6 +79,12 @@ fn f14_the_agent_abandons_its_item() {
     let closed = inbox["closed"].take();
     assert_eq!(closed[0]["id"], "app#1");
     assert_eq!(closed[0]["state"], "abandoned");
+    // Its time is the abandon's, not the submit's.
+    let closed_at = closed[0]["updated_at"].as_str().unwrap();
+    assert!(
+        closed_at > closed[0]["created_at"].as_str().unwrap(),
+        "{closed}"
+    );
     assert_eq!(
         inbox,
         json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "rules": [] })

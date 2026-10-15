@@ -39,8 +39,12 @@ impl<G: ItemGit + MergeGit, H: Github> MergeBackend for GithubBackend<'_, G, H> 
         let trial = self
             .git
             .trial_merge(&project.name, &upstream, &item.target, head)?;
+        // GitHub takes the subject and the body apart.
+        let (title, body) = message.split_once("\n\n").unwrap_or((message, ""));
         let merged = match trial {
-            Trial::Clean => self.github.squash_merge(repo, pull.number, message, head),
+            Trial::Clean => self
+                .github
+                .squash_merge(repo, pull.number, title, body, head),
             // A merge the hub never recorded is on the target now, where
             // later commits may conflict with it. Unless GitHub says so, the
             // conflict stands, so the agent still hears about it.

@@ -50,6 +50,8 @@ pub struct Item {
     /// The newest revision.
     pub revision: Revision,
     pub created_at: String,
+    /// When it merged or was abandoned; none while it's open.
+    pub closed_at: Option<String>,
     /// None sorts after p3 (§10).
     pub priority: Option<Priority>,
     /// Why it has its priority, for the operator.
@@ -90,6 +92,14 @@ impl DiffStat {
 }
 
 impl Item {
+    /// When it last moved on: as it closed, else as its newest revision
+    /// came in.
+    pub fn updated_at(&self) -> &str {
+        self.closed_at
+            .as_deref()
+            .unwrap_or(&self.revision.submitted_at)
+    }
+
     /// The revision ref that keeps this revision's commits in staging, even
     /// after its branch is pushed over.
     pub fn pin_ref(&self) -> String {

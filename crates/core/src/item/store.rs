@@ -29,6 +29,10 @@ pub trait ItemStore {
     /// The files `revision` changes, in path order, with their line counts.
     fn revision_files(&self, id: &ItemId, revision: u32) -> Result<Vec<FileStat>, StoreError>;
 
+    /// The ID [`Self::insert_item`] gives the project's next item, until
+    /// another is inserted.
+    fn next_id(&self, project: &ProjectName) -> Result<ItemId, StoreError>;
+
     /// Numbers the item next in its project.
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError>;
 
