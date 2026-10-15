@@ -2140,6 +2140,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mergegate-tailscale"
+version = "0.1.0"
+dependencies = [
+ "mergegate-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mergegate-testkit"
 version = "0.1.0"
 dependencies = [
