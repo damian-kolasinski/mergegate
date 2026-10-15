@@ -49,6 +49,9 @@ struct Commit {
     /// What the commit writes to each of `files` it gives content for, empty
     /// for a deleted file. Others get a line added: the commit's ID.
     contents: BTreeMap<String, String>,
+    /// The modes the commit sets, which a file keeps until another sets it.
+    /// A file no commit sets one for is `Regular`.
+    modes: BTreeMap<String, FileMode>,
 }
 
 pub(crate) struct FakeGit {
@@ -75,6 +78,8 @@ pub(crate) struct FakeGit {
     pins: RefCell<BTreeMap<String, String>>,
     /// Trees `replay` wrote, by ID: each path's blob.
     trees: RefCell<BTreeMap<String, BTreeMap<String, String>>>,
+    /// Each replayed tree's modes, by the same ID.
+    tree_modes: RefCell<BTreeMap<String, BTreeMap<String, FileMode>>>,
     blobs_read: RefCell<Vec<String>>,
     /// Paths `linguist-generated` in every tree.
     generated: BTreeSet<String>,
@@ -100,6 +105,7 @@ impl Default for FakeGit {
             fetched: RefCell::default(),
             pins: RefCell::default(),
             trees: RefCell::default(),
+            tree_modes: RefCell::default(),
             blobs_read: RefCell::default(),
             generated: BTreeSet::new(),
             files: BTreeMap::new(),
@@ -183,6 +189,7 @@ impl FakeGit {
             subject: subject.into(),
             files: files.iter().map(|f| (*f).into()).collect(),
             contents: BTreeMap::new(),
+            modes: BTreeMap::new(),
         };
         self.commits.insert(id.into(), commit);
         self
@@ -206,6 +213,26 @@ impl FakeGit {
                 .iter()
                 .map(|(f, c)| ((*f).into(), (*c).into()))
                 .collect(),
+            modes: BTreeMap::new(),
+        };
+        self.commits.insert(id.into(), commit);
+        self
+    }
+
+    /// Adds commit `id` on top of `parent`, changing only each file's mode.
+    pub fn chmod(
+        mut self,
+        id: &str,
+        parent: Option<&str>,
+        subject: &str,
+        modes: &[(&str, FileMode)],
+    ) -> Self {
+        let commit = Commit {
+            parent: parent.map(Into::into),
+            subject: subject.into(),
+            files: Vec::new(),
+            contents: BTreeMap::new(),
+            modes: modes.iter().map(|(f, m)| ((*f).into(), *m)).collect(),
         };
         self.commits.insert(id.into(), commit);
         self
@@ -314,6 +341,22 @@ impl FakeGit {
             return content.clone();
         }
         touching.iter().rev().map(|id| format!("{id}\n")).collect()
+    }
+
+    /// `path`'s mode at `commit` or a replayed tree, none if it doesn't exist
+    /// there.
+    fn mode(&self, commit: &str, path: &str) -> Option<FileMode> {
+        if self.blob(commit, path).is_empty() {
+            return None;
+        }
+        if let Some(modes) = self.tree_modes.borrow().get(commit) {
+            return modes.get(path).copied();
+        }
+        let set = self
+            .history(commit)
+            .iter()
+            .find_map(|id| self.commits.get(id)?.modes.get(path).copied());
+        Some(set.unwrap_or(FileMode::Regular))
     }
 
     /// Every path that exists at `commit` or in a replayed tree.
@@ -482,12 +525,15 @@ impl ItemGit for FakeGit {
         paths.extend(self.paths(head));
         Ok(paths
             .into_iter()
-            .filter(|path| blob(base, path) != blob(head, path))
+            .filter(|path| {
+                blob(base, path) != blob(head, path)
+                    || self.mode(base, path) != self.mode(head, path)
+            })
             .map(|path| {
                 let (old_blob, new_blob) = (blob(base, &path), blob(head, &path));
                 ChangedFile {
-                    old_mode: old_blob.as_ref().map(|_| FileMode::Regular),
-                    new_mode: new_blob.as_ref().map(|_| FileMode::Regular),
+                    old_mode: self.mode(base, &path),
+                    new_mode: self.mode(head, &path),
                     old_blob,
                     new_blob,
                     old_path: None,
@@ -539,6 +585,7 @@ impl InterdiffGit for FakeGit {
         paths.extend(self.paths(onto));
         paths.extend(self.paths(head));
         let mut tree = BTreeMap::new();
+        let mut modes = BTreeMap::new();
         let mut conflicts = Vec::new();
         for path in paths {
             let (b, o, h) = (
@@ -554,13 +601,22 @@ impl InterdiffGit for FakeGit {
                 conflicts.push(path.clone());
                 format!("<<<<<<<\n{o}=======\n{h}>>>>>>>\n")
             };
+            // A mode merges as a blob does, the conflict taking `head`'s.
+            let (b, o, h) = (
+                self.mode(base, &path),
+                self.mode(onto, &path),
+                self.mode(head, &path),
+            );
+            let mode = if b == h || o == h { o } else { h };
             if !blob.is_empty() {
+                modes.insert(path.clone(), mode.unwrap_or(FileMode::Regular));
                 tree.insert(path, blob);
             }
         }
         let mut trees = self.trees.borrow_mut();
         let id = format!("{:040x}", 0xeeee_0000_usize + trees.len());
         trees.insert(id.clone(), tree);
+        self.tree_modes.borrow_mut().insert(id.clone(), modes);
         Ok(Replay {
             tree: id,
             conflicts,

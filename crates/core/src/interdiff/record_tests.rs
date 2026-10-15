@@ -1,5 +1,5 @@
 use super::unpaired;
-use crate::fake::{FakeStore, commit, rebased, submit_login};
+use crate::fake::{FakeGit, FakeStore, commit, rebased, submit_login};
 use crate::interdiff::{Change, InterdiffStore};
 use crate::item::{ChangedFile, FileMode, FileStat, ItemId};
 use crate::triage::Triage;
@@ -138,6 +138,47 @@ fn carries_marks_from_the_latest_revision_a_file_is_unchanged_since() {
     store.set_viewed(&id(), 2, "src/login.rs", false).unwrap();
     submit_login(&mut store, &git, 5);
     assert_eq!(viewed(&store, 3), Vec::<String>::new());
+}
+
+#[test]
+fn a_mode_change_alone_drops_a_viewed_mark() {
+    let mut store = FakeStore::with_item(0);
+    let git = FakeGit::default()
+        .write(&commit(1), None, "Initial", &[("run.sh", "echo")])
+        .write(
+            &commit(2),
+            Some(&commit(1)),
+            "Add login",
+            &[("run.sh", "echo login"), ("src/login.rs", "login")],
+        )
+        .chmod(
+            &commit(3),
+            Some(&commit(2)),
+            "Make it runnable",
+            &[("run.sh", FileMode::Executable)],
+        )
+        .upstream("/src/app", "main", &commit(1));
+    submit_login(&mut store, &git, 2);
+    for path in ["run.sh", "src/login.rs"] {
+        store.set_viewed(&id(), 1, path, true).unwrap();
+    }
+    submit_login(&mut store, &git, 3);
+
+    assert_eq!(
+        changes(&store, 1, 2),
+        owned(&[
+            ("run.sh", Change::Changed),
+            ("src/login.rs", Change::Unchanged),
+        ])
+    );
+    let files = store.interdiff(&id(), 1, 2).unwrap().unwrap();
+    let run = &files[0].stat.file;
+    assert_eq!(
+        (run.old_mode, run.new_mode),
+        (Some(FileMode::Regular), Some(FileMode::Executable))
+    );
+    let viewed: Vec<String> = store.viewed(&id(), 2).unwrap().into_iter().collect();
+    assert_eq!(viewed, ["src/login.rs"]);
 }
 
 fn moved(path: &str, from: Option<&str>, old: Option<&str>, new: Option<&str>) -> ChangedFile {
