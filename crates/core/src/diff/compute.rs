@@ -27,16 +27,28 @@ pub fn compute(old: &[u8], new: &[u8]) -> FileDiff {
     diff.postprocess_lines(&input);
     let additions = u64::from(diff.count_additions());
     let deletions = u64::from(diff.count_removals());
-    let content = if additions + deletions > MAX_CHANGED_LINES {
-        Content::TooLarge
+    let (content, lines_after) = if additions + deletions > MAX_CHANGED_LINES {
+        (Content::TooLarge, None)
     } else {
-        Content::Text(hunks(&input, &diff, CONTEXT))
+        let hunks = hunks(&input, &diff, CONTEXT);
+        let after = lines_after(&hunks, input.before.len() as u32);
+        (Content::Text(hunks), Some(after))
     };
     FileDiff {
         additions: Some(additions),
         deletions: Some(deletions),
         content,
+        lines_after,
     }
+}
+
+/// Counted on the old side, where the last hunk ends at line `start + lines
+/// - 1`, or at `start` when the side is empty.
+fn lines_after(hunks: &[Hunk], old_len: u32) -> u32 {
+    let end = hunks.last().map_or(0, |hunk| {
+        hunk.old_start + hunk.old_lines - u32::from(hunk.old_lines > 0)
+    });
+    old_len - end
 }
 
 fn is_binary(blob: &[u8]) -> bool {

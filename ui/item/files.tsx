@@ -166,6 +166,10 @@ function label(file: File): string | undefined {
       return "whole diff";
     case "dropped":
       return "dropped";
+    case "added":
+      return "added";
+    case "deleted":
+      return "deleted";
     default:
       return undefined;
   }

@@ -550,7 +550,7 @@ sequenceDiagram
       Op->>Hub: Retry
     end
   end
-  Hub-->>AA: mg wait exits with code 3, item merged
+  Hub-->>AA: mg wait exits 0 with item.merged and its cleanup, 3 once nothing is left
   AA->>AA: clean up its worktree
   Hub-->>OA: mg events --follow reports item.merged
   OA->>OA: dispatch work that was waiting on this
@@ -772,7 +772,7 @@ flowchart TD
   F --> G["New session continues with mg wait"]
   A -->|"Work no longer needed"| H["mg abandon --reason, or Abandon in the UI"]
   H --> I["Item closed, PR closed on GitHub"]
-  I --> J["mg wait exits with code 3"]
+  I --> J["mg wait exits 0 with item.abandoned,<br/>then 3 once nothing is left"]
         </pre></div>
         <ul class="rules">
           <li>How an agent waits, and what it costs, is covered in F3.</li>

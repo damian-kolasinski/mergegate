@@ -147,6 +147,9 @@ impl Call<'_> {
             if let Some(title) = body["title"].as_str() {
                 pull.title = title.into();
             }
+            if let Some(text) = body["body"].as_str() {
+                pull.body = text.into();
+            }
             if body["state"] == "closed" && pull.state == PullState::Open {
                 pull.state = PullState::Closed;
             }
@@ -249,6 +252,7 @@ impl Call<'_> {
             "number": pull.number,
             "html_url": format!("{}/{}/pull/{}", self.shared.web, self.repo, pull.number),
             "title": pull.title,
+            "body": pull.body,
             "state": state,
             "merged": merged,
             "merge_commit_sha": commit,

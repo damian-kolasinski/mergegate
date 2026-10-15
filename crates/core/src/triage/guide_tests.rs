@@ -210,3 +210,19 @@ fn warns_about_an_indented_item_it_cannot_place() {
         ["`gone.rs` isn't changed in this revision"]
     );
 }
+
+#[test]
+fn the_intent_is_the_text_before_the_files() {
+    assert_eq!(
+        Guide::intent(GUIDE),
+        "Moves the token check into the middleware."
+    );
+    let fenced = "Why:\n\n```\n## Files\n```\nStill why.\n\n  ## files\n- `a.rs`\n";
+    assert_eq!(
+        Guide::intent(fenced),
+        "Why:\n\n```\n## Files\n```\nStill why."
+    );
+    let prose = "\n Only prose.\n\n# Notes\n";
+    assert_eq!(Guide::intent(prose), "Only prose.\n\n# Notes");
+    assert_eq!(Guide::intent("## Files\n- `a.rs`\n"), "");
+}

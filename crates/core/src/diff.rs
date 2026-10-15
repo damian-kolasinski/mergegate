@@ -18,6 +18,10 @@ pub struct FileDiff {
     pub additions: Option<u64>,
     pub deletions: Option<u64>,
     pub content: Content,
+    /// Unchanged lines after the last hunk, as many on either side; every
+    /// line when there's no hunk. Only for text, and unknown for a diff
+    /// cached before they were counted.
+    pub lines_after: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +68,7 @@ impl FileDiff {
             additions: None,
             deletions: None,
             content: Content::Binary,
+            lines_after: None,
         }
     }
 }

@@ -204,7 +204,7 @@ fn f4_submitting_opens_a_pull_request_and_keeps_it_up_to_date() {
             branch: "login".into(),
             base: "main".into(),
             title: "Add login".into(),
-            body: String::new(),
+            body: "Reviewed in mergegate as app#1.".into(),
             draft: false,
             state: GithubPullState::Open,
         }
@@ -217,18 +217,38 @@ fn f4_submitting_opens_a_pull_request_and_keeps_it_up_to_date() {
     let inbox = env.mg(&["inbox"]).assert_code(0).stdout;
     assert!(inbox.contains("login · #1"), "{inbox}");
 
-    // A new revision force-pushes the branch; a new title retitles the PR.
+    // A new revision force-pushes the branch; a new title retitles the PR,
+    // and its guide describes it.
     repo.git(["commit", "--quiet", "--amend", "-m", "Add login and logout"]);
+    let guide = repo.sibling("guide.md");
+    std::fs::write(&guide, "Signs users in and out.\n").unwrap();
     let text = env
-        .mg_at(repo.root(), &["submit", "--title", "Add login and logout"])
+        .mg_at(
+            repo.root(),
+            &[
+                "submit",
+                "--title",
+                "Add login and logout",
+                "--guide",
+                guide.to_str().unwrap(),
+            ],
+        )
         .assert_code(0)
         .stdout;
     assert!(text.contains(&format!("  #1 {url}")), "{text}");
     assert_eq!(github.rev(ACME, "login"), Some(repo.rev("HEAD")));
     let renamed = pull(&github);
     assert_eq!(
-        (renamed.number, renamed.title.as_str()),
-        (1, "Add login and logout")
+        (
+            renamed.number,
+            renamed.title.as_str(),
+            renamed.body.as_str()
+        ),
+        (
+            1,
+            "Add login and logout",
+            "Reviewed in mergegate as app#1.\n\nSigns users in and out."
+        )
     );
 
     // Someone else's push to the branch on GitHub is never overwritten.
@@ -289,6 +309,10 @@ fn f8_approving_squash_merges_the_pull_request_on_github() {
     let (env, repo) = submitted(&github);
     let head = repo.rev("HEAD");
     let base = repo.rev("main");
+    let guide = repo.sibling("guide.md");
+    std::fs::write(&guide, "Signs users in.\n\n## Files\n- `src/login.rs`\n").unwrap();
+    env.mg_at(repo.root(), &["submit", "--guide", guide.to_str().unwrap()])
+        .assert_code(0);
 
     let merge = approve(&env, 1);
     let commit = github.rev(ACME, "main").unwrap();
@@ -304,17 +328,36 @@ fn f8_approving_squash_merges_the_pull_request_on_github() {
             commit: commit.clone()
         }
     );
+    // The commit says what the change is for, without the guide's files.
     let show = github.git(ACME, ["show", "-s", "--format=%s|%b|%P", "main"]);
-    assert_eq!(show.trim(), format!("Add login (app#1)||{base}"));
+    assert_eq!(
+        show.trim(),
+        format!("Add login (app#1)|Signs users in.\n|{base}")
+    );
     assert_eq!(github.rev(ACME, "login"), None);
     // The operator's own checkout is GitHub's to update, not the hub's.
     assert_eq!(repo.rev("main"), base);
 
-    let wait = env.mg(&["wait", "app#1"]).assert_code(3).stdout;
+    let wait = env.mg(&["wait", "app#1"]).assert_code(0).stdout;
     assert!(
-        wait.contains(&format!("the operator merged it as {commit}")),
+        wait.contains(&format!(
+            "item.merged app#1 r1: the operator merged it as {commit}"
+        )),
         "{wait}"
     );
+    // The default cleanup leaves the clone on the squash commit, though its
+    // own main is behind.
+    let replay = env
+        .mg(&["--json", "feedback", "app#1", "--since", "0"])
+        .assert_code(0)
+        .json();
+    let events = replay["events"].as_array().unwrap();
+    let merged = events.iter().find(|e| e["type"] == "item.merged").unwrap();
+    for command in merged["commands"].as_array().unwrap() {
+        let args: Vec<_> = command.as_str().unwrap().split(' ').collect();
+        repo.git(&args[1..]);
+    }
+    assert_eq!(repo.rev("HEAD"), commit);
 
     // The branch name is free for the next item, which pushes it again.
     repo.git(["switch", "--quiet", "-C", "login", "main"]);

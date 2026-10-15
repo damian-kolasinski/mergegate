@@ -7,6 +7,7 @@ use crate::highlight::HighlightStore;
 use crate::item::{Item, ItemGit, ItemState, ItemStore, close};
 use crate::project::{ProjectStore, find};
 use crate::store::StoreError;
+use crate::triage::Guide;
 
 /// Lands `item`, which is in Merging, and tells its agent how that went:
 /// merged closes it, a conflict hands it back, anything else holds it.
@@ -17,7 +18,8 @@ pub(super) fn land<S: ProjectStore + ItemStore + DiffStore + HighlightStore + Fe
     item: &Item,
 ) -> Result<Merge, MergeError> {
     let project = find(store, item.id.project().as_str())?;
-    let message = format!("{} ({})", item.title, item.id);
+    let guide = store.guide(&item.id, item.revision.number)?;
+    let message = message(item, guide.as_deref());
     // A failure to even try still leaves the item waiting on the operator,
     // who sees why and can retry.
     let landing = backend
@@ -57,6 +59,16 @@ pub(super) fn land<S: ProjectStore + ItemStore + DiffStore + HighlightStore + Fe
         }
     };
     Ok(Merge { item, landing })
+}
+
+/// The squash commit's message: the item's title and ID, then the intent its
+/// guide states. The guide's file list stays out: the commit shows the files.
+fn message(item: &Item, guide: Option<&str>) -> String {
+    let subject = format!("{} ({})", item.title, item.id);
+    match guide.map(Guide::intent).filter(|intent| !intent.is_empty()) {
+        Some(intent) => format!("{subject}\n\n{intent}"),
+        None => subject,
+    }
 }
 
 fn reread(store: &impl ItemStore, item: &Item) -> Result<Item, StoreError> {

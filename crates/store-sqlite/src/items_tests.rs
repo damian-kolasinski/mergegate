@@ -1,3 +1,4 @@
+use mergegate_core::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use mergegate_core::github::{GithubRepo, Pull};
 use mergegate_core::item::{ChangedFile, FileMode, FileStat};
 use mergegate_core::project::{Backend, Project, ProjectStore};
@@ -82,8 +83,10 @@ fn new_item(project: &str, branch: &str) -> NewItem {
 #[test]
 fn numbers_items_per_project_and_lists_open_ones_oldest_first() {
     let (_dir, mut store) = store();
+    assert_eq!(store.next_id(&name("app")).unwrap().to_string(), "app#1");
     let a = store.insert_item(new_item("app", "a")).unwrap();
     let b = store.insert_item(new_item("web", "b")).unwrap();
+    assert_eq!(store.next_id(&name("app")).unwrap().to_string(), "app#2");
     let c = store.insert_item(new_item("app", "c")).unwrap();
 
     assert_eq!(a.id.to_string(), "app#1");
@@ -238,6 +241,39 @@ fn lists_items_closed_since_midnight_latest_first() {
         .map(|i| i.id)
         .collect();
     assert_eq!(closed, [ids[1].clone(), ids[0].clone()]);
+}
+
+#[test]
+fn a_closed_item_was_last_updated_as_it_closed() {
+    let (_dir, mut store) = store();
+    let open = store.insert_item(new_item("app", "a")).unwrap();
+    assert_eq!(open.closed_at, None);
+    assert_eq!(open.updated_at(), open.revision.submitted_at);
+    // A close the same millisecond as the submit couldn't tell them apart.
+    store
+        .conn
+        .execute(
+            "UPDATE revisions SET submitted_at = '2026-01-01T00:00:00.000Z'",
+            [],
+        )
+        .unwrap();
+    let notice = Notice {
+        revision: 1,
+        source: Source::Operator,
+        kind: NoticeKind::Abandoned { reason: None },
+    };
+    store
+        .notify(&open.id, ItemState::Abandoned, notice)
+        .unwrap();
+    let closed = store.item(&open.id).unwrap().unwrap();
+    let closed_at = closed.closed_at.clone().unwrap();
+    assert!(closed_at.ends_with('Z'), "{closed_at}");
+    assert_eq!(closed.updated_at(), closed_at);
+    assert!(
+        closed.updated_at() > closed.revision.submitted_at.as_str(),
+        "{closed:?}"
+    );
+    assert_eq!(store.closed_today().unwrap(), [closed]);
 }
 
 #[test]

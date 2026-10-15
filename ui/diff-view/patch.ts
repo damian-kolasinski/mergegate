@@ -19,6 +19,15 @@ export function toFileDiff(file: File): FileDiffMetadata {
   diff.name = file.path;
   if (file.old_path !== null) diff.prevName = file.old_path;
   diff.type = changeOf(file, diff.hunks.length);
+  // CodeView offers more lines past the last hunk of any partial diff it
+  // can load, so one whose hunk holds the whole file has to say it's whole.
+  // Its lines are then both files, as a full diff's are.
+  if (
+    (diff.type === "change" || diff.type === "rename-changed") &&
+    isWhole(file)
+  ) {
+    diff.isPartial = false;
+  }
   // Plain text until highlighting lands; no grammar is bundled.
   diff.lang = "text";
   return diff;
@@ -193,6 +202,31 @@ function startBoundary(start: number, count: number) {
 function dropNewline(lines: string[]) {
   const last = lines.length - 1;
   if (last >= 0) lines[last] = cleanLastNewline(lines[last] ?? "");
+}
+
+/** Unchanged lines the hub shows on either side of a change. */
+const CONTEXT = 3;
+
+/**
+ * Whether `file`'s one hunk runs from its first line to its last. A diff
+ * the hub cached before it counted the lines after says so only when the
+ * hunk's trailing context is cut short, or its last line has no newline.
+ */
+function isWhole(file: File): boolean {
+  if (file.content.kind !== "text") return false;
+  const [hunk, ...rest] = file.content.hunks;
+  if (!hunk || rest.length > 0) return false;
+  if (hunk.old_start > 1 || hunk.new_start > 1) return false;
+  const after = file.content.lines_after;
+  if (after !== null) return after === 0;
+  const last = hunk.lines.at(-1) ?? "";
+  if (last.startsWith("\\")) return true;
+  let trailing = 0;
+  for (let index = hunk.lines.length - 1; index >= 0; index--) {
+    if (hunk.lines[index]?.[0] !== " ") break;
+    trailing++;
+  }
+  return trailing < CONTEXT;
 }
 
 function hunksOf(file: File): readonly Hunk[] {

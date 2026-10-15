@@ -151,6 +151,7 @@ fn file_to_api(
             additions,
             deletions,
             content,
+            lines_after,
             viewed,
             generated,
             triage,
@@ -188,6 +189,7 @@ fn file_to_api(
                         hunk_to_api(&hunk, &lines)
                     })
                     .collect(),
+                lines_after,
             },
             Some(Content::Binary) => api::diff::Content::Binary,
             Some(Content::TooLarge) => api::diff::Content::TooLarge,
@@ -203,6 +205,8 @@ fn file_to_api(
         reason,
         interdiff: change.map(|change| match change {
             Change::Changed => api::diff::Interdiff::Changed,
+            Change::Added => api::diff::Interdiff::Added,
+            Change::Deleted => api::diff::Interdiff::Deleted,
             Change::Unchanged => api::diff::Interdiff::Unchanged,
             Change::Unseparated => api::diff::Interdiff::Unseparated,
             Change::Dropped => api::diff::Interdiff::Dropped,

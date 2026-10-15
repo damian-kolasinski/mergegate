@@ -53,6 +53,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 
 ## Switching mergegate's own reviews to mergegate
 
-- **After PR 9:** agents submit through `mg` and the hub opens the GitHub PRs. Change `AGENTS.md` so agents ship with `mg submit` instead of the `ship` skill. If the hub breaks, the PRs are still on GitHub, so a fix can be reviewed there.
+- **Since PR 9:** agents submit through `mg` and the hub opens the GitHub PRs (`AGENTS.md`). If the hub breaks, the PRs are still on GitHub, so a fix can be reviewed there.
 - **After PR 10:** bot and teammate comments show in mergegate, and the GitHub web UI is no longer needed.
 - **From PR 9 on, the hub is in daily use:** run the latest release as the hub and dev builds next to it, as `.agents/prompts/install.md` sets up. Migrations only move forward, a migration is never edited once merged, and each one is tested by upgrading databases from every earlier schema version. Before PR 9 the database can be reset freely.

@@ -79,8 +79,8 @@ pub struct File {
     /// Why the guide says to review the file; null for a trusted one.
     pub reason: Option<String>,
     /// How the file changed since `since`; null when showing all changes.
-    /// Blobs, counts and content are the interdiff's for `changed` and
-    /// `dropped` files, the revision's own otherwise.
+    /// Blobs, counts and content are the interdiff's for `changed`, `added`,
+    /// `deleted` and `dropped` files, the revision's own otherwise.
     pub interdiff: Option<Interdiff>,
     /// The judge's score, 1 to 100; null when it hasn't judged the file.
     pub importance: Option<u8>,
@@ -117,6 +117,10 @@ pub enum Mode {
 pub enum Interdiff {
     /// Changed again since.
     Changed,
+    /// Not in the earlier revision: the diff adds the whole file.
+    Added,
+    /// In the earlier revision, deleted since.
+    Deleted,
     /// As it was then, though the base may have moved.
     Unchanged,
     /// Its earlier change conflicts with the target's moves, so this shows
@@ -131,7 +135,14 @@ pub enum Interdiff {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Content {
     /// In file order, each with 3 lines of context.
-    Text { hunks: Vec<Hunk> },
+    Text {
+        hunks: Vec<Hunk>,
+        /// Unchanged lines after the last hunk, as many on either side, or
+        /// every line when there are no hunks. 0 says the last hunk ends
+        /// the file; null that the hub doesn't know, for a diff it cached
+        /// before it counted them.
+        lines_after: Option<u32>,
+    },
     /// Either side isn't text, or isn't a blob.
     Binary,
     /// Too many changed lines to show; only counted.

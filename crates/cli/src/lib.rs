@@ -15,6 +15,7 @@ mod lang_cmd;
 pub mod output;
 mod prioritize_cmd;
 mod project_cmd;
+mod project_here;
 mod reply_cmd;
 mod repo;
 mod resume_cmd;

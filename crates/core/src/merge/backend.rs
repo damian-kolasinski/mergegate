@@ -9,7 +9,8 @@ pub trait MergeBackend {
     fn kind(&self) -> Backend;
 
     /// Lands `item`'s newest revision on its target as one commit, with
-    /// `message` and the target as its only parent. The local backend makes
+    /// `message` (a subject line, then a blank line and the body, if any) and
+    /// the target as its only parent. The local backend makes
     /// the operator its author; GitHub makes it the operator's account. A
     /// merge that went through before the hub could record it lands again as
     /// the commit it made.

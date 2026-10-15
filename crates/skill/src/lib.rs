@@ -25,12 +25,25 @@ pub const FILES: &[(&str, &str)] = &[
     ),
 ];
 
-/// `SKILL.md` without its frontmatter, then each file it links under a
-/// `--- path ---` line, for prompts that inline the skill.
-pub fn inlined() -> String {
+/// `SKILL.md` without its frontmatter, then each of the files it links that
+/// `paths` names, under a `--- path ---` line, for prompts that inline the
+/// skill. A last line names the files left out, which its links still point
+/// at.
+pub fn inlined(paths: &[&str]) -> String {
     let mut out = body().trim_end().to_owned();
+    let mut left = Vec::new();
     for (path, text) in &FILES[1..] {
-        out.push_str(&format!("\n\n--- {path} ---\n\n{}", text.trim_end()));
+        if paths.contains(path) {
+            out.push_str(&format!("\n\n--- {path} ---\n\n{}", text.trim_end()));
+        } else {
+            left.push(*path);
+        }
+    }
+    if !left.is_empty() {
+        out.push_str(&format!(
+            "\n\n--- Left out here: {}; `mg skill install` writes the whole skill ---",
+            left.join(", ")
+        ));
     }
     out
 }

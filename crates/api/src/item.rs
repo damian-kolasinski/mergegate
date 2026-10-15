@@ -164,7 +164,8 @@ pub struct InboxItem {
     /// As in [`Revision`].
     pub review_files: u32,
     pub created_at: String,
-    /// When the newest revision was submitted.
+    /// When it merged or was abandoned, or, while it's open, when the
+    /// newest revision was submitted.
     pub updated_at: String,
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,

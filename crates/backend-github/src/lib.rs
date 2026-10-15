@@ -76,12 +76,23 @@ impl Github for GithubClient {
         branch: &str,
         target: &str,
         title: &str,
+        body: &str,
     ) -> Result<Pull, GithubError> {
-        pulls::open(&self.api, repo, branch, target, title)
+        pulls::open(&self.api, repo, branch, target, title, body)
     }
 
-    fn retitle_pull(&self, repo: &GithubRepo, number: u64, title: &str) -> Result<(), GithubError> {
-        pulls::retitle(&self.api, repo, number, title)
+    fn pull_body(&self, repo: &GithubRepo, number: u64) -> Result<String, GithubError> {
+        pulls::body(&self.api, repo, number)
+    }
+
+    fn edit_pull(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        title: &str,
+        body: Option<&str>,
+    ) -> Result<(), GithubError> {
+        pulls::edit(&self.api, repo, number, title, body)
     }
 
     fn squash_merge(
@@ -89,9 +100,10 @@ impl Github for GithubClient {
         repo: &GithubRepo,
         number: u64,
         title: &str,
+        message: &str,
         head: &str,
     ) -> Result<String, GithubError> {
-        pulls::squash_merge(&self.api, repo, number, title, head)
+        pulls::squash_merge(&self.api, repo, number, title, message, head)
     }
 
     fn merged(

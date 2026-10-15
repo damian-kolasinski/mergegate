@@ -39,26 +39,39 @@ pub trait Github {
     ) -> Result<Option<Pull>, GithubError>;
 
     /// Opens a pull request from `branch` into `target`, ready for review,
-    /// with `title` and an empty body.
+    /// with `title` and the Markdown description `body`.
     fn open_pull(
         &self,
         repo: &GithubRepo,
         branch: &str,
         target: &str,
         title: &str,
+        body: &str,
     ) -> Result<Pull, GithubError>;
 
-    fn retitle_pull(&self, repo: &GithubRepo, number: u64, title: &str) -> Result<(), GithubError>;
+    /// The pull request's description, empty when it has none.
+    fn pull_body(&self, repo: &GithubRepo, number: u64) -> Result<String, GithubError>;
+
+    /// Sets the pull request's title, and its description unless `body` is
+    /// `None`.
+    fn edit_pull(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        title: &str,
+        body: Option<&str>,
+    ) -> Result<(), GithubError>;
 
     /// Squash-merges the pull request, as long as its head is still `head`,
-    /// into one commit titled `title` with an empty message, and returns the
-    /// commit. One already merged at `head` returns its commit, so a retry
-    /// after a merge the hub never recorded goes through.
+    /// into one commit titled `title` with `message` as its body, and returns
+    /// the commit. One already merged at `head` returns its commit, so a
+    /// retry after a merge the hub never recorded goes through.
     fn squash_merge(
         &self,
         repo: &GithubRepo,
         number: u64,
         title: &str,
+        message: &str,
         head: &str,
     ) -> Result<String, GithubError>;
 

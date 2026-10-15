@@ -71,7 +71,7 @@ fn f10_the_inbox_orders_by_priority_then_age() {
     );
     let text = env.mg(&["inbox"]).assert_code(0).stdout;
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines[0], "needs you (3)");
+    assert_eq!(lines[0], "needs the operator (3)");
     assert!(lines[1].starts_with("  app#3 p0 r1  hotfix"), "{text}");
     assert!(lines[2].starts_with("  app#2 p1 r1  release"), "{text}");
     assert_eq!(lines[3], "      blocks the release");

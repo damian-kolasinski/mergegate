@@ -9,10 +9,12 @@ Set up two installations of mergegate that never share state:
 
 1. Find the latest release: `gh release view --repo damian-kolasinski/mergegate --json tagName --jq .tagName`.
 2. Install it with mise: `mise use -g packslip:damian-kolasinski/mergegate`. mise checks the release's packslip signature before it installs `mg`. If `mise backends ls` doesn't list `packslip`, run `mise self-update` first. Check that `command -v mg` resolves into mise and that no `mg` from an earlier source install shadows it; `cargo uninstall mg` removes one from `~/.cargo/bin`.
-3. If there is no release yet, build from `main` instead: `MG_REQUIRE_UI=1 cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --branch main mg`. The build needs pnpm and Node 22 for the UI; `MG_REQUIRE_UI=1` makes it fail rather than install an `mg` without one.
-4. Start the hub: `mg hub start`. Its data lives in `~/.mergegate`.
-5. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer. `mg project add` offers to download the language packs the repo's files use.
-6. Run `mg doctor` and fix what it reports.
+3. If there is no release yet, build from `main` instead: `MG_REQUIRE_UI=1 cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --branch main mg`. The build needs pnpm and Node 22 for the UI; `MG_REQUIRE_UI=1` makes it fail rather than install an `mg` without one. It installs into `~/.cargo/bin`, or `DIR/bin` with `--root DIR`.
+4. Check that `command -v mg` prints the `mg` you installed. macOS ships an unrelated `/usr/bin/mg`, a text editor, which wins whenever the install directory isn't on `PATH` ahead of `/usr/bin`; an agent calling `mg` then gets `usage: mg [-nR] ...` or an editor.
+5. Start the hub: `mg hub start`. Its data lives in `~/.mergegate`.
+6. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer. `mg project add` offers to download the language packs the repo's files use; a build from `main` can't download them, so build them as in Dev below, install them with `mg lang add --from DIR`, and pass `--languages none`.
+7. Link the skill to where agents load skills from, so `mg skill install` updates it in place: `ln -sfn ~/.mergegate/skill/mergegate ~/.claude/skills/mergegate`, and the same into `~/.codex/skills` for Codex.
+8. Run `mg doctor` and fix what it reports.
 
 To upgrade, run `mise up packslip:damian-kolasinski/mergegate`, then `mg hub stop`, `mg hub start` and `mg lang update`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
 
@@ -22,6 +24,17 @@ Prefer fixing forward to rolling back: a rollback loses review state written sin
 3. Delete `hub.db-wal` and `hub.db-shm`.
 4. Copy the newest `hub.db.bak-*` over `hub.db`.
 5. Run `mg hub start`.
+
+## Another machine
+
+Agents on another machine of the tailnet submit to the stable hub.
+
+1. On the hub's machine, run `mg hub set listen tailnet`.
+2. On the other machine, install the same `mg` as the hub's: a connected `mg` refuses a hub with another API version. With a release, install it with mise as above. Without one, build the same commit, or copy the hub machine's binary when both share an OS and architecture: `scp "$(command -v mg)" HOST:.local/bin/mg`. Check `command -v mg` there as in Stable step 4, in the login shell agents run in.
+3. There, run `mg connect HUB` with the hub machine's tailnet name, then `mg skill install` and link the skill as in Stable step 7.
+4. Run `mg doctor` there. Register projects only on the hub's machine; clone them there from GitHub, or from the hub as its `mergegate` remote (`git clone --origin mergegate http://HUB:7800/git/<project>`), so no `origin` pushes to the hub, and `mg init` finds the project from the clone's remote.
+
+After upgrading the hub, install the same `mg` on each other machine again and rerun `mg skill install` there.
 
 ## Dev
 

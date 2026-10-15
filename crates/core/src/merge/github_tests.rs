@@ -49,13 +49,16 @@ fn squash_merges_the_pull_request_at_the_approved_head() {
     let (project, item, git, github) = opened();
     let backend = GithubBackend::new(&git, &github);
     assert_eq!(backend.kind(), Backend::Github);
-    let landing = backend.land(&project, &item, "Add login (app#1)").unwrap();
+    let message = "Add login (app#1)\n\nSigns users in.\n\nWith a password.";
+    let landing = backend.land(&project, &item, message).unwrap();
     assert_eq!(landing, Landing::Merged { commit: commit(8) });
+    // GitHub takes the subject as the commit's title, the rest as its body.
     assert_eq!(
         merged_state(&github),
         PullState::Merged {
             head: commit(2),
-            title: "Add login (app#1)".into()
+            title: "Add login (app#1)".into(),
+            message: "Signs users in.\n\nWith a password.".into()
         }
     );
     let repo = GithubRepo::parse("acme/app").unwrap();

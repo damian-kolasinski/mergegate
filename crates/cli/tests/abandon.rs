@@ -79,6 +79,12 @@ fn f14_the_agent_abandons_its_item() {
     let closed = inbox["closed"].take();
     assert_eq!(closed[0]["id"], "app#1");
     assert_eq!(closed[0]["state"], "abandoned");
+    // Its time is the abandon's, not the submit's.
+    let closed_at = closed[0]["updated_at"].as_str().unwrap();
+    assert!(
+        closed_at > closed[0]["created_at"].as_str().unwrap(),
+        "{closed}"
+    );
     assert_eq!(
         inbox,
         json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "rules": [] })
@@ -88,11 +94,11 @@ fn f14_the_agent_abandons_its_item() {
     assert_eq!(again.json()["item"]["id"], "app#2");
 
     // Its own agent closed it, so its wait has only that to say.
-    let wait = env.mg(&["wait", "app#1"]).assert_code(3);
+    let wait = env.mg(&["wait", "app#1"]).assert_code(0);
     assert_eq!(
         wait.stdout.trim(),
-        "[1] app#1 r1: its agent abandoned it\n  Moved to app#2.\n\n\
-         cursor 1 (mg wait --since 1 replays from here)\n\napp#1 is abandoned"
+        "[1] item.abandoned app#1 r1: its agent abandoned it\n  Moved to app#2.\n\n\
+         cursor 1 (mg wait --since 1 continues after it)\n\napp#1 is abandoned"
     );
 }
 
@@ -134,7 +140,7 @@ fn f14_the_operator_abandons_an_item_and_its_agent_hears_why() {
     assert_eq!(reply.status, 200, "{}", reply.body);
     assert_eq!(json_of(&reply)["state"], "abandoned");
 
-    let wait = env.mg(&["--json", "wait", "app#1"]).assert_code(3);
+    let wait = env.mg(&["--json", "wait", "app#1"]).assert_code(0);
     let feedback = wait.json();
     assert_eq!(feedback["state"], "abandoned");
     assert_eq!(
@@ -160,9 +166,11 @@ fn f14_an_abandoned_item_stays_closed() {
     let text = env.mg(&["feedback", "app#1"]).assert_code(0);
     assert_eq!(
         text.stdout.trim(),
-        "[1] app#1 r1: the operator abandoned it\n\n\
-         cursor 1 (mg wait --since 1 replays from here)"
+        "[1] item.abandoned app#1 r1: the operator abandoned it\n\n\
+         cursor 1 (mg wait --since 1 continues after it)\n\napp#1 is abandoned"
     );
+    let again = env.mg(&["--json", "feedback", "app#1"]).assert_code(3);
+    assert_eq!(again.json()["events"], json!([]));
 
     let reply = abandon(&env, Value::Null);
     assert_eq!(reply.status, 409, "{}", reply.body);

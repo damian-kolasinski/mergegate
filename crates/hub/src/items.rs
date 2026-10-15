@@ -208,7 +208,7 @@ fn inbox_entry(
         deletions: revision.stat.deletions,
         review_files: revision.stat.review_files,
         created_at: item.created_at.clone(),
-        updated_at: revision.submitted_at.clone(),
+        updated_at: item.updated_at().to_owned(),
         blocked,
         link: link(&item.backend),
         demo,

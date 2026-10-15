@@ -34,16 +34,17 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `item.merged` | The work landed. Clean up as agreed, then stop. |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |
 
-`mg wait` exits 0 with events, 75 when it timed out with none (wait again), and 3 once the item is merged or abandoned. It prints the events and marks them delivered; `mg feedback app#3` does the same without waiting, and `--since CURSOR` replays from any cursor without marking anything.
+`mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. `mg feedback app#3` does the same without waiting, and `--since CURSOR` replays the events after any cursor without marking anything.
 
 [references/authoring.md](references/authoring.md) covers titles, revisions, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, to rank their queue, or to watch the hub for events, see [references/operator.md](references/operator.md).
 
 ## After a merge
 
-The operator merges an item by squashing it onto the target, so git doesn't see the item's branch as merged and `git branch -d` refuses it. `item.merged` names the branch. Do what you and the operator agreed; if you never agreed anything, the default is:
+The operator merges an item by squashing it onto the target, so git doesn't see the item's branch as merged and `git branch -d` refuses it. `item.merged` names the branch and lists the default cleanup. Do what you and the operator agreed; if you never agreed anything, the default leaves the clone on the target with the squash commit:
 
 ```
-git switch --detach
+git fetch mergegate
+git switch --detach mergegate/<target>
 git branch -D <branch>
 ```
 

@@ -5,7 +5,7 @@ use api::doctor::{Check, CheckStatus};
 
 use crate::client::{Client, Hub};
 use crate::output::CliError;
-use crate::project_cmd::project_here;
+use crate::project_here::project_here;
 use crate::repo::{self, REMOTE};
 
 /// None outside a git repo, and in one that is neither a project's nor set

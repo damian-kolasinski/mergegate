@@ -1,0 +1,83 @@
+use crate::review::{Author, Comment, Reply, Verdict};
+
+use super::*;
+
+fn comment() -> Comment {
+    Comment {
+        id: "c_1".into(),
+        revision: 1,
+        path: None,
+        side: None,
+        start_line: None,
+        line: None,
+        body: "Rename it.".into(),
+        quote: None,
+        external: None,
+        placement: None,
+    }
+}
+
+fn bodies() -> Vec<EventBody> {
+    vec![
+        EventBody::ReviewSubmitted {
+            verdict: Verdict::Approved,
+            summary: String::new(),
+            comments: vec![],
+            replies: vec![],
+        },
+        EventBody::ItemAbandoned { reason: None },
+        EventBody::MergeHeld {
+            reason: String::new(),
+        },
+        EventBody::MergeCancelled {},
+        EventBody::MergeConflict {
+            target_commit: String::new(),
+            paths: vec![],
+            commands: vec![],
+        },
+        EventBody::ExternalComments {
+            comments: vec![],
+            edited: vec![],
+        },
+        EventBody::CommentOverride {
+            comment: Box::new(comment()),
+            reply: Reply {
+                id: 1,
+                comment: "c_1".into(),
+                author: Author::Operator,
+                status: None,
+                body: String::new(),
+                addressed_in: None,
+                overrides: true,
+                created_at: String::new(),
+            },
+        },
+        EventBody::ItemMerged {
+            commit: String::new(),
+            branch: String::new(),
+            commands: vec![],
+        },
+    ]
+}
+
+#[test]
+fn each_kind_is_the_type_it_serializes_under() {
+    for body in bodies() {
+        let json = serde_json::to_value(&body).unwrap();
+        assert_eq!(body.kind(), json["type"], "{json}");
+    }
+}
+
+#[test]
+fn reads_a_merge_from_a_hub_that_sends_no_commands() {
+    let json = r#"{"type":"item.merged","commit":"abc","branch":"feature"}"#;
+    let body: EventBody = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        body,
+        EventBody::ItemMerged {
+            commit: "abc".into(),
+            branch: "feature".into(),
+            commands: vec![],
+        }
+    );
+}

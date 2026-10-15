@@ -80,8 +80,17 @@ where
     S: AsRef<OsStr>,
 {
     let mut cmd = git(home);
-    cmd.args(args)
-        .stdin(Stdio::piped())
+    cmd.args(args);
+    run_command_with_input(cmd, doing, input)
+}
+
+/// Like [`run_command`], with `input` on stdin.
+pub(crate) fn run_command_with_input(
+    mut cmd: Command,
+    doing: &str,
+    input: &[u8],
+) -> Result<String, GitError> {
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let cant_run =

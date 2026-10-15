@@ -7,7 +7,8 @@ use clap::Subcommand;
 
 use crate::client::{Client, Reply, segment};
 use crate::output::{CliError, Outcome};
-use crate::project_cmd::{local_path, project_here};
+use crate::project_cmd::local_path;
+use crate::project_here::project_here;
 
 #[derive(Subcommand)]
 pub enum LangCommand {

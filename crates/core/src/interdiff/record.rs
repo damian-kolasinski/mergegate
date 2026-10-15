@@ -63,8 +63,12 @@ pub(crate) fn record<S: ItemStore + DiffStore + ViewedStore>(
                         change: Change::Unseparated,
                     },
                     Some(stat) => InterdiffFile {
+                        change: match (&stat.file.old_blob, &stat.file.new_blob) {
+                            (None, _) => Change::Added,
+                            (_, None) => Change::Deleted,
+                            _ => Change::Changed,
+                        },
                         stat,
-                        change: Change::Changed,
                     },
                     None => InterdiffFile {
                         stat: own.clone(),
