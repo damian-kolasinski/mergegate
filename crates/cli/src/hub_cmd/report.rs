@@ -29,6 +29,10 @@ pub(super) struct HubStatus {
     /// Whether this `mg` speaks the running hub's API version.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatible: Option<bool>,
+    /// The hub on another machine `mg connect` set, which commands other
+    /// than `mg hub start`, `stop` and `status` go to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connected: Option<String>,
     /// A hub process holds the home's lock but doesn't answer.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub unresponsive: bool,

@@ -8,7 +8,7 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use mergegate_core::feedback::{
     self, Event, EventKind, Feedback, FeedbackError, NoticeKind, Source, Wake,
 };
@@ -17,6 +17,7 @@ use serde::Deserialize;
 use store_sqlite::Store;
 use tokio::time::Instant;
 
+use crate::guard::{self, Caller};
 use crate::reply::Failure;
 use crate::server::AppState;
 use crate::{comments, external, items, replies, reviews};
@@ -42,6 +43,7 @@ struct ReadQuery {
 
 async fn read(
     State(state): State<Arc<AppState>>,
+    Extension(caller): Extension<Caller>,
     id: Result<Path<String>, PathRejection>,
     query: Result<Query<ReadQuery>, QueryRejection>,
 ) -> Result<Json<api::feedback::Feedback>, Failure> {
@@ -55,6 +57,7 @@ async fn read(
     let deadline = Instant::now() + Duration::from_secs(query.wait).min(MAX_WAIT);
     let mut log = state.events.log();
     let mut stopping = state.events.stopping();
+    let mut admissions = caller.admissions(&state);
     let mut last = query.wait == 0;
     // Its agent is awake while this reads, and needs no wake command run.
     let _reading = state.wakes.reading(&id);
@@ -88,10 +91,16 @@ async fn read(
             return Ok(Json(to_api(&id, read)));
         }
         // The store stays unlocked while this waits.
+        let mut readmit = false;
         tokio::select! {
             changed = log.changed() => last = changed.is_err(),
             () = tokio::time::sleep_until(deadline) => last = true,
             _ = stopping.wait_for(|stopping| *stopping) => last = true,
+            () = admissions.changed() => readmit = true,
+        }
+        // A device denied while it waits gets the refusal, not events.
+        if readmit {
+            guard::recheck(&state, &caller).await?;
         }
     }
 }

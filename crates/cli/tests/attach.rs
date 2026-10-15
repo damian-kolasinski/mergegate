@@ -259,7 +259,7 @@ fn f16_a_closed_item_takes_no_attachments_and_drops_them_after_the_ttl() {
         .mg(&["--json", "hub", "set", "attachment-ttl", "0s"])
         .assert_code(0)
         .json();
-    assert_eq!(set, json!({"attachment_ttl": "0s"}));
+    assert_eq!(set, json!({"attachment_ttl": "0s", "listen": "local"}));
     let text = env
         .mg(&["hub", "set", "attachment-ttl", "48h"])
         .assert_code(0)

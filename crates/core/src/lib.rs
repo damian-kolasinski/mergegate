@@ -5,6 +5,7 @@ pub mod agent;
 pub mod attachment;
 pub mod conflict;
 pub mod decision;
+pub mod device;
 pub mod diff;
 pub mod doctor;
 pub mod external;

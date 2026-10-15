@@ -5,6 +5,7 @@ mod attachments;
 mod comments;
 mod conflicts;
 mod conversation;
+mod devices;
 mod diff;
 mod doctor;
 mod draft_replies;
@@ -29,13 +30,14 @@ mod reviews;
 mod rules;
 mod server;
 mod settings;
+mod tailnet;
 mod ui;
 mod viewed;
 mod wake;
 
 use std::io::IsTerminal;
 
-pub use home::{HOME_ENV, Home, HomeError, HubInfo};
+pub use home::{Connection, HOME_ENV, Home, HomeError, HubInfo};
 pub use store_sqlite::{SCHEMA_VERSION, StoreError};
 
 pub const DEFAULT_PORT: u16 = 7800;

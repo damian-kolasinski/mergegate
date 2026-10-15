@@ -8,9 +8,10 @@ pub use ttl::Ttl;
 use crate::store::StoreError;
 
 /// The keys `mg hub set` accepts.
-pub const KEYS: &[&str] = &[ATTACHMENT_TTL];
+pub const KEYS: &[&str] = &[ATTACHMENT_TTL, LISTEN];
 
 const ATTACHMENT_TTL: &str = "attachment-ttl";
+const LISTEN: &str = "listen";
 
 pub trait SettingsStore {
     /// The value last set for `key`, as it was given.
@@ -23,6 +24,33 @@ pub trait SettingsStore {
 pub struct Settings {
     /// How long a closed item keeps its attachments.
     pub attachment_ttl: Ttl,
+    pub listen: Listen,
+}
+
+/// Where the hub listens besides 127.0.0.1 (design §4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Listen {
+    #[default]
+    Local,
+    /// Also on the machine's Tailscale address.
+    Tailnet,
+}
+
+impl Listen {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "local" => Some(Self::Local),
+            "tailnet" => Some(Self::Tailnet),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Tailnet => "tailnet",
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,7 +73,14 @@ pub fn settings<S: SettingsStore>(store: &S) -> Result<Settings, SettingsError> 
         Some(value) => parse_ttl(&value)?,
         None => Ttl::DEFAULT_ATTACHMENTS,
     };
-    Ok(Settings { attachment_ttl })
+    let listen = match store.setting(LISTEN)? {
+        Some(value) => parse_listen(&value)?,
+        None => Listen::default(),
+    };
+    Ok(Settings {
+        attachment_ttl,
+        listen,
+    })
 }
 
 /// Checks `value` and stores it, then reads every setting back.
@@ -56,6 +91,7 @@ pub fn set<S: SettingsStore>(
 ) -> Result<Settings, SettingsError> {
     let canonical = match key {
         ATTACHMENT_TTL => parse_ttl(value)?.to_string(),
+        LISTEN => parse_listen(value)?.as_str().to_owned(),
         _ => return Err(SettingsError::Unknown { key: key.into() }),
     };
     store.set_setting(key, &canonical)?;
@@ -67,6 +103,14 @@ fn parse_ttl(value: &str) -> Result<Ttl, SettingsError> {
         key: ATTACHMENT_TTL,
         value: value.into(),
         expected: "a duration such as 2d, 12h, 30m or 0s",
+    })
+}
+
+fn parse_listen(value: &str) -> Result<Listen, SettingsError> {
+    Listen::parse(value).ok_or_else(|| SettingsError::InvalidValue {
+        key: LISTEN,
+        value: value.into(),
+        expected: "local or tailnet",
     })
 }
 

@@ -2092,6 +2092,7 @@ dependencies = [
  "mergegate-lang-release",
  "mergegate-rules-toml",
  "mergegate-store-sqlite",
+ "mergegate-tailscale",
  "serde",
  "serde_json",
  "tempfile",
@@ -2137,6 +2138,15 @@ dependencies = [
  "sha2 0.11.1",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "mergegate-tailscale"
+version = "0.1.0"
+dependencies = [
+ "mergegate-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -9,7 +9,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **PR 1 builds a `testkit` crate.** It starts the real hub binary on a random port with its own temporary `MERGEGATE_HOME`, creates real git repos and worktrees, and runs the real `mg` binary, returning its JSON output and exit code.
 - **Scenario tests** run against it and are named after the flows in [user-flows.html](user-flows.html) (F1–F16), so the tests read as the spec. A flow listed on several PRs is covered in parts: each PR tests the steps it delivers.
 - **Always real:** git, SQLite, HTTP, the hub process, the `mg` process. Time is real too; tests set debounce, poll and timeout values very small instead of faking clocks.
-- **Faked, because we don't own them:** GitHub (one stateful fake server keeping PRs and comments in memory), Tailscale's local API, and judge model APIs.
+- **Faked, because we don't own them:** GitHub (one stateful fake server keeping PRs and comments in memory), the `tailscale` CLI, and judge model APIs.
 - **Pure `core` logic** (comment re-mapping, interdiffs, rule matching, ordering) gets table and golden tests. Each suite keeps its cases in one data file, not one snapshot file per case.
 - **UI tests** use Playwright against the same harness, with state created through `mg` commands.
 - **Benchmarks** come with every speed-sensitive path a PR adds (tech-stack §9).
@@ -43,7 +43,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with interdiffs (`interdiff_files`) | F7, F12 | — | 10 |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | — |
-| 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale | 10 |
 
 ## Why this order
 
@@ -51,7 +50,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **The whole loop runs on the `local` backend before GitHub** (PRs 1–8), so it is proven against real git with nothing faked.
 - **GitHub comes right after the skill**, so mergegate's own work keeps landing as GitHub PRs, cloud bots keep reviewing, and the switch happens early.
 - **Then the design's pain points:** triage for the flat file list, re-review for cheap revision cycles, stacks for oversized work, prioritization for many open items.
-- **Reach comes last in the list:** multi-machine waits until agents run on more than one machine.
 - **Stacked items need re-review** (12b): keeping comments and approvals across a child's rebases relies on comment re-mapping, as viewed marks rely on interdiffs. Until PR 13 lands, agents submit the parts of a split one after another.
 
 ## Switching mergegate's own reviews to mergegate

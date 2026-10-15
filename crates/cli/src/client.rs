@@ -9,12 +9,27 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use ureq::http::Response;
 
-use crate::hub_cmd::probe::{Running, probe};
+use crate::hub_cmd::probe::probe;
 use crate::output::{CliError, exit};
 
 pub(crate) struct Client {
     url: String,
     agent: ureq::Agent,
+    connected: bool,
+}
+
+/// The hub this `mg` works through, and what it said of itself.
+pub(crate) struct Hub {
+    pub url: String,
+    pub health: api::hub::Health,
+    /// It is on another machine, as `mg connect` set.
+    pub connected: bool,
+}
+
+impl Hub {
+    fn compatible(&self) -> bool {
+        self.health.api_version == api::API_VERSION
+    }
 }
 
 /// What the hub answered a request that may need a decision.
@@ -29,18 +44,20 @@ impl Client {
         Self::to(&running(home)?)
     }
 
-    pub fn to(running: &Running) -> Result<Self, CliError> {
-        if !running.compatible() {
-            return Err(CliError::new(
-                "hub_incompatible",
-                format!(
-                    "the hub speaks API v{}, this mg speaks v{}",
-                    running.health.api_version,
-                    api::API_VERSION
-                ),
-            )
-            .hint("mg hub stop && mg hub start")
-            .exit(exit::UNAVAILABLE));
+    pub fn to(hub: &Hub) -> Result<Self, CliError> {
+        if !hub.compatible() {
+            let message = format!(
+                "the hub speaks API v{}, this mg speaks v{}",
+                hub.health.api_version,
+                api::API_VERSION
+            );
+            let hint = match hub.connected {
+                true => "run the same mg here as on the hub's machine",
+                false => "mg hub stop && mg hub start",
+            };
+            return Err(CliError::new("hub_incompatible", message)
+                .hint(hint)
+                .exit(exit::UNAVAILABLE));
         }
         let agent = ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(2)))
@@ -52,9 +69,15 @@ impl Client {
             .build()
             .into();
         Ok(Self {
-            url: running.url(),
+            url: hub.url.clone(),
             agent,
+            connected: hub.connected,
         })
+    }
+
+    /// The hub is on another machine.
+    pub fn connected(&self) -> bool {
+        self.connected
     }
 
     pub fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, CliError> {
@@ -150,7 +173,10 @@ impl Client {
                 "hub_unavailable",
                 format!("lost the hub at {}: {e}", self.url),
             )
-            .hint("mg hub status")
+            .hint(match self.connected {
+                true => "mg doctor",
+                false => "mg hub status",
+            })
             .exit(exit::UNAVAILABLE)
         };
         let mut response = response.map_err(lost)?;
@@ -180,12 +206,64 @@ impl Client {
     }
 }
 
-/// The hub `home` points to, if it answers.
-pub(crate) fn running(home: &Home) -> Result<Running, CliError> {
-    probe(home).ok_or_else(|| {
+/// The hub `mg connect` named, or else the one `home` runs, if it answers.
+pub(crate) fn running(home: &Home) -> Result<Hub, CliError> {
+    if let Some(connection) = home.read_connection() {
+        return reach(&connection.url);
+    }
+    let running = probe(home).ok_or_else(|| {
         CliError::new("hub_unavailable", "the hub is not running")
             .hint("mg hub start")
             .exit(exit::UNAVAILABLE)
+    })?;
+    Ok(Hub {
+        url: running.url(),
+        health: running.health,
+        connected: false,
+    })
+}
+
+/// The hub at `url`, on another machine.
+pub(crate) fn reach(url: &str) -> Result<Hub, CliError> {
+    let unreachable = |why: String| {
+        CliError::new(
+            "hub_unavailable",
+            format!("can't reach the hub at {url}: {why}"),
+        )
+        .hint("check Tailscale on both machines, or use this machine's hub: mg connect --local")
+        .exit(exit::UNAVAILABLE)
+    };
+    // A refusal is the hub's to explain: which device it refused and how the
+    // operator lets it in.
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(2)))
+        .proxy(None)
+        .http_status_as_error(false)
+        .build()
+        .into();
+    let mut response = agent
+        .get(format!("{url}/api/health"))
+        .call()
+        .map_err(|e| unreachable(e.to_string()))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.body_mut().read_to_string().unwrap_or_default();
+        return Err(match serde_json::from_str::<ErrorEnvelope>(&body) {
+            Ok(envelope) => CliError {
+                exit: exit::ERROR,
+                body: envelope.error,
+            },
+            Err(_) => unreachable(format!("it answered {status}")),
+        });
+    }
+    let health = response
+        .body_mut()
+        .read_json()
+        .map_err(|e| unreachable(format!("it doesn't answer as a mergegate hub ({e})")))?;
+    Ok(Hub {
+        url: url.to_owned(),
+        health,
+        connected: true,
     })
 }
 

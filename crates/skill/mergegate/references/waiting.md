@@ -20,4 +20,6 @@ No model is involved while mergegate waits: `mg wait` is one blocking command, a
 
 The command should start a session that runs `mg wait {item}` or `mg feedback {item}` and works on what it returns; `mg resume {item}` prints a prompt that brings a fresh session up to date. The hub runs it at most once per event, never while an `mg wait` on the item is running, never for events a wait already returned, and one at a time per item. Your own events, like your `mg abandon`, never wake you. The hub doesn't retry a failed command; the command's stderr is in `$MERGEGATE_HOME/wakes/<item>.log`.
 
+The command runs on the hub's machine, so only an agent there can leave one: from a machine `mg connect` points at another hub, `mg submit --wake` is refused, and a plain submit removes the wake an earlier session on the hub's machine left. Wait with `mg wait` there instead.
+
 The latest submit that passes `--wake` sets it; `--wake ""` removes it. Read what's new with `mg feedback` before you set it from a live session, or the hub wakes you for it at once. When you pick up an item with `mg resume`, it shows the wake an earlier session left: replace it with yours or remove it, or it keeps starting that session.

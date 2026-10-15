@@ -3,6 +3,7 @@
 mod abandon_cmd;
 mod attach_cmd;
 mod client;
+mod connect_cmd;
 mod doctor_cmd;
 mod events_cmd;
 mod feedback_cmd;
@@ -57,6 +58,15 @@ enum Command {
     /// Run and inspect the hub
     #[command(subcommand)]
     Hub(hub_cmd::HubCommand),
+    /// Work through the hub on another machine of the tailnet, which runs
+    /// with listen tailnet; --local goes back to this machine's hub
+    Connect {
+        /// The hub's machine, as in mac-mini, mac-mini:7801 or its URL
+        #[arg(required_unless_present = "local", conflicts_with = "local")]
+        hub: Option<String>,
+        #[arg(long)]
+        local: bool,
+    },
     /// Register repos as projects and change their settings
     #[command(subcommand)]
     Project(project_cmd::ProjectCommand),
@@ -80,7 +90,7 @@ enum Command {
         title: Option<String>,
         /// Shell command the hub runs in this worktree when the item has
         /// events from the operator you haven't read; `{item}` becomes its
-        /// ID, "" removes it
+        /// ID, "" removes it; only on the hub's machine
         #[arg(long, value_name = "CMD")]
         wake: Option<String>,
         /// Screenshot or recording of the change for the operator: PNG,
@@ -211,6 +221,7 @@ pub fn main() -> ExitCode {
 fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
     match command {
         Command::Hub(command) => hub_cmd::run(command),
+        Command::Connect { hub, local } => connect_cmd::run(hub, local),
         Command::Project(command) => project_cmd::run(command),
         Command::Lang(command) => lang_cmd::run(command),
         Command::Rules(command) => rules_cmd::run(command),

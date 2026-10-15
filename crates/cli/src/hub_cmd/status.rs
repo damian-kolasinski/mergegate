@@ -5,8 +5,17 @@ use super::report::HubStatus;
 use crate::output::{CliError, Outcome};
 
 pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
+    let connected = home.read_connection().map(|c| c.url);
+    // Commands go to that hub, whatever runs here.
+    let note = |text: String| match &connected {
+        Some(url) => format!("{text}\nthis mg works through the hub at {url} (mg connect)"),
+        None => text,
+    };
     if let Some(running) = probe(home) {
-        let status = running.status(home);
+        let status = HubStatus {
+            connected: connected.clone(),
+            ..running.status(home)
+        };
         let mut text = format!("hub running at {}", running.describe());
         if let Some(service) = &status.service {
             text.push_str(&format!(
@@ -15,7 +24,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
                 service.unit
             ));
         }
-        return Ok(Outcome::done(&status, text));
+        return Ok(Outcome::done(&status, note(text)));
     }
     let unresponsive = home.is_locked();
     let status = HubStatus {
@@ -24,6 +33,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
             .read_info()
             .map(|info| info.pid)
             .filter(|_| unresponsive),
+        connected: connected.clone(),
         ..HubStatus::new(home)
     };
     let text = if unresponsive {
@@ -31,5 +41,5 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
     } else {
         "hub not running"
     };
-    Ok(Outcome::done(&status, text))
+    Ok(Outcome::done(&status, note(text.to_owned())))
 }

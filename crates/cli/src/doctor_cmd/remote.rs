@@ -3,15 +3,14 @@
 
 use api::doctor::{Check, CheckStatus};
 
-use crate::client::Client;
-use crate::hub_cmd::probe::Running;
+use crate::client::{Client, Hub};
 use crate::output::CliError;
 use crate::project_cmd::project_here;
 use crate::repo::{self, REMOTE};
 
 /// None outside a git repo, and in one that is neither a project's nor set
 /// up for one.
-pub(super) fn check(running: &Running, client: &Client) -> Result<Option<Check>, CliError> {
+pub(super) fn check(running: &Hub, client: &Client) -> Result<Option<Check>, CliError> {
     if repo::read(&["rev-parse", "--git-dir"])?.is_none() {
         return Ok(None);
     }
@@ -30,7 +29,7 @@ pub(super) fn check(running: &Running, client: &Client) -> Result<Option<Check>,
         }
     };
     let expected = project.as_deref().map(|name| (name, client.remote(name)));
-    let hub = format!("{}/git/", running.url());
+    let hub = format!("{}/git/", running.url);
     Ok(judge(
         expected.as_ref().map(|(name, url)| (*name, url.as_str())),
         remote.as_deref(),
