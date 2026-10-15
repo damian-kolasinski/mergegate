@@ -11,7 +11,7 @@ use mergegate_core::attachment::{self, MAX_SIZE, Media, SNIFF_LEN};
 use serde::Serialize;
 
 use crate::client::{self, Client};
-use crate::output::{CliError, Outcome};
+use crate::output::{CliError, Outcome, exit};
 
 /// A file checked before anything is sent, so a wrong one stops a submit
 /// before it pushes.
@@ -129,8 +129,9 @@ pub(crate) fn upload(
     Ok(attachments)
 }
 
-/// Names what went before `error` and what's left to send, since attaching
-/// a file again would show it twice.
+/// Names what went before `error`, since attaching a file again would show
+/// it twice, and, when sending again may work, what's left to send. Any other
+/// refusal, such as a closed item, keeps the hub's hint.
 fn unsent(mut error: CliError, item: &str, sent: &[Attachment], rest: &[Checked]) -> CliError {
     if !sent.is_empty() {
         let names: Vec<&str> = sent.iter().map(|a| a.name.as_str()).collect();
@@ -140,9 +141,21 @@ fn unsent(mut error: CliError, item: &str, sent: &[Attachment], rest: &[Checked]
             names.join(", ")
         );
     }
-    let paths: Vec<String> = rest.iter().map(|f| f.path.display().to_string()).collect();
-    error.body.hint = Some(format!("mg attach {item} {}", paths.join(" ")));
+    if transient(&error) {
+        let paths: Vec<String> = rest.iter().map(|f| f.path.display().to_string()).collect();
+        error.body.hint = Some(format!("mg attach {item} {}", paths.join(" ")));
+    }
     error
+}
+
+/// The upload failed on the way or in storage, not because the hub refused
+/// the item or the file.
+fn transient(error: &CliError) -> bool {
+    error.exit == exit::UNAVAILABLE
+        || matches!(
+            error.body.code.as_str(),
+            "upload_failed" | "store_failed" | "attachment_unreadable" | "unexpected_reply"
+        )
 }
 
 pub(crate) fn describe(item: &str, attachments: &[Attachment]) -> String {

@@ -27,21 +27,31 @@ fn checks_files_before_anything_is_sent() {
     assert_eq!(code(Path::new("/")), "invalid_name");
 }
 
-#[test]
-fn a_failed_upload_names_what_went_and_what_is_left() {
-    let attached = |name: &str| Attachment {
+fn attached(name: &str) -> Attachment {
+    Attachment {
         revision: 1,
         name: name.into(),
         media_type: "image/png".into(),
         video: false,
         size: 1,
         url: String::new(),
-    };
-    let rest = |path: &str| Checked {
+    }
+}
+
+fn rest(path: &str) -> Checked {
+    Checked {
         path: path.into(),
         name: String::new(),
+    }
+}
+
+#[test]
+fn a_failed_upload_names_what_went_and_what_is_left() {
+    let failed = || {
+        CliError::new("hub_unavailable", "lost the hub")
+            .hint("mg hub status")
+            .exit(exit::UNAVAILABLE)
     };
-    let failed = || CliError::new("not_found", "app#1 is gone");
 
     let error = unsent(
         failed(),
@@ -51,7 +61,7 @@ fn a_failed_upload_names_what_went_and_what_is_left() {
     );
     assert_eq!(
         error.body.message,
-        "app#1 is gone (a.png attached before it)"
+        "lost the hub (a.png attached before it)"
     );
     assert_eq!(
         error.body.hint.as_deref(),
@@ -59,6 +69,28 @@ fn a_failed_upload_names_what_went_and_what_is_left() {
     );
 
     let error = unsent(failed(), "app#1", &[], &[rest("a.png")]);
-    assert_eq!(error.body.message, "app#1 is gone");
+    assert_eq!(error.body.message, "lost the hub");
     assert_eq!(error.body.hint.as_deref(), Some("mg attach app#1 a.png"));
+
+    let store = CliError::new("store_failed", "disk full");
+    let error = unsent(store, "app#1", &[], &[rest("a.png")]);
+    assert_eq!(error.body.hint.as_deref(), Some("mg attach app#1 a.png"));
+}
+
+#[test]
+fn a_refusal_that_a_retry_cannot_fix_keeps_the_hubs_hint() {
+    let missing = CliError::new("item_not_found", "no item app#9").hint("mg inbox");
+    let error = unsent(missing, "app#9", &[], &[rest("a.png")]);
+    assert_eq!(error.body.hint.as_deref(), Some("mg inbox"));
+
+    let closed = || CliError::new("item_closed", "app#1 is abandoned");
+    let error = unsent(closed(), "app#1", &[], &[rest("a.png")]);
+    assert_eq!(error.body.hint, None);
+
+    let error = unsent(closed(), "app#1", &[attached("a.png")], &[rest("b.png")]);
+    assert_eq!(
+        error.body.message,
+        "app#1 is abandoned (a.png attached before it)"
+    );
+    assert_eq!(error.body.hint, None);
 }

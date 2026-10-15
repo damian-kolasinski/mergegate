@@ -275,6 +275,11 @@ fn f16_a_closed_item_takes_no_attachments_and_drops_them_after_the_ttl() {
     env.mg(&["--json", "abandon", "app#1"]).assert_code(0);
     let closed = env.mg(&["--json", "attach", "app#1", arg(&gif)]).json();
     assert_eq!(error_code(&closed), "item_closed", "{closed}");
+    // Sending the same files again can't help, so no retry is hinted.
+    assert_eq!(closed["error"]["hint"], Value::Null, "{closed}");
+    let unknown = env.mg(&["--json", "attach", "nope#1", arg(&gif)]).json();
+    assert_eq!(error_code(&unknown), "item_not_found", "{unknown}");
+    assert_eq!(unknown["error"]["hint"], "mg inbox", "{unknown}");
     assert_eq!(get(&env, &url, "").status, 200, "kept for the 2d TTL");
 
     env.mg(&["--json", "hub", "set", "attachment-ttl", "0s"])
