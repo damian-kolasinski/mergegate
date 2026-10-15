@@ -88,6 +88,13 @@ test("f6 a newer revision takes request changes away, not comments", async ({
   const request = review.getByRole("button", { name: "Request changes" });
   await expect(request).toBeDisabled();
   await expect(request).toHaveAttribute("title", "Show r2 to request changes");
+  // The newest, however many revisions came after the one shown.
+  app.revise("Log in again", { "login.rs": "fn login(password: &[u8]) {}\n" });
+  await expect(banner.getByText("r3 submitted")).toBeVisible();
+  await expect(request).toHaveAttribute("title", "Show r3 to request changes");
+  await expect(
+    review.getByRole("button", { name: "Approve & merge" }),
+  ).toHaveAttribute("title", "Show r3 to approve it");
   await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
 });
