@@ -54,10 +54,14 @@ function listen(keymap: Keymap, modal: boolean): void {
       return;
     }
     if (isEditable(event.target)) return;
-    // Enter on a focused button or link is that control's, such as a
-    // dialog's Close: taken here it would act on the screen behind instead.
-    // A dialog's own keys still decide, as the priority picker's do.
-    if (!modal && event.key === "Enter" && isActivatable(event.target)) return;
+    // Enter on a dialog's focused control, such as the demo viewer's Close,
+    // is that control's: taken here it would act on the screen behind
+    // instead. Elsewhere a link or button left focused by a click keeps the
+    // screen's Enter, and a dialog's own keys still decide, as the priority
+    // picker's do.
+    if (!modal && event.key === "Enter" && inDialogControl(event.target)) {
+      return;
+    }
     // Capturing on window runs before any listener elsewhere; stopping here
     // keeps the key from them but not from its default, such as `Tab`.
     if (modal) event.stopPropagation();
@@ -80,10 +84,11 @@ export function isEditable(target: EventTarget | null): boolean {
   );
 }
 
-function isActivatable(target: EventTarget | null): boolean {
+function inDialogControl(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
-    target.closest("button, a[href], summary") !== null
+    target.closest("button, a[href], summary") !== null &&
+    target.closest('dialog, [role="dialog"]') !== null
   );
 }
 
