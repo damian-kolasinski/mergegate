@@ -8,11 +8,14 @@
 // <grammar>.{highlights,injections,locals}.scm. Grammars are compiled with
 // the pinned tree-sitter CLI rather than taken prebuilt, so every one has the
 // ABI of the runtime mg links; the CLI fetches wasi-sdk into ~/.cache/tree-sitter.
+//
+// DIR/languages.json lists the packs built with each archive's sha256, and a
+// release ships it beside them.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,10 +37,14 @@ const packs = wanted.length ? wanted.map((n) => byName.get(n)) : catalogue.packs
 const work = join(here, ".work");
 mkdirSync(out, { recursive: true });
 
+const index = [];
 for (const pack of packs) {
   const file = await build(pack);
+  const sha256 = createHash("sha256").update(readFileSync(file)).digest("hex");
+  index.push({ name: pack.name, version: pack.version, file: basename(file), sha256 });
   console.log(file);
 }
+writeFileSync(join(out, "languages.json"), JSON.stringify({ packs: index }, null, 2) + "\n");
 
 // "mergegate:<path>" is a query kept in langs/, where upstream's needs a fix.
 function queryPath(pkg, file) {

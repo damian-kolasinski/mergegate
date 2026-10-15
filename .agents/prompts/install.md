@@ -7,17 +7,18 @@ Set up two installations of mergegate that never share state:
 
 ## Stable
 
-1. Find the latest release: `gh release view --repo damian-kolasinski/mergegate --json tagName --jq .tagName`. If there is none yet, use `main`.
-2. Install it: `MG_REQUIRE_UI=1 cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --tag <tag> mg` (`--branch main` when there is no release). The build needs pnpm and Node 22 for the UI; `MG_REQUIRE_UI=1` makes it fail rather than install an `mg` without one. This puts `mg` in `~/.cargo/bin`. Check that `command -v mg` resolves there.
-3. Start the hub: `mg hub start`. Its data lives in `~/.mergegate`.
-4. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer.
-5. Run `mg doctor` and fix what it reports.
+1. Find the latest release: `gh release view --repo damian-kolasinski/mergegate --json tagName --jq .tagName`.
+2. Install it with mise: `mise use -g packslip:damian-kolasinski/mergegate`. mise checks the release's packslip signature before it installs `mg`. If `mise backends ls` doesn't list `packslip`, run `mise self-update` first. Check that `command -v mg` resolves into mise and that no `mg` from an earlier source install shadows it; `cargo uninstall mg` removes one from `~/.cargo/bin`.
+3. If there is no release yet, build from `main` instead: `MG_REQUIRE_UI=1 cargo install --locked --force --git https://github.com/damian-kolasinski/mergegate --branch main mg`. The build needs pnpm and Node 22 for the UI; `MG_REQUIRE_UI=1` makes it fail rather than install an `mg` without one.
+4. Start the hub: `mg hub start`. Its data lives in `~/.mergegate`.
+5. In the repo, run `mg project add`, `mg init` and `mg skill install`. When a command returns `needs_decision`, ask the operator and re-run it with their answer.
+6. Run `mg doctor` and fix what it reports.
 
-To upgrade, repeat step 2 with the new tag, then `mg hub stop` and `mg hub start`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
+To upgrade, run `mise up packslip:damian-kolasinski/mergegate`, then `mg hub stop` and `mg hub start`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
 
 Prefer fixing forward to rolling back: a rollback loses review state written since the upgrade. If you must roll back:
 1. Run `mg hub stop`.
-2. Install the previous tag as in step 2.
+2. Install the previous version: `mise use -g packslip:damian-kolasinski/mergegate@<version>`.
 3. Delete `hub.db-wal` and `hub.db-shm`.
 4. Copy the newest `hub.db.bak-*` over `hub.db`.
 5. Run `mg hub start`.
