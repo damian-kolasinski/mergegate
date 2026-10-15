@@ -15,6 +15,9 @@ import styles from "./thread.module.css";
  * Every comment, sent and draft, on every revision. The diff shows the shown
  * revision's under their last line, the earlier ones' the hub placed onto it
  * under the last of the lines theirs became, and the new one being written.
+ * A file unchanged since the revision compared against stays folded out of
+ * the diff, with its threads in the Conversation list, unless one of them
+ * waits on the operator: that brings the file back into the diff.
  */
 export function useThreads(
   revision: number,
@@ -25,15 +28,39 @@ export function useThreads(
   },
   /** Lines of a side the diff on screen has, as an interdiff has no base. */
   onScreen: (spot: Spot) => boolean,
+  unchanged: {
+    paths: ReadonlySet<string>;
+    waiting: (comment: Comment) => boolean;
+  },
 ) {
   const all = createMemo(() =>
     [...lists.sent(), ...lists.drafts()].sort(
       (a, b) => numberOf(a) - numberOf(b),
     ),
   );
-  const inDiff = (comment: Comment) => {
+  const onSide = (comment: Comment) => {
     const spot = spotOf(comment, revision);
-    return spot !== undefined && onScreen(spot);
+    return spot && onScreen(spot) ? spot : undefined;
+  };
+  const unfolded = createMemo(
+    () =>
+      new Set(
+        all().flatMap((comment) => {
+          const spot = onSide(comment);
+          return spot &&
+            unchanged.paths.has(spot.path) &&
+            unchanged.waiting(comment)
+            ? [spot.path]
+            : [];
+        }),
+      ) as ReadonlySet<string>,
+  );
+  const inDiff = (comment: Comment) => {
+    const spot = onSide(comment);
+    return (
+      spot !== undefined &&
+      (!unchanged.paths.has(spot.path) || unfolded().has(spot.path))
+    );
   };
   const shown = createMemo(() => all().filter(inDiff));
   /** The lines that hold a thread, for the diff to make room under. */
@@ -48,6 +75,8 @@ export function useThreads(
     all,
     /** Shown under its line in the diff, not only in the Conversation list. */
     inDiff,
+    /** The unchanged files a waiting thread keeps in the diff. */
+    unfolded,
     spots,
     at: (spot: Spot) =>
       shown().filter((comment) => {

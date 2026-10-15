@@ -512,6 +512,8 @@ function contentNote(file: File): string | undefined {
       return "Added since the earlier revision";
     case "deleted":
       return "Deleted since the earlier revision";
+    case "unchanged":
+      return "Unchanged since the earlier revision; its own diff shown";
     default:
       // Text, but not the file itself.
       return isLfsPointer(file)

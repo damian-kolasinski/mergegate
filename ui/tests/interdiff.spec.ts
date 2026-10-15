@@ -25,11 +25,13 @@ function reviewed(hub: Hub) {
   };
 }
 
-async function requestChanges(page: Page) {
+async function requestChanges(page: Page, revision = 1) {
   const review = page.getByRole("form", { name: "Review" });
   await review.getByRole("textbox", { name: "Review summary" }).fill("Fix it.");
   await review.getByRole("button", { name: "Request changes" }).click();
-  await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
+  await expect(
+    review.getByText(`Sent to the agent on r${revision}`),
+  ).toBeVisible();
 }
 
 test("f7 a new revision shows what changed since the review", async ({
@@ -127,4 +129,62 @@ test("f7 a file new since the review says so", async ({ page, hub }) => {
   await expect(
     diff.getByText("Added since the earlier revision"),
   ).toBeVisible();
+});
+
+test("f7 an unchanged file keeps a thread that waits in the diff", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ README: "title\n" });
+  app.submit("greet", "Add greet", { "src/greet.py": "def greet(): pass\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const files = screen.getByRole("navigation", { name: "Files" });
+  const diff = screen.getByRole("region", { name: "Diff" });
+  await expect(diff.getByText("def greet(): pass")).toBeVisible();
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  await expect(
+    page.getByRole("textbox", { name: "Comment on src/greet.py line 1" }),
+  ).toBeFocused();
+  await page.keyboard.type("Add a test.");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await files.getByLabel("Viewed src/greet.py").check();
+  await requestChanges(page);
+  hub.mg(["reply", "c_1", "--status", "addressed"]);
+  app.revise("Test greet", { "tests/test_greet.py": "greet()\n" });
+
+  // r2 leaves greet.py as it was, but the agent answered its comment: the
+  // file stays in the diff, open over its viewed mark, with the thread.
+  await page.reload();
+  await expect(screen.getByLabel("Compare")).toHaveValue("1");
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^greet\.py\s*src.*unchanged since r1/,
+    /^test_greet\.py\s*tests.*added/,
+  ]);
+  await expect(files.getByText(/\d unchanged since/)).toHaveCount(0);
+  await expect(files.getByLabel("Viewed src/greet.py")).toBeChecked();
+  const comment = diff.getByRole("article", { name: "Comment c_1" });
+  await expect(comment).toContainText("Add a test.");
+  await expect(comment).toContainText("Addressed in r2");
+
+  // Reviewed on r2, the thread is settled: r3 folds the file away again,
+  // and the Conversation list holds the thread.
+  await requestChanges(page, 2);
+  app.revise("Name it", { "src/name.py": "NAME = 'you'\n" });
+  await page.reload();
+  await expect(screen.getByLabel("Compare")).toHaveValue("2");
+  await expect(files.getByRole("listitem")).toHaveText([/^name\.py\s*src/]);
+  await expect(files.getByText("2 unchanged since r2")).toBeVisible();
+  await expect(comment).toHaveCount(0);
+  await screen.getByRole("button", { name: /^Conversation/ }).click();
+  const list = page.getByRole("complementary", { name: "Conversation" });
+  await expect(list.getByRole("button", { name: "Show in diff" })).toHaveCount(
+    0,
+  );
+  await expect(
+    list.getByRole("article", { name: "Comment c_1" }),
+  ).toContainText("Addressed in r2");
 });

@@ -71,6 +71,24 @@ export function useComments(
     sent,
     replies,
   });
+  const since = diff.since;
+  /**
+   * Over a diff since rK, a thread the operator should see again: theirs
+   * not sent yet, written on rK or later, or one the agent answered last,
+   * unless the answer is a fix rK already had or a rejection they agreed to.
+   */
+  const waiting = (comment: Comment) => {
+    if (since === null) return false;
+    if (drafts.isDraft(comment) || replyDrafts.to(comment).length) return true;
+    if (comment.revision >= since) return true;
+    const latest = replies.to(comment).at(-1);
+    if (latest?.author !== "agent" || external.agreed(comment)) return false;
+    return (
+      latest.status !== "addressed" ||
+      latest.addressed_in === null ||
+      latest.addressed_in > since
+    );
+  };
   const threads = useThreads(
     revision,
     {
@@ -79,6 +97,14 @@ export function useComments(
       composing: drafts.composing,
     },
     options.onScreen,
+    {
+      paths: new Set(
+        diff.files
+          .filter((file) => file.interdiff === "unchanged")
+          .map((file) => file.path),
+      ),
+      waiting,
+    },
   );
   return {
     /** The revision the diff shows. */
