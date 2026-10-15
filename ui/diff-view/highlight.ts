@@ -92,13 +92,49 @@ const renderer = DiffHunksRenderer.prototype as unknown as {
   renderDiffWithHighlighter: Render;
 };
 const render = renderer.renderDiffWithHighlighter;
-renderer.renderDiffWithHighlighter = function (diff, ...rest) {
-  const rendered = render.call(this, diff, ...rest);
+/**
+ * Each diff's last render. CodeView keeps a highlighted diff's, but renders
+ * a plain one's every line again whenever it renders the file at all, as
+ * its window moves or a note or the viewed mark changes: 18k lines are a
+ * frame's work many times over. Ours are all plain, coloured by the hub's
+ * spans, and the same lines render the same. Spans come with a new diff;
+ * expanding a gap fills the diff in place, with new arrays of lines and
+ * hunks, so those are part of the key. One CodeView renders every diff,
+ * with the same options.
+ */
+const kept = new WeakMap<
+  FileDiffMetadata,
+  Pick<FileDiffMetadata, "deletionLines" | "additionLines" | "hunks"> & {
+    highlighter: DiffsHighlighter;
+    plain: boolean | undefined;
+    rendered: ReturnType<Render>;
+  }
+>();
+renderer.renderDiffWithHighlighter = function (diff, highlighter, plain) {
+  const last = kept.get(diff);
+  if (
+    last?.deletionLines === diff.deletionLines &&
+    last.additionLines === diff.additionLines &&
+    last.hunks === diff.hunks &&
+    last.highlighter === highlighter &&
+    last.plain === plain
+  ) {
+    return last.rendered;
+  }
+  const rendered = render.call(this, diff, highlighter, plain);
   const painting = paintings.get(diff.name);
   if (painting) {
     paintLines(rendered.result.code.deletionLines, painting.deletions);
     paintLines(rendered.result.code.additionLines, painting.additions);
   }
+  kept.set(diff, {
+    deletionLines: diff.deletionLines,
+    additionLines: diff.additionLines,
+    hunks: diff.hunks,
+    highlighter,
+    plain,
+    rendered,
+  });
   return rendered;
 };
 

@@ -168,7 +168,9 @@ No MCP server. The CLI works in every harness, while MCP tool schemas cost conte
 | UI first paint | < 100 ms |
 | Open item (diffs precomputed, comments placed) | < 50 ms |
 | Open item from the inbox, to its diff on screen (50 files, 5k lines) | < 100 ms |
-| Switch file / keyboard action (`n`, `j`, `v`), keypress to the frame showing the result | < 16 ms |
+| Switch file / keyboard action (`n`, `j`, `v`), keypress to the frame showing the result | < 33 ms (one frame's wait plus at most one of work) |
+| Open the largest single file, a full rewrite of 9k lines (18k changed, near the 20k cap), from the inbox | < 100 ms |
+| Expand a gap between hunks, click to the lines on screen (first expansion in a file, blobs fetched) | < 50 ms |
 | Scroll a 5k-line diff | 60 fps (virtualized; p95 frame < 25 ms in `ui/tests/review.spec.ts`) |
 | A change made elsewhere showing in an open inbox | < 50 ms |
 | `mg submit` of 20 files, new item or revision, push included | < 150 ms |
@@ -179,7 +181,9 @@ No MCP server. The CLI works in every harness, while MCP tool schemas cost conte
 
 The UI budgets are in `ui/tests/inbox.spec.ts` and `review.spec.ts`; Playwright's `budgets` project runs them alone, after the rest. The hub and CLI budgets are `--ignored` tests run in release: `crates/cli/tests/budgets.rs` and `contract.rs`. CI enforces them on Ubuntu (`MG_ENFORCE_BUDGETS=1`); shared macOS runners are too noisy, so there and locally they only report.
 
-The UI doesn't prefetch: opening a 5k-line item from the inbox paints in about 25 ms, well inside its budget. It updates optimistically (marking viewed and similar actions don't wait for the server).
+The UI times are taken the way Event Timing (and so INP) takes an interaction's: from the input event's own timestamp to the end of the first frame showing the result, read by a requestAnimationFrame loop in the page, so Playwright's round trips stay out. That includes the wait for the display's next frame, up to 16.7 ms at 60 Hz, which is why a key's budget is two frames. The `budgets` project runs without Playwright's trace, whose DOM snapshots add tens of milliseconds to each action.
+
+The UI doesn't prefetch: opening a 5k-line item from the inbox paints in about 35 ms, well inside its budget. CodeView renders a plain-text diff, which ours all are (the hub's spans colour them), again in full every time it renders the file, as its window moves or a note or a viewed mark changes; `ui/diff-view/highlight.ts` keeps each diff's render, so an 18k-line file is rendered once per open rather than on every one of those. It updates optimistically (marking viewed and similar actions don't wait for the server).
 
 On macOS, git is spawned by absolute path (`git::binary`): `/usr/bin/git` there is xcrun's shim, which adds about 7 ms to every spawn, and a submit spawns a dozen.
 

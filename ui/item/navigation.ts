@@ -43,13 +43,12 @@ export function useNavigation(options: {
   };
   const showFile = (path: string) => {
     setCurrent(path);
-    const first = lines().findIndex((line) => line.path === path);
-    if (first === -1) {
-      setCursor(undefined);
-      options.view()?.clearRow();
-    } else {
-      moveCursor(first);
-    }
+    const first = lines().find((line) => line.path === path);
+    setCursor(first);
+    // Not scrolled to: the file's header goes to the top, its first line
+    // with it, and each scroll costs the view a layout and a render.
+    if (first) options.view()?.selectRow(first);
+    else options.view()?.clearRow();
     options.view()?.showFile(path);
   };
   /**

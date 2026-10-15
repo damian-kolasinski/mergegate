@@ -23,7 +23,9 @@ export default defineConfig({
       grep: budgets,
       dependencies: ["chromium"],
       workers: 1,
-      use: { ...devices["Desktop Chrome"] },
+      // A trace snapshots the whole page around every action, in the page:
+      // tens of milliseconds on a large diff, timed as if the app's.
+      use: { ...devices["Desktop Chrome"], trace: "off" },
     },
   ],
 });

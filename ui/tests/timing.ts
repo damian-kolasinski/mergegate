@@ -1,37 +1,46 @@
 // Timing for the budget tests (tech-stack.md §9): from what the operator did
-// to the frame that shows its result. Measured everywhere, enforced with
-// MG_ENFORCE_BUDGETS=1, which CI sets on Ubuntu only.
+// to the frame that shows its result, painted. Measured everywhere, enforced
+// with MG_ENFORCE_BUDGETS=1, which CI sets on Ubuntu only.
 
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect } from "./hub";
 
 /**
  * What the page reads to tell the result is on screen: the first element
- * matching `selector`, shadow roots included, for its text or for whether
- * there is one, or how many match outside shadow roots.
+ * matching `selector`, for its text or for whether there is one, or every
+ * one, for how many there are or for all their text. Shadow roots included.
  */
-export type Probe = { selector: string; read: "text" | "found" | "count" };
+export type Probe = {
+  selector: string;
+  read: "text" | "found" | "count" | "texts";
+};
 
 type Reading = string | number | boolean | null;
 
-/** What the timing keeps in the page. */
+/** What the timing keeps in the page, on `performance.now()`'s clock. */
 type Timed = {
+  /** When the operator acted. */
   started?: number;
+  /** Milliseconds from then to the result, painted. */
+  took?: number;
   reads?: (probe: Probe) => Reading;
 };
 
 /**
- * Milliseconds from pressing `key` to the first animation frame in which
- * `probe` reads other than it did before: the DOM holding the result, which
- * the browser then paints in that frame. Timed from the event's own
- * timestamp, so the browser's input queue counts too.
+ * From pressing `key` to the end of the first frame in which `probe` reads
+ * other than it did before. Timed from the event's own timestamp, so the
+ * browser's input queue counts too: what Event Timing, and so INP, call the
+ * interaction's duration. That includes the wait for the display's next
+ * frame, up to 16.7 ms at 60 Hz whatever the app does. The page can't time
+ * the app's work without it: Chrome renders the frame before it runs
+ * anything the key's handlers queue.
  */
 export async function pressToFrame(
   page: Page,
   key: string,
   probe: Probe,
 ): Promise<number> {
-  const before = await start(page, probe);
+  await watch(page, probe);
   await page.evaluate(() => {
     addEventListener(
       "keydown",
@@ -42,13 +51,13 @@ export async function pressToFrame(
     );
   });
   await page.keyboard.press(key);
-  return untilFrame(page, probe, before);
+  return took(page);
 }
 
 /**
- * Milliseconds from the page sending `body` to `path`, as another client of
- * the hub would, to the first frame in which `probe` reads other than it did
- * before: the hub's work, its event, and the page's refetch and render.
+ * From the page sending `body` to `path`, as another client of the hub
+ * would, to the end of the first frame in which `probe` reads other than it
+ * did before: the hub's work, its event, and the page's refetch and render.
  */
 export async function sendToFrame(
   page: Page,
@@ -56,7 +65,7 @@ export async function sendToFrame(
   body: unknown,
   probe: Probe,
 ): Promise<number> {
-  const before = await start(page, probe);
+  await watch(page, probe);
   await page.evaluate(
     ([path, body]) => {
       (window as Timed).started = performance.now();
@@ -71,16 +80,48 @@ export async function sendToFrame(
     },
     [path, body] as const,
   );
-  return untilFrame(page, probe, before);
+  return took(page);
 }
 
-/** Readies the page for a timing and answers what `probe` reads now. */
-async function start(page: Page, probe: Probe): Promise<Reading> {
+/**
+ * From clicking `target` to the end of the first frame in which `probe`
+ * reads other than it did before. Timed from the click's own timestamp, as
+ * `pressToFrame` times a key.
+ */
+export async function clickToFrame(
+  page: Page,
+  target: Locator,
+  probe: Probe,
+): Promise<number> {
+  // Scrolled to first, so the click's own scroll isn't timed.
+  await target.scrollIntoViewIfNeeded();
+  await watch(page, probe);
+  await page.evaluate(() => {
+    addEventListener(
+      "click",
+      (event) => {
+        (window as Timed).started = event.timeStamp;
+      },
+      { capture: true, once: true },
+    );
+  });
+  await target.click();
+  return took(page);
+}
+
+/**
+ * Starts reading `probe` after every frame the page paints, until it reads
+ * otherwise than now with the operator's action started. Read in the page,
+ * from before the action: Playwright's own round trips would otherwise land
+ * in the time.
+ */
+async function watch(page: Page, probe: Probe): Promise<void> {
   // Installed as a function rather than sent as a string: the hub's CSP
   // forbids eval.
-  return page.evaluate((probe) => {
+  await page.evaluate((probe) => {
     const timed = window as Timed;
     delete timed.started;
+    delete timed.took;
     timed.reads ??= ({ selector, read }) => {
       const find = (root: ParentNode): Element | null => {
         const found = root.querySelector(selector);
@@ -91,33 +132,45 @@ async function start(page: Page, probe: Probe): Promise<Reading> {
         }
         return null;
       };
-      if (read === "count") return document.querySelectorAll(selector).length;
+      const all = (root: ParentNode): Element[] => [
+        ...root.querySelectorAll(selector),
+        ...[...root.querySelectorAll("*")].flatMap((host) =>
+          host.shadowRoot ? all(host.shadowRoot) : [],
+        ),
+      ];
+      if (read === "count") return all(document).length;
+      if (read === "texts") {
+        return all(document)
+          .map((found) => found.textContent)
+          .join("\n");
+      }
       if (read === "found") return find(document) !== null;
       return find(document)?.textContent ?? null;
     };
-    return timed.reads(probe);
+    const reads = timed.reads;
+    const before = reads(probe);
+    // A message posted from a frame's callbacks arrives once the frame is
+    // rendered, so the time covers the view's own frame callbacks, layout
+    // and paint. The clock is read before the probe, whose walk of a large
+    // diff's shadow roots is the test's time, not the app's.
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      const now = performance.now();
+      const { started } = timed;
+      if (started !== undefined && reads(probe) !== before) {
+        timed.took = now - started;
+        channel.port1.close();
+      } else {
+        requestAnimationFrame(next);
+      }
+    };
+    const next = () => channel.port2.postMessage(null);
+    requestAnimationFrame(next);
   }, probe);
 }
 
-async function untilFrame(
-  page: Page,
-  probe: Probe,
-  before: Reading,
-): Promise<number> {
-  // Checked every frame, so the time is that of the frame with the result.
-  const done = await page.waitForFunction(
-    ([probe, before]) => {
-      const { started, reads } = window as Timed;
-      // Read before probing: a probe walking every shadow root of a 5k-line
-      // diff takes a while, and that is the test's time, not the app's.
-      const now = performance.now();
-      return (
-        started !== undefined && reads?.(probe) !== before && now - started
-      );
-    },
-    [probe, before] as const,
-    { polling: "raf" },
-  );
+async function took(page: Page): Promise<number> {
+  const done = await page.waitForFunction(() => (window as Timed).took);
   return (await done.jsonValue()) as number;
 }
 
