@@ -2,6 +2,7 @@
 
 pub mod attachment;
 pub mod decision;
+pub mod device;
 pub mod diff;
 pub mod doctor;
 pub mod error;

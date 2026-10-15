@@ -12,6 +12,7 @@ use mergegate_core::project::ProjectStore;
 
 use crate::reply::Failure;
 use crate::server::AppState;
+use crate::tailnet::Listening;
 use crate::ui;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
@@ -42,10 +43,35 @@ async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::
                 None,
             )
         })?;
-    let checks = std::iter::once(ui::check()).chain(checks);
+    let checks = std::iter::once(ui::check())
+        .chain(tailnet_check(&state))
+        .chain(checks);
     Ok(Json(api::doctor::Report {
         checks: checks.map(to_api).collect(),
     }))
+}
+
+/// Only with `listen` set to `tailnet`.
+fn tailnet_check(state: &AppState) -> Option<Check> {
+    let (status, message, fix) = match state.tailnet.listening() {
+        Listening::Off => return None,
+        Listening::Bound(bound) => (
+            CheckStatus::Ok,
+            format!("listening on the tailnet at {}", bound.url),
+            None,
+        ),
+        Listening::Waiting(problem) => (
+            CheckStatus::Warn,
+            format!("not listening on the tailnet yet, retrying: {problem}"),
+            Some("start Tailscale and log in, or: mg hub set listen local".to_owned()),
+        ),
+    };
+    Some(Check {
+        name: "tailnet".into(),
+        status,
+        message,
+        fix,
+    })
 }
 
 fn to_api(check: Check) -> api::doctor::Check {

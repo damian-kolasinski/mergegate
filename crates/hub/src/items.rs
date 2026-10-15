@@ -8,13 +8,14 @@ use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::interdiff::{self, ChangedSince};
 use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemId, ItemState, Submit};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::store::StoreError;
 
+use crate::guard::Caller;
 use crate::reply::Failure;
 use crate::server::AppState;
 use crate::{merge, priority, projects, rules};
@@ -27,9 +28,28 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 
 async fn submit(
     State(state): State<Arc<AppState>>,
+    Extension(caller): Extension<Caller>,
     request: Result<Json<api::item::Submit>, JsonRejection>,
 ) -> Result<(StatusCode, Json<api::item::Submitted>), Failure> {
-    let Json(request) = request?;
+    let Json(mut request) = request?;
+    // A wake command runs on the hub's machine, in the submitting worktree,
+    // so only an agent on that machine may leave one.
+    if let Caller::Device(device, _) = &caller {
+        if request.wake.is_some() {
+            return Err(Failure::new(
+                StatusCode::FORBIDDEN,
+                "wake_remote",
+                format!(
+                    "{} submits over the tailnet, and a wake command runs on the hub's machine",
+                    device.name
+                ),
+                Some("submit without --wake and run: mg wait".into()),
+            ));
+        }
+        // The item may have moved here from a local agent; its wake would
+        // run in a worktree this agent isn't in.
+        request.wake = Some(String::new());
+    }
     let request = Submit {
         project: request.project,
         branch: request.branch,

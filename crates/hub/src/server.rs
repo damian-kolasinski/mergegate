@@ -2,8 +2,8 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use axum::Router;
 use axum::middleware;
+use axum::{Extension, Router};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
@@ -13,14 +13,15 @@ use git::HubGit;
 use highlight::Languages;
 use lang_release::Releases;
 use mergegate_core::highlight::Pack;
+use mergegate_core::settings::Listen;
 use rules_toml::RulesToml;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, abandon, attachments, comments, conflicts, conversation, diff, doctor,
-    draft_replies, event_log, events, external, feedback, git_http, guard, highlights, io, items,
-    languages, lifecycle, merge, priority, projects, replies, reply, resume, reviews, rules,
-    settings, ui, viewed, wake,
+    Home, HubError, HubInfo, abandon, attachments, comments, conflicts, conversation, devices,
+    diff, doctor, draft_replies, event_log, events, external, feedback, git_http, guard,
+    highlights, io, items, languages, lifecycle, merge, priority, projects, replies, reply, resume,
+    reviews, rules, settings, tailnet, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -47,6 +48,7 @@ pub(crate) struct AppState {
     /// Asks the conflict watch to test-merge now, after its current pass.
     pub conflicts: Notify,
     pub rules: rules::RulesFiles,
+    pub tailnet: tailnet::Tailnet,
     /// Held for a whole request, which also keeps two requests from syncing
     /// the same staging repo at once.
     store: Mutex<Store>,
@@ -162,6 +164,7 @@ pub(crate) async fn serve(
         prune: Notify::new(),
         conflicts: Notify::new(),
         rules: rules::RulesFiles::new(RulesToml::new(home.projects())),
+        tailnet: tailnet::Tailnet::from_env(),
         store: Mutex::new(store),
         git: HubGit::new(home.projects(), home.git_home()),
         github: GithubClient::from_env(),
@@ -181,6 +184,7 @@ pub(crate) async fn serve(
         .merge(viewed::routes())
         .merge(attachments::routes())
         .merge(settings::routes())
+        .merge(devices::routes())
         .merge(reviews::routes())
         .merge(comments::routes())
         .merge(replies::routes())
@@ -197,6 +201,13 @@ pub(crate) async fn serve(
         .method_not_allowed_fallback(reply::wrong_method)
         .layer(middleware::from_fn_with_state(state.clone(), guard::guard))
         .with_state(state.clone());
+    state.tailnet.set_router(app.clone());
+    let app = app.layer(Extension(tailnet::Via::Loopback));
+    let stored = state.blocking(|store, _| mergegate_core::settings::settings(store));
+    match stored.await {
+        Ok(settings) => tailnet::apply(&state, settings.listen).await,
+        Err(e) => tracing::error!("reading the hub's settings: {e}"),
+    }
 
     let mut sigterm = signal(SignalKind::terminate()).map_err(io("handling SIGTERM"))?;
     home.write_info(&HubInfo { addr, pid })
@@ -221,6 +232,7 @@ pub(crate) async fn serve(
             }
             tracing::info!("hub stopping");
             state.events.stop();
+            tailnet::apply(&state, Listen::Local).await;
         })
         .await
         .map_err(io("serving HTTP"));

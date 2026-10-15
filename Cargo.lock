@@ -2092,6 +2092,7 @@ dependencies = [
  "mergegate-lang-release",
  "mergegate-rules-toml",
  "mergegate-store-sqlite",
+ "mergegate-tailscale",
  "serde",
  "serde_json",
  "tempfile",

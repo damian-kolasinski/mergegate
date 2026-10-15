@@ -29,6 +29,14 @@ pub struct HubInfo {
     pub pid: u32,
 }
 
+/// Written by `mg connect`: the hub on another machine this home's `mg`
+/// talks to instead of a local one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Connection {
+    /// As in `http://mac-mini:7800`.
+    pub url: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Home {
     root: PathBuf,
@@ -116,6 +124,32 @@ impl Home {
     pub(crate) fn remove_info(&self, pid: u32) {
         if self.read_info().is_some_and(|info| info.pid == pid) {
             let _ = std::fs::remove_file(self.info_path());
+        }
+    }
+
+    fn connection_path(&self) -> PathBuf {
+        self.root.join("connect.json")
+    }
+
+    /// The hub `mg connect` named, if any.
+    pub fn read_connection(&self) -> Option<Connection> {
+        let bytes = std::fs::read(self.connection_path()).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    pub fn write_connection(&self, connection: &Connection) -> io::Result<()> {
+        self.ensure()?;
+        let tmp = self.root.join("connect.json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec(connection)?)?;
+        std::fs::rename(tmp, self.connection_path())
+    }
+
+    /// Whether there was one to remove.
+    pub fn remove_connection(&self) -> io::Result<bool> {
+        match std::fs::remove_file(self.connection_path()) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e),
         }
     }
 

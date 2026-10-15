@@ -23,6 +23,7 @@ serde_json = "1.0.154"
 rules-toml.workspace = true
 store-sqlite.workspace = true
 tempfile = "3.27.0"
+tailscale.workspace = true
 thiserror = "2.0.21"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "signal", "macros", "sync", "time", "process", "io-util", "fs"] }
 tracing = "0.1.44"

@@ -11,6 +11,7 @@ use mergegate_core::settings::{self, Settings, SettingsError};
 
 use crate::reply::Failure;
 use crate::server::AppState;
+use crate::tailnet::{self, Listening};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -25,7 +26,7 @@ async fn show(
         .blocking(|store, _| settings::settings(store))
         .await
         .map_err(failure)?;
-    Ok(Json(to_api(settings)))
+    Ok(Json(to_api(&state, settings)))
 }
 
 async fn set(
@@ -41,12 +42,26 @@ async fn set(
         .map_err(failure)?;
     // A shorter time to live may make attachments due now.
     state.prune.notify_one();
-    Ok(Json(to_api(settings)))
+    tailnet::apply(&state, settings.listen).await;
+    Ok(Json(to_api(&state, settings)))
 }
 
-fn to_api(settings: Settings) -> api::settings::Settings {
+fn to_api(state: &AppState, settings: Settings) -> api::settings::Settings {
+    let tailnet = match state.tailnet.listening() {
+        Listening::Off => None,
+        Listening::Waiting(problem) => Some(api::settings::Tailnet {
+            url: None,
+            problem: Some(problem),
+        }),
+        Listening::Bound(bound) => Some(api::settings::Tailnet {
+            url: Some(bound.url.clone()),
+            problem: None,
+        }),
+    };
     api::settings::Settings {
         attachment_ttl: settings.attachment_ttl.to_string(),
+        listen: settings.listen.as_str().to_owned(),
+        tailnet,
     }
 }
 
