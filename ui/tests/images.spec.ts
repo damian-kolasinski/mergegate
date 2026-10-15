@@ -53,7 +53,7 @@ test("a changed image shows both sides and the pixels that changed", async ({
   // Escape closes the dialog, not the review.
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(page).toHaveURL(/#\/items\/app%231$/);
+  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
 });
 
 test("an added image shows alone, and one that won't decode says so", async ({

@@ -169,6 +169,14 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(changed).toBeVisible();
   await page.keyboard.press("n");
   await expect(current).toContainText("a.txt");
+  // `n`'s scroll is reported a frame later, and would move the current
+  // file back to a.txt after `v` moved on.
+  await page.evaluate(
+    () =>
+      new Promise((done) =>
+        requestAnimationFrame(() => requestAnimationFrame(done)),
+      ),
+  );
   await page.keyboard.press("v");
   await expect(current).toContainText("gone.txt");
   await expect(screen.getByLabel("Viewed a.txt")).toBeChecked();
