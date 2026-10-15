@@ -10,10 +10,13 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use mergegate_core::github::GithubError;
+use mergegate_core::highlight::{Highlighter, PackSource, available};
 use mergegate_core::project::{
-    self, AddProject, Added, Backend, Changed, Project, ProjectError, ProjectStore, Setting,
+    self, AddProject, Added, Backend, Changed, Languages, Project, ProjectError, ProjectStore,
+    Setting,
 };
 
+use crate::languages;
 use crate::reply::{self, Failure};
 use crate::server::AppState;
 
@@ -42,23 +45,59 @@ async fn add(
     request: Result<Json<api::project::AddProject>, JsonRejection>,
 ) -> Result<Response, Failure> {
     let Json(request) = request?;
+    let languages = Languages {
+        known: available(&state.known_packs, state.releases.releases()),
+        installed: state
+            .languages
+            .installed()
+            .packs
+            .into_iter()
+            .map(|p| p.name)
+            .collect(),
+        chosen: request.languages,
+    };
     let request = AddProject {
         path: absolute(&request.path)?,
         name: request.name,
         backend: request.backend.map(backend_from_api),
         target: request.target,
         github: request.github,
+        languages,
     };
-    match state
+    let (project, names) = match state
         .blocking_github(move |store, git, github| project::add(store, git, github, request))
         .await
     {
-        Ok(Added::Project(project)) => {
-            Ok((StatusCode::CREATED, Json(to_api(&project))).into_response())
+        Ok(Added::Project { project, languages }) => (project, languages),
+        Ok(Added::Decide(decision)) => return Ok(reply::decision(decision)),
+        Err(e) => return Err(failure(e)),
+    };
+    // The project stays registered whatever happens to its packs, which
+    // `mg lang add` installs again.
+    let mut warnings = Vec::new();
+    let installed = if names.is_empty() {
+        Vec::new()
+    } else {
+        match languages::install_released(&state, names).await {
+            Ok(installed) => {
+                languages::changed(&state);
+                installed
+            }
+            Err(e) => {
+                warnings.push(format!(
+                    "{e}; mg lang add --detect {} tries again",
+                    project.name
+                ));
+                Vec::new()
+            }
         }
-        Ok(Added::Decide(decision)) => Ok(reply::decision(decision)),
-        Err(e) => Err(failure(e)),
-    }
+    };
+    let added = api::project::Added {
+        project: to_api(&project),
+        languages: languages::to_api(&installed).packs,
+        warnings,
+    };
+    Ok((StatusCode::CREATED, Json(added)).into_response())
 }
 
 async fn show(

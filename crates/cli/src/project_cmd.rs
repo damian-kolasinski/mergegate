@@ -2,8 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use api::project::{AddProject, Backend, Project, Projects, SetProject};
+use api::project::{AddProject, Added, Backend, Project, Projects, SetProject};
 use clap::{Subcommand, ValueEnum};
+use mergegate_core::project::NONE;
 
 use crate::client::{Client, Reply, segment};
 use crate::output::{CliError, Outcome};
@@ -29,6 +30,10 @@ pub enum ProjectCommand {
         /// [default: the one the remotes point at]; implies --backend github
         #[arg(long, value_name = "OWNER/REPO")]
         github: Option<String>,
+        /// The language packs to install, comma-separated, or none
+        /// [default: asked, when the repo uses packs that aren't installed]
+        #[arg(long, value_name = "LIST|none")]
+        languages: Option<String>,
     },
     /// Show a project; without one, the project at the current directory, or
     /// every project when there is none
@@ -70,6 +75,7 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
             backend,
             target,
             github,
+            languages,
         } => {
             let request = AddProject {
                 path: absolute(&path)?,
@@ -77,6 +83,7 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
                 backend: backend.map(Into::into),
                 target,
                 github,
+                languages: languages.as_deref().map(language_list),
             };
             add(&client, &request)
         }
@@ -120,12 +127,33 @@ pub(crate) fn route(name: &str) -> Result<String, CliError> {
     Ok(format!("/api/projects/{}", segment(name)))
 }
 
+/// `--languages`: names, comma-separated, or `none`.
+fn language_list(value: &str) -> Vec<String> {
+    if value.trim() == NONE {
+        return Vec::new();
+    }
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(Into::into)
+        .collect()
+}
+
 fn add(client: &Client, request: &AddProject) -> Result<Outcome, CliError> {
-    match client.post::<Project>("/api/projects", request)? {
-        Reply::Done(project) => Ok(Outcome::done(
-            &project,
-            format!("registered {}\n{}", project.name, describe(&project)),
-        )),
+    match client.post::<Added>("/api/projects", request)? {
+        Reply::Done(added) => {
+            let project = &added.project;
+            let mut text = format!("registered {}\n{}", project.name, describe(project));
+            if !added.languages.is_empty() {
+                let names: Vec<&str> = added.languages.iter().map(|p| p.name.as_str()).collect();
+                text.push_str(&format!("\n  languages {}", names.join(", ")));
+            }
+            for warning in &added.warnings {
+                text.push_str(&format!("\nwarning: {warning}"));
+            }
+            Ok(Outcome::done(&added, text))
+        }
         Reply::Decide(decision) => Ok(Outcome::NeedsDecision(decision)),
     }
 }

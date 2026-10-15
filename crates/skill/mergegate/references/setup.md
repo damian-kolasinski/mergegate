@@ -20,7 +20,9 @@ A project's backend decides where approved work lands. `local` squash-merges int
 
 ## Highlighting
 
-Diffs are highlighted by language packs the operator installs; without one a file shows as plain text, and its header names the pack that would highlight it. `mg lang add --from PATH` installs a pack archive (`.tar.gz`), or every archive in the folder `PATH`, and `mg lang list` prints what is installed and which files each pack highlights. `mg lang remove <name>` removes a pack. Two packs can't claim the same grammar: remove the installed one first.
+Diffs are highlighted by language packs installed on the hub; without one a file shows as plain text, and its header names the pack that would highlight it. Each mg release comes with packs that it downloads by name. `mg project add` asks to install the ones the repo's files use (`--languages LIST|none` answers up front). For a project added without them, `mg lang add --detect [project]` installs them; without a project it uses the one at the current directory.
+
+`mg lang list --available` prints the released packs, `mg lang add <name>...` installs them, and `mg lang list` prints what is installed and which files each pack highlights. `mg lang add --from PATH` installs a pack archive (`.tar.gz`), or every archive in the folder `PATH`. After mg is upgraded, `mg lang update` downloads again the packs built for the old one; `mg doctor` says when that is needed. `mg lang remove <name>` removes a pack. Two packs can't claim the same grammar: remove the installed one first.
 
 ## Clones
 

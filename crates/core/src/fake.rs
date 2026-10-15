@@ -13,7 +13,8 @@ use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
 use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
 use crate::highlight::{
-    Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, Span, Tag,
+    Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, PackSource,
+    Release, Span, Tag,
 };
 use crate::interdiff::{InterdiffFile, InterdiffGit, InterdiffStore, Replay};
 use crate::item::{
@@ -69,6 +70,8 @@ pub(crate) struct FakeGit {
     blobs_read: RefCell<Vec<String>>,
     /// Paths `linguist-generated` in every tree.
     generated: BTreeSet<String>,
+    /// The files of every repo's branches, by repo root.
+    files: BTreeMap<PathBuf, Vec<String>>,
 }
 
 impl Default for FakeGit {
@@ -89,11 +92,19 @@ impl Default for FakeGit {
             trees: RefCell::default(),
             blobs_read: RefCell::default(),
             generated: BTreeSet::new(),
+            files: BTreeMap::new(),
         }
     }
 }
 
 impl FakeGit {
+    /// Every branch of the repo at `root` holds `files`.
+    pub fn files(mut self, root: &str, files: &[&str]) -> Self {
+        let files = files.iter().map(|f| (*f).into()).collect();
+        self.files.insert(root.into(), files);
+        self
+    }
+
     pub fn repo(self, root: &str, branches: &[&str], head: Option<&str>) -> Self {
         let mut git = self.without_repo(root);
         let mut branches: Vec<String> = branches.iter().map(|b| (*b).into()).collect();
@@ -364,6 +375,13 @@ impl Git for FakeGit {
         self.version
             .clone()
             .ok_or_else(|| GitError::Failed("git: command not found".into()))
+    }
+
+    fn files(&self, repo: &Path, _branch: &str) -> Result<Vec<String>, GitError> {
+        if !self.repos.iter().any(|r| r.root == repo) {
+            return Err(GitError::NotARepo(repo.into()));
+        }
+        Ok(self.files.get(repo).cloned().unwrap_or_default())
     }
 }
 
@@ -1271,6 +1289,11 @@ pub(crate) fn installed(names: &[(&str, &str)]) -> Installed {
     FakeHighlighter::with(names).installed()
 }
 
+/// The archive digest a `FakeHighlighter` reports for a pack.
+pub(crate) fn digest(name: &str, version: &str) -> String {
+    format!("{name}-{version}")
+}
+
 pub(crate) fn pack(name: &str, version: &str) -> Pack {
     Pack {
         name: name.into(),
@@ -1284,6 +1307,48 @@ pub(crate) fn pack(name: &str, version: &str) -> Pack {
     }
 }
 
+/// Releases packs, recording what it downloads; `fail` names one whose
+/// download fails.
+#[derive(Default)]
+pub(crate) struct FakePackSource {
+    pub releases: Vec<Release>,
+    pub fail: Option<String>,
+    pub downloaded: RefCell<Vec<String>>,
+}
+
+impl FakePackSource {
+    pub fn with(names: &[(&str, &str)]) -> Self {
+        Self {
+            releases: names
+                .iter()
+                .map(|(n, v)| Release {
+                    name: (*n).into(),
+                    version: (*v).into(),
+                    sha256: digest(n, v),
+                })
+                .collect(),
+            ..Self::default()
+        }
+    }
+}
+
+impl PackSource for FakePackSource {
+    fn releases(&self) -> &[Release] {
+        &self.releases
+    }
+
+    fn download(&self, release: &Release, _into: &Path) -> Result<(), LangError> {
+        if self.fail.as_ref() == Some(&release.name) {
+            return Err(LangError::Download {
+                name: release.name.clone(),
+                reason: "offline".into(),
+            });
+        }
+        self.downloaded.borrow_mut().push(release.name.clone());
+        Ok(())
+    }
+}
+
 impl Highlighter for FakeHighlighter {
     /// Versioned by each pack's name and version, as `rs@1,md@2`.
     fn installed(&self) -> Installed {
@@ -1294,6 +1359,11 @@ impl Highlighter for FakeHighlighter {
         Installed {
             packs: self.packs.clone(),
             version: version.collect::<Vec<_>>().join(","),
+            digests: self
+                .packs
+                .iter()
+                .map(|p| (p.name.clone(), digest(&p.name, &p.version)))
+                .collect(),
         }
     }
 

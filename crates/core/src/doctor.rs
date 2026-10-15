@@ -1,5 +1,9 @@
 //! The checks behind `mg doctor` that only the hub can run.
 
+mod languages;
+
+pub use languages::languages;
+
 use crate::git::{self, Git, GitError};
 use crate::github::{Github, GithubError};
 use crate::project::{Backend, Project, ProjectStore};

@@ -84,6 +84,8 @@ impl Env {
             .env("MERGEGATE_HOME", self.home())
             .env_remove("MG_JSON")
             .env_remove("MG_UI_DIR")
+            .env_remove("MG_LANGUAGES_INDEX")
+            .env_remove("MG_LANGUAGES_URL")
             .envs(self.vars.iter().map(|(k, v)| (k, v)));
         cmd
     }

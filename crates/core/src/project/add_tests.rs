@@ -1,5 +1,5 @@
 use super::*;
-use crate::fake::{FakeGit, FakeGithub, FakeStore};
+use crate::fake::{FakeGit, FakeGithub, FakeStore, pack};
 use crate::github::{GithubError, GithubRepo};
 
 fn request(path: &str) -> AddProject {
@@ -11,7 +11,7 @@ fn request(path: &str) -> AddProject {
 
 fn added(result: Result<Added, ProjectError>) -> Project {
     match result.unwrap() {
-        Added::Project(project) => project,
+        Added::Project { project, .. } => project,
         Added::Decide(d) => panic!("asked {d:?}"),
     }
 }
@@ -88,6 +88,44 @@ fn asks_for_the_target_without_registering_anything() {
         },
     ));
     assert_eq!(project.target, "prod");
+}
+
+#[test]
+fn asks_for_the_languages_without_registering_anything() {
+    let git = FakeGit::default()
+        .repo("/src/app", &["main"], None)
+        .files("/src/app", &["src/main.rs"]);
+    let mut store = FakeStore::default();
+    let languages = |chosen: Option<Vec<String>>| Languages {
+        known: vec![pack("rs", "1")],
+        installed: Vec::new(),
+        chosen,
+    };
+    let result = add(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        AddProject {
+            languages: languages(None),
+            ..request("/src/app")
+        },
+    )
+    .unwrap();
+    assert!(matches!(result, Added::Decide(d) if d.flag == "--languages"));
+    assert!(store.projects().unwrap().is_empty());
+    assert!(git.synced().is_empty());
+
+    let result = add(
+        &mut store,
+        &git,
+        &FakeGithub::default(),
+        AddProject {
+            languages: languages(Some(vec!["rs".into()])),
+            ..request("/src/app")
+        },
+    )
+    .unwrap();
+    assert!(matches!(result, Added::Project { languages, .. } if languages == ["rs"]));
 }
 
 #[test]

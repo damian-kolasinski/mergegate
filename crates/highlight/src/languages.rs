@@ -216,6 +216,10 @@ impl Languages {
     }
 }
 
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 impl Highlighter for Languages {
     /// Versioned by every pack's archive digest and the span format.
     fn installed(&self) -> Installed {
@@ -225,13 +229,13 @@ impl Highlighter for Languages {
         for e in entries.iter() {
             hash.update(e.digest);
         }
-        let version = hash.finalize()[..16]
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
         Installed {
             packs: entries.iter().map(|e| e.pack.clone()).collect(),
-            version,
+            version: hex(&hash.finalize()[..16]),
+            digests: entries
+                .iter()
+                .map(|e| (e.pack.name.clone(), hex(&e.digest)))
+                .collect(),
         }
     }
 
