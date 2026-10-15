@@ -1,10 +1,15 @@
-import { createResource, Show } from "solid-js";
+import { createResource, Show, untrack } from "solid-js";
 import type { Inbox } from "../api/Inbox";
 import { getJson } from "../app/hub";
 import { useKeys } from "../app/keys";
 import { go, itemHref } from "../app/router";
 import { Mono } from "../design-system";
 import styles from "./next.module.css";
+
+// The items decided on since the page loaded. A comment leaves its item in
+// Needs you, as likely first in line as before, so without these the way on
+// bounces between the first two items and never reaches the rest.
+const decided = new Set<string>();
 
 /**
  * After a decision, the item that needs the operator next, which `Enter`
@@ -19,7 +24,15 @@ export function NextItem(props: {
   const [inbox] = createResource(() =>
     getJson<Inbox>("/api/inbox").catch(() => undefined),
   );
-  const next = () => inbox()?.needs_you.find((item) => item.id !== props.after);
+  decided.add(untrack(() => props.after));
+  // Once every item has had a decision, round again from the first.
+  const next = () => {
+    const waiting = inbox()?.needs_you ?? [];
+    return (
+      waiting.find((item) => !decided.has(item.id)) ??
+      waiting.find((item) => item.id !== props.after)
+    );
+  };
   const open = () => {
     const item = next();
     if (item) go(itemHref(item.id));

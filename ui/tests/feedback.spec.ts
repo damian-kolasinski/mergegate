@@ -65,3 +65,33 @@ test("f6 comment leaves the item with the operator", async ({ page, hub }) => {
   const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
   expect(feedback.events).toMatchObject([{ verdict: "comment" }]);
 });
+
+test("f6 the way on after a review reaches every item that needs the operator", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("a", "First", { "a.txt": "a\n" });
+  app.submit("b", "Second", { "b.txt": "b\n" });
+  app.submit("c", "Third", { "c.txt": "c\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  // A comment leaves each item in Needs you, where the way on goes past it
+  // rather than back to it.
+  const review = page.getByRole("form", { name: "Review" });
+  for (const [item, next] of [
+    ["app%231", "app#2"],
+    ["app%232", "app#3"],
+  ] as const) {
+    await expect(page).toHaveURL(new RegExp(`#/items/${item}`));
+    await review
+      .getByRole("textbox", { name: "Review summary" })
+      .fill("Looking good so far.");
+    await review.getByRole("button", { name: "Send comments" }).click();
+    await expect(review.getByRole("link", { name: /^Next:/ })).toContainText(
+      next,
+    );
+    await page.keyboard.press("Enter");
+  }
+  await expect(page).toHaveURL(/#\/items\/app%233/);
+});
