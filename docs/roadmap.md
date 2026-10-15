@@ -33,8 +33,8 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **A row is a step.** Rows split into a and b (11, 12) where only part of the work waits on another step; each part has its own brief (say, `docs/roadmap/12a-interdiffs.md`) and its own row to delete.
 - **A step starts once every row in its After column is gone from the table,** that is, once that step's last PR has merged, and runs in its own worktree. Rows with nothing there can start any time, whatever is running.
 - **Migrations take their number when they merge.** A step renumbers its unmerged migration onto whatever `main` has, and a dev home that ran the old number is reset; a merged migration never changes.
-- **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags (13, 14) and the skill's reference files (`mg events` from 10 and 14). The one that merges second rebases onto the other.
-- **Where two steps' features meet, the one that lands second adds the meeting:** stacked children in 14's early conflict detection and its inbox ordering ("items stacked on it") come from whichever of 13 and 14 merges last.
+- **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags and the skill's reference files. The one that merges second rebases onto the other.
+- **Where two steps' features meet, the one that lands second adds the meeting:** 13 adds stacked children to the early conflict watch (a conflict the parent also has is reported on the parent only) and to the inbox ordering ("items stacked on it"), both already on `main`.
 
 ## PRs
 
@@ -43,7 +43,6 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 | 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with interdiffs (`interdiff_files`) | F7, F12 | — | 10 |
 | 12b | Re-mapping | Re-mapping drafts and comments, the operator's and external ones, onto newer revisions; until then a draft on an older revision shows only in the Conversation list | F7, F13 | — | 10 |
 | 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
-| 14 | Prioritization | `--priority/--note`, `mg prioritize`, inbox ordering, early conflict detection, `mg events --follow` | F9, F10 | — | — |
 | 17 | Judge | Judge port and providers (`command` and `anthropic` first), structural heuristics | F12 | model APIs | — |
 | 19 | Multi-machine | Listening on the tailnet, tokens, Tailscale `whois`, `mg connect`, `mg hub allow`, refusing `--wake` from remote workers and clearing a wake on a remote submit | F2 | Tailscale | 10 |
 

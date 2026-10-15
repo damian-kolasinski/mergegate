@@ -11,7 +11,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::interdiff::{self, ChangedSince};
-use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, Submit};
+use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemId, ItemState, Submit};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::store::StoreError;
 
@@ -65,6 +65,8 @@ async fn submit(
     state.wakes.recheck();
     if submitted.new_revision {
         state.highlight.notify_one();
+        // Submitting fetched the target, which may have moved.
+        state.conflicts.notify_one();
         state.events.send(UiEvent::InboxChanged);
         state.events.send(UiEvent::ItemChanged {
             item: submitted.item.id.to_string(),
@@ -90,14 +92,15 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
     let inbox = state
         .blocking(|store, _| {
             let inbox = item::inbox(store)?;
-            let entries = |items: Vec<Item>| -> Result<Vec<_>, StoreError> {
+            let entries = |items: &[Item]| -> Result<Vec<_>, StoreError> {
                 items
                     .iter()
                     .map(|item| {
                         let blocked = merge::blocked(store, item)?;
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
-                        Ok(inbox_entry(item, blocked, demo, changed))
+                        let with = inbox.conflicts.get(&item.id).map_or(&[][..], Vec::as_slice);
+                        Ok(inbox_entry(item, blocked, demo, changed, with))
                     })
                     .collect()
             };
@@ -112,9 +115,9 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                 }
             }
             Ok(api::item::Inbox {
-                needs_you: entries(inbox.needs_you)?,
-                with_agents: entries(inbox.with_agents)?,
-                merging: entries(inbox.merging)?,
+                needs_you: entries(&inbox.needs_you)?,
+                with_agents: entries(&inbox.with_agents)?,
+                merging: entries(&inbox.merging)?,
                 rules: pending,
             })
         })
@@ -165,6 +168,7 @@ fn inbox_entry(
     blocked: Option<api::merge::Blocked>,
     demo: bool,
     changed: Option<ChangedSince>,
+    conflicts_with: &[ItemId],
 ) -> api::item::InboxItem {
     let revision = &item.revision;
     api::item::InboxItem {
@@ -187,6 +191,7 @@ fn inbox_entry(
         }),
         priority: item.priority.map(priority::to_api),
         note: item.note.clone(),
+        conflicts_with: conflicts_with.iter().map(ToString::to_string).collect(),
     }
 }
 

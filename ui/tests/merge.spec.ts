@@ -4,7 +4,7 @@
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Hub, test } from "./hub";
+import { expect, Hub, test } from "./hub";
 
 function events(hub: Hub): { type: string }[] {
   return (hub.mg(["feedback", "app#1"]) as { events: { type: string }[] })
@@ -41,30 +41,37 @@ test("f8 approving merges the item", async ({ page, hub }) => {
   ]);
 });
 
-test("f9 a conflict shows what to rebase", async ({ page, hub }) => {
-  const app = hub.project("app");
-  app.seed({ README: "hello\n" });
-  app.submit("readme", "Greet", { README: "hello, login\n" });
-  app.seed({ README: "hi there\n" });
-  await page.goto(`${hub.url}#/items/app%231`);
-  const screen = page.getByRole("region", { name: "app#1" });
-  await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
+test("f9 a conflict shows what to rebase", async ({ page }) => {
+  // Without the target watch, which would find the moved target first
+  // (conflicts.spec.ts).
+  const hub = new Hub({ MG_TARGET_WATCH: "off" });
+  try {
+    const app = hub.project("app");
+    app.seed({ README: "hello\n" });
+    app.submit("readme", "Greet", { README: "hello, login\n" });
+    app.seed({ README: "hi there\n" });
+    await page.goto(`${hub.url}#/items/app%231`);
+    const screen = page.getByRole("region", { name: "app#1" });
+    await page.getByRole("button", { name: "Approve & merge" }).click();
+    await page.getByRole("button", { name: "Merge", exact: true }).click();
 
-  const conflict = screen.getByRole("region", { name: "Merge conflict" });
-  await expect(conflict.getByText("README", { exact: true })).toBeVisible();
-  await expect(conflict.getByText("Sent back to the agent")).toBeVisible();
-  await expect(screen.getByText("Changes requested")).toBeVisible();
-  expect(events(hub).map((event) => event.type)).toEqual([
-    "review.submitted",
-    "merge.conflict",
-  ]);
+    const conflict = screen.getByRole("region", { name: "Merge conflict" });
+    await expect(conflict.getByText("README", { exact: true })).toBeVisible();
+    await expect(conflict.getByText("Sent back to the agent")).toBeVisible();
+    await expect(screen.getByText("Changes requested")).toBeVisible();
+    expect(events(hub).map((event) => event.type)).toEqual([
+      "review.submitted",
+      "merge.conflict",
+    ]);
 
-  await page.keyboard.press("Escape");
-  const withAgents = page.getByRole("region", { name: "With agents" });
-  await expect(
-    withAgents.getByRole("listitem").getByText("Conflict"),
-  ).toBeVisible();
+    await page.keyboard.press("Escape");
+    const withAgents = page.getByRole("region", { name: "With agents" });
+    await expect(
+      withAgents.getByRole("listitem").getByText("Conflict"),
+    ).toBeVisible();
+  } finally {
+    hub.stop();
+  }
 });
 
 test("f8 a held merge waits for a retry or a cancel", async ({ page, hub }) => {

@@ -3,6 +3,7 @@
 mod abandon;
 mod attachments;
 mod comments;
+mod conflicts;
 mod conversation;
 mod diff;
 mod doctor;

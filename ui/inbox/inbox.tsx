@@ -224,6 +224,16 @@ function Entry(props: {
           </span>
         )}
       </Show>
+      <Show when={props.item.conflicts_with.length}>
+        <span
+          class={styles.flag}
+          title="These conflict now: whichever merges first may leave the other to rebase"
+        >
+          <Badge tone="warning">
+            ⚡ conflicts with {props.item.conflicts_with.join(", ")}
+          </Badge>
+        </span>
+      </Show>
       {/* A zero count leaves its cell empty so the columns stay aligned. */}
       <span class={styles.figure}>
         <Show when={props.item.additions}>

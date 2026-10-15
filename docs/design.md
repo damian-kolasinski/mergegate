@@ -127,7 +127,7 @@ Principles
 - **The agent hears every operator action on its item:** the approval (`review.submitted` with verdict `approved`), a hold (`merge.held`, so it doesn't push over an approval), a cancelled hold (`merge.cancelled`), the merge (`item.merged`, with the squash commit) and an abandon (`item.abandoned`, with who and why).
 - **A merge cut short by a restart** leaves the item in *merging*, where Retry runs it again. If the push had landed, the merged tree equals the target's and the item closes as merged at the target commit.
 - A new revision while the operator is mid-review never discards draft comments (§9.2).
-- Conflicts are detected early: the hub test-merges every open item whenever the target moves, and sends conflicts to the authoring agent before the operator gets to the item.
+- **Conflicts are detected early.** The hub test-merges every open item into its target on each submit, after each of its own merges, and by fetching every project's target each minute, so a target moved outside the hub is seen too. An item that no longer merges cleanly goes back to its agent with the same `merge.conflict` and moves to *changes requested*, before the operator gets to it; the operator's draft comments stay. Each revision hears of it at most once, and items in *merging* are left to their merge. The fetches and test-merges run without holding the hub up: each target is fetched aside, to `refs/mergegate/watch/<target>`, and staging's target only fast-forwards to it, so an agent told to rebase rebases onto where the target is. Open items of one project and target are also test-merged into each other: the inbox shows which ones conflict, and no agent hears of it, since only landing one makes it real for the other.
 - **Closing an item prunes its diffs.** When an item merges or is abandoned, the hub drops its revision pins (a merged item keeps its newest revision's) and deletes the cached file diffs no open item's revision still uses (the cache is keyed by blob pair, so items and revisions share entries). Its file list and line counts stay. Opening a merged item diffs its files again on read, without caching them, since its blobs live on in the target's history and that pin, which a squash needs when it auto-merged a file the target also changed; an abandoned item's blobs may be garbage-collected, so it shows the file list and counts with a note that the diff is gone.
 
 ### 5.1 Stacked items
@@ -395,7 +395,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS. Stat
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Order: explicit priority (set by the operator agent or the operator) → conflict pressure (merging this unblocks others) → age.
+- Order, within every group: explicit priority (set by the operator agent or the operator) → conflict pressure (how many open items it conflicts with, most first, since landing it settles theirs) → age, oldest first. Both items of a conflicting pair show "⚡ conflicts with" the other.
 - When rules trust some files, the file count shows the ones left to review next to the total ("9 of 14 files"). That is the real cost of the item.
 - A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
 - An item the operator reviewed on an earlier revision shows how many of its files changed since then ("2 changed since r1").
@@ -449,7 +449,7 @@ mergegate doesn't try to know the plan. The operator agent does.
 
 - **Initial, at submit:** the operator agent includes priority and a "why" note in the task brief it dispatches. The authoring agent passes them to `mg submit --priority --note`, so items arrive already prioritized. Only the submit that creates the item sets them; a later one warns and keeps what's there, so an agent repeating its brief can't undo the operator.
 - **Updates, any time:** `mg prioritize` (operator agent, when the plan changes) or the priority picker in the UI (operator). Priority and note are written together, the latest write wins, and the note is shown in the inbox. No priority sorts after p3.
-- **Derived signals** for tie-breaking and display: pairwise conflicts between open items, items stacked on it, age, review-tier size, open external comments.
+- **Derived signals** for tie-breaking and display: pairwise conflicts between open items (§5), items stacked on it, age, review-tier size, open external comments.
 - **Optional judge pass** over the inbox: rank items given notes and signals. This is never needed for correctness.
 - `mg events --follow` lets the operator agent react to merges and start dependent work.
 

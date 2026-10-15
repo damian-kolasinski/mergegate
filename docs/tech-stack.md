@@ -82,7 +82,7 @@ Ports (traits in `core`): `Git`, `Backend`, `Store`, `RulesFile`, `Highlighter`,
 | Operation | Implementation | Why |
 |---|---|---|
 | Receive pushes from workers | `git http-backend` (CGI) behind axum, bodies streamed both ways, `refs/mergegate` hidden | gix has no server side. |
-| Test-merge, merge | `git merge-tree --write-tree` | Must match git's `ort` merge exactly, or conflicts are detected wrongly. |
+| Test-merge, merge | `git merge-tree --write-tree` | Must match git's `ort` merge exactly, or conflicts are detected wrongly. The early watch reuses it: each pair of open items is merged again only when one of their heads moved, and each item against a target commit only once per hub run (once per revision across restarts, as a conflict already sent isn't tried again). Every pass, a submit's or a merge's too, re-fetches each target. `MG_TARGET_POLL_MS` shortens the target poll for tests, and `MG_TARGET_WATCH=off` stops the watch for tests of what a merge finds. |
 | Push to GitHub / operator repo | `git push` (`updateInstead` for local) | gix push is incomplete; must respect git semantics. |
 | Read blobs, trees, history | gix | No process spawn per call (~2–5 ms each on macOS); typed results. |
 | File diffs, interdiffs | gix tree diff + imara-diff (histogram) | In-memory; yields the line mapping that comment anchoring needs. |

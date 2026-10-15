@@ -6,8 +6,10 @@
 use serde_json::{Value, json};
 use testkit::{Env, Reply, TestRepo, http_reply};
 
+/// Without the target watch: these tests are of what merging finds, which
+/// the watch could find first (see `conflicts.rs`).
 fn env() -> Env {
-    Env::new(env!("CARGO_BIN_EXE_mg"))
+    Env::new(env!("CARGO_BIN_EXE_mg")).with_vars(vec![("MG_TARGET_WATCH".into(), "off".into())])
 }
 
 fn send(env: &Env, method: &str, path: &str, body: &Value) -> Reply {
