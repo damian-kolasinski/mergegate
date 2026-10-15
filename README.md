@@ -34,13 +34,14 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 
 ## Features
 
-- **One inbox for every agent's work.** Items that need you come first, ordered by priority, then by how many other open items each one conflicts with, then by age. Items with agents, merging and closed today fold underneath.
+- **One inbox for every agent's work.** Items that need you come first, ordered by priority, then by how many other open items each one conflicts with, then by age. Items with agents and merging follow, and those closed today fold underneath.
 - **Files ordered by importance, not alphabetically.** Each file to review carries a one-line reason, from the agent's own reviewer guide, an optional AI judge, or path heuristics (lockfiles, generated files and tests sink; migrations, config and changed declarations rise).
 - **Trusted files hidden by rules you approve.** Rules such as "`**/*.xcstrings` is trusted" fold whole file kinds out of the way. Agents can propose rules; only you can approve one that hides a file.
 - **Feedback straight back to the agent.** Your review arrives as an event with each comment's file, line range and quoted code. The agent fixes it, answers each comment (`addressed`, `rejected` with a reason, or a `question`) and submits a new revision.
-- **Re-review only what changed.** Every submit is a revision. "Since r1" shows the interdiff without the noise of a moved target branch, comments follow their lines onto new revisions, and viewed marks stay on unchanged files.
+- **Re-review only what changed.** Every submit is a revision. "Since r1" shows the interdiff without the noise of a moved target branch, comments follow their lines onto new revisions, viewed marks stay on unchanged files, and files added or deleted since r1 say so.
+- **Images and docs as they look.** A changed PNG, JPEG, GIF or WebP opens before and after, side by side, with the pixels that differ marked. A changed Markdown file opens rendered.
 - **External reviewers keep working.** Comments from review bots (Codex, Claude and other GitHub connectors) and teammates on the GitHub PR flow into mergegate in batches. The agent weighs and answers them, and you can accept or override its decisions.
-- **Approve means merge.** One click squash-merges the item: through the GitHub API on the `github` backend, or straight into your local repo on the `local` backend. Each item lands as one commit authored by you.
+- **Approve means merge.** One click squash-merges the item: through the GitHub API on the `github` backend, or straight into your local repo on the `local` backend. Each item lands as one commit authored by you, its message the item's title and the summary from the agent's guide. An approval follows the diff, so a rebase that changes nothing merges without a second look.
 - **Conflicts caught before you review.** The hub test-merges every open item against its target, so an agent hears about a conflict and rebases before you get to it.
 - **Demos next to the diff.** Agents attach screenshots and screen recordings with `mg submit --attach`.
 - **Agents across machines.** Workers on other machines connect over Tailscale. No tokens, no ports opened beyond your tailnet.
@@ -65,7 +66,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
                                                         you
 ```
 
-1. **An agent finishes work** on its branch and runs `mg submit --guide guide.md`. The guide says what the change is for and which files to read first. The hub pushes the branch, opens or updates the GitHub PR (on the `github` backend) and adds the item to your inbox.
+1. **An agent finishes work** on its branch and runs `mg submit --guide guide.md`. The guide says what the change is for and which files to read first. The hub pushes the branch, opens or updates the GitHub PR with the guide as its description (on the `github` backend) and adds the item to your inbox.
 2. **The agent waits** with `mg wait`, a blocking command that costs no tokens while it blocks.
 3. **You review** at `http://127.0.0.1:7800`: files that matter first, trusted files folded away, bot comments inline.
 4. **You request changes** and the agent gets one `review.submitted` event with every comment anchored to its lines. It fixes, replies to each comment and submits a new revision. You review only the interdiff.
@@ -79,7 +80,7 @@ The hub is the only stateful component and the only part that talks to GitHub, u
 
 ## Which coding agents does mergegate support?
 
-Any agent that can run a shell command. mergegate ships one [Agent Skill](crates/skill/mergegate/SKILL.md), the `SKILL.md` format that Claude Code, OpenAI Codex, opencode and Cursor load natively, so there are no per-agent plugins. The skill tells the agent to submit through `mg` instead of `git push` or `gh pr create`, how to wait for feedback in the cheapest way its environment allows, and how to answer every comment.
+Any agent that can run a shell command. mergegate ships one [Agent Skill](crates/skill/mergegate/SKILL.md), the `SKILL.md` format that Claude Code, OpenAI Codex, opencode and Cursor load natively, so there are no per-agent plugins. The skill tells the agent to submit through `mg` instead of `git push` or `gh pr create`, how to wait for feedback in the cheapest way its environment allows, and how to answer every comment. It also keeps agents out of the review UI and the hub's API: the UI is yours.
 
 The CLI is built for agents: every command takes `--json`, nothing ever prompts, and exit codes are stable. When a command needs a decision only you can make, it exits with a `needs_decision` question that the agent puts to you.
 
@@ -99,6 +100,8 @@ Or build from source (needs Rust, Node 22 and pnpm for the UI):
 MG_REQUIRE_UI=1 cargo install --locked --git https://github.com/damian-kolasinski/mergegate mg
 ```
 
+macOS ships an unrelated `/usr/bin/mg` text editor. Check that `command -v mg` finds mergegate's, and put its install directory ahead of `/usr/bin` on your `PATH` if it doesn't.
+
 ## Quick start
 
 mergegate is agent-operated: you ask your agent, and it runs the commands. You run two commands yourself:
@@ -108,7 +111,14 @@ mg hub start        # run the hub as a user service (launchd or systemd)
 mg skill install    # write the agent skill and print where it is
 ```
 
-Link the printed skill folder into wherever your agent loads skills from, for example `~/.claude/skills/` for Claude Code. Then, in a repository, tell your agent:
+Link the printed skill folder into wherever your agent loads skills from, so each `mg skill install` updates it in place:
+
+```sh
+ln -sfn ~/.mergegate/skill/mergegate ~/.claude/skills/mergegate   # Claude Code
+ln -sfn ~/.mergegate/skill/mergegate ~/.codex/skills/mergegate    # Codex
+```
+
+Then, in a repository, tell your agent:
 
 > Set up mergegate for this repo.
 
@@ -148,7 +158,7 @@ Yes. mergegate is MIT licensed. There is no paid tier, account or hosted service
 
 ### Does my code leave my machine?
 
-Only where you send it. On the `github` backend the hub pushes branches and opens pull requests on GitHub. On the `local` backend nothing leaves your machine. The optional judge, which ranks files with a model, is off until you pick one, because it sends your diffs to that model.
+Only where you send it. On the `github` backend the hub pushes branches and opens pull requests on GitHub, described with the agent's guide. On the `local` backend nothing leaves your machine. The optional judge, which ranks files with a model, is off until you pick one, because it sends your diffs to that model. Jev never receives a file whose diff names a password, token or key.
 
 ### Do I need an LLM API key?
 
@@ -160,7 +170,7 @@ Yes. The `local` backend squash-merges approved items into a branch of your repo
 
 ### Can agents run on other machines?
 
-Yes. Run `mg hub set listen tailnet` on the hub's machine and `mg connect <hub>` on each worker. Your own Tailscale devices are trusted automatically; anyone else's need `mg hub allow`.
+Yes. Run `mg hub set listen tailnet` on the hub's machine and `mg connect <hub>` on each worker. Your own Tailscale devices are trusted automatically; anyone else's need `mg hub allow`. Workers clone from GitHub, or straight from the hub when a project has no GitHub repository.
 
 ### Is it for teams?
 
@@ -168,7 +178,7 @@ No. mergegate is a personal tool: one operator per hub, reviewing the work of th
 
 ### What does it write to GitHub?
 
-Branches, pull requests and merges. Your review comments and the agent's replies stay in mergegate, which keeps the GitHub thread clean for human reviewers.
+Branches, pull requests and squash merges. Each pull request is described with the agent's guide, unless you wrote its description on GitHub, which the hub never overwrites. Your review comments and the agent's replies stay in mergegate, which keeps the GitHub thread clean for human reviewers.
 
 ## License
 
