@@ -43,23 +43,38 @@ async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::
                 None,
             )
         })?;
-    let checks = std::iter::once(ui::check())
-        .chain(tailnet_check(&state))
-        .chain(checks);
+    let tailnet = tailnet_check(&state).await;
+    let checks = std::iter::once(ui::check()).chain(tailnet).chain(checks);
     Ok(Json(api::doctor::Report {
         checks: checks.map(to_api).collect(),
     }))
 }
 
-/// Only with `listen` set to `tailnet`.
-fn tailnet_check(state: &AppState) -> Option<Check> {
+/// Only with `listen` set to `tailnet`. A listener once bound stays, so
+/// this asks Tailscale whether peers can still reach it.
+async fn tailnet_check(state: &AppState) -> Option<Check> {
+    let restart = || Some("restart the hub: mg hub stop, then mg hub start".to_owned());
     let (status, message, fix) = match state.tailnet.listening() {
         Listening::Off => return None,
-        Listening::Bound(bound) => (
-            CheckStatus::Ok,
-            format!("listening on the tailnet at {}", bound.url),
-            None,
-        ),
+        Listening::Bound(bound) => match state.tailnet.status().await {
+            Err(e) => (
+                CheckStatus::Warn,
+                format!("listening on the tailnet at {}, but {e}", bound.url),
+                Some("start Tailscale and log in".to_owned()),
+            ),
+            Ok(now) => match bound.ip {
+                Some(ip) if !now.me.ips.contains(&ip) => (
+                    CheckStatus::Warn,
+                    format!("listening on {ip}, which is no longer this machine's tailnet address"),
+                    restart(),
+                ),
+                _ => (
+                    CheckStatus::Ok,
+                    format!("listening on the tailnet at {}", bound.url),
+                    None,
+                ),
+            },
+        },
         Listening::Waiting(problem) => (
             CheckStatus::Warn,
             format!("not listening on the tailnet yet, retrying: {problem}"),

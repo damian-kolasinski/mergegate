@@ -18,7 +18,7 @@ Agents on other machines reach the hub over Tailscale, which must run on both ma
 
 On the hub's machine, `mg hub set listen tailnet` makes the hub listen on the tailnet too, and prints its tailnet URL; `mg hub set listen local` goes back to loopback only. If Tailscale isn't running yet, the hub keeps trying, and `mg doctor` says why it isn't listening.
 
-On the other machine, `mg connect HUB` points `mg` at that hub, as in `mg connect mac-mini` (port 7800 unless given as `mac-mini:7801`); every command but `mg hub start`, `stop` and `status` then goes to it, and `mg init` points clones at it. `mg connect --local` goes back to the hub on this machine.
+On the other machine, `mg connect HUB` points `mg` at that hub, as in `mg connect mac-mini` (port 7800 unless given as `mac-mini:7801`); every command but `mg hub start`, `stop` and `status` then goes to it, and `mg init` points clones at it. `mg connect --local` goes back to the hub on this machine. Register projects and install language packs on the hub's machine: a connected `mg` can't hand the hub a path on this one.
 
 The hub lets in the devices of whoever runs Tailscale on its machine. Another person's or a tagged device is refused until the operator allows it: the refusal names the device and the command to run on the hub. `mg hub devices` lists the tailnet's devices and whether each may connect; `mg hub allow <device>` lets one in and `mg hub deny <device>` shuts one out, even the operator's own. Only run these when the operator tells you to.
 

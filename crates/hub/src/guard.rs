@@ -7,6 +7,7 @@ use axum::http::{Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use mergegate_core::device::{self, Device, Refusal, TailnetError, Trust};
+use tokio::sync::watch;
 
 use crate::git_http;
 use crate::reply::Failure;
@@ -18,7 +19,49 @@ use crate::tailnet::{Bound, Via};
 pub(crate) enum Caller {
     /// On the hub's machine, through loopback.
     Local,
-    Device(Device, Trust),
+    /// Over the tailnet listener it came in on.
+    Device(Device, Trust, Arc<Bound>),
+}
+
+impl Caller {
+    /// Changes when a device's admission may have, for a response that stays
+    /// open to [`recheck`] its caller; never for a local caller.
+    pub(crate) fn admissions(&self, state: &AppState) -> Admissions {
+        Admissions(match self {
+            Caller::Local => None,
+            Caller::Device(..) => Some(state.tailnet.admissions()),
+        })
+    }
+}
+
+pub(crate) struct Admissions(Option<watch::Receiver<u64>>);
+
+impl Admissions {
+    pub(crate) async fn changed(&mut self) {
+        if let Some(admissions) = &mut self.0
+            && admissions.changed().await.is_ok()
+        {
+            return;
+        }
+        // A local caller's never change, and the sender lives as long as
+        // the hub.
+        std::future::pending().await
+    }
+}
+
+/// Whether the caller of an open response is still let in, after
+/// [`Caller::admissions`] changed: the listener may have closed, or the
+/// operator denied its device.
+pub(crate) async fn recheck(state: &Arc<AppState>, caller: &Caller) -> Result<(), Failure> {
+    match caller {
+        Caller::Local => Ok(()),
+        Caller::Device(device, _, bound) => {
+            if !state.tailnet.is_current(bound) {
+                return Err(closed());
+            }
+            trusted(state, bound, device.clone()).await.map(drop)
+        }
+    }
 }
 
 /// Accepts only requests addressed to the listener they came in on (against
@@ -47,12 +90,18 @@ pub(crate) async fn guard(
                 Err(refused) => return refused.into_response(),
             }
         }
-        Some(Via::Loopback) | None => {
+        Some(Via::Loopback) => {
             let port = state.port;
             if host != format!("127.0.0.1:{port}") && host != format!("localhost:{port}") {
                 return forbidden("requests must address the hub as 127.0.0.1 or localhost");
             }
             Caller::Local
+        }
+        // Every listener's router sets it; a route mounted without would
+        // otherwise pass as local.
+        None => {
+            tracing::error!("a request came in on no known listener");
+            return forbidden("the hub can't tell which listener this request came in on");
         }
     };
     if req.method() != Method::GET
@@ -75,12 +124,7 @@ async fn admit(
     peer: Option<SocketAddr>,
 ) -> Result<Caller, Failure> {
     if !state.tailnet.is_current(bound) {
-        return Err(Failure::new(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "the hub no longer listens on the tailnet",
-            None,
-        ));
+        return Err(closed());
     }
     if !bound.addressed_as(host) {
         return Err(Failure::new(
@@ -109,6 +153,12 @@ async fn admit(
             ));
         }
     };
+    let trust = trusted(state, bound, caller.clone()).await?;
+    Ok(Caller::Device(caller, trust, Arc::clone(bound)))
+}
+
+/// Whether the operator lets `caller` in, now.
+async fn trusted(state: &Arc<AppState>, bound: &Bound, caller: Device) -> Result<Trust, Failure> {
     let me = bound.me.clone();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -127,7 +177,7 @@ async fn admit(
             )
         })?;
     match decision {
-        Ok(trust) => Ok(Caller::Device(caller, trust)),
+        Ok(trust) => Ok(trust),
         Err(refusal) => {
             let (code, why) = match refusal {
                 Refusal::Denied => ("device_denied", "the operator denied it"),
@@ -153,6 +203,15 @@ async fn admit(
             ))
         }
     }
+}
+
+fn closed() -> Failure {
+    Failure::new(
+        StatusCode::FORBIDDEN,
+        "forbidden",
+        "the hub no longer listens on the tailnet",
+        None,
+    )
 }
 
 fn unknown(address: &str) -> Failure {

@@ -143,6 +143,25 @@ fn allow_and_deny_find_a_device_by_any_of_its_names() {
 }
 
 #[test]
+fn a_short_name_two_devices_share_needs_the_full_name() {
+    let mine = device("worker-2", user(2), "100.64.0.3");
+    let mut shared = device("worker-2", user(3), "100.64.0.4");
+    shared.id = DeviceId("nshared".into());
+    shared.dns_name = "worker-2.other.ts.net".into();
+    let net = tailnet(vec![mine.clone(), shared.clone()]);
+    let mut store = FakeStore::default();
+
+    let err = decide(&mut store, &net, "worker-2", Access::Allow).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "\"worker-2\" names more than one device: worker-2.tail0.ts.net, worker-2.other.ts.net"
+    );
+    let record = decide(&mut store, &net, "worker-2.other.ts.net", Access::Allow).unwrap();
+    assert_eq!(record.id, shared.id);
+    assert_eq!(store.device(&mine.id).unwrap(), None);
+}
+
+#[test]
 fn decisions_need_tailscale() {
     let net = FakeTailnet {
         status: Err(TailnetError::Unavailable("Tailscale is stopped".into())),

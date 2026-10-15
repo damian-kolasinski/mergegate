@@ -5,13 +5,14 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use api::event::UiEvent;
-use axum::Router;
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::get;
+use axum::{Extension, Router};
 use futures_util::Stream;
 use tokio::sync::{broadcast, watch};
 
+use crate::guard::{self, Caller};
 use crate::server::AppState;
 
 /// Fans events out to every open stream.
@@ -66,17 +67,40 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 
 async fn stream(
     State(state): State<Arc<AppState>>,
+    Extension(caller): Extension<Caller>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let receivers = (state.events.sender.subscribe(), state.events.stopping());
-    let stream = futures_util::stream::unfold(receivers, |(mut events, mut stopping)| async move {
-        let event = tokio::select! {
-            _ = stopping.wait_for(|stopping| *stopping) => return None,
-            // A stream that fell behind ends instead of skipping events: the
-            // browser reconnects and the UI refetches everything on connect.
-            received = events.recv() => received.ok()?,
+    let open = Open {
+        events: state.events.sender.subscribe(),
+        stopping: state.events.stopping(),
+        admissions: caller.admissions(&state),
+        state,
+        caller,
+    };
+    let stream = futures_util::stream::unfold(open, |mut open| async move {
+        let event = loop {
+            tokio::select! {
+                _ = open.stopping.wait_for(|stopping| *stopping) => return None,
+                () = open.admissions.changed() => {}
+                // A stream that fell behind ends instead of skipping events:
+                // the browser reconnects and the UI refetches everything on
+                // connect.
+                received = open.events.recv() => break received.ok()?,
+            }
+            // Out of the select, whose output borrows `stopping`. A denied
+            // device's browser reconnects and is refused.
+            guard::recheck(&open.state, &open.caller).await.ok()?;
         };
         let data = serde_json::to_string(&event).expect("a UI event serializes");
-        Some((Ok(Event::default().data(data)), (events, stopping)))
+        Some((Ok(Event::default().data(data)), open))
     });
     Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+/// One UI's stream while it is open.
+struct Open {
+    events: broadcast::Receiver<UiEvent>,
+    stopping: watch::Receiver<bool>,
+    admissions: guard::Admissions,
+    state: Arc<AppState>,
+    caller: Caller,
 }

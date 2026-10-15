@@ -34,7 +34,7 @@ async fn submit(
     let Json(mut request) = request?;
     // A wake command runs on the hub's machine, in the submitting worktree,
     // so only an agent on that machine may leave one.
-    if let Caller::Device(device, _) = &caller {
+    if let Caller::Device(device, ..) = &caller {
         if request.wake.is_some() {
             return Err(Failure::new(
                 StatusCode::FORBIDDEN,

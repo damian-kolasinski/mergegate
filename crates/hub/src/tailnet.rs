@@ -11,7 +11,7 @@ use mergegate_core::device::{Device, Status, Tailnet as _, TailnetError};
 use mergegate_core::settings::Listen;
 use tailscale::TailscaleCli;
 use tokio::net::TcpListener;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, watch};
 use tokio::task::JoinHandle;
 
 use crate::server::AppState;
@@ -32,6 +32,8 @@ pub(crate) struct Bound {
     hosts: Vec<String>,
     /// The hub's own machine, whose owner's devices are trusted.
     pub me: Device,
+    /// The tailnet address listened on; `None` with `MG_TAILNET_ADDR`.
+    pub ip: Option<IpAddr>,
 }
 
 impl Bound {
@@ -56,6 +58,10 @@ pub(crate) struct Tailnet {
     /// Held across a change of listener, so two changes can't interleave.
     tasks: tokio::sync::Mutex<Tasks>,
     listening: Mutex<Listening>,
+    /// Counts changes of listener and the operator's decisions on devices.
+    /// A response that stays open, like `mg wait` or the UI's event stream,
+    /// rechecks its device on each, since only new requests pass the guard.
+    admissions: watch::Sender<u64>,
     /// `MG_TAILNET_ADDR`: an address to listen on instead of the tailnet's,
     /// so tests and demos run without a second machine.
     addr: Option<SocketAddr>,
@@ -79,6 +85,7 @@ impl Tailnet {
             router: OnceLock::new(),
             tasks: tokio::sync::Mutex::default(),
             listening: Mutex::new(Listening::Off),
+            admissions: watch::Sender::new(0),
             addr: std::env::var("MG_TAILNET_ADDR")
                 .ok()
                 .and_then(|addr| addr.parse().ok()),
@@ -98,7 +105,8 @@ impl Tailnet {
     }
 
     /// Whether `bound` is still the listener: after `listen local`, a
-    /// connection the old listener kept alive gets nothing more.
+    /// connection the old listener kept alive gets nothing more. Checked by
+    /// every request, and by open responses when [`Self::admissions`] changes.
     pub fn is_current(&self, bound: &Arc<Bound>) -> bool {
         matches!(self.listening(), Listening::Bound(now) if Arc::ptr_eq(&now, bound))
     }
@@ -113,12 +121,25 @@ impl Tailnet {
         blocking(move || tailscale.whois(ip)).await
     }
 
+    pub fn admissions(&self) -> watch::Receiver<u64> {
+        self.admissions.subscribe()
+    }
+
+    /// Call after the operator decides on a device.
+    pub fn readmit(&self) {
+        self.admissions
+            .send_modify(|count| *count = count.wrapping_add(1));
+    }
+
     pub fn tailscale(&self) -> Arc<TailscaleCli> {
         Arc::clone(&self.tailscale)
     }
 
     fn set(&self, listening: Listening) {
         *self.listening.lock().unwrap_or_else(|e| e.into_inner()) = listening;
+        // After the store, so a recheck sees the new listener. Graceful
+        // shutdown of a closed listener waits on the responses this ends.
+        self.readmit();
     }
 }
 
@@ -173,8 +194,8 @@ async fn bind(state: &Arc<AppState>, tasks: &mut Tasks) -> Result<(), String> {
     let tailnet = &state.tailnet;
     let status = tailnet.status().await.map_err(|e| e.to_string())?;
     let me = status.me;
-    let addr = match tailnet.addr {
-        Some(addr) => addr,
+    let (addr, ip) = match tailnet.addr {
+        Some(addr) => (addr, None),
         None => {
             // Peers reach the hub by its IPv4 address; MagicDNS names
             // resolve to it first.
@@ -183,7 +204,7 @@ async fn bind(state: &Arc<AppState>, tasks: &mut Tasks) -> Result<(), String> {
                 .iter()
                 .find(|ip| ip.is_ipv4())
                 .ok_or_else(|| format!("{} has no tailnet IPv4 address", me.name))?;
-            SocketAddr::new(*ip, state.port)
+            (SocketAddr::new(*ip, state.port), Some(*ip))
         }
     };
     let listener = TcpListener::bind(addr)
@@ -206,7 +227,7 @@ async fn bind(state: &Arc<AppState>, tasks: &mut Tasks) -> Result<(), String> {
             .iter()
             .map(|ip| SocketAddr::new(*ip, local.port()).to_string()),
     );
-    let bound = Arc::new(Bound { url, hosts, me });
+    let bound = Arc::new(Bound { url, hosts, me, ip });
 
     let app = tailnet
         .router

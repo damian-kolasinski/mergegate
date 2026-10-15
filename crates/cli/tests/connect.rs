@@ -356,6 +356,99 @@ fn f2_the_hub_keeps_trying_while_tailscale_is_down() {
     }
 }
 
+#[test]
+fn f2_doctor_notices_tailscale_stopping_under_the_listener() {
+    let mut net = Tailnet::new();
+    net.tailscale.set_running(false);
+    let doctor = net.hub.mg(&["doctor"]).stdout;
+    assert!(
+        doctor.contains(&format!(
+            "listening on the tailnet at {}, but Tailscale isn't connected",
+            net.url
+        )),
+        "{doctor}"
+    );
+}
+
+#[test]
+fn f2_a_denial_ends_a_wait_in_progress() {
+    let (mut net, _repo) = with_an_item();
+    net.tailscale.call_from("laptop", HUB_OWNER);
+    net.connect().assert_code(0);
+    let wait = waiting(&net.worker);
+    std::thread::sleep(Duration::from_millis(500));
+    net.hub.mg(&["hub", "deny", "laptop"]).assert_code(0);
+    let refused = finished(wait);
+    assert_eq!(refused["error"]["code"], "device_denied", "{refused}");
+}
+
+#[test]
+fn f2_listen_local_ends_a_wait_in_progress() {
+    let (mut net, _repo) = with_an_item();
+    net.tailscale.call_from("laptop", HUB_OWNER);
+    net.connect().assert_code(0);
+    let wait = waiting(&net.worker);
+    std::thread::sleep(Duration::from_millis(500));
+    net.hub
+        .mg(&["hub", "set", "listen", "local"])
+        .assert_code(0);
+    let refused = finished(wait);
+    assert_eq!(
+        refused["error"]["message"], "the hub no longer listens on the tailnet",
+        "{refused}"
+    );
+}
+
+#[test]
+fn f2_a_connected_mg_sends_the_hub_no_local_paths() {
+    let mut net = Tailnet::new();
+    net.tailscale.call_from("laptop", HUB_OWNER);
+    net.connect().assert_code(0);
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    let add = net.worker.mg_at(repo.root(), &["--json", "project", "add"]);
+    assert_eq!(error(&add)["code"], "path_remote", "{add:?}");
+    let packs = repo.root().to_str().unwrap();
+    let lang = net.worker.mg(&["--json", "lang", "add", "--from", packs]);
+    assert_eq!(error(&lang)["code"], "path_remote", "{lang:?}");
+}
+
+/// A hub listening on the tailnet with `app#1` submitted on its own machine.
+fn with_an_item() -> (Tailnet, TestRepo) {
+    let net = Tailnet::new();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    net.hub
+        .mg_at(repo.root(), &["--json", "project", "add"])
+        .assert_code(0);
+    net.hub
+        .mg_at(repo.root(), &["--json", "init"])
+        .assert_code(0);
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Add login", &[("src/login.rs", "fn login() {}\n")]);
+    net.hub.mg_at(repo.root(), &["submit"]).assert_code(0);
+    (net, repo)
+}
+
+/// `mg wait app#1` on the worker, answering in JSON.
+fn waiting(worker: &Env) -> std::process::Child {
+    Command::new(env!("CARGO_BIN_EXE_mg"))
+        .args(["--json", "wait", "app#1", "--timeout", "30"])
+        .current_dir(worker.home())
+        .env("MERGEGATE_HOME", worker.home())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap()
+}
+
+/// What a wait printed, once it ended well before its own timeout.
+fn finished(wait: std::process::Child) -> Value {
+    let started = std::time::Instant::now();
+    let output = wait.wait_with_output().unwrap();
+    assert!(started.elapsed() < Duration::from_secs(15), "{output:?}");
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|e| panic!("{e}: {output:?}"))
+}
+
 fn review(hub: &Env, summary: &str) {
     let addr = hub.hub_addr();
     let body = json!({ "revision": 1, "verdict": "comment", "summary": summary }).to_string();

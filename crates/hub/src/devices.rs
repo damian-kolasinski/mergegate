@@ -30,7 +30,7 @@ async fn whoami(Extension(caller): Extension<Caller>) -> Json<api::device::WhoAm
             via: api::device::Via::Loopback,
             device: None,
         },
-        Caller::Device(device, trust) => api::device::WhoAmI {
+        Caller::Device(device, trust, _) => api::device::WhoAmI {
             via: api::device::Via::Tailnet,
             device: Some(api::device::Caller {
                 name: device.name,
@@ -80,6 +80,9 @@ async fn decide(
         .blocking(move |store, _| device::decide(store, &*tailscale, &name, access))
         .await
         .map_err(failure)?;
+    // A denied device's open `mg wait` or UI stream ends now, not at its
+    // next request.
+    state.tailnet.readmit();
     tracing::info!("{:?} {} ({})", access, record.name, record.owner);
     Ok(Json(api::device::Decided {
         name: record.name,
@@ -108,6 +111,7 @@ fn failure(e: DeviceError) -> Failure {
     use StatusCode as S;
     let (status, code) = match &e {
         DeviceError::Unknown { .. } => (S::NOT_FOUND, "unknown_device"),
+        DeviceError::Ambiguous { .. } => (S::CONFLICT, "ambiguous_device"),
         DeviceError::Tailnet(TailnetError::Unknown(_)) => (S::NOT_FOUND, "unknown_device"),
         DeviceError::Tailnet(TailnetError::Unavailable(_)) => {
             (S::SERVICE_UNAVAILABLE, "tailscale_unavailable")
@@ -119,6 +123,7 @@ fn failure(e: DeviceError) -> Failure {
     }
     let hint = match code {
         "unknown_device" => Some("mg hub devices".to_owned()),
+        "ambiguous_device" => Some("name the device by its full name or address".to_owned()),
         _ => None,
     };
     Failure::new(status, code, e.to_string(), hint)

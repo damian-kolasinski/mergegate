@@ -78,7 +78,7 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
             languages,
         } => {
             let request = AddProject {
-                path: absolute(&path)?,
+                path: local_path(&client, &path)?,
                 name,
                 backend: backend.map(Into::into),
                 target,
@@ -101,7 +101,7 @@ pub fn run(command: ProjectCommand) -> Result<Outcome, CliError> {
             confirm,
         } => {
             let value = match key.as_str() {
-                "upstream" => absolute(Path::new(&value))?,
+                "upstream" => local_path(&client, Path::new(&value))?,
                 _ => value,
             };
             let request = SetProject {
@@ -229,9 +229,25 @@ fn landing(p: &Project) -> String {
     }
 }
 
+/// A path on this machine for the hub to read, which a hub on another
+/// machine can't.
+pub(crate) fn local_path(client: &Client, path: &Path) -> Result<String, CliError> {
+    if client.connected() {
+        return Err(CliError::new(
+            "path_remote",
+            format!(
+                "{} is on this machine, and the hub is on another",
+                path.display()
+            ),
+        )
+        .hint("run it on the hub's machine"));
+    }
+    absolute(path)
+}
+
 /// The hub may run with another working directory, so paths go to it
 /// absolute and with symlinks resolved.
-pub(crate) fn absolute(path: &Path) -> Result<String, CliError> {
+fn absolute(path: &Path) -> Result<String, CliError> {
     let resolved = std::fs::canonicalize(path)
         .map_err(|e| CliError::new("invalid_path", format!("{}: {e}", path.display())))?;
     resolved.into_os_string().into_string().map_err(|path| {

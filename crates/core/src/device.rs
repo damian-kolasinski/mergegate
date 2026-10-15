@@ -137,6 +137,8 @@ pub struct Listed {
 pub enum DeviceError {
     #[error("no device named {name:?} on the tailnet")]
     Unknown { name: String },
+    #[error("{name:?} names more than one device: {}", full.join(", "))]
+    Ambiguous { name: String, full: Vec<String> },
     #[error(transparent)]
     Tailnet(#[from] TailnetError),
     #[error(transparent)]
@@ -190,7 +192,7 @@ pub fn decide(
     access: Access,
 ) -> Result<Record, DeviceError> {
     let status = tailnet.status()?;
-    let device = find(&status, name).ok_or_else(|| DeviceError::Unknown { name: name.into() })?;
+    let device = find(&status, name)?;
     let asked_at = store.device(&device.id)?.and_then(|r| r.asked_at);
     let record = Record {
         id: device.id.clone(),
@@ -203,13 +205,28 @@ pub fn decide(
     Ok(record)
 }
 
-fn find<'a>(status: &'a Status, name: &str) -> Option<&'a Device> {
+fn find<'a>(status: &'a Status, name: &str) -> Result<&'a Device, DeviceError> {
     let name = name.trim_end_matches('.');
-    std::iter::once(&status.me).chain(&status.peers).find(|d| {
-        d.name.eq_ignore_ascii_case(name)
-            || d.dns_name.eq_ignore_ascii_case(name)
-            || d.ips.iter().any(|ip| ip.to_string() == name)
-    })
+    let devices = || std::iter::once(&status.me).chain(&status.peers);
+    let exact = devices().find(|d| {
+        d.dns_name.eq_ignore_ascii_case(name) || d.ips.iter().any(|ip| ip.to_string() == name)
+    });
+    if let Some(device) = exact {
+        return Ok(device);
+    }
+    // Devices shared in from other tailnets can share a short name, and a
+    // decision on the wrong one would let it in.
+    let named: Vec<_> = devices()
+        .filter(|d| d.name.eq_ignore_ascii_case(name))
+        .collect();
+    match named[..] {
+        [device] => Ok(device),
+        [] => Err(DeviceError::Unknown { name: name.into() }),
+        _ => Err(DeviceError::Ambiguous {
+            name: name.into(),
+            full: named.iter().map(|d| d.dns_name.clone()).collect(),
+        }),
+    }
 }
 
 /// Every device on the tailnet, and every device the hub kept that has left

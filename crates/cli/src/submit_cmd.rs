@@ -55,7 +55,7 @@ pub fn run(
     if wake.is_some() && client.connected() {
         return Err(CliError::new(
             "wake_remote",
-            "a wake command runs on the hub's machine, and this mg works through a hub on another",
+            "a wake command runs on the hub's machine, and this mg works through a hub on another machine",
         )
         .hint("submit without --wake and run: mg wait ITEM"));
     }

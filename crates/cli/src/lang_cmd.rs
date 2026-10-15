@@ -7,7 +7,7 @@ use clap::Subcommand;
 
 use crate::client::{Client, Reply, segment};
 use crate::output::{CliError, Outcome};
-use crate::project_cmd::{absolute, project_here};
+use crate::project_cmd::{local_path, project_here};
 
 #[derive(Subcommand)]
 pub enum LangCommand {
@@ -70,7 +70,7 @@ pub fn run(command: LangCommand) -> Result<Outcome, CliError> {
         } => {
             let request = match (from, detect) {
                 (Some(from), _) => AddPacks {
-                    from: Some(absolute(&from)?),
+                    from: Some(local_path(&client, &from)?),
                     ..AddPacks::default()
                 },
                 (None, Some(project)) => {
