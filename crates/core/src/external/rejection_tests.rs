@@ -25,6 +25,7 @@ fn answered(status: ReplyStatus) -> FakeStore {
         bot: true,
         url: String::new(),
         path: None,
+        dated: 0,
     };
     store.insert_external(new, 0).unwrap();
     release(&mut store, &id()).unwrap();

@@ -65,6 +65,28 @@ pub(crate) fn of_pull(
     Ok(comments)
 }
 
+/// Asked fresh: it's asked for only when a list left it out, which a cached
+/// copy can't settle.
+pub(crate) fn one(
+    api: &Api,
+    repo: &GithubRepo,
+    number: u64,
+    kind: PullCommentKind,
+    id: u64,
+) -> Result<Option<PullComment>, GithubError> {
+    let path = match kind {
+        PullCommentKind::ReviewComment => format!("/repos/{repo}/pulls/comments/{id}"),
+        PullCommentKind::IssueComment => format!("/repos/{repo}/issues/comments/{id}"),
+        PullCommentKind::Review => format!("/repos/{repo}/pulls/{number}/reviews/{id}"),
+    };
+    let reply = api.get(&path)?;
+    match reply.status {
+        404 | 410 => Ok(None),
+        _ if reply.ok() => comment(kind, &reply.body),
+        _ => Err(reply.error()),
+    }
+}
+
 /// Every item of the list at `path`, following its pages.
 fn items(api: &Api, cache: &Cache, path: &str, fresh: bool) -> Result<Vec<Value>, GithubError> {
     let lists = || cache.lists.lock().unwrap_or_else(|e| e.into_inner());
@@ -146,7 +168,69 @@ fn comment(kind: PullCommentKind, value: &Value) -> Result<Option<PullComment>, 
         // A review submitted without a body has it null.
         body: value["body"].as_str().unwrap_or_default().to_owned(),
         lines,
+        // A time GitHub left out or spelled otherwise reads as the epoch:
+        // the comment never counts as posted since a push, which holds a
+        // batch until its cap at worst, where failing would hold every
+        // comment on the pull request. A review can't be edited after it is
+        // submitted, short of its body, which GitHub doesn't date.
+        dated: match kind {
+            PullCommentKind::Review => &["submitted_at"][..],
+            PullCommentKind::ReviewComment | PullCommentKind::IssueComment => {
+                &["created_at", "updated_at"]
+            }
+        }
+        .iter()
+        .filter_map(|field| value[*field].as_str().and_then(millis))
+        .max()
+        .unwrap_or(0),
     }))
+}
+
+/// A UTC time as GitHub writes one, `2011-04-14T16:00:49Z`, in Unix
+/// milliseconds; a fraction of a second is allowed.
+fn millis(stamp: &str) -> Option<u64> {
+    let (date, time) = stamp.strip_suffix('Z')?.split_once('T')?;
+    let field = |part: Option<&str>, len: usize| -> Option<u64> {
+        let part = part.filter(|p| p.len() == len && p.bytes().all(|b| b.is_ascii_digit()))?;
+        part.parse().ok()
+    };
+    let mut date = date.split('-');
+    let (year, month, day) = (
+        field(date.next(), 4)?,
+        field(date.next(), 2)?,
+        field(date.next(), 2)?,
+    );
+    let (time, fraction) = time.split_once('.').unwrap_or((time, ""));
+    let mut time = time.split(':');
+    let (hour, minute, second) = (
+        field(time.next(), 2)?,
+        field(time.next(), 2)?,
+        field(time.next(), 2)?,
+    );
+    let valid = date.next().is_none()
+        && time.next().is_none()
+        && (1..=12).contains(&month)
+        && (1..=31).contains(&day)
+        && hour < 24
+        && minute < 60
+        && second < 61
+        && fraction.bytes().all(|b| b.is_ascii_digit());
+    if !valid || year < 1970 {
+        return None;
+    }
+    let ms = fraction
+        .bytes()
+        .chain(std::iter::repeat(b'0'))
+        .take(3)
+        .fold(0, |ms, digit| ms * 10 + u64::from(digit - b'0'));
+    // Howard Hinnant's days_from_civil, in days since 1970-01-01.
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year / 400;
+    let yoe = year % 400;
+    let doy = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = (era * 146_097 + doe).checked_sub(719_468)?;
+    Some(((days * 24 + hour) * 60 + minute) * 60_000 + second * 1_000 + ms)
 }
 
 #[cfg(test)]

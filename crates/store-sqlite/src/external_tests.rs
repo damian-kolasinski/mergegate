@@ -72,6 +72,7 @@ fn external(github_id: u64, login: &str, body: &str, anchored: bool) -> NewExter
         bot: login.ends_with("[bot]"),
         url: format!("https://github.com/o/app/pull/1#c{github_id}"),
         path: anchored.then(|| "src/login.rs".into()),
+        dated: 0,
     }
 }
 
@@ -150,18 +151,41 @@ fn heard_counts_who_spoke_since_the_newest_push() {
     assert!(held.pushed.abs_diff(before) < 60_000, "{held:?}");
     assert!(held.heard.is_empty());
 
+    // GitHub's date counts, not when the hub saw it: a comment posted
+    // before the push and edited after it is heard, one GitHub dates before
+    // it isn't, however late the hub saw it or its edit.
     let after = held.pushed + 1;
+    let before = held.pushed - 1_000;
+    let late = NewExternal {
+        dated: before,
+        ..external(2, "late[bot]", "Seen late", false)
+    };
+    let late = store.insert_external(late, after).unwrap();
+    let stale = NewExternal {
+        dated: before,
+        ..external(3, "stale[bot]", "Seen late", false)
+    };
+    let stale = store.insert_external(stale, after).unwrap();
     store
-        .insert_external(external(2, "codex[bot]", "Leaks", false), after)
+        .edit_external(stale.id, "Edited before", before + 500, after)
         .unwrap();
+    assert!(store.held(&app()).unwrap().unwrap().heard.is_empty());
     store
-        .insert_external(external(3, "ana", "Why?", false), after)
+        .edit_external(late.id, "Edited late", held.pushed + 1_000, after)
         .unwrap();
-    store
-        .insert_external(external(4, "codex[bot]", "Again", false), after)
-        .unwrap();
+    for (github_id, login, body) in [
+        (4, "codex[bot]", "Leaks"),
+        (5, "ana", "Why?"),
+        (6, "codex[bot]", "Again"),
+    ] {
+        let new = NewExternal {
+            dated: held.pushed,
+            ..external(github_id, login, body, false)
+        };
+        store.insert_external(new, after).unwrap();
+    }
     let held = store.held(&app()).unwrap().unwrap();
-    assert_eq!(held.heard, ["codex[bot]", "ana"]);
+    assert_eq!(held.heard, ["late[bot]", "codex[bot]", "ana"]);
     assert_eq!((held.first, held.last), (1, after));
 }
 
@@ -210,7 +234,7 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
 
     // An edit waits again, and goes out marked as one.
     store
-        .edit_external(first.id, "Leaks a handle", 300)
+        .edit_external(first.id, "Leaks a handle", 0, 300)
         .unwrap();
     let held = store.held(&app()).unwrap().unwrap();
     assert_eq!((held.first, held.last), (300, 300));
@@ -226,6 +250,67 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
     assert_eq!(carried, [(first.id, "Leaks a handle", true)]);
     // The first batch still reads as it went out.
     assert_eq!(store.events(&app(), 0).unwrap(), [released, again]);
+}
+
+#[test]
+fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
+    let (_dir, mut store) = store();
+    let sent = store
+        .insert_external(external(1, "ana", "Leaks", false), 100)
+        .unwrap();
+    store.release(&app(), 1).unwrap();
+    store
+        .insert_reply(reply(sent.id, Author::Operator, None, "Where?"))
+        .unwrap();
+    store
+        .edit_external(sent.id, "Leaks a handle", 0, 200)
+        .unwrap();
+    let drafted = store
+        .insert_external(external(2, "ana", "Why?", false), 200)
+        .unwrap();
+    store
+        .insert_reply(reply(drafted.id, Author::Operator, None, "Draft"))
+        .unwrap();
+    let answered = store
+        .insert_external(external(3, "ana", "Rename it", false), 200)
+        .unwrap();
+    store
+        .insert_reply(reply(
+            answered.id,
+            Author::Agent,
+            Some(ReplyStatus::Addressed),
+            "",
+        ))
+        .unwrap();
+
+    for comment in [&sent, &drafted, &answered] {
+        store.withdraw_external(comment.id).unwrap();
+    }
+    assert_eq!(store.held(&app()).unwrap(), None);
+    let left: Vec<_> = store
+        .comments(&app())
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.id, c.body, c.external.unwrap().pending))
+        .collect();
+    assert_eq!(
+        left,
+        [
+            (sent.id, "Leaks".into(), false),
+            (answered.id, "Rename it".into(), false)
+        ]
+    );
+    // The operator's draft on the one kept stays; the deleted one's goes.
+    let replies: Vec<_> = store
+        .replies(&app())
+        .unwrap()
+        .into_iter()
+        .map(|r| (r.comment, r.body))
+        .collect();
+    assert_eq!(
+        replies,
+        [(sent.id, "Where?".into()), (answered.id, String::new())]
+    );
 }
 
 #[test]

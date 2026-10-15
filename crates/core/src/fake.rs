@@ -13,7 +13,7 @@ use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
-use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment};
+use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind};
 use crate::highlight::{
     Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, PackSource,
     Release, Span, Tag,
@@ -777,6 +777,8 @@ pub(crate) struct FakeStore {
     external: BTreeMap<CommentId, (u64, Option<u64>)>,
     /// The external comments a batch carried.
     batched: BTreeSet<CommentId>,
+    /// When GitHub says each external comment was posted or last edited.
+    dated: BTreeMap<CommentId, u64>,
     rules: BTreeMap<ProjectName, Rules>,
     applied_text: BTreeMap<ProjectName, String>,
     /// The highest rule number each project used.
@@ -1997,6 +1999,7 @@ impl FeedbackStore for FakeStore {
 impl ExternalStore for FakeStore {
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError> {
         self.last_comment += 1;
+        let dated = comment.dated;
         let comment = Comment {
             id: CommentId(self.last_comment),
             item: comment.item,
@@ -2018,15 +2021,57 @@ impl ExternalStore for FakeStore {
         };
         self.comments.push(comment.clone());
         self.external.insert(comment.id, (now, Some(now)));
+        self.dated.insert(comment.id, dated);
         Ok(comment)
     }
 
-    fn edit_external(&mut self, id: CommentId, body: &str, now: u64) -> Result<(), StoreError> {
+    fn edit_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        let known = self.dated.get_mut(&id).unwrap();
+        *known = (*known).max(dated);
         let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
         comment.body = body.into();
         comment.external.as_mut().unwrap().pending = true;
         let times = self.external.get_mut(&id).unwrap();
         *times = (now, Some(times.1.unwrap_or(now)));
+        Ok(())
+    }
+
+    fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        let answered = self
+            .replies
+            .iter()
+            .any(|r| r.comment == id && !r.is_draft());
+        if !self.batched.contains(&id) && !answered {
+            self.comments.retain(|c| c.id != id);
+            self.replies.retain(|r| r.comment != id);
+            self.external.remove(&id);
+            self.dated.remove(&id);
+            return Ok(());
+        }
+        let sent = self
+            .events
+            .iter()
+            .rev()
+            .find_map(|(_, event)| match &event.kind {
+                EventKind::ExternalComments(batch) => batch
+                    .comments
+                    .iter()
+                    .find(|d| d.comment.id == id)
+                    .map(|d| d.comment.body.clone()),
+                _ => None,
+            });
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        if let Some(body) = sent {
+            comment.body = body;
+        }
+        comment.external.as_mut().unwrap().pending = false;
+        self.external.get_mut(&id).unwrap().1 = None;
         Ok(())
     }
 
@@ -2040,7 +2085,7 @@ impl ExternalStore for FakeStore {
                 continue;
             };
             let (seen, pending) = self.external[&comment.id];
-            if external.bot && seen >= pushed && !heard.contains(&external.login) {
+            if self.dated[&comment.id] >= pushed && !heard.contains(&external.login) {
                 heard.push(external.login.clone());
             }
             if let Some(pending) = pending {
@@ -2204,6 +2249,8 @@ pub(crate) struct FakeGithub {
     deleted: RefCell<Vec<(GithubRepo, String)>>,
     /// Every pull request's, oldest first.
     comments: RefCell<Vec<(GithubRepo, u64, PullComment)>>,
+    unlisted: RefCell<BTreeSet<(PullCommentKind, u64)>>,
+    unanswered: RefCell<BTreeSet<(PullCommentKind, u64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2236,6 +2283,8 @@ impl Default for FakeGithub {
             pulls: RefCell::default(),
             deleted: RefCell::default(),
             comments: RefCell::default(),
+            unlisted: RefCell::default(),
+            unanswered: RefCell::default(),
         }
     }
 }
@@ -2281,6 +2330,17 @@ impl FakeGithub {
             Some((_, _, known)) => *known = comment,
             None => comments.push((repo, number, comment)),
         }
+    }
+
+    /// Lists leave the comment out though GitHub still has it, as one read
+    /// while an earlier comment is deleted can.
+    pub fn unlist(&self, kind: PullCommentKind, id: u64) {
+        self.unlisted.borrow_mut().insert((kind, id));
+    }
+
+    /// Asking for the comment by itself fails.
+    pub fn fail_asking_for(&self, kind: PullCommentKind, id: u64) {
+        self.unanswered.borrow_mut().insert((kind, id));
     }
 
     fn signed_in(&self) -> Result<(), GithubError> {
@@ -2449,9 +2509,30 @@ impl Github for FakeGithub {
             .comments
             .borrow()
             .iter()
-            .filter(|(r, n, _)| r == repo && *n == number)
+            .filter(|(r, n, c)| {
+                r == repo && *n == number && !self.unlisted.borrow().contains(&(c.kind, c.id))
+            })
             .map(|(_, _, c)| c.clone())
             .collect())
+    }
+
+    fn pull_comment(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        kind: PullCommentKind,
+        id: u64,
+    ) -> Result<Option<PullComment>, GithubError> {
+        self.signed_in()?;
+        if self.unanswered.borrow().contains(&(kind, id)) {
+            return Err(GithubError::Failed("GitHub is down".into()));
+        }
+        Ok(self
+            .comments
+            .borrow()
+            .iter()
+            .find(|(r, n, c)| r == repo && *n == number && c.kind == kind && c.id == id)
+            .map(|(_, _, c)| c.clone()))
     }
 }
 

@@ -1,9 +1,10 @@
 //! Bringing a pull request's comments in: a new one is placed on a revision
-//! and held for the next batch, an edited one held again.
+//! and held for the next batch, an edited one held again, and a held one
+//! GitHub deleted withdrawn.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::{ExternalError, ExternalStore, NewExternal};
+use super::{ExternalError, ExternalStore, GithubKey, NewExternal};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::github::{Github, GithubError, GithubRepo, PullComment, PullCommentKind, PullLines};
 use crate::item::{Item, ItemBackend, ItemId, ItemState, ItemStore, Revision};
@@ -14,11 +15,13 @@ use crate::review::{Anchor, CommentId, ReviewError, ReviewStore, Side, quote, sh
 pub struct Ingested {
     pub new: usize,
     pub edited: usize,
+    /// Held ones GitHub no longer has.
+    pub withdrawn: usize,
 }
 
 impl Ingested {
     pub fn changed(self) -> bool {
-        self.new + self.edited > 0
+        self.new + self.edited + self.withdrawn > 0
     }
 }
 
@@ -44,17 +47,25 @@ pub fn fetch(
     Ok(github
         .pull_comments(repo, number, fresh)?
         .into_iter()
-        .filter(|c| !c.login.eq_ignore_ascii_case(&viewer) && !c.body.trim().is_empty())
+        .filter(|c| kept(c, &viewer))
         .collect())
 }
 
-/// Records what `comments` adds to `id`'s and holds it for the next batch.
-/// A comment GitHub no longer has stays: the agent may have answered it.
+pub(super) fn kept(comment: &PullComment, viewer: &str) -> bool {
+    !comment.login.eq_ignore_ascii_case(viewer) && !comment.body.trim().is_empty()
+}
+
+/// Records what `comments`, all of the pull request's that [`fetch`] keeps,
+/// adds to `id`'s and holds it for the next batch. A held comment in `gone`
+/// ([`confirm_gone`](super::confirm_gone)) and not in `comments` is withdrawn
+/// ([`ExternalStore::withdraw_external`]); one a batch carried and nothing
+/// holds stays as the agent got it, since the agent may have answered it.
 pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     store: &mut S,
     git: &impl DiffGit,
     id: &ItemId,
     comments: Vec<PullComment>,
+    gone: &BTreeSet<GithubKey>,
     now: u64,
 ) -> Result<Ingested, ExternalError> {
     let item = store
@@ -63,21 +74,24 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     if matches!(item.state, ItemState::Merged | ItemState::Abandoned) {
         return Ok(Ingested::default());
     }
-    let known: BTreeMap<(PullCommentKind, u64), (CommentId, String)> = store
+    let known: BTreeMap<(PullCommentKind, u64), (CommentId, String, bool)> = store
         .comments(id)?
         .into_iter()
         .filter_map(|c| {
             let external = c.external?;
-            Some(((external.kind, external.github_id), (c.id, c.body)))
+            let key = (external.kind, external.github_id);
+            Some((key, (c.id, c.body, external.pending)))
         })
         .collect();
     let revisions = store.revisions(id)?;
     let mut ingested = Ingested::default();
+    let mut found = BTreeSet::new();
     for comment in comments {
+        found.insert((comment.kind, comment.id));
         match known.get(&(comment.kind, comment.id)) {
-            Some((_, body)) if *body == comment.body => {}
-            Some((known, _)) => {
-                store.edit_external(*known, &comment.body, now)?;
+            Some((_, body, _)) if *body == comment.body => {}
+            Some((known, _, _)) => {
+                store.edit_external(*known, &comment.body, comment.dated, now)?;
                 ingested.edited += 1;
             }
             None => {
@@ -96,10 +110,17 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
                     bot: comment.bot,
                     url: comment.url,
                     path: comment.lines.map(|lines| lines.path),
+                    dated: comment.dated,
                 };
                 store.insert_external(new, now)?;
                 ingested.new += 1;
             }
+        }
+    }
+    for (key, (comment, _, pending)) in known {
+        if pending && gone.contains(&key) && !found.contains(&key) {
+            store.withdraw_external(comment)?;
+            ingested.withdrawn += 1;
         }
     }
     Ok(ingested)

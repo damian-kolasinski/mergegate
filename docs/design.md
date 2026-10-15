@@ -210,8 +210,9 @@ mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     --for operator: only an event from the operator ends the wait, which then returns every
     unacknowledged event with it, so acknowledging never skips one. --timeout 0 waits until an event.
     External comments come in batches, not a trickle: the hub holds an item's GitHub comments until
-    they have been quiet for 60s and every bot in the project's `bots` has posted since the newest
-    push (or 20 minutes have passed since it), and sends them 20 minutes after the first regardless.
+    they have been quiet for 60s and every bot in the project's `bots` has posted or edited a
+    comment GitHub dates at or after the newest push (or 20 minutes have passed since it), and
+    sends them 20 minutes after the first regardless.
     A read that returns other events takes the held comments with it.
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
@@ -273,7 +274,11 @@ The cursor is the event's position in the item's log, and comment IDs are hub-wi
 
 Event types: `review.submitted`, `external.comments` (each comment carries `external`: its author, whether a bot, its kind (`review_comment`, `issue_comment` or `review`) and its GitHub URL; one that can't be placed on a line has no anchor, and `edited` lists those an earlier batch carried with another body), `merge.held` (the upstream's reason), `merge.cancelled`, `merge.conflict` (the target commit, the paths and the commands to rebase), `item.merged` (the squash commit and the branch, which git sees as unmerged), `item.abandoned`, `parent.updated`, `parent.abandoned`, `comment.override` (the operator overrode the agent's rejection of an external comment: the comment and the operator's reply, sent at once rather than with a review).
 
-External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. Deleted comments are ignored, as are the operator's own (the account `gh` signs in as).
+External comments share the operator's comment IDs, so the agent answers them with `mg reply` too. An inline one anchors on the revision whose head it was written on; a conversation comment, a review body or an inline one on a commit the hub never had sits on the item as a whole. Each GitHub reply in a thread is its own comment, an edit comes again in the next batch, and a batch keeps the bodies it sent, so an event reads the same after an edit. The operator's own comments (the account `gh` signs in as) are ignored.
+
+A comment deleted on GitHub while the hub still holds it is withdrawn, but only once GitHub, asked for that comment by itself, answers 404: lists come a page at a time by offset, so one read while an earlier comment is deleted can skip a comment that's still there. One no batch carried and no one answered goes, with the operator's draft replies on it; one the agent already got stays as the agent got it, draft replies included, and only its held edit is dropped. A comment deleted after it went out stays as it is.
+
+An expected bot has reviewed the newest push once GitHub dates a comment of its at or after the push: a comment by when it was posted or last edited, so a bot that keeps one summary comment counts once it edits it, and a review by its submission. When the hub saw the comment or the edit doesn't matter, so a bot's review of the revision before, read late, doesn't count.
 
 ### 6.4 Push
 

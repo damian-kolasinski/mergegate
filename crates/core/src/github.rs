@@ -90,6 +90,17 @@ pub trait Github {
         number: u64,
         fresh: bool,
     ) -> Result<Vec<PullComment>, GithubError>;
+
+    /// One comment of the pull request, asked for by itself; none when
+    /// GitHub says it's gone. A list can miss a comment that's still there,
+    /// so only this tells that one was deleted.
+    fn pull_comment(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        kind: PullCommentKind,
+        id: u64,
+    ) -> Result<Option<PullComment>, GithubError>;
 }
 
 /// A comment on a pull request as GitHub has it.
@@ -106,6 +117,10 @@ pub struct PullComment {
     pub body: String,
     /// Where an inline comment sits; none for the other kinds.
     pub lines: Option<PullLines>,
+    /// When it was posted or last edited, whichever is later, a review when
+    /// it was submitted: Unix milliseconds by GitHub's clock, which counts
+    /// whole seconds.
+    pub dated: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
