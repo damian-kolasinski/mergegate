@@ -35,10 +35,21 @@ impl<G: ItemGit + MergeGit, H: Github> MergeBackend for GithubBackend<'_, G, H> 
             Ok(remote) => Upstream::Remote(remote),
             Err(e) => return held(e.to_string()),
         };
+        // A stacked item's pull request may still be based on its parent's
+        // branch, and GitHub merges into whatever it's based on.
+        if item.parent.is_some()
+            && let Err(e) = self.github.retarget(repo, pull.number, &item.target)
+        {
+            return held(e.to_string());
+        }
         let head = &item.revision.head;
+        // Its head still holds the parent revision it's built on, which
+        // GitHub merges from the old merge-base, so a parent that changed
+        // before landing must not come back through it.
+        let base = item.parent.as_ref().map(|_| item.revision.base.as_str());
         let trial = self
             .git
-            .trial_merge(&project.name, &upstream, &item.target, head)?;
+            .trial_merge(&project.name, &upstream, &item.target, head, base)?;
         // GitHub takes the subject and the body apart.
         let (title, body) = message.split_once("\n\n").unwrap_or((message, ""));
         let merged = match trial {
@@ -65,13 +76,28 @@ impl<G: ItemGit + MergeGit, H: Github> MergeBackend for GithubBackend<'_, G, H> 
             Ok(commit) => commit,
             Err(e) => return held(e.to_string()),
         };
-        // The merge is done on GitHub whatever these do: staging catches up
-        // on its next fetch, and a branch left behind only clutters GitHub.
+        // The merge is done on GitHub whatever this does: staging catches up
+        // on its next fetch.
         let _ = self
             .git
             .fetch_target(&project.name, &upstream, &item.target);
-        let _ = self.github.delete_branch(repo, &item.branch);
         Ok(Landing::Merged { commit })
+    }
+
+    fn restack(&self, _project: &Project, child: &Item) -> Result<(), GitError> {
+        let ItemBackend::Github { repo, pull } = &child.backend else {
+            return Ok(());
+        };
+        self.github
+            .retarget(repo, pull.number, &child.target)
+            .map_err(|e| GitError::Failed(format!("GitHub didn't retarget {}: {e}", child.name())))
+    }
+
+    /// A branch left behind only clutters GitHub.
+    fn tidy(&self, _project: &Project, item: &Item) {
+        if let ItemBackend::Github { repo, .. } = &item.backend {
+            let _ = self.github.delete_branch(repo, &item.branch);
+        }
     }
 }
 

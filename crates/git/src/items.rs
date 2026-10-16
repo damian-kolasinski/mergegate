@@ -88,6 +88,21 @@ impl ItemGit for HubGit {
         Ok(base.map(|base| base.trim().to_owned()))
     }
 
+    fn contains(&self, project: &ProjectName, head: &str, commit: &str) -> Result<bool, GitError> {
+        let found = run_optional(
+            &self.home,
+            "checking the branch's history",
+            [
+                self.git_dir(project).as_os_str(),
+                arg("merge-base"),
+                arg("--is-ancestor"),
+                arg(commit),
+                arg(head),
+            ],
+        )?;
+        Ok(found.is_some())
+    }
+
     fn changed_files(
         &self,
         project: &ProjectName,

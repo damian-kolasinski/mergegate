@@ -81,6 +81,10 @@ fn line(i: &InboxItem) -> String {
     if let Some(note) = &i.note {
         out.push_str(&format!("\n      {}", one_line(note)));
     }
+    if let Some(parent) = &i.parent {
+        let behind = if i.behind { ", behind it" } else { "" };
+        out.push_str(&format!("\n      on {parent}{behind}"));
+    }
     match &i.blocked {
         Some(Blocked::Held { reason }) => {
             out.push_str(&format!("\n      held: {}", one_line(reason)));
@@ -94,6 +98,14 @@ fn line(i: &InboxItem) -> String {
                 "\n      conflicts with {} at {short}: {}",
                 i.target,
                 listed(paths)
+            ));
+        }
+        Some(Blocked::Waiting { parent }) => {
+            out.push_str(&format!("\n      approved; merges right after {parent}"));
+        }
+        Some(Blocked::Behind { parent }) => {
+            out.push_str(&format!(
+                "\n      approved, but doesn't apply since {parent} merged; waits for its agent to rebase"
             ));
         }
         None => {}

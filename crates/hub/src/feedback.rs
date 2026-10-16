@@ -1,6 +1,7 @@
 //! `GET /api/items/{id}/feedback` and `POST .../feedback/ack`: an item's
 //! events for its agent, read by `mg wait` (long-polling) and `mg feedback`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,7 +13,8 @@ use axum::{Extension, Json, Router};
 use mergegate_core::feedback::{
     self, Event, EventKind, Feedback, FeedbackError, NoticeKind, Source, Wake,
 };
-use mergegate_core::item::{Item, ItemId};
+use mergegate_core::item::{Item, ItemId, ItemStore};
+use mergegate_core::store::StoreError;
 use serde::Deserialize;
 use store_sqlite::Store;
 use tokio::time::Instant;
@@ -65,10 +67,14 @@ async fn read(
     let mut since = query.since;
     loop {
         log.mark_unchanged();
-        let read = {
+        let (read, parents) = {
             let id = id.clone();
             state
-                .blocking(move |store, _| feedback::feedback(store, &id, since))
+                .blocking(move |store, _| {
+                    let read = feedback::feedback(store, &id, since)?;
+                    let parents = parent_names(store, &read.events)?;
+                    Ok::<_, FeedbackError>((read, parents))
+                })
                 .await
                 .map_err(failure)?
         };
@@ -82,12 +88,16 @@ async fn read(
             // A wait's answer at its deadline can hold events its `mg wait`
             // isn't waiting for, and skips.
             if !(query.wait == 0 || woke) || read.events.is_empty() {
-                return Ok(Json(to_api(&id, read)));
+                return Ok(Json(to_api(&id, read, &parents)));
             }
-            let (read, released) = {
+            let ((read, released), parents) = {
                 let id = id.clone();
                 state
-                    .blocking(move |store, _| handing(store, &id, since, read))
+                    .blocking(move |store, _| {
+                        let handed = handing(store, &id, since, read)?;
+                        let parents = parent_names(store, &handed.0.events)?;
+                        Ok::<_, FeedbackError>((handed, parents))
+                    })
                     .await
                     .map_err(failure)?
             };
@@ -95,7 +105,7 @@ async fn read(
                 external::released(&state, &id);
             }
             state.wakes.handed(&id, read.cursor);
-            return Ok(Json(to_api(&id, read)));
+            return Ok(Json(to_api(&id, read, &parents)));
         }
         // The store stays unlocked while this waits.
         let mut readmit = false;
@@ -151,7 +161,11 @@ fn parse(id: &str) -> Result<ItemId, Failure> {
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
 }
 
-fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
+fn to_api(
+    id: &ItemId,
+    read: Feedback,
+    parents: &HashMap<ItemId, String>,
+) -> api::feedback::Feedback {
     api::feedback::Feedback {
         item: id.to_string(),
         name: read.item.name().to_string(),
@@ -159,13 +173,44 @@ fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
         events: read
             .events
             .into_iter()
-            .map(|e| event_to_api(id, &read.item, e))
+            .map(|e| event_to_api(id, &read.item, e, parents))
             .collect(),
         cursor: read.cursor,
     }
 }
 
-pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedback::Event {
+/// The names of the parents `events` speak of, which the store keeps by ID
+/// and agents know by name.
+pub(crate) fn parent_names<'a>(
+    store: &impl ItemStore,
+    events: impl IntoIterator<Item = &'a Event>,
+) -> Result<HashMap<ItemId, String>, StoreError> {
+    let mut names = HashMap::new();
+    for event in events {
+        if let EventKind::Notice(notice) = &event.kind
+            && let NoticeKind::ParentUpdated { parent, .. }
+            | NoticeKind::ParentAbandoned { parent, .. } = &notice.kind
+            && !names.contains_key(parent)
+        {
+            names.insert(parent.clone(), items::name_of(store, parent)?);
+        }
+    }
+    Ok(names)
+}
+
+/// `parents` names the parents `event` may speak of, as [`parent_names`].
+pub(crate) fn event_to_api(
+    id: &ItemId,
+    item: &Item,
+    event: Event,
+    parents: &HashMap<ItemId, String>,
+) -> api::feedback::Event {
+    let name = |parent: &ItemId| {
+        parents
+            .get(parent)
+            .cloned()
+            .unwrap_or_else(|| parent.to_string())
+    };
     let target = &item.target;
     let revision = event.revision();
     let source = source_to_api(event.source());
@@ -206,6 +251,38 @@ pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedb
                     format!("git branch -D {}", item.branch),
                 ],
             },
+            // `--onto` keeps the parent's old commits out: once it merged,
+            // they're on the target squashed into one, which a plain rebase
+            // would try to apply again.
+            NoticeKind::ParentUpdated {
+                parent,
+                merged,
+                onto,
+                upstream,
+            } => api::feedback::EventBody::ParentUpdated {
+                parent: name(&parent),
+                merged,
+                commands: vec![
+                    "git fetch mergegate".to_owned(),
+                    if merged {
+                        format!("git rebase --onto mergegate/{target} {upstream}")
+                    } else {
+                        format!("git rebase --onto {onto} {upstream}")
+                    },
+                ],
+                onto,
+                upstream,
+            },
+            NoticeKind::ParentAbandoned { parent, upstream } => {
+                api::feedback::EventBody::ParentAbandoned {
+                    parent: name(&parent),
+                    commands: vec![
+                        "git fetch mergegate".to_owned(),
+                        format!("git rebase --onto mergegate/{target} {upstream}"),
+                    ],
+                    upstream,
+                }
+            }
         },
         EventKind::ExternalComments(batch) => external::batch_to_api(&batch),
         EventKind::Override(o) => api::feedback::EventBody::CommentOverride {

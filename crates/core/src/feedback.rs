@@ -84,6 +84,19 @@ pub enum NoticeKind {
     },
     /// The approved revision landed as `commit` on the target.
     Merged { commit: String },
+    /// The item's parent moved on (§5.1): it got a revision, or it merged
+    /// and the item couldn't land with it. The item's agent rebases the
+    /// commits after `upstream`, the parent revision they're built on, onto
+    /// `onto`: the parent's new head, or the target's once it merged.
+    ParentUpdated {
+        parent: ItemId,
+        merged: bool,
+        onto: String,
+        upstream: String,
+    },
+    /// The item's parent closed without merging, so the item is back with
+    /// its agent, whose commits after `upstream` belong on another base.
+    ParentAbandoned { parent: ItemId, upstream: String },
 }
 
 /// Who an event comes from.

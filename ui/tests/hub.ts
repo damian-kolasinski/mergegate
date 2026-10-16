@@ -146,6 +146,26 @@ export class Project {
     this.revise(title, files, attach);
   }
 
+  /**
+   * Commits `files` on a new `branch` off the current one and submits it
+   * stacked on `on`, the item that branch is.
+   */
+  stack(
+    branch: string,
+    on: string,
+    title: string,
+    files: Record<string, string | Buffer | null>,
+  ) {
+    git(this.dir, "switch", "--quiet", "-c", branch);
+    this.write(files);
+    git(this.dir, "commit", "--quiet", "-m", title);
+    this.hub.mg(["submit", "--on", on], this.dir);
+  }
+
+  switch(branch: string) {
+    git(this.dir, "switch", "--quiet", branch);
+  }
+
   /** Commits `files` on the current branch and submits the new revision. */
   revise(
     title: string,

@@ -12,6 +12,7 @@ mod git;
 mod github;
 mod hold;
 mod land;
+mod stacked;
 
 pub use approve::{Approve, approve};
 pub use backend::{Landing, MergeBackend};
@@ -21,6 +22,7 @@ pub use error::MergeError;
 pub use git::{MergeGit, Trial};
 pub use github::GithubBackend;
 pub use hold::{cancel, retry};
+pub use stacked::merged_elsewhere;
 
 use crate::item::Item;
 
@@ -29,4 +31,7 @@ use crate::item::Item;
 pub struct Merge {
     pub item: Item,
     pub landing: Landing,
+    /// The items stacked on it that its merge moved, bottom first: merged
+    /// right after it, or told to rebase.
+    pub stacked: Vec<Item>,
 }

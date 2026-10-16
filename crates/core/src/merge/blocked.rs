@@ -2,7 +2,7 @@
 //! inbox and the review screen.
 
 use crate::feedback::{EventKind, FeedbackStore, NoticeKind};
-use crate::item::{Item, ItemState};
+use crate::item::{Item, ItemId, ItemState, ItemStore};
 use crate::store::StoreError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +14,12 @@ pub enum Blocked {
         target_commit: String,
         paths: Vec<String>,
     },
+    /// Approved, and lands right after `parent`, which it's stacked on.
+    Waiting { parent: ItemId },
+    /// Approved, but its own diff didn't apply once `parent` merged; it lands
+    /// when its agent has rebased, on the same approval if the diff is
+    /// unchanged.
+    Behind { parent: ItemId },
 }
 
 /// The newest revision's last merge event says it, as long as the item is
@@ -23,7 +29,18 @@ pub enum Blocked {
 /// An item in Merging is always held: approve and retry hold the store until
 /// they finish, so one seen in Merging with no hold logged is a merge that a
 /// stopped hub or a failed write cut short, and only the operator moves it on.
-pub fn blocked(store: &impl FeedbackStore, item: &Item) -> Result<Option<Blocked>, StoreError> {
+pub fn blocked(
+    store: &(impl FeedbackStore + ItemStore),
+    item: &Item,
+) -> Result<Option<Blocked>, StoreError> {
+    if item.state == ItemState::Merging
+        && let Some(parent) = &item.parent
+        && store.item(parent)?.is_some_and(|p| p.state.is_open())
+    {
+        return Ok(Some(Blocked::Waiting {
+            parent: parent.clone(),
+        }));
+    }
     let last = store
         .events(&item.id, 0)?
         .into_iter()
@@ -38,6 +55,14 @@ pub fn blocked(store: &impl FeedbackStore, item: &Item) -> Result<Option<Blocked
         (Some(NoticeKind::MergeHeld { reason }), ItemState::Merging) => {
             Some(Blocked::Held { reason })
         }
+        (
+            Some(NoticeKind::ParentUpdated {
+                parent,
+                merged: true,
+                ..
+            }),
+            ItemState::Merging,
+        ) => Some(Blocked::Behind { parent }),
         (_, ItemState::Merging) => Some(Blocked::Held {
             reason: "the merge stopped before it finished".into(),
         }),

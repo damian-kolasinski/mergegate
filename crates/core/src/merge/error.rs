@@ -21,6 +21,8 @@ pub enum MergeError {
         revision: u32,
         newest: u32,
     },
+    #[error("{parent}, which {id} is stacked on, was abandoned; {id} needs a new base first")]
+    ParentAbandoned { id: ItemId, parent: ItemId },
     #[error("{id} merges through {}, which can't merge yet", .backend.as_str())]
     NoBackend { id: ItemId, backend: Backend },
     #[error(transparent)]

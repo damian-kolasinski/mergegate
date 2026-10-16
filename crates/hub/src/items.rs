@@ -11,7 +11,9 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::interdiff::{self, ChangedSince};
-use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, ItemStore, Submit};
+use mergegate_core::item::{
+    self, Item, ItemBackend, ItemError, ItemId, ItemState, ItemStore, On, StackError, Submit,
+};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::review::Waiting;
 use mergegate_core::store::StoreError;
@@ -51,6 +53,17 @@ async fn submit(
         // run in a worktree this agent isn't in.
         request.wake = Some(String::new());
     }
+    let on = match (&request.on, ProjectName::parse(&request.project)) {
+        (Some(on), Ok(project)) => Some(On::parse(on, &project).map_err(|e| {
+            Failure::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_item",
+                format!("--on {on}: {e}"),
+                Some("name an open item, as app#41 or 41, or none".into()),
+            )
+        })?),
+        _ => None,
+    };
     let request = Submit {
         project: request.project,
         branch: request.branch,
@@ -61,9 +74,10 @@ async fn submit(
         guide: request.guide,
         priority: request.priority.map(priority::from_api),
         note: request.note,
+        on,
     };
     let app = state.clone();
-    let (moved, submitted, carried) = state
+    let (moved, submitted, carried, (stacked, parent)) = state
         .blocking_github(move |store, git, github| {
             // So a rule the operator just wrote applies to this revision
             // without waiting for the next poll.
@@ -77,21 +91,43 @@ async fn submit(
             // of them either way.
             let mut submitted = item::submit(store, git, github, request);
             let mut carried = false;
+            let mut stacked = Vec::new();
             // The operator approved the diff, not a title it would land under.
             if let Ok(done) = &mut submitted
                 && done.new_revision
                 && !done.retitled
-                && let Some(warning) = merge::carry(store, git, github, &done.item.id)
+                && let Some(carry) = merge::carry(store, git, github, &done.item.id)
             {
                 carried = true;
-                done.warnings.push(warning);
+                done.warnings.push(carry.warning);
+                stacked = carry.stacked;
                 // The merge happened: failing to re-read it mustn't fail the
                 // submit, whose item then shows the state before it.
                 if let Ok(Some(item)) = store.item(&done.item.id) {
                     done.item = item;
                 }
             }
-            Ok::<_, ItemError>((moved, submitted, carried))
+            // A new revision told the item stacked on it to rebase. The
+            // submit is recorded, so failing to read that mustn't fail it.
+            if let Ok(done) = &submitted
+                && done.new_revision
+                && let Ok(Some(child)) = store.child(&done.item.id)
+            {
+                stacked.push(child.id);
+            }
+            // Its parent's stack trail now lists it.
+            if let Ok(done) = &submitted
+                && let Some(parent) = &done.item.parent
+            {
+                stacked.push(parent.clone());
+            }
+            // The submit is recorded, so a failed read leaves the parent's ID.
+            let parent = submitted
+                .as_ref()
+                .ok()
+                .and_then(|done| done.item.parent.as_ref())
+                .map(|parent| name_of(store, parent).unwrap_or_else(|_| parent.to_string()));
+            Ok::<_, ItemError>((moved, submitted, carried, (stacked, parent)))
         })
         .await
         .map_err(failure)?;
@@ -100,6 +136,7 @@ async fn submit(
     if carried {
         merge::changed(&state, &submitted.item.id);
     }
+    merge::stacked_changed(&state, &stacked);
     // A new wake command may be due for events already logged.
     state.wakes.recheck();
     if submitted.new_revision {
@@ -125,6 +162,7 @@ async fn submit(
             item: to_api(&submitted.item),
             new_revision: submitted.new_revision,
             warnings: submitted.warnings,
+            parent,
         }),
     ))
 }
@@ -141,7 +179,15 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
                         let waiting = inbox.waiting.get(&item.id).copied().unwrap_or_default();
-                        Ok(inbox_entry(item, blocked, demo, changed, waiting))
+                        let behind = item.state.is_open() && item::behind(store, item)?;
+                        let mut entry = inbox_entry(item, blocked, demo, changed, waiting);
+                        entry.parent = item
+                            .parent
+                            .as_ref()
+                            .map(|p| name_of(store, p))
+                            .transpose()?;
+                        entry.behind = behind;
+                        Ok(entry)
                     })
                     .collect()
             };
@@ -192,6 +238,7 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
         created_at: item.created_at.clone(),
         priority: item.priority.map(priority::to_api),
         note: item.note.clone(),
+        parent: item.parent.as_ref().map(ToString::to_string),
     }
 }
 
@@ -236,7 +283,17 @@ fn inbox_entry(
         note: item.note.clone(),
         questions: waiting.questions,
         rejections: waiting.rejections,
+        parent: None,
+        behind: false,
     }
+}
+
+/// The name of the item `id` is of, or `id` for one the hub doesn't have.
+pub(crate) fn name_of(store: &impl ItemStore, id: &ItemId) -> Result<String, StoreError> {
+    let item = store.item(id)?;
+    Ok(item
+        .map_or_else(|| id.clone(), |item| item.name())
+        .to_string())
 }
 
 pub(crate) fn changed_to_api(changed: ChangedSince) -> api::item::ChangedSince {
@@ -286,6 +343,7 @@ pub(crate) fn failure(e: ItemError) -> Failure {
         E::BranchMoved { .. } => (S::CONFLICT, "branch_moved", None),
         // Its pull request was closed on GitHub, which can't reopen it.
         E::BranchGone { .. } => (S::CONFLICT, "branch_gone", None),
+        E::Stack(e) => stack_failure(e),
         E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };
@@ -293,4 +351,35 @@ pub(crate) fn failure(e: ItemError) -> Failure {
         tracing::error!("{e}");
     }
     Failure::new(status, code, e.to_string(), hint)
+}
+
+fn stack_failure(e: &StackError) -> (StatusCode, &'static str, Option<String>) {
+    use StackError as E;
+    use StatusCode as S;
+    let none = Some("mg submit --on none".to_owned());
+    match e {
+        E::OtherProject { .. } => (S::BAD_REQUEST, "other_project", None),
+        E::ParentClosed(_) => (S::CONFLICT, "parent_closed", none),
+        E::OnItself(_) => (S::BAD_REQUEST, "on_itself", None),
+        E::Cycle { .. } => (S::CONFLICT, "stack_cycle", None),
+        E::HasChild { child, .. } => (
+            S::CONFLICT,
+            "has_child",
+            Some(format!("mg submit --on {child}")),
+        ),
+        E::OtherTarget { .. } => (S::CONFLICT, "other_target", None),
+        E::OtherBackend { .. } => (S::CONFLICT, "other_backend", None),
+        E::NotOnParent { parent_branch, .. } => (
+            S::CONFLICT,
+            "not_on_parent",
+            Some(format!("git rebase mergegate/{parent_branch}")),
+        ),
+        E::ParentMerged {
+            target, upstream, ..
+        } => (
+            S::CONFLICT,
+            "parent_merged",
+            Some(format!("git rebase --onto mergegate/{target} {upstream}")),
+        ),
+    }
 }

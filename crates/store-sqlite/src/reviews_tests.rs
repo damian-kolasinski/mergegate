@@ -18,6 +18,7 @@ fn store() -> (tempfile::TempDir, Store) {
         guide: None,
         interdiffs: Vec::new(),
         viewed: Vec::new(),
+        parent: None,
     };
     let name = ProjectName::parse("app").unwrap();
     store
@@ -181,6 +182,7 @@ fn a_review_sends_only_its_items_drafts() {
                 guide: None,
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
+                parent: None,
             },
             priority: None,
             note: None,

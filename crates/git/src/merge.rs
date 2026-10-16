@@ -53,7 +53,11 @@ impl HubGit {
         staging::fetch(&self.home, &dir, &upstream, target)?;
         let branch = format!("refs/heads/{target}");
         let target_commit = self.rev_parse(&project.name, &format!("{branch}^{{commit}}"))?;
-        let tree = match self.merge_tree(&project.name, &target_commit, &item.revision.head)? {
+        // A stacked item lands its own diff: the parent it was built on has
+        // landed already, squashed into a commit its head doesn't contain.
+        let base = item.parent.as_ref().map(|_| item.revision.base.as_str());
+        let head = &item.revision.head;
+        let tree = match self.merge_tree(&project.name, &target_commit, head, base)? {
             Merged::Tree(tree) => tree,
             Merged::Conflict(paths) => {
                 return Ok(Some(Landing::Conflict {

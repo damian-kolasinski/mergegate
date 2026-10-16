@@ -46,6 +46,7 @@ fn revision(interdiffs: Vec<NewInterdiff>, viewed: &[&str]) -> NewRevision {
         guide: None,
         interdiffs,
         viewed: viewed.iter().map(|p| (*p).into()).collect(),
+        parent: None,
     }
 }
 

@@ -1,7 +1,8 @@
 //! Approving a revision, which merges it (F8).
 
 use super::land::{land, through};
-use super::{Merge, MergeBackend, MergeError};
+use super::stacked::tidy_parent;
+use super::{Landing, Merge, MergeBackend, MergeError};
 use crate::diff::{DiffGit, DiffStore};
 use crate::feedback::FeedbackStore;
 use crate::highlight::HighlightStore;
@@ -22,7 +23,8 @@ pub struct Approve {
 /// Sends the item's drafts to its agent as an `approved` review, moving it
 /// to Merging, then lands it. The review is recorded first, so the agent
 /// learns of the approval even if the merge never finishes. Drafts move to
-/// the revision as a submitted review's do.
+/// the revision as a submitted review's do. An item stacked on one that
+/// hasn't landed waits in Merging and lands right after it (§5.1).
 pub fn approve<
     S: ProjectStore
         + ItemStore
@@ -60,6 +62,16 @@ pub fn approve<
             newest: item.revision.number,
         });
     }
+    let parent = match &item.parent {
+        Some(parent) => store.item(parent)?,
+        None => None,
+    };
+    if let Some(parent) = parent.filter(|parent| parent.state == ItemState::Abandoned) {
+        return Err(MergeError::ParentAbandoned {
+            id,
+            parent: parent.name(),
+        });
+    }
     let backend = through(&item, backends)?;
     let moved = move_drafts(store, git, &id, revision)?;
     let review = NewReview {
@@ -71,7 +83,12 @@ pub fn approve<
     };
     store.insert_review(review, ItemState::Merging)?;
     let item = store.item(&id)?.ok_or(MergeError::NoItem(id))?;
-    land(store, git, backend, &item)
+    let merge = land(store, git, backend, &item)?;
+    // A child its parent's merge couldn't move off that parent's branch.
+    if matches!(merge.landing, Landing::Merged { .. }) {
+        tidy_parent(store, backend, &item)?;
+    }
+    Ok(merge)
 }
 
 #[cfg(test)]

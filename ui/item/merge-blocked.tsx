@@ -8,7 +8,8 @@ import styles from "./merge-blocked.module.css";
 /**
  * Why the newest revision's merge didn't land. A held merge waits for the
  * operator to retry or cancel it; a conflict is already with the agent, who
- * was told how to rebase.
+ * was told how to rebase. A stacked item's approval waits for its parent to
+ * land, or, once that one has, for its agent to rebase onto the target.
  */
 export function MergeBlocked(props: {
   item: string;
@@ -80,6 +81,46 @@ export function MergeBlocked(props: {
           );
         }}
       </Match>
+      <Match when={props.blocked.kind === "waiting" && props.blocked}>
+        {(waiting) => (
+          <section class={styles.notice} aria-label="Merge waiting">
+            <Badge tone="brand" solid>
+              Approved
+            </Badge>
+            <Meta>
+              Merges right after <Mono>{waiting().parent}</Mono>, which it's
+              stacked on, lands.
+            </Meta>
+            <span class={styles.actions}>
+              <Show when={failure()}>
+                {(failure) => <ErrorNote failure={failure()} />}
+              </Show>
+              <CancelMerge sending={sending()} onCancel={cancel} />
+            </span>
+          </section>
+        )}
+      </Match>
+      <Match when={props.blocked.kind === "behind" && props.blocked}>
+        {(behind) => (
+          <section class={styles.notice} aria-label="Merge behind">
+            <Badge tone="warning" solid>
+              Behind
+            </Badge>
+            <Meta>
+              Approved, but its diff didn't apply to <Mono>{props.target}</Mono>{" "}
+              once <Mono>{behind().parent}</Mono> merged. Sent to the agent to
+              rebase: it merges on this approval if its diff comes back
+              unchanged.
+            </Meta>
+            <span class={styles.actions}>
+              <Show when={failure()}>
+                {(failure) => <ErrorNote failure={failure()} />}
+              </Show>
+              <CancelMerge sending={sending()} onCancel={cancel} />
+            </span>
+          </section>
+        )}
+      </Match>
       <Match when={props.blocked.kind === "conflict" && props.blocked}>
         {(conflict) => (
           <section class={styles.notice} aria-label="Merge conflict">
@@ -104,6 +145,22 @@ export function MergeBlocked(props: {
         )}
       </Match>
     </Switch>
+  );
+}
+
+function CancelMerge(props: {
+  sending: "cancel" | "retry" | undefined;
+  onCancel: () => void;
+}) {
+  return (
+    <Button
+      variant="danger"
+      disabled={props.sending !== undefined}
+      busy={props.sending === "cancel"}
+      onClick={() => props.onCancel()}
+    >
+      {props.sending === "cancel" ? "Cancelling…" : "Cancel merge"}
+    </Button>
   );
 }
 

@@ -45,6 +45,9 @@ pub trait ItemGit {
         target: &str,
     ) -> Result<Option<String>, GitError>;
 
+    /// Whether `commit` is `head` or one of its ancestors.
+    fn contains(&self, project: &ProjectName, head: &str, commit: &str) -> Result<bool, GitError>;
+
     /// Files changed from `base` to `head`, with renames detected, in path
     /// order.
     fn changed_files(

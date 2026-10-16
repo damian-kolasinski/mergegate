@@ -26,9 +26,10 @@ Split the work into parts only when it holds parts the operator would rather rev
 - Split along the work's own seams (layer, crate, slice), bottom-up, so each part builds only on the parts below it.
 - Each part stands on its own: it builds, its checks pass, and it carries the tests for the code it adds. Do not split one change across parts.
 - Name the branches `<branch>-1-<slug>`, `<branch>-2-<slug>`, and so on, each starting from the one below it.
-- mergegate reviews every item as its whole branch against the target and squash-merges it, so an item above an unmerged one would show the lower part's diff again. Submit only the lowest unmerged part.
-- To change a lower part, commit to its branch, then rebase each part above onto the one below it, bottom up. The parts above aren't submitted yet, so rewriting them is safe.
-- Once a part merges, the squash commit doesn't match its commits, so a plain rebase would replay them. Before deleting its branch, move the next part onto the target with `git rebase --onto mergegate/<target> <merged part's branch> <next part's branch>`, then submit it.
+- When `mg submit --help` lists `--on`, submit every part, each `--on` the item below it, as the mergegate skill's "Stacking work" describes: each is reviewed as its own diff and lands right after the one below, and `parent.updated` gives the rebase to run when a lower part moves.
+- An older hub reviews every item as its whole branch against the target and squash-merges it, so an item above an unmerged one would show the lower part's diff again. Submit only the lowest unmerged part, then:
+  - To change a lower part, commit to its branch, then rebase each part above onto the one below it, bottom up. The parts above aren't submitted yet, so rewriting them is safe.
+  - Once a part merges, the squash commit doesn't match its commits, so a plain rebase would replay them. Before deleting its branch, move the next part onto the target with `git rebase --onto mergegate/<target> <merged part's branch> <next part's branch>`, then submit it.
 - If shipping ends before every part is submitted, list the remaining branches, bottom first, in the report.
 
 ## Review

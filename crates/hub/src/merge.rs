@@ -12,7 +12,7 @@ use axum::{Json, Router};
 use backend_github::GithubClient;
 use git::HubGit;
 use mergegate_core::feedback::FeedbackStore;
-use mergegate_core::item::{Item, ItemId};
+use mergegate_core::item::{Item, ItemId, ItemState, ItemStore};
 use mergegate_core::merge::{
     self, Approve, Blocked, Carried, GithubBackend, Landing, Merge, MergeError,
 };
@@ -51,7 +51,10 @@ async fn approve(
         })
         .await;
     changed(&state, &id);
-    Ok(Json(to_api(merge.map_err(failure)?)))
+    let merge = merge.map_err(failure)?;
+    let stacked: Vec<_> = merge.stacked.iter().map(|i| i.id.clone()).collect();
+    stacked_changed(&state, &stacked);
+    Ok(Json(to_api(merge)))
 }
 
 async fn retry(
@@ -69,7 +72,10 @@ async fn retry(
         })
         .await;
     changed(&state, &id);
-    Ok(Json(to_api(merge.map_err(failure)?)))
+    let merge = merge.map_err(failure)?;
+    let stacked: Vec<_> = merge.stacked.iter().map(|i| i.id.clone()).collect();
+    stacked_changed(&state, &stacked);
+    Ok(Json(to_api(merge)))
 }
 
 async fn cancel(
@@ -86,38 +92,56 @@ async fn cancel(
     Ok(Json(items::to_api(&item)))
 }
 
+/// What carrying an approval over came to.
+pub(crate) struct Carry {
+    /// For its agent: what came of it.
+    pub warning: String,
+    /// The items stacked on it that merged right after it.
+    pub stacked: Vec<ItemId>,
+}
+
 /// Lands a new revision of `id` on the operator's standing approval when
-/// it changes nothing since the approved one; a warning for its agent says
-/// what came of it.
+/// it changes nothing since the approved one.
 pub(crate) fn carry(
     store: &mut Store,
     git: &HubGit,
     github: &GithubClient,
     id: &ItemId,
-) -> Option<String> {
+) -> Option<Carry> {
     let github = GithubBackend::new(git, github);
     let (from, merge) = match merge::carry(store, git, &[git, &github], id) {
         Ok(None) => return None,
         Ok(Some(Carried { from, merge })) => (from, Ok(merge)),
         Err(e) => (0, Err(e)),
     };
-    let landing = match dropped(store, git, merge) {
-        Ok(merge) => merge.landing,
-        Err(e) => return Some(format!("the earlier approval couldn't carry over: {e}")),
+    let (landing, stacked) = match dropped(store, git, merge) {
+        Ok(merge) => (merge.landing, merge.stacked),
+        Err(e) => {
+            return Some(Carry {
+                warning: format!("the earlier approval couldn't carry over: {e}"),
+                stacked: Vec::new(),
+            });
+        }
     };
+    let stacked = stacked.into_iter().map(|item| item.id).collect();
     let outcome = match landing {
         Landing::Merged { commit } => format!("merged as {commit}"),
         Landing::Held { reason } => format!("the merge is held: {reason}"),
         Landing::Conflict { paths, .. } => {
             format!("the merge conflicts in {}", paths.join(", "))
         }
+        Landing::Waiting { parent } => format!("it merges right after {parent}"),
     };
-    Some(format!(
-        "the diff is unchanged since the operator approved r{from}, so the approval stands: {outcome}"
-    ))
+    Some(Carry {
+        warning: format!(
+            "the diff is unchanged since the operator approved r{from}, so the approval stands: {outcome}"
+        ),
+        stacked,
+    })
 }
 
-/// Drops a merged item's branch from staging.
+/// Drops the branches of a merged item and of what merged right after it
+/// from staging.
 fn dropped(
     store: &Store,
     git: &HubGit,
@@ -126,9 +150,13 @@ fn dropped(
     if let Ok(Merge {
         item,
         landing: Landing::Merged { .. },
+        stacked,
     }) = &merge
     {
         branches::drop(store, git, &item.id);
+        for child in stacked.iter().filter(|c| c.state == ItemState::Merged) {
+            branches::drop(store, git, &child.id);
+        }
     }
     merge
 }
@@ -148,21 +176,46 @@ pub(crate) fn changed(state: &AppState, id: &ItemId) {
     });
 }
 
+/// Sends the items stacked on `id` changed: a merge or a new revision of
+/// theirs logs an event for each, and may have merged them.
+pub(crate) fn stacked_changed(state: &AppState, stacked: &[ItemId]) {
+    if stacked.is_empty() {
+        return;
+    }
+    state.events.logged();
+    for id in stacked {
+        state.events.send(UiEvent::ItemChanged {
+            item: id.to_string(),
+        });
+    }
+}
+
 /// Why `item`'s merge is stuck, for the inbox and the review screen.
 pub(crate) fn blocked(
-    store: &impl FeedbackStore,
+    store: &(impl FeedbackStore + ItemStore),
     item: &Item,
 ) -> Result<Option<api::merge::Blocked>, StoreError> {
-    Ok(merge::blocked(store, item)?.map(|blocked| match blocked {
-        Blocked::Held { reason } => api::merge::Blocked::Held { reason },
-        Blocked::Conflict {
-            target_commit,
-            paths,
-        } => api::merge::Blocked::Conflict {
-            target_commit,
-            paths,
-        },
-    }))
+    merge::blocked(store, item)?
+        .map(|blocked| -> Result<_, StoreError> {
+            Ok(match blocked {
+                Blocked::Held { reason } => api::merge::Blocked::Held { reason },
+                Blocked::Conflict {
+                    target_commit,
+                    paths,
+                } => api::merge::Blocked::Conflict {
+                    target_commit,
+                    paths,
+                },
+                // The store keeps the parent by ID; the operator knows it by name.
+                Blocked::Waiting { parent } => api::merge::Blocked::Waiting {
+                    parent: items::name_of(store, &parent)?,
+                },
+                Blocked::Behind { parent } => api::merge::Blocked::Behind {
+                    parent: items::name_of(store, &parent)?,
+                },
+            })
+        })
+        .transpose()
 }
 
 fn to_api(merge: Merge) -> api::merge::Merge {
@@ -176,10 +229,14 @@ fn to_api(merge: Merge) -> api::merge::Merge {
             target_commit,
             paths,
         },
+        Landing::Waiting { parent } => api::merge::Outcome::Waiting {
+            parent: parent.to_string(),
+        },
     };
     api::merge::Merge {
         item: items::to_api(&merge.item),
         outcome,
+        stacked: merge.stacked.iter().map(items::to_api).collect(),
     }
 }
 
@@ -206,6 +263,7 @@ fn failure(e: MergeError) -> Failure {
         E::NotMerging(_) => (S::CONFLICT, "not_merging", None),
         E::NoRevision { .. } => (S::NOT_FOUND, "revision_not_found", None),
         E::Stale { .. } => (S::CONFLICT, "stale_revision", None),
+        E::ParentAbandoned { .. } => (S::CONFLICT, "parent_abandoned", None),
         E::NoBackend { .. } => (S::CONFLICT, "backend_unavailable", None),
     };
     Failure::new(status, code, e.to_string(), hint)

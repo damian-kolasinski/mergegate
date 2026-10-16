@@ -4,6 +4,7 @@
 //! that would land nothing.
 
 use super::close::close;
+use super::stack;
 use super::{Item, ItemBackend, ItemError, ItemGit, ItemId, ItemState, ItemStore};
 use crate::diff::DiffStore;
 use crate::external::ExternalStore;
@@ -36,9 +37,23 @@ pub fn follow_pull<S: ItemStore + DiffStore + HighlightStore + FeedbackStore + E
     }
     let (state, source, kind) = match status {
         PullStatus::Open => return Ok(None),
+        // A stacked item's pull request is based on its parent's branch, so
+        // merging it there lands nothing on the target. Told it merged, the
+        // agent would delete the work the parent now carries unreviewed.
+        PullStatus::Merged { commit, base, .. } if base != item.target => (
+            ItemState::Abandoned,
+            Source::External,
+            NoticeKind::Abandoned {
+                reason: Some(format!(
+                    "Its pull request was merged on GitHub as {commit} into {base}, not {}, \
+                     so it reaches {} only if {base} does.",
+                    item.target, item.target
+                )),
+            },
+        ),
         // An approval held in the hub merged on GitHub is still the
         // operator's merge.
-        PullStatus::Merged { commit, head } if head == item.revision.head => {
+        PullStatus::Merged { commit, head, .. } if head == item.revision.head => {
             let source = match item.state {
                 ItemState::Merging => Source::Operator,
                 _ => Source::External,
@@ -47,7 +62,7 @@ pub fn follow_pull<S: ItemStore + DiffStore + HighlightStore + FeedbackStore + E
         }
         // A revision submitted after GitHub merged an earlier head never
         // landed. Told it merged, the agent would delete it with the branch.
-        PullStatus::Merged { commit, head } => (
+        PullStatus::Merged { commit, head, .. } => (
             ItemState::Abandoned,
             Source::External,
             NoticeKind::Abandoned {
@@ -79,7 +94,15 @@ pub fn follow_pull<S: ItemStore + DiffStore + HighlightStore + FeedbackStore + E
         source,
         kind,
     };
-    close(store, git, &item, state, notice).map(Some)
+    let item = close(store, git, &item, state, notice)?;
+    // A merge moves what's stacked on it through the merge backend, which the
+    // caller holds; an abandon hands it back to its agent here, as `abandon`
+    // would. Its pull request keeps its base, as GitHub leaves a closed
+    // pull request's branch.
+    if item.state == ItemState::Abandoned {
+        stack::abandoned(store, &item)?;
+    }
+    Ok(Some(item))
 }
 
 #[cfg(test)]

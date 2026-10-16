@@ -1,5 +1,6 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import type { Approve } from "../api/Approve";
+import type { Blocked } from "../api/Blocked";
 import type { ChangedSince } from "../api/ChangedSince";
 import type { ItemState } from "../api/ItemState";
 import type { Merge } from "../api/Merge";
@@ -29,8 +30,13 @@ export function ReviewBar(props: {
    * its number, as `#42`, and branch.
    */
   pullRequest: { label: string; branch: string } | undefined;
-  /** The newest revision's merge is held or conflicts. */
-  blocked: "held" | "conflict" | undefined;
+  /** Why the newest revision's merge didn't land, while it stands. */
+  blocked: Blocked["kind"] | undefined;
+  /**
+   * The open item this one is stacked on: approving holds the merge until
+   * that one lands, then lands this right after it.
+   */
+  after: string | undefined;
   /** The newer revision submitted, if any: only it can be approved. */
   newest: number | undefined;
   /**
@@ -310,13 +316,25 @@ export function ReviewBar(props: {
                   keyHint="a"
                   onClick={confirm}
                 >
-                  {sending() === "merge" ? "Merging…" : "Approve & merge"}
+                  {sending() === "merge"
+                    ? "Merging…"
+                    : props.after
+                      ? `Approve, merge after ${props.after}`
+                      : "Approve & merge"}
                 </Button>
               </>
             }
           >
             <fieldset class={styles.confirm} aria-label="Confirm merge">
               <span class={styles.question}>
+                <Show when={props.after}>
+                  {(after) => (
+                    <Meta>
+                      Stacked on {after()}: this waits for it, then lands right
+                      after it.
+                    </Meta>
+                  )}
+                </Show>
                 <Show
                   when={props.pullRequest}
                   fallback={
@@ -349,7 +367,7 @@ export function ReviewBar(props: {
                 keyHint="↵"
                 ref={(element) => requestAnimationFrame(() => element.focus())}
               >
-                Merge
+                {props.after ? "Approve" : "Merge"}
               </Button>
             </fieldset>
           </Show>

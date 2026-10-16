@@ -64,7 +64,9 @@ pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response
             let head = shared.pull_head(&state, &call.repo, number.parse().unwrap_or(0));
             comments::list(shared, &mut state, request, &call.repo, number, kind, head)
         }
-        ("DELETE", ["git", "refs", "heads", branch @ ..]) => call.delete_branch(&branch.join("/")),
+        ("DELETE", ["git", "refs", "heads", branch @ ..]) => {
+            call.delete_branch(&mut state, &branch.join("/"))
+        }
         _ => message(404, "Not Found"),
     }
 }
@@ -147,6 +149,12 @@ impl Call<'_> {
             return message(403, "Resource not accessible by integration");
         }
         self.with_pull(state, number, |call, pull| {
+            if let Some(base) = body["base"].as_str() {
+                if call.head_of(base).is_none() {
+                    return invalid(&format!("base {base} doesn't exist"));
+                }
+                pull.base = base.into();
+            }
             if let Some(title) = body["title"].as_str() {
                 pull.title = title.into();
             }
@@ -212,7 +220,9 @@ impl Call<'_> {
         })
     }
 
-    fn delete_branch(&self, branch: &str) -> Response {
+    /// As GitHub does, it closes the open pull requests based on the branch,
+    /// which then can't be retargeted or reopened.
+    fn delete_branch(&self, state: &mut State, branch: &str) -> Response {
         if !self.can_push {
             return message(403, "Resource not accessible by integration");
         }
@@ -221,6 +231,13 @@ impl Call<'_> {
         }
         self.bare(&["update-ref", "-d", &format!("refs/heads/{branch}")], &[])
             .expect("delete the branch");
+        for pull in state
+            .pulls
+            .iter_mut()
+            .filter(|p| p.repo == self.repo && p.base == branch && p.state == PullState::Open)
+        {
+            pull.state = PullState::Closed;
+        }
         Response::empty(204)
     }
 

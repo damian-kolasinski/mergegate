@@ -61,6 +61,7 @@ fn request(project: &str, branch: &str, head: u8) -> Submit {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     }
 }
 
@@ -214,6 +215,7 @@ fn the_same_head_with_a_title_retitles_the_item() {
     .unwrap();
     let retitled = Submit {
         title: Some(" Login page ".into()),
+        on: None,
         ..request("app", "login", 3)
     };
     let again = submit(&mut store, &git, &FakeGithub::default(), retitled).unwrap();
@@ -223,6 +225,7 @@ fn the_same_head_with_a_title_retitles_the_item() {
 
     let blank = Submit {
         title: Some(" ".into()),
+        on: None,
         ..request("app", "login", 3)
     };
     let again = submit(&mut store, &git, &FakeGithub::default(), blank).unwrap();
@@ -236,6 +239,7 @@ fn records_the_agents_worktree_and_wake_even_at_the_same_head() {
     git.push("app", "login", &commit(3));
     let first = Submit {
         worktree: Some("/work/login".into()),
+        on: None,
         ..request("app", "login", 3)
     };
     let id = submit(&mut store, &git, &FakeGithub::default(), first)
@@ -250,6 +254,7 @@ fn records_the_agents_worktree_and_wake_even_at_the_same_head() {
     // Waking needs no new commits: the agent submits again with --wake.
     let again = Submit {
         wake: Some("resume {item}".into()),
+        on: None,
         ..request("app", "login", 3)
     };
     assert!(
@@ -468,6 +473,7 @@ fn the_pull_request_describes_the_item_by_its_guide() {
     git.push("app", "login", &commit(2));
     let guided = |head, guide: &str| Submit {
         guide: Some(guide.into()),
+        on: None,
         ..request("app", "login", head)
     };
     let guide = "Signs users in.\n\n## Files\n- `src/login.rs` — the form\n";
@@ -508,6 +514,7 @@ fn the_pull_request_describes_the_item_by_its_guide() {
     submit(&mut store, &git, &github, guided(3, "Remembers them.")).unwrap();
     let retitled = Submit {
         title: Some("Login page".into()),
+        on: None,
         ..guided(3, "Remembers them, really.")
     };
     submit(&mut store, &git, &github, retitled).unwrap();
@@ -529,6 +536,7 @@ fn a_new_revision_pushes_again_and_retitles_the_pull_request() {
     git.push("app", "login", &commit(3));
     let retitled = Submit {
         title: Some("Login page".into()),
+        on: None,
         ..request("app", "login", 3)
     };
     let item = submit(&mut store, &git, &github, retitled).unwrap().item;
@@ -548,6 +556,7 @@ fn retitling_at_the_same_head_retitles_the_pull_request() {
     submit(&mut store, &git, &github, request("app", "login", 2)).unwrap();
     let retitled = Submit {
         title: Some("Login page".into()),
+        on: None,
         ..request("app", "login", 2)
     };
     let item = submit(&mut store, &git, &github, retitled).unwrap().item;
@@ -793,6 +802,7 @@ fn keeps_the_guide_and_warns_about_what_it_cannot_place() {
             guide: Some(guide.into()),
             priority: None,
             note: None,
+            on: None,
             ..request("app", "login", 2)
         },
     )
@@ -833,6 +843,7 @@ fn keeps_the_guide_and_warns_about_what_it_cannot_place() {
             guide: Some(" \n".into()),
             priority: None,
             note: None,
+            on: None,
             ..request("app", "login", 3)
         },
     )
@@ -854,6 +865,7 @@ fn only_the_submit_that_opens_the_item_sets_its_priority() {
             priority: Some(Priority::P1),
             // Blank is no note, as `mg prioritize` takes it.
             note: Some("  ".into()),
+            on: None,
             ..request("app", "login", 2)
         },
     )
@@ -872,6 +884,7 @@ fn only_the_submit_that_opens_the_item_sets_its_priority() {
         Submit {
             priority: Some(Priority::P3),
             note: Some("from the brief".into()),
+            on: None,
             ..request("app", "login", 2)
         },
     )
@@ -895,6 +908,7 @@ fn warns_when_the_guides_intent_names_the_review() {
     git.push("app", "login", &commit(2));
     let guided = |head, intent: &str| Submit {
         guide: Some(format!("{intent}\n\n## Files\n- `src/login.rs`\n")),
+        on: None,
         ..request("app", "login", head)
     };
     let first = submit(

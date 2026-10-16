@@ -15,6 +15,7 @@ fn store() -> (tempfile::TempDir, Store) {
         guide: None,
         interdiffs: Vec::new(),
         viewed: Vec::new(),
+        parent: None,
     };
     for name in ["app", "web"] {
         let name = ProjectName::parse(name).unwrap();

@@ -1,0 +1,45 @@
+.stack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.entries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font: var(--type-p3);
+}
+
+/* Bottom first, so each arrow points up the stack, to what lands next. */
+.entry + .entry::before {
+  content: "›";
+  color: var(--text-subtle);
+}
+
+.link {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--text-brand-hover);
+  text-decoration: underline;
+}
+
+.current {
+  color: var(--text-primary);
+  font-weight: 600;
+}

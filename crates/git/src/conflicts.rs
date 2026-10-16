@@ -19,7 +19,7 @@ impl ConflictGit for HubGit {
         ours: &str,
         theirs: &str,
     ) -> Result<Vec<String>, GitError> {
-        Ok(match self.merge_tree(project, ours, theirs)? {
+        Ok(match self.merge_tree(project, ours, theirs, None)? {
             Merged::Tree(_) => Vec::new(),
             Merged::Conflict(paths) => paths,
         })

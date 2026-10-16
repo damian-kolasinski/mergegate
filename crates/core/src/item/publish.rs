@@ -11,7 +11,12 @@ pub(super) struct Revision<'a> {
     pub id: &'a ItemId,
     pub branch: &'a str,
     pub head: &'a str,
-    pub target: &'a str,
+    /// The branch the pull request merges into: the target, or the
+    /// parent's for a stacked item.
+    pub base: &'a str,
+    /// Whether the pull request may be based elsewhere than `base`, as a
+    /// stacked item's is once its parent moves, so it's pointed at `base`.
+    pub restack: bool,
     pub title: &'a str,
     pub guide: Option<&'a str>,
 }
@@ -38,7 +43,8 @@ pub(super) fn publish(
         id,
         branch,
         head,
-        target,
+        base,
+        restack,
         title,
         guide,
     } = revision;
@@ -66,15 +72,18 @@ pub(super) fn publish(
         if item.title != title || body.is_some() {
             describe(github, repo, pull.number, title, body.as_deref())?;
         }
+        if restack {
+            github.retarget(repo, pull.number, base)?;
+        }
         return Ok(pull.clone());
     }
     let body = description(id, guide);
-    match github.find_pull(repo, branch, target)? {
+    match github.find_pull(repo, branch, base)? {
         Some(pull) => {
             describe(github, repo, pull.number, title, Some(&body))?;
             Ok(pull)
         }
-        None => Ok(github.open_pull(repo, branch, target, title, &body)?),
+        None => Ok(github.open_pull(repo, branch, base, title, &body)?),
     }
 }
 

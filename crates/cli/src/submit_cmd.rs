@@ -45,6 +45,7 @@ pub fn run(
     guide: Option<PathBuf>,
     priority: Option<Priority>,
     note: Option<String>,
+    on: Option<String>,
 ) -> Result<Outcome, CliError> {
     repo::require()?;
     // Check and read before pushing, so a wrong file stops the submit.
@@ -98,6 +99,7 @@ pub fn run(
         guide,
         priority,
         note,
+        on,
     };
     let submitted = match client.post::<Submitted>("/api/items", &request)? {
         Reply::Done(submitted) => submitted,
@@ -194,13 +196,18 @@ fn describe(submitted: &Submitted, guided: bool) -> String {
     let item = &submitted.item;
     let r = &item.revision;
     let mut text = if submitted.new_revision {
+        // A stacked item's diff is against its parent, not the target.
+        let onto = match &submitted.parent {
+            Some(parent) => format!("on {parent}"),
+            None => format!("onto {}", item.target),
+        };
         let mut text = format!(
-            "submitted {} r{}: {}\n  {} onto {} · {}, +{} -{}",
+            "submitted {} r{}: {}\n  {} {} · {}, +{} -{}",
             item.name,
             r.number,
             item.title,
             item.branch,
-            item.target,
+            onto,
             files(r.files),
             r.additions,
             r.deletions

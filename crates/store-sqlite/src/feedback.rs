@@ -22,8 +22,10 @@ impl FeedbackStore for Store {
             .conn
             .prepare_cached(&format!(
                 "SELECT e.cursor, e.type, e.revision, e.source, e.body, e.commit_id, e.paths,
-                        r.id, r.revision, r.verdict, r.summary, r.submitted_at, e.reply_id
+                        r.id, r.revision, r.verdict, r.summary, r.submitted_at, e.reply_id,
+                        parent.number, e.upstream, e.merged
                  FROM events e LEFT JOIN reviews r ON r.id = e.review_id
+                 LEFT JOIN items parent ON parent.id = e.parent_id
                  WHERE e.item_id = ({ITEM}) AND e.cursor > ?3
                  ORDER BY e.cursor"
             ))
@@ -51,7 +53,7 @@ impl FeedbackStore for Store {
                 (None, None) => EventKind::Notice(Notice {
                     revision: row.revision,
                     source: source_named(&row.source)?,
-                    kind: notice_kind(row)?,
+                    kind: notice_kind(id, row)?,
                 }),
             };
             Ok(Event { cursor, kind })
@@ -159,11 +161,20 @@ impl FeedbackStore for Store {
             body,
             commit_id,
             paths,
+            parent,
+            upstream,
+            merged,
         } = columns(&notice.kind);
+        // Stacks are within a project, so the parent's number finds it.
         let cursor: i64 = tx
             .query_row(
-                "INSERT INTO events (item_id, type, revision, source, body, commit_id, paths)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING cursor",
+                "INSERT INTO events (item_id, type, revision, source, body, commit_id, paths,
+                                     parent_id, upstream, merged)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
+                         (SELECT p.id FROM items p JOIN items i ON i.project_id = p.project_id
+                          WHERE i.id = ?1 AND p.number = ?8),
+                         ?9, ?10)
+                 RETURNING cursor",
                 params![
                     item_id,
                     kind,
@@ -171,7 +182,10 @@ impl FeedbackStore for Store {
                     notice.source.as_str(),
                     body,
                     commit_id,
-                    paths
+                    paths,
+                    parent,
+                    upstream,
+                    merged
                 ],
                 |row| row.get(0),
             )
@@ -196,6 +210,9 @@ struct EventRow {
     paths: Option<String>,
     review: Option<ReviewRow>,
     reply: Option<i64>,
+    parent: Option<i64>,
+    upstream: Option<String>,
+    merged: Option<bool>,
 }
 
 impl EventRow {
@@ -220,6 +237,9 @@ impl EventRow {
             paths: row.get(6)?,
             review,
             reply: row.get(12)?,
+            parent: row.get(13)?,
+            upstream: row.get(14)?,
+            merged: row.get(15)?,
         })
     }
 }
@@ -231,6 +251,10 @@ struct Columns {
     commit_id: Option<String>,
     /// One per line, which git's conflict listing quotes out of any path.
     paths: Option<String>,
+    /// The parent's number in the item's project.
+    parent: Option<i64>,
+    upstream: Option<String>,
+    merged: Option<bool>,
 }
 
 fn columns(kind: &NoticeKind) -> Columns {
@@ -239,6 +263,9 @@ fn columns(kind: &NoticeKind) -> Columns {
         body: body.cloned(),
         commit_id: None,
         paths: None,
+        parent: None,
+        upstream: None,
+        merged: None,
     };
     match kind {
         NoticeKind::Abandoned { reason } => spelled("item.abandoned", reason.as_ref()),
@@ -256,10 +283,27 @@ fn columns(kind: &NoticeKind) -> Columns {
             commit_id: Some(commit.clone()),
             ..spelled("item.merged", None)
         },
+        NoticeKind::ParentUpdated {
+            parent,
+            merged,
+            onto,
+            upstream,
+        } => Columns {
+            commit_id: Some(onto.clone()),
+            parent: Some(parent.number() as i64),
+            upstream: Some(upstream.clone()),
+            merged: Some(*merged),
+            ..spelled("parent.updated", None)
+        },
+        NoticeKind::ParentAbandoned { parent, upstream } => Columns {
+            parent: Some(parent.number() as i64),
+            upstream: Some(upstream.clone()),
+            ..spelled("parent.abandoned", None)
+        },
     }
 }
 
-fn notice_kind(row: EventRow) -> Result<NoticeKind, StoreError> {
+fn notice_kind(id: &ItemId, row: EventRow) -> Result<NoticeKind, StoreError> {
     let kind = row.kind.as_str();
     let missing = |column| StoreError::new(format!("{kind} event without {column}"));
     match kind {
@@ -279,6 +323,20 @@ fn notice_kind(row: EventRow) -> Result<NoticeKind, StoreError> {
         "item.merged" => Ok(NoticeKind::Merged {
             commit: row.commit_id.ok_or_else(|| missing("commit_id"))?,
         }),
+        "parent.updated" | "parent.abandoned" => {
+            let parent = row.parent.ok_or_else(|| missing("parent_id"))?;
+            let parent = ItemId::new(id.project().clone(), parent as u64);
+            let upstream = row.upstream.ok_or_else(|| missing("upstream"))?;
+            Ok(match kind {
+                "parent.updated" => NoticeKind::ParentUpdated {
+                    parent,
+                    merged: row.merged.ok_or_else(|| missing("merged"))?,
+                    onto: row.commit_id.ok_or_else(|| missing("commit_id"))?,
+                    upstream,
+                },
+                _ => NoticeKind::ParentAbandoned { parent, upstream },
+            })
+        }
         other => Err(StoreError::new(format!("unknown event type {other:?}"))),
     }
 }
