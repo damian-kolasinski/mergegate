@@ -21,7 +21,7 @@ export function Badge(props: {
       data-solid={props.solid ? "" : undefined}
       title={props.title}
     >
-      {props.children}
+      <span class={styles.label}>{props.children}</span>
     </span>
   );
 }

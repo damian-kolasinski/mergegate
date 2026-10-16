@@ -29,9 +29,24 @@
   width: 3.5em;
 }
 
-.title {
+/* Takes what the fixed cells leave. Flags that don't fit beside a readable
+   title wrap under it rather than push the cells after them out of line.
+   The floor keeps titles on screen in a window too narrow for every column;
+   all rows overflow alike then, so the columns still line up. */
+.main {
   flex: 1;
-  min-width: 0;
+  min-width: 10em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* A zero basis lets the flags take the line first; the minimum is what the
+   title keeps before they wrap. */
+.title {
+  flex: 1 1 0;
+  min-width: min(14em, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -49,7 +64,11 @@
 }
 
 .flag {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .demo {
