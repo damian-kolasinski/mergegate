@@ -4,7 +4,7 @@ import { rulesHref } from "../app/router";
 import { CodeText, Meta, Row } from "../design-system";
 import { Counts } from "./counts";
 import styles from "./files.module.css";
-import { describe } from "./why";
+import { describe, importance } from "./why";
 
 /**
  * The files the diff shows beside it, the current one selected: those to
@@ -170,7 +170,7 @@ function FileEntry(props: {
             <bdi dir="ltr">{folder()}</bdi>
           </span>
         </Show>
-        <Show when={describe(props.file)}>
+        <Show when={describe(props.file, { score: false })}>
           {(why) => (
             <span class={styles.why} title={why()}>
               <CodeText text={why()} />
@@ -185,6 +185,20 @@ function FileEntry(props: {
             additions={props.file.additions}
             deletions={props.file.deletions}
           />
+          {/* Last, so the scores line up down the list's right edge. */}
+          <Show when={importance(props.file)}>
+            {(title) => (
+              <span
+                class={styles.score}
+                role="img"
+                title={title()}
+                aria-label={title()}
+                data-raised={props.file.raised ? "" : undefined}
+              >
+                {props.file.importance}
+              </span>
+            )}
+          </Show>
         </span>
       </span>
     </>
