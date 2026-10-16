@@ -42,7 +42,7 @@ pub const JSON_ENV: &str = "MG_JSON";
 #[derive(Parser)]
 #[command(
     name = "mg",
-    version,
+    version = env!("MG_VERSION"),
     about = "mergegate: local code review hub for coding agents",
     after_help = EXIT_CODES_HELP,
     arg_required_else_help = true,

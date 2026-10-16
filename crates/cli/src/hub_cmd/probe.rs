@@ -31,8 +31,23 @@ impl Running {
             api_version: Some(self.health.api_version),
             schema_version: Some(self.health.schema_version),
             compatible: Some(self.compatible()),
+            warnings: self.outdated().into_iter().collect(),
             ..HubStatus::new(home)
         }
+    }
+
+    /// Why to restart a hub that speaks this `mg`'s API but runs another
+    /// `mg`, as one left running across an upgrade does: it lacks whatever
+    /// the upgrade changed behind an unchanged API.
+    fn outdated(&self) -> Option<String> {
+        let theirs = &self.health.version;
+        let ours = env!("MG_VERSION");
+        (self.compatible() && theirs != ours).then(|| {
+            format!(
+                "the hub runs mg {theirs}, this is mg {ours}; \
+                 mg hub stop && mg hub start runs this one"
+            )
+        })
     }
 
     pub fn describe(&self) -> String {
@@ -46,7 +61,7 @@ impl Running {
         );
         if !self.compatible() {
             text.push_str(&format!(
-                "\nwarning: the hub speaks API v{}, this mg speaks v{}; \
+                "\nwarning: the hub speaks API {:08x}, this mg speaks {:08x}; \
                  restart it with this mg: mg hub stop && mg hub start",
                 h.api_version,
                 api::API_VERSION

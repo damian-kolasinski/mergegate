@@ -63,7 +63,7 @@ impl Client {
     pub fn to(hub: &Hub) -> Result<Self, CliError> {
         if !hub.compatible() {
             let message = format!(
-                "the hub speaks API v{}, this mg speaks v{}",
+                "the hub speaks API {:08x}, this mg speaks {:08x}",
                 hub.health.api_version,
                 api::API_VERSION
             );

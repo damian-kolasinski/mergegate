@@ -129,6 +129,7 @@ impl AppState {
 pub(crate) async fn serve(
     home: &Home,
     port: u16,
+    version: &str,
     schema_version: u32,
     store: Store,
 ) -> Result<(), HubError> {
@@ -153,7 +154,7 @@ pub(crate) async fn serve(
     });
     let state = Arc::new(AppState {
         health: api::hub::Health {
-            version: env!("CARGO_PKG_VERSION").to_owned(),
+            version: version.to_owned(),
             api_version: api::API_VERSION,
             schema_version,
             pid,
