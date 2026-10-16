@@ -335,6 +335,55 @@ fn a_wait_for_the_operator_leaves_held_comments_held() {
     );
 }
 
+#[test]
+fn a_wait_since_the_printed_cursor_takes_held_comments_along() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    let first = env.mg(&["--json", "wait", "app#1"]).assert_code(0).json();
+    let cursor = first["cursor"].to_string();
+    github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
+    until(&env, "the poller never saw it", |c| {
+        c.as_array().unwrap().len() == 2
+    });
+
+    // A look back before the delivered cursor leaves it held.
+    let back = env
+        .mg(&["--json", "feedback", "app#1", "--since", "0"])
+        .assert_code(0)
+        .json();
+    assert_eq!(back["events"].as_array().unwrap().len(), 1, "{back}");
+    let comments = conversation(&env)["comments"].clone();
+    assert_eq!(
+        with_body(&comments, "Split it.")["external"]["pending"],
+        true
+    );
+
+    // Held comments alone don't wake a wait; the review does, and takes
+    // them along.
+    let review = json!({ "revision": 1, "verdict": "comment", "summary": "Looks close." });
+    let reply = post(&env, "/api/items/app%231/reviews", &review);
+    assert_eq!(reply.status, 201, "{}", reply.body);
+    let next = env
+        .mg(&["--json", "wait", "app#1", "--since", &cursor])
+        .assert_code(0)
+        .json();
+    let events = next["events"].as_array().unwrap();
+    let types: Vec<_> = events.iter().map(|e| e["type"].clone()).collect();
+    assert_eq!(
+        types,
+        [json!("review.submitted"), json!("external.comments")],
+        "{next}"
+    );
+    assert_eq!(events[1]["comments"][0]["body"], "Split it.", "{next}");
+    let again = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(again["events"], json!([]), "{again}");
+}
+
 /// Polls the item's conversation until `done` holds for its comments.
 fn until(env: &Env, what: &str, done: impl Fn(&Value) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(30);

@@ -45,7 +45,7 @@ fn returns_what_wasnt_acknowledged_until_it_is() {
     // Not acknowledged: the next read returns it again.
     assert_eq!(feedback(&store, &app, None).unwrap(), read);
 
-    assert_eq!(acknowledge(&mut store, &app, first).unwrap(), first);
+    assert_eq!(acknowledge(&mut store, &app, first, None).unwrap(), first);
     let after = feedback(&store, &app, None).unwrap();
     assert!(after.events.is_empty());
     assert_eq!(after.cursor, first);
@@ -62,7 +62,7 @@ fn since_replays_from_any_cursor_without_moving_the_delivered_one() {
     let app = id("app#1");
     let first = review(&mut store, "First");
     let second = review(&mut store, "Second");
-    acknowledge(&mut store, &app, second).unwrap();
+    acknowledge(&mut store, &app, second, None).unwrap();
 
     assert_eq!(
         summaries(&feedback(&store, &app, Some(0)).unwrap()),
@@ -74,8 +74,64 @@ fn since_replays_from_any_cursor_without_moving_the_delivered_one() {
     );
     // Acknowledging a replay's older cursor keeps the newer one.
     let delivered = store.delivered(&app).unwrap();
-    assert_eq!(acknowledge(&mut store, &app, first).unwrap(), delivered);
+    assert_eq!(
+        acknowledge(&mut store, &app, first, Some(0)).unwrap(),
+        delivered
+    );
     assert!(feedback(&store, &app, None).unwrap().events.is_empty());
+}
+
+#[test]
+fn a_read_since_the_delivered_cursor_delivers_what_it_returned() {
+    let mut store = FakeStore::with_item(1);
+    let app = id("app#1");
+    let first = review(&mut store, "First");
+    acknowledge(&mut store, &app, first, None).unwrap();
+    let second = review(&mut store, "Second");
+
+    // As `mg wait --since` the cursor the last wait printed.
+    let read = feedback(&store, &app, Some(first)).unwrap();
+    assert_eq!(summaries(&read), ["Second"]);
+    assert_eq!(
+        acknowledge(&mut store, &app, read.cursor, Some(first)).unwrap(),
+        second
+    );
+    assert!(feedback(&store, &app, None).unwrap().events.is_empty());
+}
+
+#[test]
+fn a_replay_from_before_the_delivered_cursor_delivers_what_it_returned() {
+    let mut store = FakeStore::with_item(1);
+    let app = id("app#1");
+    let first = review(&mut store, "First");
+    acknowledge(&mut store, &app, first, None).unwrap();
+    let second = review(&mut store, "Second");
+
+    let read = feedback(&store, &app, Some(0)).unwrap();
+    assert_eq!(summaries(&read), ["First", "Second"]);
+    assert_eq!(
+        acknowledge(&mut store, &app, read.cursor, Some(0)).unwrap(),
+        second
+    );
+}
+
+#[test]
+fn a_read_past_an_undelivered_event_delivers_nothing() {
+    let mut store = FakeStore::with_item(1);
+    let app = id("app#1");
+    let first = review(&mut store, "First");
+    review(&mut store, "Second");
+
+    let read = feedback(&store, &app, Some(first)).unwrap();
+    assert_eq!(summaries(&read), ["Second"]);
+    assert_eq!(
+        acknowledge(&mut store, &app, read.cursor, Some(first)).unwrap(),
+        0
+    );
+    assert_eq!(
+        summaries(&feedback(&store, &app, None).unwrap()),
+        ["First", "Second"]
+    );
 }
 
 #[test]
@@ -93,9 +149,9 @@ fn refuses_cursors_past_the_newest_event() {
     let mut store = FakeStore::with_item(1);
     let app = id("app#1");
     let first = review(&mut store, "First");
-    let err = acknowledge(&mut store, &app, first + 1).unwrap_err();
+    let err = acknowledge(&mut store, &app, first + 1, None).unwrap_err();
     assert_eq!(err.to_string(), format!("app#1 has no event {}", first + 1));
-    let err = acknowledge(&mut store, &id("app#2"), 0).unwrap_err();
+    let err = acknowledge(&mut store, &id("app#2"), 0, None).unwrap_err();
     assert_eq!(err.to_string(), "no item app#2");
     assert!(matches!(
         feedback(&store, &id("app#2"), None),

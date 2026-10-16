@@ -120,7 +120,7 @@ async fn acknowledge(
     let Json(request) = request?;
     let id = parse(&id)?;
     let delivered = state
-        .blocking(move |store, _| feedback::acknowledge(store, &id, request.cursor))
+        .blocking(move |store, _| feedback::acknowledge(store, &id, request.cursor, request.since))
         .await
         .map_err(failure)?;
     Ok(Json(api::feedback::Acknowledged { delivered }))

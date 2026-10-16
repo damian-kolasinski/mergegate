@@ -70,17 +70,18 @@ pub(crate) fn read(
     client.get_query(&format!("/api/items/{}/feedback", segment(item)), &query)
 }
 
-/// Prints `feedback`, then acknowledges its events unless they are a replay.
+/// Prints `feedback`, then acknowledges its events. The hub ignores the
+/// acknowledgement of a read with `since` past an event it never delivered,
+/// which this didn't print either.
 fn deliver(client: Client, feedback: &Feedback, since: Option<u64>, text: String) -> Outcome {
     let outcome = Outcome::done(feedback, text);
-    // A replay may start past the delivered cursor, and acknowledging it
-    // would skip the events before `since` that were never printed.
-    if feedback.events.is_empty() || since.is_some() {
+    if feedback.events.is_empty() {
         return outcome;
     }
     let path = format!("/api/items/{}/feedback/ack", segment(&feedback.item));
     let ack = Acknowledge {
         cursor: feedback.cursor,
+        since,
     };
     // A failed acknowledgement only means the events come again.
     outcome.then(move || {

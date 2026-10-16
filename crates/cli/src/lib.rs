@@ -136,8 +136,8 @@ enum Command {
         /// feedback
         #[arg(long, default_value_t = 540)]
         timeout: u64,
-        /// Replay the events after this cursor, even delivered ones, without
-        /// marking them delivered
+        /// Read the events after this cursor, even delivered ones; they are
+        /// marked delivered unless one up to the cursor still waits
         #[arg(long)]
         since: Option<u64>,
     },
@@ -145,8 +145,8 @@ enum Command {
     Feedback {
         /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
-        /// Replay the events after this cursor, even delivered ones, without
-        /// marking them delivered
+        /// Read the events after this cursor, even delivered ones; they are
+        /// marked delivered unless one up to the cursor still waits
         #[arg(long)]
         since: Option<u64>,
     },

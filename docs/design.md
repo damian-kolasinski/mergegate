@@ -217,13 +217,15 @@ mg wait <item> [--for any|operator] [--timeout 540] [--since CURSOR] [--json]
     they have been quiet for 60s and every bot in the project's `bots` has posted or edited a
     comment GitHub dates at or after the newest push (or 20 minutes have passed since it), and
     sends them 20 minutes after the first regardless.
-    A read that returns other events takes the held comments with it.
+    A read that returns other events takes the held comments with it, unless its --since looks back
+    before the delivered cursor.
 
 mg feedback <item> [--since CURSOR] [--json]     Non-blocking version of wait.
     The hub keeps a delivered cursor per item: wait and feedback return the events after it, and the
-    CLI acknowledges them once printed, so an event arrives at least once. --since N replays the
-    events after cursor N (not N itself; cursors are hub-wide, so an item's have gaps) without
-    acknowledging. Exits as wait does: 3 only on a closed item with no events to return.
+    CLI acknowledges them once printed, so an event arrives at least once. --since N reads the
+    events after cursor N (not N itself; cursors are hub-wide, so an item's have gaps), delivered
+    ones too, and acknowledges them unless the item has an undelivered event at or before N.
+    Exits as wait does: 3 only on a closed item with no events to return.
 mg reply <comment> --status addressed|rejected|question [--body TEXT]
     Respond to a comment (operator's or external). Replies thread on the comment and the latest
     status counts; a rejection or a question needs a body. Replies live in mergegate only, where the

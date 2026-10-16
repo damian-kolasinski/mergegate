@@ -35,7 +35,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `item.merged` | The work landed. Clean up as agreed, then stop. |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |
 
-`mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. `mg feedback app#3` does the same without waiting, and `--since CURSOR` replays the events after any cursor without marking anything.
+`mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. `mg feedback app#3` does the same without waiting, and `--since CURSOR` reads the events after any cursor, delivered ones too.
 
 [references/authoring.md](references/authoring.md) covers titles, revisions, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, to rank their queue, or to watch the hub for events, see [references/operator.md](references/operator.md).
 

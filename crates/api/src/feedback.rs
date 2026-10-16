@@ -148,6 +148,11 @@ pub enum Wake {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Acknowledge {
     pub cursor: u64,
+    /// The `since` of the read that returned the events. A read that started
+    /// past an event not yet delivered leaves the delivered cursor where it
+    /// is, as that event never reached the agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

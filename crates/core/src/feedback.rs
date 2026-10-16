@@ -191,12 +191,16 @@ pub fn feedback<S: ItemStore + FeedbackStore>(
     })
 }
 
-/// Marks `id`'s events up to `cursor` delivered. Acknowledging an older
-/// cursor changes nothing, so a replay with `--since` never re-delivers.
+/// Marks `id`'s events up to `cursor` delivered: those of a read after
+/// `since`, or after the delivered cursor when it is none. Acknowledging an
+/// older cursor changes nothing, so a replay never re-delivers, and neither
+/// does a read that started past an event not yet delivered, which it never
+/// returned.
 pub fn acknowledge<S: ItemStore + FeedbackStore>(
     store: &mut S,
     id: &ItemId,
     cursor: u64,
+    since: Option<u64>,
 ) -> Result<u64, FeedbackError> {
     if store.item(id)?.is_none() {
         return Err(FeedbackError::NoItem(id.clone()));
@@ -210,6 +214,15 @@ pub fn acknowledge<S: ItemStore + FeedbackStore>(
     }
     let delivered = store.delivered(id)?;
     if cursor <= delivered {
+        return Ok(delivered);
+    }
+    if let Some(since) = since
+        && since > delivered
+        && store
+            .events(id, delivered)?
+            .first()
+            .is_some_and(|skipped| skipped.cursor <= since)
+    {
         return Ok(delivered);
     }
     store.set_delivered(id, cursor)?;
