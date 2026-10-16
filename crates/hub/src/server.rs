@@ -21,8 +21,8 @@ use store_sqlite::Store;
 use crate::{
     Home, HubError, HubInfo, abandon, attachments, branches, comments, conflicts, conversation,
     devices, diff, doctor, draft_replies, event_log, events, external, feedback, git_http, guard,
-    highlights, io, items, judge, languages, lifecycle, merge, priority, projects, replies, reply,
-    resume, reviews, rules, settings, tailnet, ui, viewed, wake,
+    highlights, io, items, judge, languages, lifecycle, merge, names, priority, projects, replies,
+    reply, resume, reviews, rules, settings, tailnet, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -190,6 +190,7 @@ pub(crate) async fn serve(
         .merge(abandon::routes())
         .merge(priority::routes())
         .merge(merge::routes())
+        .merge(names::routes())
         .merge(diff::routes())
         .merge(highlights::routes())
         .merge(languages::routes())

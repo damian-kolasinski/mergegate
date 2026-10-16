@@ -20,8 +20,8 @@ use crate::highlight::{
 };
 use crate::interdiff::{InterdiffFile, InterdiffGit, InterdiffStore, Replay};
 use crate::item::{
-    ChangedFile, DiffStat, FileMode, FileStat, Item, ItemGit, ItemId, ItemState, ItemStore,
-    NewItem, NewRevision, Priority, Pushed, Revision, Submit, submit,
+    ChangedFile, DiffStat, FileMode, FileStat, Item, ItemBackend, ItemGit, ItemId, ItemState,
+    ItemStore, NewItem, NewRevision, Priority, Pushed, Revision, Submit, submit,
 };
 use crate::judge::{JudgeSetting, JudgeStore, Verdict};
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
@@ -1050,6 +1050,17 @@ impl ItemStore for FakeStore {
 
     fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError> {
         Ok(self.items.iter().find(|i| i.id == *id).cloned())
+    }
+
+    fn item_with_pull(&self, project: &ProjectName, pull: u64) -> Result<Option<Item>, StoreError> {
+        let with: Vec<&Item> = self
+            .items
+            .iter()
+            .filter(|i| i.id.project() == project && i.name().number() == pull)
+            .filter(|i| matches!(i.backend, ItemBackend::Github { .. }))
+            .collect();
+        let open = with.iter().rev().find(|i| i.state.is_open());
+        Ok(open.or(with.last()).map(|i| (*i).clone()))
     }
 
     fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError> {
@@ -2202,6 +2213,9 @@ impl AgentStore for FakeStore {
             if cursor > seen {
                 due.push(DueWake {
                     item: id.clone(),
+                    name: self
+                        .item(id)?
+                        .map_or_else(|| id.clone(), |item| item.name()),
                     command: command.clone(),
                     worktree: agent.worktree.clone(),
                     cursor,

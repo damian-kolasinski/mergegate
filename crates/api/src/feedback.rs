@@ -12,6 +12,8 @@ use crate::review::{Comment, Reply, Verdict};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Feedback {
     pub item: String,
+    /// The item's name, as in [`crate::item::Item`].
+    pub name: String,
     pub state: ItemState,
     /// Oldest first.
     pub events: Vec<Event>,
@@ -35,6 +37,8 @@ pub struct Log {
 pub struct Event {
     pub cursor: u64,
     pub item: String,
+    /// The item's name, as in [`crate::item::Item`].
+    pub name: String,
     /// The revision the event is about.
     pub revision: u32,
     pub source: Source,

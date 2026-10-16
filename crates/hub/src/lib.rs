@@ -23,6 +23,7 @@ mod judge;
 mod languages;
 mod lifecycle;
 mod merge;
+mod names;
 mod priority;
 mod projects;
 mod replies;

@@ -6,12 +6,14 @@ use super::*;
 fn feedback(events: &[u64], cursor: u64) -> Feedback {
     Feedback {
         item: "app#1".into(),
+        name: "app#1".into(),
         state: ItemState::NeedsReview,
         events: events
             .iter()
             .map(|&cursor| Event {
                 cursor,
                 item: "app#1".into(),
+                name: "app#1".into(),
                 revision: 1,
                 source: Source::Agent,
                 body: EventBody::MergeCancelled {},

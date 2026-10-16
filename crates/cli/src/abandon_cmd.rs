@@ -5,6 +5,7 @@ use api::feedback::Source;
 use api::item::{Abandon, Item};
 
 use crate::client::{self, Client};
+use crate::item_name;
 use crate::output::{CliError, Outcome};
 
 pub fn run(item: String, reason: Option<String>) -> Result<Outcome, CliError> {
@@ -13,11 +14,12 @@ pub fn run(item: String, reason: Option<String>) -> Result<Outcome, CliError> {
         source: Source::Agent,
         reason,
     };
-    let path = format!("/api/items/{}/abandon", client::segment(&item));
+    let item = item_name::find(&client, &item)?;
+    let path = format!("/api/items/{}/abandon", client::segment(&item.id));
     let item = match client.post::<Item>(&path, &request)? {
         client::Reply::Done(item) => item,
         client::Reply::Decide(decision) => return Ok(Outcome::NeedsDecision(decision)),
     };
-    let text = format!("abandoned {}", item.id);
+    let text = format!("abandoned {}", item.name);
     Ok(Outcome::done(&item, text))
 }

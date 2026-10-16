@@ -23,6 +23,11 @@ pub trait ItemStore {
     /// Any item, open or closed.
     fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError>;
 
+    /// The project's item with pull request `pull` on GitHub. A project that
+    /// moved to another repository may have one on each; the open one wins,
+    /// then the newest.
+    fn item_with_pull(&self, project: &ProjectName, pull: u64) -> Result<Option<Item>, StoreError>;
+
     /// Every revision of `id`, oldest first.
     fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError>;
 

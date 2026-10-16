@@ -10,6 +10,7 @@ import {
   postJson,
 } from "../app/hub";
 import { useKeys } from "../app/keys";
+import { nameOf } from "../app/names";
 import { go, inboxHref, itemHref } from "../app/router";
 import { useTitle } from "../app/title";
 import {
@@ -97,7 +98,7 @@ export function RulesScreen(props: {
         <Show when={props.back}>
           {(back) => (
             <a class={styles.back} href={itemHref(back())}>
-              ← back to <Mono>{back()}</Mono>
+              ← back to <Mono>{nameOf(back())}</Mono>
             </a>
           )}
         </Show>
@@ -242,7 +243,7 @@ function Change(props: {
                   {(file) => (
                     <li>
                       <a href={itemHref(file.item)}>
-                        <Mono>{file.item}</Mono>
+                        <Mono>{file.name}</Mono>
                       </a>
                       <Mono>{file.path}</Mono>
                       <Meta>

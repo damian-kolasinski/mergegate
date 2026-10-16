@@ -75,6 +75,19 @@ export class FakeGithub {
     return ((await response.json()) as { id: number }).id;
   }
 
+  /**
+   * Takes the next `count` numbers of `repo`'s pull requests, as ones opened
+   * without the hub would, so its items' pull requests and IDs part ways.
+   */
+  async openElsewhere(repo: string, count: number) {
+    const response = await fetch(`${this.web}/_fake/pulls`, {
+      method: "POST",
+      body: JSON.stringify({ repo, count }),
+    });
+    if (!response.ok)
+      throw new Error(`fake-github answered ${response.status}`);
+  }
+
   stop() {
     // Closing stdin is how it's told to stop.
     this.process.stdin?.end();

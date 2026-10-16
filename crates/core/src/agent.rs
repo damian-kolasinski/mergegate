@@ -21,6 +21,8 @@ pub struct Agent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DueWake {
     pub item: ItemId,
+    /// What its agent knows it by, as in [`crate::item::Item::name`].
+    pub name: ItemId,
     pub command: String,
     pub worktree: Option<String>,
     /// The item's newest event from the operator.
@@ -79,8 +81,8 @@ pub const SESSION_MARKERS: &[&str] = &[
     "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
 ];
 
-/// `command` with `{item}` replaced by the item's ID. IDs are a project name,
-/// `#` and a number, so the result needs no quoting.
+/// `command` with `{item}` replaced by the item's name. Names are a project
+/// name, `#` and a number, so the result needs no quoting.
 pub fn wake_command(command: &str, item: &ItemId) -> String {
     command.replace("{item}", &item.to_string())
 }

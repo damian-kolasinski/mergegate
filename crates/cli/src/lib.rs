@@ -10,6 +10,7 @@ mod feedback_cmd;
 mod hub_cmd;
 mod inbox_cmd;
 mod init_cmd;
+mod item_name;
 mod judge_cmd;
 mod lang_cmd;
 pub mod output;
@@ -95,7 +96,7 @@ enum Command {
         title: Option<String>,
         /// Shell command the hub runs in this worktree when the item has
         /// events from the operator you haven't read; `{item}` becomes its
-        /// ID, "" removes it; only on the hub's machine
+        /// name, "" removes it; only on the hub's machine
         #[arg(long, value_name = "CMD")]
         wake: Option<String>,
         /// Screenshot or recording of the change for the operator: PNG,
@@ -117,7 +118,7 @@ enum Command {
     },
     /// Add screenshots or recordings to the item's newest revision
     Attach {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
         /// PNG, JPEG, GIF, WebP, MP4 or WebM, up to 100 MB each
         #[arg(required = true)]
@@ -126,7 +127,7 @@ enum Command {
     /// Wait until the item has feedback for its agent, print it and mark it
     /// delivered
     Wait {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
         /// Which events end the wait
         #[arg(long = "for", value_enum, default_value = "any")]
@@ -142,7 +143,7 @@ enum Command {
     },
     /// Print the item's new feedback and mark it delivered, without waiting
     Feedback {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
         /// Replay the events after this cursor, even delivered ones, without
         /// marking them delivered
@@ -163,12 +164,12 @@ enum Command {
     /// hub holds at once; the hub polls on its own, so only when it missed
     /// some
     Sync {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
     },
     /// Set how urgent an open item is, which orders the operator's inbox
     Prioritize {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
         #[arg(long, value_enum)]
         priority: prioritize_cmd::Level,
@@ -189,7 +190,7 @@ enum Command {
     },
     /// Close an item without merging it; its pinned revisions and diffs go
     Abandon {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
         /// Why, for the operator
         #[arg(long)]
@@ -198,7 +199,7 @@ enum Command {
     /// Print a prompt that brings a new agent session up to date on an item,
     /// without marking anything delivered
     Resume {
-        /// The item, as in app#42
+        /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
     },
     /// Open items: those waiting for review, with their agents, merging

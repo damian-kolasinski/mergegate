@@ -7,10 +7,12 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use api::attachment::{Attached, Attachment};
+use api::item::Item;
 use mergegate_core::attachment::{self, MAX_SIZE, Media, SNIFF_LEN};
 use serde::Serialize;
 
 use crate::client::{self, Client};
+use crate::item_name;
 use crate::output::{CliError, Outcome, exit};
 
 /// A file checked before anything is sent, so a wrong one stops a submit
@@ -23,16 +25,19 @@ pub(crate) struct Checked {
 #[derive(Serialize)]
 struct AttachedAll<'a> {
     item: &'a str,
+    name: &'a str,
     attachments: &'a [Attachment],
 }
 
 pub fn run(item: String, files: Vec<PathBuf>) -> Result<Outcome, CliError> {
     let checked = check(&files)?;
     let client = Client::connect(&crate::home()?)?;
+    let item = item_name::find(&client, &item)?;
     let attachments = upload(&client, &item, None, &checked)?;
-    let text = describe(&item, &attachments);
+    let text = describe(&item.name, &attachments);
     let output = AttachedAll {
-        item: &item,
+        item: &item.id,
+        name: &item.name,
         attachments: &attachments,
     };
     Ok(Outcome::done(&output, text))
@@ -96,11 +101,11 @@ fn check_one(path: &Path) -> Result<Checked, CliError> {
 /// the first went, even if a revision lands meanwhile.
 pub(crate) fn upload(
     client: &Client,
-    item: &str,
+    item: &Item,
     mut revision: Option<u32>,
     files: &[Checked],
 ) -> Result<Vec<Attachment>, CliError> {
-    let path = format!("/api/items/{}/attachments", client::segment(item));
+    let path = format!("/api/items/{}/attachments", client::segment(&item.id));
     let mut attachments = Vec::with_capacity(files.len());
     for (i, file) in files.iter().enumerate() {
         let sent = std::fs::read(&file.path)
@@ -123,7 +128,7 @@ pub(crate) fn upload(
                 revision = Some(attached.attachment.revision);
                 attachments.push(attached.attachment);
             }
-            Err(e) => return Err(unsent(e, item, &attachments, &files[i..])),
+            Err(e) => return Err(unsent(e, &item.name, &attachments, &files[i..])),
         }
     }
     Ok(attachments)

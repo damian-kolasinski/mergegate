@@ -47,6 +47,9 @@ struct State {
     /// By `owner/repo`: whether the signed-in account may push.
     repos: BTreeMap<String, bool>,
     pulls: Vec<Pull>,
+    /// By `owner/repo`: how many pull requests were opened elsewhere, which
+    /// the numbers of the hub's come after.
+    opened_elsewhere: BTreeMap<String, u64>,
     refusal: Option<String>,
     requests: Vec<String>,
     comments: Vec<Comment>,
@@ -67,6 +70,7 @@ impl Default for State {
             token: String::new(),
             repos: BTreeMap::new(),
             pulls: Vec::new(),
+            opened_elsewhere: BTreeMap::new(),
             refusal: None,
             requests: Vec::new(),
             comments: Vec::new(),
@@ -221,6 +225,17 @@ impl FakeGithub {
     /// lets them through again.
     pub fn refuse_merges(&self, reason: Option<&str>) {
         self.state().refusal = reason.map(Into::into);
+    }
+
+    /// Takes the next `count` numbers of `repo`'s pull requests, as ones
+    /// opened without the hub would, so the hub's own numbers and its pull
+    /// requests' part ways.
+    pub fn open_elsewhere(&self, repo: &str, count: u64) {
+        *self
+            .state()
+            .opened_elsewhere
+            .entry(repo.into())
+            .or_default() += count;
     }
 
     pub fn pulls(&self) -> Vec<Pull> {

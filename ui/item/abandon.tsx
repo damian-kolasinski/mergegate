@@ -11,6 +11,8 @@ import styles from "./abandon.module.css";
  */
 export function Abandon(props: {
   item: string;
+  /** What the operator calls it, as in `Item`. */
+  name: string;
   /** Set for an item on GitHub, whose pull request closes with it. */
   pullRequest: { label: string; branch: string } | undefined;
   /** What's typed as the reason, which a reload keeps. */
@@ -38,7 +40,7 @@ export function Abandon(props: {
   return (
     <form id="abandon" class={styles.panel} aria-label="Abandon">
       <Meta>
-        Close {props.item} without merging. Its agent hears why, and its diffs
+        Close {props.name} without merging. Its agent hears why, and its diffs
         are dropped.
       </Meta>
       <Show when={props.pullRequest}>
@@ -71,7 +73,7 @@ export function Abandon(props: {
           keyHint="⌘↩"
           onClick={abandon}
         >
-          {sending() ? "Abandoning…" : `Abandon ${props.item}`}
+          {sending() ? "Abandoning…" : `Abandon ${props.name}`}
         </Button>
       </div>
     </form>

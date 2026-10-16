@@ -135,6 +135,11 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
     let inbox = state
         .blocking(|store, _| {
             let inbox = item::inbox(store)?;
+            // Conflicts are between open items, which are all listed.
+            let open: Vec<&Item> = [&inbox.needs_you, &inbox.with_agents, &inbox.merging]
+                .into_iter()
+                .flatten()
+                .collect();
             let entries = |items: &[Item]| -> Result<Vec<_>, StoreError> {
                 items
                     .iter()
@@ -143,6 +148,7 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
                         let with = inbox.conflicts.get(&item.id).map_or(&[][..], Vec::as_slice);
+                        let with = names(&open, with);
                         let waiting = inbox.waiting.get(&item.id).copied().unwrap_or_default();
                         Ok(inbox_entry(item, blocked, demo, changed, with, waiting))
                     })
@@ -175,6 +181,7 @@ pub(crate) fn to_api(item: &Item) -> api::item::Item {
     let revision = &item.revision;
     api::item::Item {
         id: item.id.to_string(),
+        name: item.name().to_string(),
         title: item.title.clone(),
         branch: item.branch.clone(),
         state: state_to_api(item.state),
@@ -213,12 +220,13 @@ fn inbox_entry(
     blocked: Option<api::merge::Blocked>,
     demo: bool,
     changed: Option<ChangedSince>,
-    conflicts_with: &[ItemId],
+    conflicts_with: Vec<String>,
     waiting: Waiting,
 ) -> api::item::InboxItem {
     let revision = &item.revision;
     api::item::InboxItem {
         id: item.id.to_string(),
+        name: item.name().to_string(),
         title: item.title.clone(),
         branch: item.branch.clone(),
         state: state_to_api(item.state),
@@ -235,10 +243,21 @@ fn inbox_entry(
         changed_since: changed.map(changed_to_api),
         priority: item.priority.map(priority::to_api),
         note: item.note.clone(),
-        conflicts_with: conflicts_with.iter().map(ToString::to_string).collect(),
+        conflicts_with,
         questions: waiting.questions,
         rejections: waiting.rejections,
     }
+}
+
+/// The names of the items `ids` are of, among `items`; an ID none of them
+/// has stands for itself.
+pub(crate) fn names(items: &[&Item], ids: &[ItemId]) -> Vec<String> {
+    ids.iter()
+        .map(|id| match items.iter().find(|item| item.id == *id) {
+            Some(item) => item.name().to_string(),
+            None => id.to_string(),
+        })
+        .collect()
 }
 
 pub(crate) fn changed_to_api(changed: ChangedSince) -> api::item::ChangedSince {

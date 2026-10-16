@@ -6,11 +6,13 @@ use api::item::ItemState;
 use api::review::{Comment, Side, Verdict};
 
 use crate::client::{Client, Reply, segment};
+use crate::item_name;
 use crate::output::{CliError, Outcome, exit};
 
 pub fn run(item: String, since: Option<u64>) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
-    let feedback = read(&client, &item, since, None)?;
+    let item = item_name::find(&client, &item)?;
+    let feedback = read(&client, &item.id, since, None)?;
     Ok(report(client, &feedback, since, &["feedback"]))
 }
 
@@ -31,9 +33,9 @@ pub(crate) fn report(
     }
     let closed = closed(feedback.state);
     match closed {
-        Some(state) => text.push(format!("{} is {state}", feedback.item)),
+        Some(state) => text.push(format!("{} is {state}", feedback.name)),
         None if feedback.events.is_empty() => {
-            text.push(format!("no new feedback on {}", feedback.item));
+            text.push(format!("no new feedback on {}", feedback.name));
         }
         None => {}
     }
@@ -45,8 +47,9 @@ pub(crate) fn report(
     }
 }
 
-/// The events after `since` (or after the delivered cursor). With `wait`,
-/// the hub holds the request for up to that many seconds until one arrives.
+/// The events after `since` (or after the delivered cursor) of the item with
+/// ID `item`. With `wait`, the hub holds the request for up to that many
+/// seconds until one arrives.
 pub(crate) fn read(
     client: &Client,
     item: &str,
@@ -104,7 +107,7 @@ fn describe(feedback: &Feedback, command: &[&str]) -> String {
             let options: String = options.iter().map(|o| format!(" {o}")).collect();
             format!(
                 "cursor {cursor} (mg {name} {}{options} --since {cursor} continues after it)",
-                feedback.item
+                feedback.name
             )
         }
         Some(_) => format!("cursor {cursor}"),
@@ -119,7 +122,7 @@ pub(crate) fn event(event: &Event) -> String {
         "[{}] {} {} r{}:",
         event.cursor,
         event.body.kind(),
-        event.item,
+        event.name,
         event.revision
     );
     match &event.body {

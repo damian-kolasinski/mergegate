@@ -14,6 +14,7 @@ import type { ItemState } from "../api/ItemState";
 import type { Review as SentReview } from "../api/Review";
 import { type Failure, failureOf, getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
+import { learnName } from "../app/names";
 import { go, inboxHref, itemHref } from "../app/router";
 import { useTitle } from "../app/title";
 import {
@@ -80,9 +81,13 @@ export function ItemScreen(props: { id: string }) {
   const [conflicts, setConflicts] = createSignal<readonly string[]>([], {
     equals: (a, b) => a.join() === b.join(),
   });
+  createEffect(() => {
+    const item = latest();
+    if (item) learnName(item.id, item.name);
+  });
   useTitle(() => {
     const item = latest();
-    return item ? `${item.id} ${item.title}` : id;
+    return item ? `${item.name} ${item.title}` : id;
   });
   // What the operator picked to compare against: `all` or a revision. Until
   // they pick, the hub chooses.
@@ -615,6 +620,7 @@ function Review(props: {
         <Show when={abandoning() && open(state())}>
           <Abandon
             item={props.diff.item.id}
+            name={props.diff.item.name}
             pullRequest={pullRequest(props.diff.item)}
             reason={props.reason}
             onReason={props.onReason}
@@ -630,6 +636,7 @@ function Review(props: {
         <Show when={picking()}>
           <PriorityPicker
             item={props.diff.item.id}
+            name={props.diff.item.name}
             priority={priority()}
             note={note()}
             onClose={() => setPicking(false)}

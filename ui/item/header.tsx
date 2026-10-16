@@ -38,7 +38,7 @@ export function ItemHeader(props: {
   return (
     <header class={styles.header}>
       <div class={styles.name}>
-        <Mono>{props.item.id}</Mono>
+        <Mono>{props.item.name}</Mono>
         <h1 class={styles.title} title={props.item.title}>
           {props.item.title}
         </h1>

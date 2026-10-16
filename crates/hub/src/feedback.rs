@@ -153,6 +153,7 @@ fn parse(id: &str) -> Result<ItemId, Failure> {
 fn to_api(id: &ItemId, read: Feedback) -> api::feedback::Feedback {
     api::feedback::Feedback {
         item: id.to_string(),
+        name: read.item.name().to_string(),
         state: items::state_to_api(read.item.state),
         events: read
             .events
@@ -214,6 +215,7 @@ pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedb
     api::feedback::Event {
         cursor: event.cursor,
         item: id.to_string(),
+        name: item.name().to_string(),
         revision,
         source,
         body,

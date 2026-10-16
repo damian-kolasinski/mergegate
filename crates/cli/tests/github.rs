@@ -280,6 +280,43 @@ fn f4_submitting_opens_a_pull_request_and_keeps_it_up_to_date() {
 }
 
 #[test]
+fn f4_an_item_goes_by_its_pull_request() {
+    let github = FakeGithub::start();
+    github.open_elsewhere(ACME, 83);
+    let (env, repo) = submitted(&github);
+    assert_eq!(pull(&github).number, 84);
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let entry = &inbox["needs_you"][0];
+    assert_eq!(
+        (&entry["id"], &entry["name"]),
+        (&json!("app#1"), &json!("app#84"))
+    );
+    let inbox = env.mg(&["inbox"]).assert_code(0).stdout;
+    assert!(inbox.contains("  app#84 r1  Add login"), "{inbox}");
+
+    repo.commit_files("Add logout", &[("src/logout.rs", "fn logout() {}\n")]);
+    let text = env.mg_at(repo.root(), &["submit"]).assert_code(0).stdout;
+    assert!(text.starts_with("submitted app#84 r2: "), "{text}");
+
+    // Commands take its name, and its ID where no pull request has that
+    // number.
+    for name in ["app#84", "app#1"] {
+        let feedback = env.mg(&["--json", "feedback", name]).assert_code(0).json();
+        assert_eq!(
+            (&feedback["item"], &feedback["name"]),
+            (&json!("app#1"), &json!("app#84"))
+        );
+    }
+    let missing = env
+        .mg(&["--json", "feedback", "app#2"])
+        .assert_code(1)
+        .json();
+    assert_eq!(error_code(&missing), "item_not_found");
+    let text = env.mg(&["abandon", "app#84"]).assert_code(0).stdout;
+    assert!(text.starts_with("abandoned app#84"), "{text}");
+}
+
+#[test]
 fn f4_submitting_fails_while_github_is_out_of_reach() {
     let github = FakeGithub::start();
     let (env, repo) = submitted(&github);

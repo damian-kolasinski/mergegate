@@ -8,6 +8,7 @@ use api::feedback::{Event, Feedback, Source};
 
 use crate::client::Client;
 use crate::feedback_cmd::{closed, read, report};
+use crate::item_name;
 use crate::output::{CliError, Outcome, exit};
 
 /// Which events end the wait.
@@ -38,6 +39,7 @@ pub fn run(
     mut since: Option<u64>,
 ) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
+    let item = item_name::find(&client, &item)?.id;
     let query = match wake {
         Wake::Any => "any",
         Wake::Operator => "operator",
@@ -66,7 +68,7 @@ pub fn run(
             return Ok(report(client, &feedback, since, command));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            let text = format!("no feedback on {} yet; call mg wait again", feedback.item);
+            let text = format!("no feedback on {} yet; call mg wait again", feedback.name);
             return Ok(Outcome::done(&feedback, text).exit(exit::TIMEOUT));
         }
         since = next_since(since, &feedback);

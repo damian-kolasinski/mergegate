@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use api::event::UiEvent;
 use judge_command::CommandJudge;
 use judge_jev::Jev;
-use mergegate_core::item::ItemId;
+use mergegate_core::item::{ItemId, ItemStore};
 use mergegate_core::judge::{self, Judge, JudgeError, JudgeStore, Provider, Request, Unjudged};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::store::StoreError;
@@ -48,19 +48,32 @@ impl Failures {
     }
 
     /// `project`'s failures under the judge `key`, oldest item first.
-    pub(super) fn of(&self, project: &ProjectName, key: &str) -> Vec<api::judge::Failure> {
-        let failures = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        let mut of: Vec<_> = failures
-            .iter()
-            .filter(|((item, _), f)| item.project() == project && f.key == key)
-            .map(|((item, revision), f)| (item.clone(), *revision, f.error.clone()))
-            .collect();
+    pub(super) fn of(
+        &self,
+        store: &impl ItemStore,
+        project: &ProjectName,
+        key: &str,
+    ) -> Result<Vec<api::judge::Failure>, StoreError> {
+        let mut of: Vec<_> = {
+            let failures = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            failures
+                .iter()
+                .filter(|((item, _), f)| item.project() == project && f.key == key)
+                .map(|((item, revision), f)| (item.clone(), *revision, f.error.clone()))
+                .collect()
+        };
         of.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
         of.into_iter()
-            .map(|(item, revision, error)| api::judge::Failure {
-                item: item.to_string(),
-                revision,
-                error,
+            .map(|(item, revision, error)| {
+                let name = store
+                    .item(&item)?
+                    .map_or_else(|| item.clone(), |found| found.name());
+                Ok(api::judge::Failure {
+                    item: item.to_string(),
+                    name: name.to_string(),
+                    revision,
+                    error,
+                })
             })
             .collect()
     }

@@ -5,15 +5,17 @@ import { expect, test } from "./hub";
 
 test("f4 links an item to its pull request", async ({ page, github }) => {
   const app = github.hub.githubProject("app", github.github);
+  // So the item's pull request, #84, isn't its ID, app#1.
+  await github.github.openElsewhere("acme/app", 83);
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
-  const url = `${github.github.web}/acme/app/pull/1`;
+  const url = `${github.github.web}/acme/app/pull/84`;
   await page.goto(github.hub.url);
 
   const row = page
     .getByRole("region", { name: "Needs you" })
     .getByRole("listitem");
   // Named by its pull request, not the hub's own count.
-  await expect(row.locator("code")).toHaveText("app#1");
+  await expect(row.locator("code")).toHaveText("app#84");
   const link = row.getByRole("link", { name: "View on GitHub" });
   await expect(link).toHaveAttribute("href", url);
   await expect(link).toHaveAttribute("target", "_blank");
@@ -22,16 +24,22 @@ test("f4 links an item to its pull request", async ({ page, github }) => {
   const opened = page.waitForEvent("popup");
   await link.click();
   const pull = await opened;
-  await expect(pull.getByRole("heading")).toHaveText("Add login #1");
+  await expect(pull.getByRole("heading")).toHaveText("Add login #84");
   await expect(pull.getByText("Open", { exact: true })).toBeVisible();
   await expect(page).not.toHaveURL(/#\/items/);
 
   await row.click();
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute(
+  await expect(screen.getByRole("link", { name: "#84" })).toHaveAttribute(
     "href",
     url,
   );
+  // The review screen goes by the same name.
+  await expect(screen.locator("header code").first()).toHaveText("app#84");
+  await expect(page).toHaveTitle("app#84 Add login · mergegate");
+  await expect(
+    page.getByRole("link", { name: "app#84", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
 });
 
 test("f8 approving merges the pull request", async ({ page, github }) => {

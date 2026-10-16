@@ -61,10 +61,11 @@ pub(super) fn land<S: ProjectStore + ItemStore + DiffStore + HighlightStore + Fe
     Ok(Merge { item, landing })
 }
 
-/// The squash commit's message: the item's title and ID, then the intent its
-/// guide states. The guide's file list stays out: the commit shows the files.
+/// The squash commit's message: the item's title and name, then the intent
+/// its guide states. The guide's file list stays out: the commit shows the
+/// files.
 fn message(item: &Item, guide: Option<&str>) -> String {
-    let subject = format!("{} ({})", item.title, item.id);
+    let subject = format!("{} ({})", item.title, item.name());
     match guide.map(Guide::intent).filter(|intent| !intent.is_empty()) {
         Some(intent) => format!("{subject}\n\n{intent}"),
         None => subject,

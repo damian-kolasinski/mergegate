@@ -53,7 +53,8 @@ impl AgentStore for Store {
         let mut stmt = self
             .conn
             .prepare_cached(
-                "SELECT p.name, i.number, a.wake, a.worktree, e.cursor
+                "SELECT p.name, i.number, a.wake, a.worktree, e.cursor,
+                        coalesce(i.pull_number, i.number)
                  FROM item_agents a
                  JOIN items i ON i.id = a.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -72,13 +73,17 @@ impl AgentStore for Store {
                     row.get::<_, String>(2)?,
                     row.get::<_, Option<String>>(3)?,
                     row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
                 ))
             })
             .map_err(StoreError::new)?;
         rows.map(|row| {
-            let (project, number, command, worktree, cursor) = row.map_err(StoreError::new)?;
+            let (project, number, command, worktree, cursor, name) =
+                row.map_err(StoreError::new)?;
             let project = ProjectName::parse(&project).map_err(StoreError::new)?;
             Ok(DueWake {
+                // A local item has no pull request, so it's named by its ID.
+                name: ItemId::new(project.clone(), name as u64),
                 item: ItemId::new(project, number as u64),
                 command,
                 worktree,

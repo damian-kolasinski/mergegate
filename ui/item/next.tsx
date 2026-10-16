@@ -71,7 +71,7 @@ export function NextItem(props: {
       >
         {(item) => (
           <a class={styles.link} href={itemHref(item().id)}>
-            Next: <Mono>{item().id}</Mono> {item().title}
+            Next: <Mono>{item().name}</Mono> {item().title}
             <kbd>↵</kbd>
           </a>
         )}

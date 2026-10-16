@@ -10,6 +10,7 @@ import { render } from "solid-js/web";
 import { InboxScreen } from "../inbox/inbox";
 import { ItemScreen } from "../item/item";
 import { RulesScreen } from "../rules/rules";
+import { nameOf } from "./names";
 import { inboxHref, itemHref, useRoute } from "./router";
 import { Shell } from "./shell";
 
@@ -44,7 +45,7 @@ function App() {
           <Show when={item()} fallback={<span>{project()} rules</span>}>
             {(id) => (
               <a href={itemHref(id())} aria-current="page">
-                {id()}
+                {nameOf(id())}
               </a>
             )}
           </Show>
