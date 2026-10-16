@@ -30,10 +30,12 @@
 }
 
 /* Takes what the fixed cells leave. Flags that don't fit beside a readable
-   title wrap under it rather than push the cells after them out of line. */
+   title wrap under it rather than push the cells after them out of line.
+   The floor keeps titles on screen in a window too narrow for every column;
+   all rows overflow alike then, so the columns still line up. */
 .main {
   flex: 1;
-  min-width: 0;
+  min-width: 10em;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -62,7 +64,11 @@
 }
 
 .flag {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .demo {
