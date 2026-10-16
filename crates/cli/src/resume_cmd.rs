@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use crate::client::{Client, segment};
 use crate::feedback_cmd::heading;
+use crate::item_name;
 use crate::output::{CliError, Outcome};
 
 #[derive(Serialize)]
@@ -20,7 +21,8 @@ struct Resumed {
 
 pub fn run(item: String) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
-    let resume: Resume = client.get(&format!("/api/items/{}/resume", segment(&item)))?;
+    let item = item_name::find(&client, &item)?;
+    let resume: Resume = client.get(&format!("/api/items/{}/resume", segment(&item.id)))?;
     let prompt = prompt(&resume);
     let text = prompt.clone();
     Ok(Outcome::done(&Resumed { resume, prompt }, text))
@@ -28,7 +30,7 @@ pub fn run(item: String) -> Result<Outcome, CliError> {
 
 fn prompt(resume: &Resume) -> String {
     let item = &resume.item;
-    let id = &item.id;
+    let id = &item.name;
     let mut out = format!(
         "You are picking up mergegate item {id}, \"{}\", from an agent session that ended.\n\n\
          - State: {}, at revision r{}\n\
@@ -121,7 +123,7 @@ fn describe(thread: &Thread, newest: u32) -> String {
 }
 
 fn next(resume: &Resume) -> String {
-    let id = &resume.item.id;
+    let id = &resume.item.name;
     match resume.item.state {
         // A wait may have delivered the closing events already, so a plain
         // `mg feedback` could print nothing new. The replay repeats the

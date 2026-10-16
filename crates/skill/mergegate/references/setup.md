@@ -24,7 +24,7 @@ The hub lets in the devices of whoever runs Tailscale on its machine. Another pe
 
 ## Projects
 
-Each repo under review is a project. In the repo, `mg project add` registers it. Its name, used in item IDs, defaults to the repo's folder name (`--name NAME` picks another), and its target branch defaults to `main`, `master` or `trunk` (`--target BRANCH` picks another). Ask the operator which target to use when the repo has none of those.
+Each repo under review is a project. In the repo, `mg project add` registers it. Its name, used in item names, defaults to the repo's folder name (`--name NAME` picks another), and its target branch defaults to `main`, `master` or `trunk` (`--target BRANCH` picks another). Ask the operator which target to use when the repo has none of those.
 
 A project's backend decides where approved work lands. `local` squash-merges into the target branch of the registered repo. `github` pushes each item's branch to GitHub, opens its pull request and squash-merges it there; the hub signs in as whoever the operator's `gh` CLI is logged in as, so if a command says it can't sign in, ask the operator to run `gh auth login`. A repo with a GitHub remote asks which backend to use; `--backend local|github` answers up front, and `--github OWNER/REPO` names the repository when its remotes don't settle it.
 

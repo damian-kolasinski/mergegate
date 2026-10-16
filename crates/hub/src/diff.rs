@@ -85,6 +85,7 @@ async fn show(
                 let conflicts = conflicting(&open, &store.pairs(project)?)
                     .remove(&id)
                     .unwrap_or_default();
+                let conflicts = items::names(&open.iter().collect::<Vec<_>>(), &conflicts);
                 let changed = interdiff::changed_since_review(store, &diff.item)?;
                 Ok(Some((diff, blocked, spans, demo, conflicts, changed)))
             })
@@ -109,7 +110,7 @@ async fn show(
         interdiffs: diff.interdiffs,
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         guide: diff.guide,
-        conflicts_with: conflicts.iter().map(ToString::to_string).collect(),
+        conflicts_with: conflicts,
         conversation: conversation::to_api(&diff.conversation),
     }))
 }

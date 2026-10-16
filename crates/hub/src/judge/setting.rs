@@ -106,7 +106,7 @@ fn read(
         order: Some(setting.order.as_str().into()),
         problem,
         waiting: judge::unjudged(store, Some(project))?.len() as u32,
-        failures: failures.of(project, &setting.key()),
+        failures: failures.of(store, project, &setting.key())?,
     })
 }
 

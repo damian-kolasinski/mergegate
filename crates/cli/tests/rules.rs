@@ -371,7 +371,8 @@ fn f12_a_hand_edit_that_hides_more_waits_for_the_operator() {
         json!({
             "items": 1,
             "hidden": [{
-                "item": "app#1", "title": "Bump the parser", "path": "Cargo.lock", "rule": "R2",
+                "item": "app#1", "name": "app#1", "title": "Bump the parser", "path": "Cargo.lock",
+                "rule": "R2",
             }],
         })
     );

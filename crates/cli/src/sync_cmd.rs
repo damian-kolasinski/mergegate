@@ -5,11 +5,14 @@
 use api::review::Synced;
 
 use crate::client::{self, Client};
+use crate::item_name;
 use crate::output::{CliError, Outcome};
 
 pub fn run(item: String) -> Result<Outcome, CliError> {
     let client = Client::connect(&crate::home()?)?;
-    let path = format!("/api/items/{}/sync", client::segment(&item));
+    let found = item_name::find(&client, &item)?;
+    let path = format!("/api/items/{}/sync", client::segment(&found.id));
+    let item = found.name;
     let synced = match client.post::<Synced>(&path, &serde_json::json!({}))? {
         client::Reply::Done(synced) => synced,
         client::Reply::Decide(decision) => return Ok(Outcome::NeedsDecision(decision)),

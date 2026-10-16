@@ -90,6 +90,7 @@ fn f9_a_target_moved_outside_the_hub_sends_the_conflict_before_review() {
         json!([{
             "cursor": 1,
             "item": "app#1",
+            "name": "app#1",
             "revision": 1,
             "source": "operator",
             "type": "merge.conflict",

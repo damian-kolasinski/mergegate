@@ -145,6 +145,50 @@ fn keeps_a_github_items_pull_request() {
 }
 
 #[test]
+fn finds_an_item_by_its_pull_request_the_open_one_first() {
+    let (_dir, mut store) = store();
+    let on = |repo: &str, number| ItemBackend::Github {
+        repo: GithubRepo::parse(repo).unwrap(),
+        pull: Pull {
+            number,
+            url: format!("https://github.com/{repo}/pull/{number}"),
+        },
+    };
+    let insert = |store: &mut Store, branch, backend| {
+        store
+            .insert_item(NewItem {
+                backend,
+                ..new_item("web", branch)
+            })
+            .unwrap()
+    };
+    // The project moved repositories, and both have a pull request #7.
+    let old = insert(&mut store, "a", on("acme/old", 7));
+    let new = insert(&mut store, "b", on("acme/web", 7));
+    insert(&mut store, "c", on("acme/web", 8));
+    let found = |store: &Store, number| {
+        store
+            .item_with_pull(&name("web"), number)
+            .unwrap()
+            .map(|item| item.id.to_string())
+    };
+    assert_eq!(found(&store, 7), Some(new.id.to_string()));
+    assert_eq!(found(&store, 9), None);
+    assert_eq!(store.item_with_pull(&name("app"), 7).unwrap(), None);
+
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged' WHERE branch = 'b'", [])
+        .unwrap();
+    assert_eq!(found(&store, 7), Some(old.id.to_string()));
+    store
+        .conn
+        .execute("UPDATE items SET state = 'merged' WHERE branch = 'a'", [])
+        .unwrap();
+    assert_eq!(found(&store, 7), Some(new.id.to_string()));
+}
+
+#[test]
 fn reads_any_item_by_id() {
     let (_dir, mut store) = store();
     let a = store.insert_item(new_item("app", "a")).unwrap();

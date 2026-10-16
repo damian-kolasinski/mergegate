@@ -1,6 +1,6 @@
 use mergegate_core::external::{ExternalStore, NewExternal};
 use mergegate_core::feedback::{FeedbackStore, Notice, NoticeKind, Source};
-use mergegate_core::github::PullCommentKind;
+use mergegate_core::github::{GithubRepo, Pull, PullCommentKind};
 use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
 use mergegate_core::project::{Backend, Project, ProjectStore};
 use mergegate_core::review::{NewReview, ReviewStore, Verdict};
@@ -177,4 +177,52 @@ fn a_batch_of_external_comments_wakes_the_agent() {
     assert_eq!(due(&store), []);
     store.release(&id("app#1"), 1).unwrap();
     assert_eq!(due(&store), [("app#1".into(), "a".into(), 1)]);
+}
+
+#[test]
+fn a_wake_names_a_github_item_by_its_pull_request() {
+    let (_dir, mut store) = store();
+    let item = store
+        .insert_item(NewItem {
+            project: ProjectName::parse("app").unwrap(),
+            branch: "three".into(),
+            title: "Work".into(),
+            state: ItemState::NeedsReview,
+            backend: ItemBackend::Github {
+                repo: GithubRepo::parse("acme/app").unwrap(),
+                pull: Pull {
+                    number: 84,
+                    url: "https://github.com/acme/app/pull/84".into(),
+                },
+            },
+            target: "main".into(),
+            revision: NewRevision {
+                head: "a".repeat(40),
+                base: "0".repeat(40),
+                files: Vec::new(),
+                guide: None,
+                interdiffs: Vec::new(),
+                viewed: Vec::new(),
+            },
+            priority: None,
+            note: None,
+        })
+        .unwrap();
+    store.set_agent(&id("app#1"), &waking("a")).unwrap();
+    store.set_agent(&item.id, &waking("b")).unwrap();
+    review(&mut store, "app#1");
+    review(&mut store, "app#3");
+    let names: Vec<_> = store
+        .due_wakes()
+        .unwrap()
+        .into_iter()
+        .map(|w| (w.item.to_string(), w.name.to_string()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("app#1".into(), "app#1".into()),
+            ("app#3".into(), "app#84".into())
+        ]
+    );
 }

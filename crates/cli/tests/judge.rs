@@ -316,7 +316,10 @@ fn f12_a_failing_judge_is_shown_and_retried_when_set_again() {
     });
     assert_eq!(
         show["failures"],
-        json!([{ "item": "app#1", "revision": 1, "error": "Jev answered 529: overloaded" }])
+        json!([{
+            "item": "app#1", "name": "app#1", "revision": 1,
+            "error": "Jev answered 529: overloaded",
+        }])
     );
     assert_eq!(show["waiting"], 1);
     let text = env.mg(&["judge", "show", "app"]).assert_code(0).stdout;

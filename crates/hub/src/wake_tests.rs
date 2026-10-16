@@ -39,6 +39,7 @@ impl AgentStore for Store {
         let woken = self.woken.get(&item).copied().unwrap_or(0);
         Ok((self.cursor > woken)
             .then(|| DueWake {
+                name: item.clone(),
                 item,
                 command: "resume".into(),
                 worktree: Some(self.worktree.clone()),

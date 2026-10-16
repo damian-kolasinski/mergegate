@@ -104,11 +104,11 @@ pub fn run(
         Reply::Decide(decision) => return Ok(Outcome::NeedsDecision(decision)),
     };
     let item = &submitted.item;
-    let attachments = attach_cmd::upload(&client, &item.id, Some(item.revision.number), &attach)
+    let attachments = attach_cmd::upload(&client, item, Some(item.revision.number), &attach)
         .map_err(|e| {
             let message = format!(
                 "submitted {} r{}, but attaching failed: {}",
-                item.id, item.revision.number, e.body.message
+                item.name, item.revision.number, e.body.message
             );
             CliError {
                 body: api::error::ErrorBody { message, ..e.body },
@@ -118,7 +118,7 @@ pub fn run(
     let mut text = describe(&submitted, guided);
     if !attachments.is_empty() {
         text.push('\n');
-        text.push_str(&attach_cmd::describe(&item.id, &attachments));
+        text.push_str(&attach_cmd::describe(&item.name, &attachments));
     }
     let output = Output {
         submitted: &submitted,
@@ -196,7 +196,7 @@ fn describe(submitted: &Submitted, guided: bool) -> String {
     let mut text = if submitted.new_revision {
         let mut text = format!(
             "submitted {} r{}: {}\n  {} onto {} · {}, +{} -{}",
-            item.id,
+            item.name,
             r.number,
             item.title,
             item.branch,
@@ -212,7 +212,7 @@ fn describe(submitted: &Submitted, guided: bool) -> String {
     } else {
         let mut text = format!(
             "{} r{} is already at {}: {}",
-            item.id,
+            item.name,
             r.number,
             r.head.get(..12).unwrap_or(&r.head),
             item.title

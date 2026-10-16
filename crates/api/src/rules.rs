@@ -79,6 +79,8 @@ pub struct Preview {
 pub struct HiddenFile {
     /// As in `app#42`.
     pub item: String,
+    /// As in [`crate::item::Item`].
+    pub name: String,
     pub title: String,
     pub path: String,
     /// The rule that would have trusted it, as in `R3`.

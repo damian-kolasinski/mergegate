@@ -148,6 +148,7 @@ fn f14_the_operator_abandons_an_item_and_its_agent_hears_why() {
         json!([{
             "cursor": 1,
             "item": "app#1",
+            "name": "app#1",
             "revision": 1,
             "source": "operator",
             "type": "item.abandoned",

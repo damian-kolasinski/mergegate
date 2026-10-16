@@ -213,6 +213,7 @@ fn f9_a_conflict_sends_the_item_back_to_rebase() {
         json!({
             "cursor": 2,
             "item": "app#1",
+            "name": "app#1",
             "revision": 1,
             "source": "operator",
             "type": "merge.conflict",

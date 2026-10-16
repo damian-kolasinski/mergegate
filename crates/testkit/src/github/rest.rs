@@ -123,7 +123,10 @@ impl Call<'_> {
                 self.owner()
             ));
         }
-        let number = state.pulls.iter().filter(|p| p.repo == self.repo).count() as u64 + 1;
+        let elsewhere = state.opened_elsewhere.get(&self.repo).copied();
+        let number = state.pulls.iter().filter(|p| p.repo == self.repo).count() as u64
+            + elsewhere.unwrap_or(0)
+            + 1;
         let pull = Pull {
             repo: self.repo.clone(),
             number,
@@ -273,6 +276,21 @@ impl Call<'_> {
     fn bare(&self, args: &[&str], vars: &[(&str, &str)]) -> Option<String> {
         self.shared.bare(&self.repo, args, vars)
     }
+}
+
+/// `POST /_fake/pulls` with `{repo, count}`, for a process that can't call
+/// [`FakeGithub::open_elsewhere`](super::FakeGithub::open_elsewhere).
+pub(super) fn open_elsewhere(shared: &Shared, request: &Request) -> Response {
+    let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+    let (Some(repo), Some(count)) = (body["repo"].as_str(), body["count"].as_u64()) else {
+        return Response::empty(400);
+    };
+    *shared
+        .state()
+        .opened_elsewhere
+        .entry(repo.into())
+        .or_default() += count;
+    Response::empty(204)
 }
 
 fn message(status: u16, message: &str) -> Response {

@@ -90,8 +90,12 @@ pub struct Submitted {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Item {
-    /// As in `app#42`.
+    /// The hub's own, as in `app#42`, which the API's paths take. Commands
+    /// take `name`: on GitHub this ID may be another item's name.
     pub id: String,
+    /// What the operator knows it by: on GitHub its project and pull
+    /// request, as in `app#84`, otherwise `id`. Commands take it too.
+    pub name: String,
     pub title: String,
     pub branch: String,
     pub state: ItemState,
@@ -153,6 +157,8 @@ pub struct Inbox {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InboxItem {
     pub id: String,
+    /// As in [`Item`].
+    pub name: String,
     pub title: String,
     pub branch: String,
     pub state: ItemState,
@@ -176,8 +182,8 @@ pub struct InboxItem {
     pub changed_since: Option<ChangedSince>,
     pub priority: Option<Priority>,
     pub note: Option<String>,
-    /// The open items its head conflicts with, of its project and target,
-    /// oldest first: landing one of them hands this one back.
+    /// The names of the open items its head conflicts with, of its project
+    /// and target, oldest first: landing one of them hands this one back.
     pub conflicts_with: Vec<String>,
     /// Threads whose agent asked the operator something and waits on the
     /// answer.

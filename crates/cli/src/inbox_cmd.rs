@@ -76,7 +76,7 @@ fn line(i: &InboxItem) -> String {
     };
     let mut out = format!(
         "  {}{priority} r{}  {}  ({}{link} · {files}, +{} -{}{changed})",
-        i.id, i.revision, i.title, i.branch, i.additions, i.deletions
+        i.name, i.revision, i.title, i.branch, i.additions, i.deletions
     );
     if let Some(note) = &i.note {
         out.push_str(&format!("\n      {}", one_line(note)));

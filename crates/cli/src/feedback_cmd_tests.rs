@@ -4,6 +4,7 @@ fn merged(commands: &[&str]) -> Event {
     Event {
         cursor: 9,
         item: "app#1".into(),
+        name: "app#1".into(),
         revision: 2,
         source: Source::Operator,
         body: EventBody::ItemMerged {
@@ -35,6 +36,7 @@ fn a_merge_from_a_hub_that_sends_no_cleanup_offers_none() {
 fn feedback(state: ItemState) -> Feedback {
     Feedback {
         item: "app#1".into(),
+        name: "app#1".into(),
         state,
         events: vec![merged(&[])],
         cursor: 9,

@@ -31,6 +31,8 @@ pub struct Judge {
 pub struct Failure {
     /// As in `app#42`.
     pub item: String,
+    /// As in [`crate::item::Item`].
+    pub name: String,
     pub revision: u32,
     pub error: String,
 }

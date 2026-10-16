@@ -176,7 +176,7 @@ fn show(proposal: &Proposal) -> String {
     if let Some(preview) = &proposal.preview {
         out.push(format!("When proposed, {}", would_hide(preview)));
         for file in &preview.hidden {
-            out.push(format!("  {}  {}  {}", file.item, file.path, file.title));
+            out.push(format!("  {}  {}  {}", file.name, file.path, file.title));
         }
     }
     out.join("\n")

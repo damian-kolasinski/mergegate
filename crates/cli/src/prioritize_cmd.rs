@@ -5,6 +5,7 @@ use api::item::{Item, Prioritize, Priority};
 use clap::ValueEnum;
 
 use crate::client::{self, Client};
+use crate::item_name;
 use crate::output::{CliError, Outcome};
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -36,14 +37,15 @@ pub fn run(item: String, priority: Level, note: Option<String>) -> Result<Outcom
         priority: priority.to_api(),
         note,
     };
-    let path = format!("/api/items/{}/priority", client::segment(&item));
+    let item = item_name::find(&client, &item)?;
+    let path = format!("/api/items/{}/priority", client::segment(&item.id));
     let item = match client.post::<Item>(&path, &request)? {
         client::Reply::Done(item) => item,
         client::Reply::Decide(decision) => return Ok(Outcome::NeedsDecision(decision)),
     };
     let mut text = match item.priority {
-        Some(priority) => format!("{} is {}", item.id, name(priority)),
-        None => format!("{} has no priority", item.id),
+        Some(priority) => format!("{} is {}", item.name, name(priority)),
+        None => format!("{} has no priority", item.name),
     };
     if let Some(note) = &item.note {
         text.push_str(&format!(": {note}"));

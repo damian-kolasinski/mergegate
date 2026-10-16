@@ -101,12 +101,14 @@ fn preview_to_api(store: &Store, preview: &Preview) -> Result<api::rules::Previe
         .hidden
         .iter()
         .map(|file| {
+            let item = store.item(&file.item)?;
             Ok(api::rules::HiddenFile {
                 item: file.item.to_string(),
-                title: store
-                    .item(&file.item)?
-                    .map(|item| item.title)
-                    .unwrap_or_default(),
+                name: item
+                    .as_ref()
+                    .map_or_else(|| file.item.clone(), |item| item.name())
+                    .to_string(),
+                title: item.map(|item| item.title).unwrap_or_default(),
                 path: file.path.clone(),
                 rule: file.rule.to_string(),
             })

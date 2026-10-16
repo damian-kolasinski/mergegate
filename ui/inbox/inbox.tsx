@@ -234,6 +234,7 @@ export function InboxScreen() {
         {(item) => (
           <PriorityPicker
             item={item.id}
+            name={item.name}
             priority={item.priority}
             note={item.note}
             onClose={() => setPicking(undefined)}
@@ -259,16 +260,6 @@ function columnsOf(inbox: Inbox): Columns {
   };
 }
 
-/**
- * What a row is called: on GitHub its project and pull request, the number
- * the operator knows it by, as `app#42`; otherwise the hub's own id.
- */
-function label(item: InboxItem): string {
-  const pull = item.link?.label;
-  if (!pull?.startsWith("#")) return item.id;
-  return `${item.id.split("#")[0] ?? ""}${pull}`;
-}
-
 function Entry(props: {
   item: InboxItem;
   columns: Columns;
@@ -284,7 +275,7 @@ function Entry(props: {
       onOpen={props.onOpen}
     >
       <span class={styles.id} title={props.item.id}>
-        <Mono>{label(props.item)}</Mono>
+        <Mono>{props.item.name}</Mono>
       </span>
       <span class={styles.revision}>
         <Meta>r{props.item.revision}</Meta>

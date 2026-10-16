@@ -20,9 +20,9 @@ The events are what you have to act on: the operator's reviews and overrides, co
 
 ## Being woken
 
-`mg submit --wake CMD` leaves a command with the hub. When the item has events from the operator or from GitHub you haven't read, the hub runs `sh -c CMD` in the worktree you submitted from, with `{item}` in CMD replaced by the item's ID and these set:
+`mg submit --wake CMD` leaves a command with the hub. When the item has events from the operator or from GitHub you haven't read, the hub runs `sh -c CMD` in the worktree you submitted from, with `{item}` in CMD replaced by the item's name and these set:
 
-- `MG_ITEM`: the item, as in `app#3`.
+- `MG_ITEM`: the item's name, as in `app#3`.
 - `MG_CURSOR`: the cursor of the newest such event.
 - `MERGEGATE_HOME`: the hub's data directory, so `mg` in the command finds the hub.
 

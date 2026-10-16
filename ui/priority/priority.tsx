@@ -58,6 +58,8 @@ export function PriorityBadge(props: {
  */
 export function PriorityPicker(props: {
   item: string;
+  /** What the operator calls it, as in `Item`. */
+  name: string;
   priority: Priority | null;
   note: string | null;
   onClose: () => void;
@@ -128,9 +130,9 @@ export function PriorityPicker(props: {
         class={styles.panel}
         role="dialog"
         aria-modal="true"
-        aria-label={`Priority of ${props.item}`}
+        aria-label={`Priority of ${props.name}`}
       >
-        <Meta>Priority of {props.item}</Meta>
+        <Meta>Priority of {props.name}</Meta>
         <div class={styles.choices} role="radiogroup" aria-label="Priority">
           <For each={CHOICES}>
             {(value) => (

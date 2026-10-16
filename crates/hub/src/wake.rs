@@ -167,14 +167,14 @@ async fn start(state: Arc<AppState>, wake: DueWake) {
 }
 
 async fn run_command(state: &AppState, wake: &DueWake) {
-    let command = agent::wake_command(&wake.command, &wake.item);
+    let command = agent::wake_command(&wake.command, &wake.name);
     let Some(worktree) = wake.worktree.as_deref() else {
         return;
     };
     tracing::info!("waking {} at cursor {}: {command}", wake.item, wake.cursor);
     // A file, not a pipe: the session it starts may outlive the hub and
     // write long after, and its stderr is unbounded.
-    let log = state.wake_logs.join(format!("{}.log", wake.item));
+    let log = state.wake_logs.join(format!("{}.log", wake.name));
     let stderr = match open_log(&log) {
         Ok(file) => file,
         Err(e) => {
@@ -193,7 +193,7 @@ async fn run_command(state: &AppState, wake: &DueWake) {
         .arg("-c")
         .arg(&command)
         .current_dir(worktree)
-        .env("MG_ITEM", wake.item.to_string())
+        .env("MG_ITEM", wake.name.to_string())
         .env("MG_CURSOR", wake.cursor.to_string())
         .env(HOME_ENV, &state.health.home)
         .stdin(Stdio::null())

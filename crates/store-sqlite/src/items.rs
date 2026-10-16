@@ -124,6 +124,21 @@ impl ItemStore for Store {
             .transpose()
     }
 
+    fn item_with_pull(&self, project: &ProjectName, pull: u64) -> Result<Option<Item>, StoreError> {
+        self.conn
+            .query_row(
+                &format!(
+                    "{SELECT} WHERE p.name = ?1 AND i.pull_number = ?2
+                     ORDER BY {OPEN} DESC, i.id DESC LIMIT 1"
+                ),
+                params![project.as_str(), pull as i64],
+                read,
+            )
+            .optional()
+            .map_err(StoreError::new)?
+            .transpose()
+    }
+
     fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError> {
         let mut stmt = self
             .conn

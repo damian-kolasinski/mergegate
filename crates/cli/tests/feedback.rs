@@ -107,6 +107,7 @@ fn f7_wait_returns_the_review_once() {
         json!([{
             "cursor": 1,
             "item": "app#1",
+            "name": "app#1",
             "revision": 1,
             "source": "operator",
             "type": "review.submitted",

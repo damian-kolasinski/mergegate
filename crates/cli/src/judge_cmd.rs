@@ -132,7 +132,7 @@ fn describe(judge: &Judge) -> String {
     for failure in &judge.failures {
         out.push(format!(
             "  failed on {} revision {}: {}",
-            failure.item, failure.revision, failure.error
+            failure.name, failure.revision, failure.error
         ));
     }
     if !judge.failures.is_empty() {
