@@ -12,16 +12,10 @@
 
 .id {
   flex: none;
-  width: 16ch;
+  width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Fixed even when empty, so titles start at one edge down the list. */
-.revision {
-  flex: none;
-  width: 4ch;
 }
 
 .priority {
@@ -29,27 +23,18 @@
   width: 3.5em;
 }
 
-/* Takes what the fixed cells leave. Flags that don't fit beside a readable
-   title wrap under it rather than push the cells after them out of line.
-   The floor keeps titles on screen in a window too narrow for every column;
-   all rows overflow alike then, so the columns still line up. */
-.main {
+/* Takes what the fixed cells leave, on up to two lines so a long title still
+   reads whole. The floor keeps titles on screen in a window too narrow for
+   every column; all rows overflow alike then, so the columns still line up. */
+.title {
   flex: 1;
   min-width: 10em;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-}
-
-/* A zero basis lets the flags take the line first; the minimum is what the
-   title keeps before they wrap. */
-.title {
-  flex: 1 1 0;
-  min-width: min(14em, 100%);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   color: var(--text-primary);
   text-decoration: none;
 }
@@ -63,36 +48,50 @@
   color: var(--text-secondary);
 }
 
+/* Flags that don't fit side by side wrap under each other, inside the
+   column, so a row with many grows taller rather than wider. */
+.flags {
+  flex: none;
+  width: 12em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* A flag wider than the column is cut short; its tooltip has the whole of
+   it. */
 .flag {
-  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.demo {
-  flex: none;
-  width: 6em;
-  text-align: right;
-}
-
 .link {
   flex: none;
-  width: 9em;
+  width: 8.5em;
   text-align: right;
 }
 
 .figure {
   flex: none;
-  width: 5em;
+  width: 4em;
   text-align: right;
   white-space: nowrap;
 }
 
 .files {
   flex: none;
-  width: 8em;
+  width: 7em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.age {
+  flex: none;
+  width: 3.5em;
   text-align: right;
   white-space: nowrap;
 }
