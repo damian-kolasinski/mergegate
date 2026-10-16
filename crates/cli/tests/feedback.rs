@@ -164,6 +164,26 @@ fn f7_since_replays_delivered_events() {
 }
 
 #[test]
+fn f7_a_wait_since_the_printed_cursor_delivers_what_it_printed() {
+    let (env, _repo) = submitted();
+    review(&env, "comment", "First look.");
+    env.mg(&["--json", "wait", "app#1"]).assert_code(0);
+    review(&env, "changes_requested", "Second look.");
+
+    // As the cursor line after the first wait suggests.
+    let next = env
+        .mg(&["--json", "wait", "app#1", "--since", "1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(next["events"][0]["summary"], "Second look.");
+    let again = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(again["events"], json!([]));
+}
+
+#[test]
 fn f7_a_replay_past_the_delivered_cursor_skips_nothing() {
     let (env, _repo) = submitted();
     review(&env, "comment", "First look.");
@@ -285,7 +305,9 @@ fn f6_drafts_reach_the_agent_with_the_lines_they_are_on() {
         .mg(&["--json", "feedback", "app#1", "--since", "0"])
         .assert_code(0);
     assert_eq!(feedback.json()["events"][0]["comments"], json!([expected]));
-    let text = env.mg(&["feedback", "app#1"]).assert_code(0);
+    let text = env
+        .mg(&["feedback", "app#1", "--since", "0"])
+        .assert_code(0);
     assert_eq!(
         text.stdout.trim(),
         "[1] review.submitted app#1 r1: the operator requested changes\n\n  \
