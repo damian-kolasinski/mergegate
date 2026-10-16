@@ -24,6 +24,9 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
                 service.unit
             ));
         }
+        for warning in &status.warnings {
+            text.push_str(&format!("\nwarning: {warning}"));
+        }
         return Ok(Outcome::done(&status, note(text)));
     }
     let unresponsive = home.is_locked();

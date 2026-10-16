@@ -3,7 +3,7 @@
 use api::doctor::{Check, CheckStatus};
 
 pub(super) fn check(url: &str, version: &str) -> Check {
-    versioned(url, version, env!("CARGO_PKG_VERSION"))
+    versioned(url, version, env!("MG_VERSION"))
 }
 
 fn versioned(url: &str, version: &str, ours: &str) -> Check {

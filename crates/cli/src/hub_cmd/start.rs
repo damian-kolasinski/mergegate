@@ -108,11 +108,11 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
 }
 
 fn outcome(home: &Home, running: &Running, started: bool, warnings: Vec<String>) -> Outcome {
-    let status = HubStatus {
+    let mut status = HubStatus {
         started: Some(started),
-        warnings,
         ..running.status(home)
     };
+    status.warnings.extend(warnings);
     let verb = if started {
         "started"
     } else {
@@ -135,7 +135,7 @@ fn outcome(home: &Home, running: &Running, started: bool, warnings: Vec<String>)
 fn run_here(home: Home, port: u16) -> Result<Outcome, CliError> {
     hub::init_logging();
     let status = HubStatus::stopped(&home, true);
-    hub::run(home, port).map_err(hub_error)?;
+    hub::run(home, port, env!("MG_VERSION")).map_err(hub_error)?;
     Ok(Outcome::done(&status, "hub stopped"))
 }
 
@@ -143,7 +143,7 @@ fn incompatible(running: &Running) -> CliError {
     CliError::new(
         "hub_incompatible",
         format!(
-            "the running hub speaks API v{}, this mg speaks v{}",
+            "the running hub speaks API {:08x}, this mg speaks {:08x}",
             running.health.api_version,
             api::API_VERSION
         ),

@@ -73,10 +73,7 @@ fn help_and_version_exit_0() {
     let help = env.mg(&["--help"]).assert_code(0);
     assert!(help.stdout.contains("Exit codes:"), "{help:?}");
     let version = env.mg(&["--version"]).assert_code(0);
-    assert_eq!(
-        version.stdout.trim(),
-        format!("mg {}", env!("CARGO_PKG_VERSION"))
-    );
+    assert_eq!(version.stdout.trim(), format!("mg {}", env!("MG_VERSION")));
 }
 
 #[test]

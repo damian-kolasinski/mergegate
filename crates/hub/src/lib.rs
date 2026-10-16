@@ -67,8 +67,9 @@ fn io(context: &'static str) -> impl FnOnce(std::io::Error) -> HubError {
 
 /// Runs the hub in this process until it is asked to stop, over HTTP or by
 /// SIGINT/SIGTERM. `port` 0 picks a free port; the address the hub listens on
-/// is written to the home's `hub.json`.
-pub fn run(home: Home, port: u16) -> Result<(), HubError> {
+/// is written to the home's `hub.json`. `version` is the `mg` it reports
+/// running, which only the binary that runs it knows in full.
+pub fn run(home: Home, port: u16, version: &str) -> Result<(), HubError> {
     home.ensure().map_err(io("creating the data directory"))?;
     let _lock = home
         .acquire()
@@ -81,7 +82,7 @@ pub fn run(home: Home, port: u16) -> Result<(), HubError> {
         .enable_all()
         .build()
         .map_err(io("starting the async runtime"))?;
-    let served = runtime.block_on(server::serve(&home, port, schema_version, store));
+    let served = runtime.block_on(server::serve(&home, port, version, schema_version, store));
     // Dropping the runtime would wait out every blocking task, a judge call
     // too, which can run for minutes; serve set `stopping` for those that
     // can stop.
