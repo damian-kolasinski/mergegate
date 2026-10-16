@@ -57,7 +57,7 @@ export function InboxScreen() {
 
   const columns = createMemo(() => {
     const current = inbox();
-    return current ? columnsOf(current) : { demo: false, link: false };
+    return current ? columnsOf(current) : { flags: false, link: false };
   });
 
   const [now, setNow] = createSignal(Date.now());
@@ -250,14 +250,27 @@ export function InboxScreen() {
 }
 
 /** The optional columns: each is there when some row has something in it. */
-type Columns = { demo: boolean; link: boolean };
+type Columns = { flags: boolean; link: boolean };
 
 function columnsOf(inbox: Inbox): Columns {
   const all = [...GROUPS.flatMap((group) => inbox[group.key]), ...inbox.closed];
   return {
-    demo: all.some((item) => item.demo),
+    flags: all.some(flagged),
     link: all.some((item) => item.link),
   };
+}
+
+/** Whether the row shows any of the flags `Entry` draws. */
+function flagged(item: InboxItem): boolean {
+  return Boolean(
+    item.questions ||
+      item.rejections ||
+      item.state === "changes_requested" ||
+      item.changed_since ||
+      item.blocked ||
+      item.conflicts_with.length ||
+      item.demo,
+  );
 }
 
 function Entry(props: {
@@ -277,9 +290,6 @@ function Entry(props: {
       <span class={styles.id} title={props.item.id}>
         <Mono>{props.item.name}</Mono>
       </span>
-      <span class={styles.revision}>
-        <Meta>r{props.item.revision}</Meta>
-      </span>
       <span class={styles.priority}>
         <PriorityBadge
           priority={props.item.priority}
@@ -287,93 +297,93 @@ function Entry(props: {
           keyHint="p"
         />
       </span>
-      {/* One cell for the title and its flags, so however many flags a row
-          has, the columns after it stay in line with the rows around it:
-          flags wrap under the title, and one too wide for the cell is cut
-          short, with the whole of it in its tooltip. */}
-      <span class={styles.main}>
-        {/* A real link, so a middle or ⌘ click opens the item in a new tab. */}
-        <a
-          class={styles.title}
-          href={itemHref(props.item.id)}
-          title={props.item.branch}
-        >
-          {props.item.title}
-          <Show when={props.item.note}>
-            {(note) => (
-              <span class={styles.note} title={note()}>
-                {" · "}
-                {note()}
+      {/* A real link, so a middle or ⌘ click opens the item in a new tab. */}
+      <a
+        class={styles.title}
+        href={itemHref(props.item.id)}
+        title={props.item.branch}
+      >
+        {props.item.title}
+        <Show when={props.item.note}>
+          {(note) => (
+            <span class={styles.note} title={note()}>
+              {" · "}
+              {note()}
+            </span>
+          )}
+        </Show>
+      </a>
+      {/* One column for every flag, so however many a row has, the cells
+          after it stay in line with the rows around it. */}
+      <Show when={props.columns.flags}>
+        <span class={styles.flags}>
+          <Show when={props.item.questions}>
+            {(count) => (
+              <span
+                class={styles.flag}
+                title="The agent asked: it waits on you"
+              >
+                <Badge tone="brand" solid>
+                  {count()} {count() === 1 ? "question" : "questions"}
+                </Badge>
               </span>
             )}
           </Show>
-        </a>
-        <Show when={props.item.questions}>
-          {(count) => (
-            <span class={styles.flag} title="The agent asked: it waits on you">
-              <Badge tone="brand" solid>
-                {count()} {count() === 1 ? "question" : "questions"}
-              </Badge>
-            </span>
-          )}
-        </Show>
-        <Show when={props.item.rejections}>
-          {(count) => (
+          <Show when={props.item.rejections}>
+            {(count) => (
+              <span
+                class={styles.flag}
+                title="The agent rejected a comment: accept it or override"
+              >
+                <Badge tone="warning" solid>
+                  {count()} {count() === 1 ? "rejection" : "rejections"}
+                </Badge>
+              </span>
+            )}
+          </Show>
+          <Show when={props.item.state === "changes_requested"}>
             <span
               class={styles.flag}
-              title="The agent rejected a comment: accept it or override"
+              title={`Changes requested: waiting for r${props.item.revision + 1}`}
             >
-              <Badge tone="warning" solid>
-                {count()} {count() === 1 ? "rejection" : "rejections"}
-              </Badge>
-            </span>
-          )}
-        </Show>
-        <Show when={props.item.state === "changes_requested"}>
-          <span class={styles.flag}>
-            <Meta>
-              changes requested · waiting for r{props.item.revision + 1}
-            </Meta>
-          </span>
-        </Show>
-        <Show when={props.item.changed_since}>
-          {(changed) => (
-            <span class={styles.flag}>
               <Meta>
-                {changedCount(changed())}changed since{" "}
-                {changed().approved ? "approved " : ""}r{changed().revision}
+                changes requested · waiting for r{props.item.revision + 1}
               </Meta>
             </span>
-          )}
-        </Show>
-        <Show when={props.item.blocked}>
-          {(blocked) => (
-            <span class={styles.flag} title={why(blocked())}>
-              <Badge tone="warning" solid>
-                {blocked().kind === "held" ? "Merge held" : "Conflict"}
+          </Show>
+          <Show when={props.item.changed_since}>
+            {(changed) => (
+              <span class={styles.flag}>
+                <Meta>
+                  {changedCount(changed())}changed since{" "}
+                  {changed().approved ? "approved " : ""}r{changed().revision}
+                </Meta>
+              </span>
+            )}
+          </Show>
+          <Show when={props.item.blocked}>
+            {(blocked) => (
+              <span class={styles.flag} title={why(blocked())}>
+                <Badge tone="warning" solid>
+                  {blocked().kind === "held" ? "Merge held" : "Conflict"}
+                </Badge>
+              </span>
+            )}
+          </Show>
+          <Show when={props.item.conflicts_with.length}>
+            <span
+              class={styles.flag}
+              title={`Conflicts with ${props.item.conflicts_with.join(", ")} now: whichever merges first may leave the other to rebase`}
+            >
+              <Badge tone="warning">
+                ⚡ conflicts with {props.item.conflicts_with.join(", ")}
               </Badge>
             </span>
-          )}
-        </Show>
-        <Show when={props.item.conflicts_with.length}>
-          <span
-            class={styles.flag}
-            title={`Conflicts with ${props.item.conflicts_with.join(", ")} now: whichever merges first may leave the other to rebase`}
-          >
-            <Badge tone="warning">
-              ⚡ conflicts with {props.item.conflicts_with.join(", ")}
-            </Badge>
-          </span>
-        </Show>
-      </span>
-      {/* Cells of their own, empty on a row without one, so a demo never
-          pushes the link out of line with the rows around it. */}
-      <Show when={props.columns.demo}>
-        <span class={styles.demo}>
+          </Show>
           <Show when={props.item.demo}>
-            <Badge tone="brand" title="Has screenshots or recordings">
-              ▶ demo
-            </Badge>
+            <span class={styles.flag} title="Has screenshots or recordings">
+              <Badge tone="brand">▶ demo</Badge>
+            </span>
           </Show>
         </span>
       </Show>
@@ -403,7 +413,7 @@ function Entry(props: {
         <Meta>{files(props.item)}</Meta>
       </span>
       <span
-        class={styles.figure}
+        class={styles.age}
         title={new Date(props.item.updated_at).toLocaleString()}
       >
         <Meta>{age(props.item.updated_at, props.now)}</Meta>
