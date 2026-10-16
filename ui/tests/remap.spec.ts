@@ -107,8 +107,9 @@ test("f13 comments follow their lines to the next revision", async ({
   app.revise("Verify passwords", { "login.rs": file(r2) });
   await screen
     .getByRole("region", { name: "Newer revision" })
-    .getByRole("button", { name: "Show changes since r1" })
+    .getByRole("button", { name: "Show r2" })
     .click();
+  await screen.getByLabel("Compare").selectOption("1");
   await expect(diff.getByText("verify(password);")).toBeVisible();
 
   // A sent comment follows its changed line, a draft its unchanged one.
@@ -210,8 +211,9 @@ test("drafts from another tab that hold the review can be dealt with", async ({
   app.revise("Verify passwords", { "login.rs": file(r2) });
   await screen
     .getByRole("region", { name: "Newer revision" })
-    .getByRole("button", { name: "Show changes since r1" })
+    .getByRole("button", { name: "Show r2" })
     .click();
+  await screen.getByLabel("Compare").selectOption("1");
   await expect(diff.getByText("verify(password);")).toBeVisible();
 
   // Another tab, still on r1, drafts on lines r2 deleted and changed.

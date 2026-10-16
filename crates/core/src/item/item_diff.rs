@@ -16,11 +16,8 @@ use crate::viewed::ViewedStore;
 /// What the newest revision's files are diffed from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Compare {
-    /// Since the revision last reviewed, when that's an earlier one;
-    /// against the base otherwise.
-    #[default]
-    Default,
     /// Against the base.
+    #[default]
     All,
     /// Since this earlier revision.
     Since(u32),
@@ -108,7 +105,6 @@ pub fn item_diff<
         Vec::new()
     };
     let since = match compare {
-        Compare::Default => last_reviewed,
         Compare::All => None,
         Compare::Since(revision) => Some(revision),
     }

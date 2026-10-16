@@ -463,7 +463,7 @@ sequenceDiagram
         <div class="diagram"><pre class="mermaid">
 flowchart TD
   A["Inbox: open the top item"] --> B["Read the intent and watch the demo"]
-  B --> C["Revision range: since last review by default"]
+  B --> C["Revision range: all changes by default, or since an earlier revision"]
   C --> D["Walk the Review tier in order<br/>n/p file, j/k line, v to mark viewed"]
   D --> E{"Need more context?"}
   E -->|"yes"| F["Expand Trusted"]
@@ -492,7 +492,7 @@ flowchart TD
         <div class="who"><span>Operator</span><span>Hub</span><span>Authoring agent</span></div>
         <div class="bounds">
           <div class="bound"><span class="k">Starts when</span>You submit Request changes.</div>
-          <div class="bound end"><span class="k">Ends when</span>The new revision is back in Needs you, showing only what changed.</div>
+          <div class="bound end"><span class="k">Ends when</span>The new revision is back in Needs you, with what changed since your review a pick away.</div>
         </div>
         <div class="diagram"><pre class="mermaid">
 sequenceDiagram
@@ -741,7 +741,7 @@ sequenceDiagram
     Op->>Hub: finish reviewing r1 and submit
     Hub-->>AA: review delivered against r1
   else switch now
-    Op->>Hub: open the r1 to r2 changes
+    Op->>Hub: open r2, all its changes
     Hub-->>Op: threads and drafts at their r2 lines, the rest outdated
     opt a draft's lines changed or went
       Hub-->>Op: flag it and hold the review

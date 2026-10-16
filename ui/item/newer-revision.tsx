@@ -3,7 +3,9 @@ import styles from "./newer-revision.module.css";
 
 /**
  * A revision arrived while an older one is on screen. The review stays on
- * the older one until the operator switches, so nothing moves under them.
+ * the older one until the operator switches, so nothing moves under them,
+ * and switching shows all its changes; Compare narrows them to an earlier
+ * revision's.
  */
 export function NewerRevision(props: {
   newest: number;
@@ -25,7 +27,7 @@ export function NewerRevision(props: {
           disabled={props.holding}
           onClick={props.onSwitch}
         >
-          Show changes since r{props.shown}
+          Show r{props.newest}
         </Button>
       </span>
     </section>

@@ -90,7 +90,7 @@ export function ItemScreen(props: { id: string }) {
     return item ? `${item.name} ${item.title}` : id;
   });
   // What the operator picked to compare against: `all` or a revision. Until
-  // they pick, the hub chooses.
+  // they pick, the hub shows all changes.
   let since: string | undefined;
   const fetchDiff = (compare = since) =>
     getJson<ItemDiff>(
@@ -668,9 +668,7 @@ function Review(props: {
               newest={newest()}
               shown={props.diff.item.revision.number}
               holding={comments.editor.holding()}
-              onSwitch={() =>
-                props.onCompare(String(props.diff.item.revision.number))
-              }
+              onSwitch={() => props.onCompare("all")}
             />
           )}
         </Show>

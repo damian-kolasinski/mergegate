@@ -8,8 +8,7 @@ use crate::review::Conversation;
 use crate::rules::Tier;
 
 /// `GET /api/items/{id}?since=`: the item with its newest revision's files.
-/// `since` is a revision number or `all`; without it, the files are shown
-/// since the last reviewed revision when there's an interdiff from it.
+/// `since` is a revision number or `all`, which it defaults to.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDiff {

@@ -121,7 +121,7 @@ fn rebased() -> (Env, TestRepo) {
 fn f7_shows_what_changed_since_the_last_review_over_a_moved_base() {
     let (env, repo) = rebased();
 
-    let diff = get(&env, "/api/items/app%231");
+    let diff = get(&env, "/api/items/app%231?since=1");
     assert_eq!(diff["item"]["revision"]["number"], 2);
     assert_eq!(diff["since"], 1);
     assert_eq!(diff["last_reviewed"], 1);
@@ -149,7 +149,8 @@ fn f7_shows_what_changed_since_the_last_review_over_a_moved_base() {
     assert_eq!(db["old_blob"], repo.rev("main:src/db.rs"));
     assert_eq!(db["new_blob"], repo.rev("feature:src/db.rs"));
 
-    let all = get(&env, "/api/items/app%231?since=all");
+    // All changes until the operator picks the revision.
+    let all = get(&env, "/api/items/app%231");
     assert_eq!(all["since"], Value::Null);
     // Against the base, login.rs declares a function, which ranks it first.
     assert_eq!(
@@ -160,8 +161,10 @@ fn f7_shows_what_changed_since_the_last_review_over_a_moved_base() {
             file("src/lib.rs", Value::Null, false),
         ]
     );
-    let since = get(&env, "/api/items/app%231?since=1");
-    assert_eq!(since["files"], diff["files"]);
+    assert_eq!(
+        get(&env, "/api/items/app%231?since=all")["files"],
+        all["files"]
+    );
 
     let inbox = get(&env, "/api/inbox");
     assert_eq!(

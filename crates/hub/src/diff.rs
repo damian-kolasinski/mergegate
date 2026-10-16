@@ -46,8 +46,7 @@ async fn show(
     let id = ItemId::parse(&id)
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))?;
     let compare = match query.since.as_deref() {
-        None => Compare::Default,
-        Some("all") => Compare::All,
+        None | Some("all") => Compare::All,
         Some(since) => since.parse().map(Compare::Since).map_err(|_| {
             Failure::new(
                 StatusCode::BAD_REQUEST,
