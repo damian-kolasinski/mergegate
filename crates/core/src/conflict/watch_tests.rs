@@ -27,6 +27,16 @@ fn setup() -> (FakeStore, FakeGit) {
 }
 
 fn add(store: &mut FakeStore, branch: &str, head: u8, backend: ItemBackend) -> ItemId {
+    add_on(store, branch, head, backend, None)
+}
+
+fn add_on(
+    store: &mut FakeStore,
+    branch: &str,
+    head: u8,
+    backend: ItemBackend,
+    parent: Option<&ItemId>,
+) -> ItemId {
     let item = NewItem {
         project: app(),
         branch: branch.into(),
@@ -41,6 +51,7 @@ fn add(store: &mut FakeStore, branch: &str, head: u8, backend: ItemBackend) -> I
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: parent.cloned(),
         },
         priority: None,
         note: None,
@@ -117,6 +128,29 @@ fn a_target_that_moves_into_a_conflict_hands_the_item_back_once() {
 }
 
 #[test]
+fn a_stacked_item_is_left_to_its_parent_until_it_lands() {
+    let (mut store, git) = setup();
+    let login = add(&mut store, "login", 2, ItemBackend::Local);
+    let profile = add_on(&mut store, "profile", 3, ItemBackend::Local, Some(&login));
+    let github = FakeGithub::default();
+    git.push_upstream("/src/app", "main", &commit(5));
+    git.conflict_between(&commit(5), &commit(2), &["src/login.rs"]);
+    git.conflict_between(&commit(5), &commit(3), &["src/login.rs"]);
+
+    let back = watch(&mut store, &git, &github, &app(), &mut Seen::default()).unwrap();
+    assert_eq!(back, std::slice::from_ref(&login));
+    assert_eq!(git.merged(), [(commit(2), commit(5))]);
+    assert_eq!(state(&store, &profile), ItemState::NeedsReview);
+
+    // Once its parent closed, its agent was told how to rebase: a trial
+    // from where its head forked would replay the parent's commits.
+    store.set_state(&login, ItemState::Abandoned);
+    let back = watch(&mut store, &git, &github, &app(), &mut Seen::default()).unwrap();
+    assert!(back.is_empty(), "{back:?}");
+    assert_eq!(state(&store, &profile), ItemState::NeedsReview);
+}
+
+#[test]
 fn a_new_revision_is_tried_again() {
     let (mut store, git) = setup();
     let id = add(&mut store, "login", 2, ItemBackend::Local);
@@ -138,6 +172,7 @@ fn a_new_revision_is_tried_again() {
                 guide: None,
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
+                parent: None,
             },
         )
         .unwrap();
@@ -270,6 +305,7 @@ fn an_item_that_moved_on_while_merging_is_left_alone() {
                 guide: None,
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
+                parent: None,
             },
         )
         .unwrap();

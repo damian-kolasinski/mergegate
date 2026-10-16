@@ -9,10 +9,22 @@
 - `--guide FILE` (or `-` for stdin) sends a guide for the review: see below.
 - `--priority p0|p1|p2|p3` and `--note "Why"` pass on how urgent the work is, when your brief says. Only the submit that opens the item sets them; later ones warn and keep what the operator set, which `mg prioritize` changes (see [operator.md](operator.md)).
 - `--wake CMD` leaves a command for the hub to run when the item has events from the operator you haven't read: see [waiting.md](waiting.md).
+- `--on ITEM` stacks the item on another: see "Stacking work" below.
 
-The operator reviews the newest revision. Each revision is the whole branch against the target, so amend, rebase or add commits as you like before submitting again.
+The operator reviews the newest revision. Each revision is the whole branch against the target (a stacked item's, against its parent: see below), so amend, rebase or add commits as you like before submitting again.
 
 The hub test-merges open items as their target moves. When yours stops merging cleanly, a `merge.conflict` can come before the operator reviews it, once per revision: rebase as it says and submit, and the item is back in the operator's queue.
+
+## Stacking work
+
+Work too big for one review goes up as a stack: a branch per part, each built on the one below, each its own item. Submit the bottom part as usual, then branch from it, commit the next part and `mg submit --on app#3` (or `--on 3`). The operator reviews each item as only its own commits, against the revision of the item below that it's built on, and an approved item lands right after the one below it.
+
+- The parent sticks across submits; `--on` changes it, and `--on none` takes the item off the stack.
+- Stacks are linear. A second `--on` to an item that already has one stacked on it is refused, naming that item: stack on it instead.
+- The branch must contain a revision of its parent, so build it on the parent's branch or rebase onto it; a closed item can't be stacked on.
+- When the parent gets a new revision, you get `parent.updated` with the `git rebase --onto` that moves only your own commits onto it. When the parent merges and yours doesn't apply cleanly after it, `parent.updated` says to move them onto the target; an approved item waits for that revision and merges on the same approval when its diff is unchanged.
+- When the parent is abandoned, `parent.abandoned` lists the commands that move your commits onto the target. Once the parent is closed, your next revision is reviewed against the target.
+- On GitHub, a stacked item's pull request is based on its parent's branch until the parent lands.
 
 ## The guide
 

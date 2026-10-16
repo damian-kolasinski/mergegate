@@ -32,12 +32,14 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `merge.conflict` | The target moved under the item, before or after review. Run the commands it lists, resolve the conflicts, `mg submit`. |
 | `merge.held` | The operator retries or cancels the merge; keep waiting. If the reason is that the branch is behind its target, rebase onto it and `mg submit`: a revision whose diff is unchanged merges on the same approval. |
 | `merge.cancelled` | The item needs review again; keep waiting. |
+| `parent.updated` | The item this one is stacked on has a new revision, or merged without this one. Run the commands it lists, which move only your own commits, resolve any conflicts, `mg submit`. |
+| `parent.abandoned` | The item this one is stacked on was abandoned. Run the commands it lists to move your own commits onto the target, or ask the operator first if your work needs the abandoned one, then `mg submit`. |
 | `item.merged` | The work landed. Clean up as agreed, then stop. |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |
 
 `mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. `mg feedback app#3` does the same without waiting, and `--since CURSOR` replays the events after any cursor without marking anything.
 
-[references/authoring.md](references/authoring.md) covers titles, revisions, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, to rank their queue, or to watch the hub for events, see [references/operator.md](references/operator.md).
+[references/authoring.md](references/authoring.md) covers titles, revisions, stacking work too big for one review, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, to rank their queue, or to watch the hub for events, see [references/operator.md](references/operator.md).
 
 ## After a merge
 

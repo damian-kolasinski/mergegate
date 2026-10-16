@@ -108,6 +108,7 @@ fn send(store: &mut FakeStore, git: &FakeGit, head: u8) -> Item {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     submit(store, git, &FakeGithub::default(), request)
         .unwrap()
@@ -276,5 +277,26 @@ fn abandoning_takes_the_approval_back() {
         reason: None,
     };
     abandon(&mut store, &git, &FakeGithub::default(), request).unwrap();
+    assert_eq!(standing_approval(&store, &id()).unwrap(), None);
+}
+
+#[test]
+fn a_parent_abandoned_takes_the_approval_back() {
+    // The approval was of one part of work that won't land: the same diff on
+    // the target is a change the operator hasn't seen.
+    let (mut store, git) = login();
+    let backend = FakeBackend::new(Backend::Local).then(held());
+    approve_held(&mut store, &git, &backend);
+    let notice = Notice {
+        revision: 1,
+        source: Source::Operator,
+        kind: NoticeKind::ParentAbandoned {
+            parent: ItemId::parse("app#9").unwrap(),
+            upstream: commit(1),
+        },
+    };
+    store
+        .notify(&id(), ItemState::ChangesRequested, notice)
+        .unwrap();
     assert_eq!(standing_approval(&store, &id()).unwrap(), None);
 }

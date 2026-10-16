@@ -17,8 +17,8 @@ use crate::review::{NewReview, ReviewStore, Verdict};
 use crate::store::StoreError;
 
 /// The revision of `id` whose approval still stands: the operator approved
-/// it and hasn't reviewed since, cancelled its merge or seen the item
-/// abandoned. A merge that conflicted or held leaves it standing; the
+/// it and hasn't reviewed since, cancelled its merge or seen the item or
+/// its parent abandoned. A merge that conflicted or held leaves it standing; the
 /// operator's mind didn't change, the target did.
 pub fn standing_approval(
     store: &impl FeedbackStore,
@@ -31,7 +31,10 @@ pub fn standing_approval(
                 standing = (review.verdict == Verdict::Approved).then_some(review.revision);
             }
             EventKind::Notice(Notice {
-                kind: NoticeKind::MergeCancelled | NoticeKind::Abandoned { .. },
+                kind:
+                    NoticeKind::MergeCancelled
+                    | NoticeKind::Abandoned { .. }
+                    | NoticeKind::ParentAbandoned { .. },
                 ..
             })
             | EventKind::Override(_) => standing = None,

@@ -34,6 +34,7 @@ fn open_item(store: &mut FakeStore, branch: &str, target: &str) -> ItemId {
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: None,
         },
         priority: None,
         note: None,
@@ -316,6 +317,7 @@ fn github_item(store: &mut FakeStore, branch: &str) -> ItemId {
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: None,
         },
     };
     store.insert_item(item).unwrap().id

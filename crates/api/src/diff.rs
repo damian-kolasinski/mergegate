@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::attachment::Demo;
 use crate::highlight::Span;
-use crate::item::{ChangedSince, Item};
+use crate::item::{ChangedSince, Item, ItemState};
 use crate::merge::Blocked;
 use crate::review::Conversation;
 use crate::rules::Tier;
@@ -37,8 +37,24 @@ pub struct ItemDiff {
     /// merging this one hands them back to their agents.
     #[serde(default)]
     pub conflicts_with: Vec<String>,
+    /// The stack the item is in, bottom first and the item among them: its
+    /// parents down to the first closed one, then the open items stacked on
+    /// it. Empty when it isn't stacked.
+    #[serde(default)]
+    pub stack: Vec<StackEntry>,
+    /// As on the inbox.
+    #[serde(default)]
+    pub behind: bool,
     #[serde(flatten)]
     pub conversation: Conversation,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StackEntry {
+    pub id: String,
+    pub title: String,
+    pub state: ItemState,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

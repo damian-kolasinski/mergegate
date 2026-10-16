@@ -53,6 +53,11 @@ pub struct Submit {
     pub priority: Option<Priority>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The open item to stack on, as `app#41` or `41`, reviewed and merged
+    /// as its own diff against that one's head; `none` takes the item off
+    /// its parent, onto its target. Absent keeps what the item has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<String>,
 }
 
 /// `POST /api/items/{id}/priority`, answered with the [`Item`]. It sets both:
@@ -106,6 +111,10 @@ pub struct Item {
     pub priority: Option<Priority>,
     /// Why it has its priority.
     pub note: Option<String>,
+    /// The item it's stacked on, as `app#41`: its revisions are diffed
+    /// against that one's head, and it lands right after it.
+    #[serde(default)]
+    pub parent: Option<String>,
 }
 
 /// A page outside mergegate, as a pull request on GitHub.
@@ -187,6 +196,13 @@ pub struct InboxItem {
     /// with or overridden.
     #[serde(default)]
     pub rejections: u32,
+    /// As in [`Item`].
+    #[serde(default)]
+    pub parent: Option<String>,
+    /// Stacked on a parent revision that's no longer its parent's newest,
+    /// or on a parent that closed: its agent has a rebase to do.
+    #[serde(default)]
+    pub behind: bool,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

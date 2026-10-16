@@ -2,6 +2,7 @@ import { type JSX, Show } from "solid-js";
 import type { Item } from "../api/Item";
 import type { ItemState } from "../api/ItemState";
 import type { Priority } from "../api/Priority";
+import type { StackEntry } from "../api/StackEntry";
 import type { Failure } from "../app/hub";
 import {
   Badge,
@@ -14,6 +15,7 @@ import {
 import { PriorityBadge } from "../priority/priority";
 import { Counts } from "./counts";
 import styles from "./header.module.css";
+import { StackTrail } from "./stack";
 
 /**
  * What the item is on a line of its own, then where it stands and how much
@@ -32,6 +34,9 @@ export function ItemHeader(props: {
   trusted: number;
   /** A viewed mark the hub refused. */
   failure: Failure | undefined;
+  /** As the hub reads it: empty when the item isn't stacked. */
+  stack: readonly StackEntry[];
+  behind: boolean;
   /** At the end of the second line, which the Conversation list hangs below. */
   children?: JSX.Element;
 }) {
@@ -76,6 +81,13 @@ export function ItemHeader(props: {
         </Show>
         <span class={styles.controls}>{props.children}</span>
       </div>
+      <Show when={props.stack.length}>
+        <StackTrail
+          item={props.item.id}
+          stack={props.stack}
+          behind={props.behind}
+        />
+      </Show>
     </header>
   );
 }

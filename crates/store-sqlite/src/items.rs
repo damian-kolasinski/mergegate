@@ -38,9 +38,10 @@ const SELECT: &str = concat!(
            ",
     review_files!(),
     ",
-           i.priority, i.note, i.closed_at
+           i.priority, i.note, i.closed_at, parent.number
     FROM items i
     JOIN projects p ON p.id = i.project_id
+    LEFT JOIN items parent ON parent.id = i.parent_id
     JOIN revisions r ON r.item_id = i.id
         AND r.number = (SELECT max(number) FROM revisions WHERE item_id = i.id)"
 );
@@ -105,6 +106,18 @@ impl ItemStore for Store {
             .query_row(
                 &format!("{SELECT} WHERE {OPEN} AND p.name = ?1 AND i.branch = ?2"),
                 [project.as_str(), branch],
+                read,
+            )
+            .optional()
+            .map_err(StoreError::new)?
+            .transpose()
+    }
+
+    fn child(&self, id: &ItemId) -> Result<Option<Item>, StoreError> {
+        self.conn
+            .query_row(
+                &format!("{SELECT} WHERE {OPEN} AND p.name = ?1 AND parent.number = ?2"),
+                params![id.project().as_str(), id.number() as i64],
                 read,
             )
             .optional()
@@ -220,8 +233,9 @@ impl ItemStore for Store {
         };
         tx.execute(
             "INSERT INTO items (project_id, number, branch, title, state, backend, target, created_at,
-                                github, pull_number, pull_url, priority, note)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                                github, pull_number, pull_url, priority, note, parent_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+                     (SELECT id FROM items WHERE project_id = ?1 AND number = ?14))",
             params![
                 project_id,
                 number,
@@ -236,6 +250,7 @@ impl ItemStore for Store {
                 pull.map(|pull| pull.url.as_str()),
                 item.priority.map(Priority::as_str),
                 item.note,
+                item.revision.parent.as_ref().map(|p| p.number() as i64),
             ],
         )
         .map_err(StoreError::new)?;
@@ -266,9 +281,18 @@ impl ItemStore for Store {
             .query_row(&format!("SELECT {NOW}"), [], |row| row.get(0))
             .map_err(StoreError::new)?;
         insert_revision(&tx, item_id, number, &revision, &now)?;
+        // Stacks are within a project, so the parent's number finds it.
         tx.execute(
-            "UPDATE items SET title = ?2, state = ?3 WHERE id = ?1",
-            params![item_id, title, state.as_str()],
+            "UPDATE items SET title = ?2, state = ?3,
+                 parent_id = (SELECT p.id FROM items p
+                              WHERE p.project_id = items.project_id AND p.number = ?4)
+             WHERE id = ?1",
+            params![
+                item_id,
+                title,
+                state.as_str(),
+                revision.parent.as_ref().map(|p| p.number() as i64)
+            ],
         )
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)?;
@@ -448,6 +472,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
     let priority: Option<String> = row.get(19)?;
     let note: Option<String> = row.get(20)?;
     let closed_at: Option<String> = row.get(21)?;
+    let parent: Option<i64> = row.get(22)?;
     let pull = pull_number.zip(pull_url).map(|(number, url)| Pull {
         number: number as u64,
         url,
@@ -479,6 +504,7 @@ fn read(row: &Row) -> rusqlite::Result<Result<Item, StoreError>> {
             .transpose()?;
         let project = ProjectName::parse(&project).map_err(StoreError::new)?;
         Ok(Item {
+            parent: parent.map(|parent| ItemId::new(project.clone(), parent as u64)),
             id: ItemId::new(project, number as u64),
             branch,
             title,

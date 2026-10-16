@@ -24,6 +24,11 @@ pub struct Seen(BTreeSet<(u64, String, String)>);
 /// comes from, so each is fetched once however many items use it. Items in
 /// Merging are left to their merge, and one whose agent already heard of a
 /// conflict on its revision isn't tried again, though its target is fetched.
+///
+/// Nor is an item stacked on an open one (§5.1): its branch carries its
+/// parent's commits, whose conflict is the parent's to fix, and rebasing
+/// onto the target would take it off its parent. Its own diff is tried when
+/// its parent lands.
 #[derive(Debug)]
 pub struct Watch {
     project: Project,
@@ -54,7 +59,8 @@ impl Watch {
             return Ok(None);
         };
         let mut sources: Vec<(Option<GithubRepo>, String, Vec<Item>)> = Vec::new();
-        for item in store.open_items(Some(&project.name))? {
+        let open = store.open_items(Some(&project.name))?;
+        for item in &open {
             if item.state == ItemState::Merging {
                 continue;
             }
@@ -73,9 +79,11 @@ impl Watch {
                 }
             };
             // A told item's target is still fetched, so staging follows it
-            // for the rebase the agent was told to do.
-            if !told(store, &item)? {
-                sources[index].2.push(item);
+            // for the rebase the agent was told to do. So is a stacked one's:
+            // its own diff is tried as its parent lands, and once its parent
+            // closed its agent was told to rebase off it.
+            if item.parent.is_none() && !told(store, item)? {
+                sources[index].2.push(item.clone());
             }
         }
         Ok(Some(Self { project, sources }))

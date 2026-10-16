@@ -95,6 +95,10 @@ impl Github for GithubClient {
         pulls::edit(&self.api, repo, number, title, body)
     }
 
+    fn retarget(&self, repo: &GithubRepo, number: u64, base: &str) -> Result<(), GithubError> {
+        pulls::retarget(&self.api, repo, number, base)
+    }
+
     fn squash_merge(
         &self,
         repo: &GithubRepo,

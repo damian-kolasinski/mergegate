@@ -9,11 +9,11 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use mergegate_core::item::{self, Abandon, ItemId};
+use mergegate_core::item::{self, Abandon, ItemId, ItemStore};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{branches, feedback, items};
+use crate::{branches, feedback, items, merge};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/items/{id}/abandon", post(abandon))
@@ -33,14 +33,20 @@ async fn abandon(
         source: feedback::source_from_api(request.source),
         reason: request.reason,
     };
-    let item = state
+    let (item, child) = state
         .blocking_github(move |store, git, github| {
             let item = item::abandon(store, git, github, request)?;
             branches::drop(store, git, &item.id);
-            Ok(item)
+            // Handed back to its agent; failing to read it mustn't fail the
+            // abandon, which happened.
+            let child = store.child(&item.id).ok().flatten().map(|c| c.id);
+            Ok((item, child))
         })
         .await
         .map_err(items::failure)?;
+    // Its parent's stack trail shows it abandoned.
+    let stacked: Vec<_> = child.into_iter().chain(item.parent.clone()).collect();
+    merge::stacked_changed(&state, &stacked);
     state.events.logged();
     // Starts its attachments' time to live.
     state.prune.notify_one();

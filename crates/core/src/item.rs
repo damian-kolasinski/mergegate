@@ -14,6 +14,7 @@ mod item_diff;
 mod mode;
 mod priority;
 mod publish;
+mod stack;
 mod state;
 mod store;
 mod submit;
@@ -31,6 +32,7 @@ pub use inbox::{Inbox, inbox};
 pub use item_diff::{Compare, DiffedFile, ItemDiff, item_diff};
 pub use mode::FileMode;
 pub use priority::{Prioritize, Priority, prioritize};
+pub use stack::{On, Stack, StackError, behind, stack};
 pub use state::ItemState;
 pub use store::{ItemStore, NewItem, NewRevision};
 pub use submit::{Submit, Submitted, submit};
@@ -56,13 +58,18 @@ pub struct Item {
     pub priority: Option<Priority>,
     /// Why it has its priority, for the operator.
     pub note: Option<String>,
+    /// The item it's stacked on (§5.1), set by `mg submit --on`. It stays
+    /// once the parent closes, until the item's next revision.
+    pub parent: Option<ItemId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Revision {
     pub number: u32,
     pub head: String,
-    /// Merge-base of `head` and the item's target when it was submitted.
+    /// What the revision's diff is against: the merge-base of `head` and
+    /// the item's target when it was submitted, or for a stacked item the
+    /// head of the newest parent revision `head` contains.
     pub base: String,
     pub stat: DiffStat,
     pub submitted_at: String,

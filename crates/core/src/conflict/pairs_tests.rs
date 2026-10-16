@@ -7,6 +7,16 @@ fn app() -> ProjectName {
 }
 
 fn add(store: &mut FakeStore, branch: &str, head: u8, target: &str) -> ItemId {
+    add_on(store, branch, head, target, None)
+}
+
+fn add_on(
+    store: &mut FakeStore,
+    branch: &str,
+    head: u8,
+    target: &str,
+    parent: Option<&ItemId>,
+) -> ItemId {
     let item = NewItem {
         project: app(),
         branch: branch.into(),
@@ -21,6 +31,7 @@ fn add(store: &mut FakeStore, branch: &str, head: u8, target: &str) -> ItemId {
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: parent.cloned(),
         },
         priority: None,
         note: None,
@@ -43,6 +54,35 @@ fn shown(store: &FakeStore) -> BTreeMap<ItemId, Vec<ItemId>> {
         &store.open_items(None).unwrap(),
         &store.pairs(None).unwrap(),
     )
+}
+
+#[test]
+fn a_stack_isnt_tried_against_itself_and_shows_its_parents_conflicts_on_them() {
+    let mut store = FakeStore::default();
+    let git = FakeGit::default();
+    let login = add(&mut store, "login", 2, "main");
+    let profile = add_on(&mut store, "profile", 3, "main", Some(&login));
+    let search = add(&mut store, "search", 4, "main");
+    let theme = add(&mut store, "theme", 5, "main");
+    // profile carries login's commits, so conflicts with search as login
+    // does; with theme, its own commits do.
+    git.conflict_between(&commit(2), &commit(4), &["src/login.rs"]);
+    git.conflict_between(&commit(3), &commit(4), &["src/login.rs"]);
+    git.conflict_between(&commit(3), &commit(5), &["src/theme.rs"]);
+
+    pairs(&mut store, &git, &app()).unwrap();
+    let tried = git.merged();
+    assert_eq!(tried.len(), 5, "all but login with profile: {tried:?}");
+    assert!(!tried.contains(&(commit(2), commit(3))));
+    assert_eq!(
+        shown(&store),
+        BTreeMap::from([
+            (login.clone(), vec![search.clone()]),
+            (profile.clone(), vec![theme.clone()]),
+            (search, vec![login]),
+            (theme, vec![profile]),
+        ])
+    );
 }
 
 #[test]
@@ -83,6 +123,7 @@ fn tries_each_pair_with_one_target_once_per_heads() {
                 guide: None,
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
+                parent: None,
             },
         )
         .unwrap();
@@ -133,6 +174,7 @@ fn a_pair_that_stops_conflicting_names_both_items() {
                 guide: None,
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
+                parent: None,
             },
         )
         .unwrap();
@@ -161,6 +203,7 @@ fn a_stale_pair_shows_nothing() {
                 guide: None,
                 interdiffs: Vec::new(),
                 viewed: Vec::new(),
+                parent: None,
             },
         )
         .unwrap();

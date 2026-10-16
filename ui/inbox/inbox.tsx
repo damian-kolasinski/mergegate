@@ -350,11 +350,26 @@ function Entry(props: {
           </span>
         )}
       </Show>
+      <Show when={props.item.parent}>
+        {(parent) => (
+          <span
+            class={styles.flag}
+            title={`Stacked on ${parent()}: reviewed as its own diff, it lands right after`}
+          >
+            <Badge tone={props.item.behind ? "warning" : "neutral"}>
+              ↳ {props.item.behind ? "behind" : "on"} {parent()}
+            </Badge>
+          </span>
+        )}
+      </Show>
       <Show when={props.item.blocked}>
         {(blocked) => (
           <span class={styles.flag} title={why(blocked())}>
-            <Badge tone="warning" solid>
-              {blocked().kind === "held" ? "Merge held" : "Conflict"}
+            <Badge
+              tone={blocked().kind === "waiting" ? "brand" : "warning"}
+              solid
+            >
+              {blockedLabel[blocked().kind]}
             </Badge>
           </span>
         )}
@@ -437,9 +452,24 @@ function changedCount(changed: ChangedSince): string {
   return changed.approved && !changed.files ? "" : `${changed.files} `;
 }
 
+const blockedLabel: Record<Blocked["kind"], string> = {
+  held: "Merge held",
+  conflict: "Conflict",
+  waiting: "Approved",
+  behind: "Behind",
+};
+
 function why(blocked: Blocked): string {
-  if (blocked.kind === "held") return blocked.reason.split("\n\n")[0] ?? "";
-  return `Conflicts in ${blocked.paths.join(", ")}`;
+  switch (blocked.kind) {
+    case "held":
+      return blocked.reason.split("\n\n")[0] ?? "";
+    case "conflict":
+      return `Conflicts in ${blocked.paths.join(", ")}`;
+    case "waiting":
+      return `Merges right after ${blocked.parent} lands`;
+    case "behind":
+      return `Its diff didn't apply once ${blocked.parent} merged: waiting for its agent to rebase`;
+  }
 }
 
 /** How long ago `timestamp` was, as short as a column allows: `5m`, `2h`. */

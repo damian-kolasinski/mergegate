@@ -75,6 +75,7 @@ impl Hub {
             closed_at: None,
             priority: None,
             note: None,
+            parent: None,
         }
     }
 

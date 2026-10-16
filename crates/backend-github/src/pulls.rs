@@ -74,6 +74,15 @@ pub(crate) fn edit(
     update(api, repo, number, body)
 }
 
+pub(crate) fn retarget(
+    api: &Api,
+    repo: &GithubRepo,
+    number: u64,
+    base: &str,
+) -> Result<(), GithubError> {
+    update(api, repo, number, json!({ "base": base }))
+}
+
 pub(crate) fn close(api: &Api, repo: &GithubRepo, number: u64) -> Result<(), GithubError> {
     update(api, repo, number, json!({ "state": "closed" }))
 }

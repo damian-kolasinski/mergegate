@@ -34,13 +34,15 @@ impl Pairing {
     }
 
     /// Every two open items with one target, Merging included, as one may
-    /// land any moment. A pair is merged again only once a head moves.
+    /// land any moment, except two of one stack, which land in turn. A pair
+    /// is merged again only once a head moves.
     pub fn try_all(&self, git: &impl ConflictGit) -> Result<Vec<Pair>, ConflictError> {
         let mut tried = Vec::new();
         for (i, item) in self.open.iter().enumerate() {
+            let bottom = bottom(&self.open, item);
             for other in self.open[i + 1..]
                 .iter()
-                .filter(|o| o.target == item.target)
+                .filter(|o| o.target == item.target && self::bottom(&self.open, o) != bottom)
             {
                 let (item_head, other_head) = (&item.revision.head, &other.revision.head);
                 let known = self.cached.iter().find(|pair| {
@@ -99,6 +101,10 @@ pub fn save_pairs<S: ConflictStore>(
 
 /// The open items each of `open` conflicts with, by `pairs` tried at their
 /// heads now. An item with none isn't listed.
+///
+/// A stacked item's branch carries its open parents' commits, so it
+/// conflicts with whatever they do: that conflict is listed on the parent
+/// only.
 pub fn conflicting(open: &[Item], pairs: &[Pair]) -> BTreeMap<ItemId, Vec<ItemId>> {
     let head = |id: &ItemId| {
         open.iter()
@@ -114,10 +120,46 @@ pub fn conflicting(open: &[Item], pairs: &[Pair]) -> BTreeMap<ItemId, Vec<ItemId
             }
         }
     }
-    for with in conflicts.values_mut() {
+    let inherited = |id: &ItemId, other: &ItemId| {
+        parents(open, id).any(|parent| {
+            conflicts
+                .get(&parent.id)
+                .is_some_and(|with| with.contains(other))
+        })
+    };
+    let mut listed: BTreeMap<ItemId, Vec<ItemId>> = BTreeMap::new();
+    for (id, with) in &conflicts {
+        let own: Vec<_> = with
+            .iter()
+            .filter(|other| !inherited(id, other) && !inherited(other, id))
+            .cloned()
+            .collect();
+        if !own.is_empty() {
+            listed.insert(id.clone(), own);
+        }
+    }
+    for with in listed.values_mut() {
         with.sort();
     }
-    conflicts
+    listed
+}
+
+/// The open items `id` is stacked on, nearest first.
+fn parents<'a>(open: &'a [Item], id: &ItemId) -> impl Iterator<Item = &'a Item> {
+    let find = move |id: &ItemId| open.iter().find(|item| item.id == *id);
+    let first = find(id)
+        .and_then(|item| item.parent.as_ref())
+        .and_then(find);
+    // Bounded, so a cycle the store can't hold wouldn't loop.
+    std::iter::successors(first, move |item| item.parent.as_ref().and_then(find)).take(open.len())
+}
+
+/// The bottom of the stack `item` is in, of the open items: itself when it
+/// isn't stacked on one.
+fn bottom<'a>(open: &'a [Item], item: &'a Item) -> &'a ItemId {
+    parents(open, &item.id)
+        .last()
+        .map_or(&item.id, |bottom| &bottom.id)
 }
 
 #[cfg(test)]

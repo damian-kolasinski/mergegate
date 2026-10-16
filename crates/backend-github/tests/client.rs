@@ -189,6 +189,37 @@ fn a_refused_merge_says_why() {
 }
 
 #[test]
+fn retargets_a_pull_request_and_one_on_a_deleted_branch_closes() {
+    let github = FakeGithub::start();
+    let repo = TestRepo::new("app");
+    repo.git(["checkout", "--quiet", "-b", "login"]);
+    repo.commit_files("Add login", &[("login.rs", "fn login() {}\n")]);
+    repo.git(["checkout", "--quiet", "-b", "profile"]);
+    repo.commit_files("Add profile", &[("profile.rs", "fn profile() {}\n")]);
+    repo.git(["checkout", "--quiet", "-b", "avatar"]);
+    repo.commit_files("Add avatar", &[("avatar.rs", "fn avatar() {}\n")]);
+    repo.checkout("main");
+    github.create_repo("acme/app", repo.root());
+    let client = GithubClient::new(github.api_url(), github.web_url(), github.gh());
+    client
+        .open_pull(&acme(), "profile", "login", "Add profile", "")
+        .unwrap();
+    client
+        .open_pull(&acme(), "avatar", "profile", "Add avatar", "")
+        .unwrap();
+
+    client.retarget(&acme(), 1, "main").unwrap();
+    assert_eq!(github.pulls()[0].base, "main");
+    let err = client.retarget(&acme(), 1, "nope").unwrap_err();
+    assert!(err.to_string().contains("base nope doesn't exist"), "{err}");
+
+    // GitHub closes what's based on a branch it deletes, for good: the
+    // hub retargets a child before it deletes its parent's branch.
+    client.delete_branch(&acme(), "profile").unwrap();
+    assert_eq!(github.pulls()[1].state, GithubPullState::Closed);
+}
+
+#[test]
 fn deletes_a_branch_even_one_already_gone() {
     let (github, client, _repo) = setup();
     client.delete_branch(&acme(), "login").unwrap();

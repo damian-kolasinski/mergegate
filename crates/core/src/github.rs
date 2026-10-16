@@ -62,6 +62,9 @@ pub trait Github {
         body: Option<&str>,
     ) -> Result<(), GithubError>;
 
+    /// Points the pull request at `base`; one already there is fine.
+    fn retarget(&self, repo: &GithubRepo, number: u64, base: &str) -> Result<(), GithubError>;
+
     /// Squash-merges the pull request, as long as its head is still `head`,
     /// into one commit titled `title` with `message` as its body, and returns
     /// the commit. One already merged at `head` returns its commit, so a

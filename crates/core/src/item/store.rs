@@ -23,6 +23,9 @@ pub trait ItemStore {
     /// Any item, open or closed.
     fn item(&self, id: &ItemId) -> Result<Option<Item>, StoreError>;
 
+    /// The open item stacked on `id`, of which there's at most one (§5.1).
+    fn child(&self, id: &ItemId) -> Result<Option<Item>, StoreError>;
+
     /// Every revision of `id`, oldest first.
     fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError>;
 
@@ -37,7 +40,7 @@ pub trait ItemStore {
     fn insert_item(&mut self, item: NewItem) -> Result<Item, StoreError>;
 
     /// Records the revision with its interdiffs and carried viewed marks, all
-    /// or nothing.
+    /// or nothing, and stacks the item on the revision's parent.
     fn add_revision(
         &mut self,
         id: &ItemId,
@@ -89,4 +92,6 @@ pub struct NewRevision {
     pub interdiffs: Vec<NewInterdiff>,
     /// Files that start out viewed.
     pub viewed: Vec<String>,
+    /// The item it's stacked on from this revision on; none unstacks it.
+    pub parent: Option<ItemId>,
 }

@@ -130,6 +130,7 @@ fn revision(files: Vec<FileStat>) -> NewRevision {
         guide: None,
         interdiffs: Vec::new(),
         viewed: Vec::new(),
+        parent: None,
     }
 }
 
@@ -166,6 +167,7 @@ fn prunes_the_blobs_of_a_closed_item_no_open_item_has() {
                 change: Change::Changed,
             }],
         }],
+        parent: None,
         ..revision(files)
     };
     // app#1 has x→a, then b and x→c, r→c since r1; app#2 (open) has x→b, then

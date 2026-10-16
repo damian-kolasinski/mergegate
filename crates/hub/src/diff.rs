@@ -86,19 +86,26 @@ async fn show(
                     .remove(&id)
                     .unwrap_or_default();
                 let changed = interdiff::changed_since_review(store, &diff.item)?;
-                Ok(Some((diff, blocked, spans, demo, conflicts, changed)))
+                let stack = item::stack(store, &diff.item)?.items;
+                let stack = if stack.len() > 1 { stack } else { Vec::new() };
+                let behind = diff.item.state.is_open() && item::behind(store, &diff.item)?;
+                let stacked = (stack, behind);
+                Ok(Some((
+                    diff, blocked, spans, demo, conflicts, changed, stacked,
+                )))
             })
             .await
             .map_err(items::failure)?
     };
-    let (diff, blocked, spans, demo, conflicts, changed) = found.ok_or_else(|| {
-        Failure::new(
-            StatusCode::NOT_FOUND,
-            "item_not_found",
-            format!("no item {id}"),
-            Some("mg inbox".into()),
-        )
-    })?;
+    let (diff, blocked, spans, demo, conflicts, changed, (stack, behind)) =
+        found.ok_or_else(|| {
+            Failure::new(
+                StatusCode::NOT_FOUND,
+                "item_not_found",
+                format!("no item {id}"),
+                Some("mg inbox".into()),
+            )
+        })?;
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
         blocked,
@@ -110,6 +117,15 @@ async fn show(
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         guide: diff.guide,
         conflicts_with: conflicts.iter().map(ToString::to_string).collect(),
+        stack: stack
+            .iter()
+            .map(|item| api::diff::StackEntry {
+                id: item.id.to_string(),
+                title: item.title.clone(),
+                state: items::state_to_api(item.state),
+            })
+            .collect(),
+        behind,
         conversation: conversation::to_api(&diff.conversation),
     }))
 }

@@ -3,7 +3,7 @@ use crate::fake::{FakeGit, FakeGithub, FakeStore, PullState, commit};
 use crate::feedback::{Event, EventKind};
 use crate::github::GithubRepo;
 use crate::highlight::{HighlightStore, Highlights};
-use crate::item::{Submit, submit};
+use crate::item::{On, Submit, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
 /// `app#1` on `login` at c2, and `app#2` on `copy` at c2 too, so the two share
@@ -42,6 +42,7 @@ fn two_items() -> (FakeStore, FakeGit) {
             guide: None,
             priority: None,
             note: None,
+            on: None,
         };
         submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }
@@ -133,6 +134,7 @@ fn drops_its_pins_and_the_diffs_and_spans_no_open_item_uses() {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     assert_eq!(store.diffs().len(), 3);
@@ -278,6 +280,7 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     submit(&mut store, &git, &github, request).unwrap();
     // The item still closes on the repository it was opened on.
@@ -308,4 +311,63 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
     .unwrap();
     assert_eq!(github.pulls()[0].state, PullState::Closed);
     assert_eq!(github.deleted(), [(acme, "login".to_owned())]);
+}
+
+#[test]
+fn an_abandoned_parents_branch_goes_with_the_last_pull_request_based_on_it() {
+    let mut store = FakeStore::default();
+    let acme = GithubRepo::parse("acme/app").unwrap();
+    store
+        .insert_project(&Project {
+            name: ProjectName::parse("app").unwrap(),
+            backend: Backend::Github,
+            target: "main".into(),
+            upstream: "/src/app".into(),
+            github: Some(acme.clone()),
+            bots: Vec::new(),
+        })
+        .unwrap();
+    let git = FakeGit::default()
+        .commit(&commit(1), None, "Initial", &["README.md"])
+        .commit(&commit(2), Some(&commit(1)), "Add login", &["src/login.rs"])
+        .commit(
+            &commit(3),
+            Some(&commit(2)),
+            "Add profile",
+            &["src/profile.rs"],
+        )
+        .upstream("https://github.com/acme/app.git", "main", &commit(1));
+    git.push("app", "login", &commit(2));
+    git.push("app", "profile", &commit(3));
+    let github = FakeGithub::default();
+    for (branch, head, on) in [("login", 2, None), ("profile", 3, Some("app#1"))] {
+        let request = Submit {
+            project: "app".into(),
+            branch: branch.into(),
+            head: commit(head),
+            title: None,
+            worktree: None,
+            wake: None,
+            guide: None,
+            priority: None,
+            note: None,
+            on: on.map(|on| On::Item(id(on))),
+        };
+        submit(&mut store, &git, &github, request).unwrap();
+    }
+
+    let give_up = |store: &mut FakeStore, item| {
+        abandon(store, &git, &github, abandoning(item, Source::Agent, None)).unwrap()
+    };
+    give_up(&mut store, "app#1");
+    // GitHub would close the pull request based on it.
+    assert!(github.deleted().is_empty());
+    give_up(&mut store, "app#2");
+    assert_eq!(
+        github.deleted(),
+        [
+            (acme.clone(), "profile".to_owned()),
+            (acme, "login".to_owned())
+        ]
+    );
 }

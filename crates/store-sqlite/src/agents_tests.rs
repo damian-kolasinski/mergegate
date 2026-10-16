@@ -38,6 +38,7 @@ fn store() -> (tempfile::TempDir, Store) {
                     guide: None,
                     interdiffs: Vec::new(),
                     viewed: Vec::new(),
+                    parent: None,
                 },
                 priority: None,
                 note: None,

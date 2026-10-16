@@ -44,6 +44,7 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     (store, git)

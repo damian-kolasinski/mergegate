@@ -204,6 +204,38 @@ pub(crate) fn event_to_api(id: &ItemId, item: &Item, event: Event) -> api::feedb
                     format!("git branch -D {}", item.branch),
                 ],
             },
+            // `--onto` keeps the parent's old commits out: once it merged,
+            // they're on the target squashed into one, which a plain rebase
+            // would try to apply again.
+            NoticeKind::ParentUpdated {
+                parent,
+                merged,
+                onto,
+                upstream,
+            } => api::feedback::EventBody::ParentUpdated {
+                parent: parent.to_string(),
+                merged,
+                commands: vec![
+                    "git fetch mergegate".to_owned(),
+                    if merged {
+                        format!("git rebase --onto mergegate/{target} {upstream}")
+                    } else {
+                        format!("git rebase --onto {onto} {upstream}")
+                    },
+                ],
+                onto,
+                upstream,
+            },
+            NoticeKind::ParentAbandoned { parent, upstream } => {
+                api::feedback::EventBody::ParentAbandoned {
+                    parent: parent.to_string(),
+                    commands: vec![
+                        "git fetch mergegate".to_owned(),
+                        format!("git rebase --onto mergegate/{target} {upstream}"),
+                    ],
+                    upstream,
+                }
+            }
         },
         EventKind::ExternalComments(batch) => external::batch_to_api(&batch),
         EventKind::Override(o) => api::feedback::EventBody::CommentOverride {

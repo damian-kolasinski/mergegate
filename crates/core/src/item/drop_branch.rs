@@ -40,8 +40,8 @@ pub fn drop_closed_branches<S: ItemStore>(
 
 fn drop_closed<S: ItemStore>(store: &S, git: &impl ItemGit, item: &Item) -> Result<(), ItemError> {
     let project = item.id.project();
-    // Once stacks land, a branch that open children target must stay too
-    // (design §5.1).
+    // An item stacked on this one needs none of it: its own head has the
+    // commits its base is, and its pins keep them (§5.1).
     if item.state.is_open() || store.open_item(project, &item.branch)?.is_some() {
         return Ok(());
     }

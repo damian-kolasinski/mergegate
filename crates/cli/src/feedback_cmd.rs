@@ -224,6 +224,38 @@ pub(crate) fn event(event: &Event) -> String {
             }
             out
         }
+        EventBody::ParentUpdated {
+            parent,
+            merged,
+            commands,
+            ..
+        } => {
+            let (what, onto) = if *merged {
+                ("merged", "the target")
+            } else {
+                ("has a new revision", "it")
+            };
+            let mut out = format!("{head} {parent}, which this is stacked on, {what}");
+            out.push_str(&format!(
+                "\n\n  Move your own commits onto {onto} and submit again:"
+            ));
+            for command in commands {
+                out.push_str(&format!("\n    {command}"));
+            }
+            out
+        }
+        EventBody::ParentAbandoned {
+            parent, commands, ..
+        } => {
+            let mut out = format!(
+                "{head} {parent}, which this is stacked on, was abandoned; this is back with you"
+            );
+            out.push_str("\n\n  Move your own commits onto the target, or ask the operator, then submit again:");
+            for command in commands {
+                out.push_str(&format!("\n    {command}"));
+            }
+            out
+        }
     }
 }
 

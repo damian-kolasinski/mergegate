@@ -22,7 +22,8 @@ pub struct Approve {
 /// Sends the item's drafts to its agent as an `approved` review, moving it
 /// to Merging, then lands it. The review is recorded first, so the agent
 /// learns of the approval even if the merge never finishes. Drafts move to
-/// the revision as a submitted review's do.
+/// the revision as a submitted review's do. An item stacked on one that
+/// hasn't landed waits in Merging and lands right after it (§5.1).
 pub fn approve<
     S: ProjectStore
         + ItemStore
@@ -58,6 +59,16 @@ pub fn approve<
             id,
             revision,
             newest: item.revision.number,
+        });
+    }
+    if let Some(parent) = &item.parent
+        && store
+            .item(parent)?
+            .is_some_and(|parent| parent.state == ItemState::Abandoned)
+    {
+        return Err(MergeError::ParentAbandoned {
+            id,
+            parent: parent.clone(),
         });
     }
     let backend = through(&item, backends)?;

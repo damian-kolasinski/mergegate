@@ -60,6 +60,7 @@ fn keeps_a_branch_an_open_item_holds() {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     let again = submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     assert_eq!(again.item.id, id("app#2"));
