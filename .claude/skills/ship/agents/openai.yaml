@@ -1,4 +1,4 @@
 interface:
   display_name: "Ship"
-  short_description: "Commit, review, push, and open a PR"
-  default_prompt: "Use $ship to publish the current changes as a GitHub pull request."
+  short_description: "Commit, review, and submit to mergegate"
+  default_prompt: "Use $ship to submit the current changes for review through mergegate."
