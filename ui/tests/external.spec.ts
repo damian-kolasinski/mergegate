@@ -99,3 +99,54 @@ test("the operator agrees with a rejection or overrides it", async ({
   expect(feedback.events.map((e) => e.type)).toEqual(["comment.override"]);
   expect(feedback.events[0]?.reply.body).toBe("The old name misleads.");
 });
+
+test("a comment from GitHub renders its Markdown, and nothing that runs", async ({
+  page,
+  github,
+}) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await github.github.comment(1, {
+    login: "codex[bot]",
+    path: "src/login.rs",
+    line: 1,
+    body: [
+      "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Hash the password**",
+      "",
+      "Use `argon2` here; see [the guide](https://example.com/guide).",
+      "A [relative link](../blob/main/x.rs) and <img src=x onerror=alert(1)>.",
+      "",
+      "<script>window.ran = true</script>",
+      "<!-- codex-code-review-finding:v1 -->",
+    ].join("\n"),
+  });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const comment = page
+    .getByRole("region", { name: "app#1" })
+    .getByRole("article", { name: "Comment c_1" });
+
+  await expect(comment.locator("strong")).toContainText("Hash the password");
+  await expect(comment.locator("code", { hasText: "argon2" })).toBeVisible();
+  await expect(
+    comment.getByRole("link", { name: "the guide" }),
+  ).toHaveAttribute("target", "_blank");
+  // The CSP loads no outside image, so a badge is a link to its image.
+  await expect(comment.getByRole("link", { name: "P2 Badge" })).toHaveAttribute(
+    "href",
+    /^https:\/\/img\.shields\.io\//,
+  );
+  await expect(comment.getByText("relative link")).toBeVisible();
+  await expect(
+    comment.getByRole("link", { name: "relative link" }),
+  ).toHaveCount(0);
+  await expect(comment.locator("img, script")).toHaveCount(0);
+  await expect(comment).not.toContainText("codex-code-review-finding");
+  await expect(comment).not.toContainText("**");
+  expect(await page.evaluate(() => "ran" in window)).toBe(false);
+
+  // The Conversation list's one-line excerpt is the rendered text.
+  await page.getByRole("button", { name: /^Conversation/ }).click();
+  await expect(page.getByRole("listitem", { name: "c_1" })).toContainText(
+    "P2 Badge Hash the password Use argon2 here",
+  );
+});

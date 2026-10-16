@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
 import type { Comment } from "../api/Comment";
-import { Badge, Button, Meta, Mono } from "../design-system";
+import { Badge, Button, markdownText, Meta, Mono } from "../design-system";
 import type { Comments } from "./comments/comments";
 import { StatusBadge } from "./comments/replies";
 import { CommentCard } from "./comments/thread";
@@ -137,7 +137,7 @@ function Entry(props: {
         when={!inDiff()}
         fallback={
           <p class={styles.excerpt}>
-            {props.comment.body}
+            {markdownText(props.comment.body)}
             <Show when={replies()}>
               {(count) => (
                 <Meta>

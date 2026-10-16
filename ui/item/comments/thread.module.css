@@ -24,6 +24,4 @@
 
 .body {
   margin-top: var(--space-1);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
