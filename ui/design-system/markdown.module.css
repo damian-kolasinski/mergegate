@@ -98,8 +98,19 @@
   cursor: pointer;
 }
 
+/*
+ * Bots shrink a badge image with `<sub><sub>`; on its text chip that only
+ * pushes it off the line, so a `sub` or `sup` around one sits on the line.
+ */
+.markdown :is(sub, sup):has(.image) {
+  vertical-align: baseline;
+  font-size: inherit;
+}
+
 /* An image the page won't load, as a link named by its alt text. */
 .image {
+  display: inline-block;
+  vertical-align: 1px;
   padding: 0 var(--space-1);
   border: 1px solid var(--border-container);
   border-radius: var(--radius-small);
