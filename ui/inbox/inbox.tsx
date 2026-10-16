@@ -297,7 +297,9 @@ function Entry(props: {
         />
       </span>
       {/* One cell for the title and its flags, so however many flags a row
-          has, the columns after it stay in line with the rows around it. */}
+          has, the columns after it stay in line with the rows around it:
+          flags wrap under the title, and one too wide for the cell is cut
+          short, with the whole of it in its tooltip. */}
       <span class={styles.main}>
         {/* A real link, so a middle or ⌘ click opens the item in a new tab. */}
         <a
@@ -365,7 +367,7 @@ function Entry(props: {
         <Show when={props.item.conflicts_with.length}>
           <span
             class={styles.flag}
-            title="These conflict now: whichever merges first may leave the other to rebase"
+            title={`Conflicts with ${props.item.conflicts_with.join(", ")} now: whichever merges first may leave the other to rebase`}
           >
             <Badge tone="warning">
               ⚡ conflicts with {props.item.conflicts_with.join(", ")}

@@ -8,6 +8,15 @@
   line-height: 16px;
   letter-spacing: var(--tracking-label);
   white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Squeezed narrower than its text, a badge ends in an ellipsis rather than
+   spilling over what's beside it. */
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .badge[data-tone="neutral"] {
