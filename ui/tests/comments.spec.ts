@@ -212,6 +212,28 @@ test("`+` follows the pointer past the cursor, and stays at a dragged range's en
   ).toBeFocused();
 });
 
+test("a shift-click extends a range from the cursor's line", async ({
+  page,
+  hub,
+}) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const diff = page.getByRole("region", { name: "Diff" });
+  const notes = diff.getByRole("code").filter({ hasText: "three" });
+  await expect(notes.getByText("three", { exact: true })).toBeVisible();
+  const number = (line: number) =>
+    notes.locator(`[data-column-number="${line}"]`).last();
+
+  await number(1).click();
+  await number(3).click({ modifiers: ["Shift"] });
+  await notes.getByText("one", { exact: true }).hover();
+  await expect(number(3).locator("[data-utility-button]")).toHaveCount(1);
+  await notes.locator("[data-utility-button]").click();
+  await expect(
+    page.getByRole("textbox", { name: "Comment on notes.md lines 1–3" }),
+  ).toBeFocused();
+});
+
 test("a file marked viewed stays open while a comment is written on it", async ({
   page,
   hub,

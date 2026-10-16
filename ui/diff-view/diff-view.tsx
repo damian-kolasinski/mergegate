@@ -56,7 +56,10 @@ export type Span = Spot & { start: number };
 /** Where under a line a note sits; one per line, for `note` to fill. */
 type Note = DiffLineAnnotation<string>;
 
-type Drawn = Pick<FileDiff<string>, "setEditorActiveLine">;
+type Drawn = {
+  instance: Pick<FileDiff<string>, "setEditorActiveLine">;
+  node: Node;
+};
 
 /** A file header's Viewed box. */
 export type ViewedBox = { checked: boolean; disabledWhy?: string };
@@ -199,7 +202,12 @@ export function DiffView(props: {
         element,
         render(
           () => (
-            <span class={previewStyles.header}>
+            <span
+              classList={{
+                [previewStyles.header ?? ""]: true,
+                [previewStyles.noted ?? ""]: notes.length > 0,
+              }}
+            >
               <Show when={notes.length}>{note}</Show>
               <Show when={preview}>
                 {(shown) => (
@@ -244,17 +252,17 @@ export function DiffView(props: {
         (range?.endSide ?? range?.side) === range?.side;
       if (range && single) view.clearSelectedLines({ notify: false });
     },
-    onPostRender: (_node, instance, phase, context) => {
+    onPostRender: (node, instance, phase, context) => {
       const path = context.item.id;
       if (phase === "unmount") {
-        if (drawn.get(path) === instance) drawn.delete(path);
+        if (drawn.get(path)?.instance === instance) drawn.delete(path);
         return;
       }
       // CodeView can hand a file's instance on to another file.
       for (const [other, shown] of drawn) {
-        if (shown === instance) drawn.delete(other);
+        if (shown.instance === instance) drawn.delete(other);
       }
-      drawn.set(path, instance);
+      drawn.set(path, { instance, node });
       draw(path);
     },
   };
@@ -429,11 +437,45 @@ export function DiffView(props: {
     box.click();
   };
 
+  /**
+   * A shift-click on a line number extends a selection from its anchor, and
+   * a clicked line is the cursor rather than a selection, so CodeView would
+   * find none. Before it looks, the cursor's line becomes the selection to
+   * extend, in the cursor's file.
+   */
+  const onShiftPress = (event: PointerEvent) => {
+    if (!event.shiftKey || event.button !== 0 || !cursor) return;
+    if (view.getSelectedLines()) return;
+    const node = drawn.get(cursor.path)?.node;
+    const path = event.composedPath();
+    if (!node || !path.includes(node)) return;
+    // A cursor whose line another revision dropped isn't drawn, and has
+    // nothing to extend from.
+    const file = byPath.get(cursor.path);
+    if (!file || !shows(file, { ...cursor, start: cursor.line })) return;
+    const is = (attribute: string) =>
+      path.some(
+        (target) => target instanceof Element && target.hasAttribute(attribute),
+      );
+    // `+` sits in the number's cell, and comments on its own line.
+    if (!is("data-column-number") || is("data-gutter-utility-slot")) return;
+    const { line, side } = cursor;
+    view.setSelectedLines(
+      {
+        id: cursor.path,
+        range: { start: line, end: line, side, endSide: side },
+      },
+      { notify: false },
+    );
+  };
+
   onMount(() => {
     view.setup(root);
     const observer = new MutationObserver(sweep);
     observer.observe(root, { childList: true, subtree: true });
     root.addEventListener("click", onHeaderClick);
+    // Captured, to run before CodeView's own listener inside the file.
+    root.addEventListener("pointerdown", onShiftPress, { capture: true });
     const onScroll = (top: number) => {
       if (movedFrom !== undefined && Math.abs(top - movedFrom) < 1) return;
       movedFrom = undefined;
@@ -445,6 +487,7 @@ export function DiffView(props: {
     const unsubscribe = view.subscribeToScroll(onScroll);
     onCleanup(() => {
       root.removeEventListener("click", onHeaderClick);
+      root.removeEventListener("pointerdown", onShiftPress, { capture: true });
       observer.disconnect();
       unsubscribe();
       view.cleanUp();
@@ -501,10 +544,10 @@ export function DiffView(props: {
   // The instance showing each file on the page, to draw the cursor in.
   const drawn = new Map<string, Drawn>();
   const draw = (path: string) => {
-    const instance = drawn.get(path);
+    const instance = drawn.get(path)?.instance;
     const file = byPath.get(path);
-    // Another revision can drop the cursor's line, and CodeView throws on a
-    // line its diff doesn't have.
+    // Another revision can drop the cursor's line, and CodeView would mark
+    // whichever row took its number.
     if (
       cursor?.path === path &&
       file &&
@@ -716,8 +759,9 @@ async function text(url: string): Promise<string> {
 }
 
 // The header's counts read `+3 −1` as everywhere else on the page, and a
-// long note gives way to the file's name: the metadata shrinks first, by
-// its slotted note, which `styles.note` cuts short. A click on the header
+// long note gives way to the file's name: the metadata shrinks first, down
+// to its counts and buttons, by its slotted note, which `styles.note` cuts
+// short. A click on the header
 // marks the file viewed. Lines an expanded gap shows aren't part of the
 // change, and the hub takes no comment on them. The cursor's line,
 // CodeView's active line, which it marks only by its number's colour,
@@ -726,7 +770,7 @@ const headerCSS = `
 [data-additions-count] { order: -1; }
 [data-diffs-header] { cursor: pointer; }
 [data-line-type="context-expanded"] [data-gutter-utility-slot] { display: none; }
-[data-metadata] { min-width: 0; flex-shrink: 1000; }
+[data-metadata] { flex-shrink: 1000; }
 ::slotted([slot="header-metadata"]) { min-width: 0; overflow: hidden; }
 [data-line][data-editor-active-line] {
   --mix-selection-light: 82%;

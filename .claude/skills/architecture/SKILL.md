@@ -5,7 +5,7 @@ description: Apply mergegate's architecture (crate layout, ports and adapters, d
 
 # Architecture
 
-mergegate is one Rust binary, `mg` (hub daemon and CLI), with a web UI embedded in it. `mergegate` (`crates/cli/src/bin/`) only runs the `mg` beside it, for PATHs where macOS's `/usr/bin/mg` editor comes first. Code is organized as ports and adapters, and the crate graph enforces the boundaries.
+mergegate is one Rust binary, `mg` (hub daemon and CLI), with a web UI embedded in it. `mergegate` is `mg` under a name nothing else takes, for PATHs where macOS's `/usr/bin/mg` editor comes first: a release ships it as a copy of `mg`, and a source build gets `crates/cli/src/bin/mergegate.rs`, which runs the `mg` beside it. Code is organized as ports and adapters, and the crate graph enforces the boundaries.
 
 ## Layout
 

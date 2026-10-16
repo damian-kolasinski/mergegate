@@ -1,10 +1,11 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
 use api::doctor::CheckStatus;
 
-use super::{first_on, judge};
+use super::{first_on, judge, profile, shown};
 
 fn executable(dir: &Path, name: &str) -> PathBuf {
     fs::create_dir_all(dir).unwrap();
@@ -41,7 +42,7 @@ fn this_mg_first_on_path_is_ok() {
     fs::create_dir_all(&linked).unwrap();
     symlink(&this, linked.join("mg")).unwrap();
     for found in [&this, &linked.join("mg")] {
-        let check = judge(&this, Some(found), Path::new("/usr/bin/mg"));
+        let check = judge(&this, Some(found), Path::new("/usr/bin/mg"), "~/.zprofile");
         assert_eq!(check.status, CheckStatus::Ok, "{check:?}");
         assert_eq!(check.fix, None);
     }
@@ -52,13 +53,13 @@ fn the_macos_editor_first_on_path_fails_with_the_folder_to_put_ahead() {
     let dir = tempfile::tempdir().unwrap();
     let this = executable(&dir.path().join("bin"), "mg");
     let editor = executable(&dir.path().join("usr/bin"), "mg");
-    let check = judge(&this, Some(&editor), &editor);
+    let check = judge(&this, Some(&editor), &editor, "~/.zprofile");
     assert_eq!(check.status, CheckStatus::Fail);
-    assert!(check.message.contains("macOS's text editor"), "{check:?}");
+    assert!(check.message.contains("a text editor"), "{check:?}");
     assert_eq!(
         check.fix,
         Some(format!(
-            "export PATH=\"{}:$PATH\"",
+            "echo 'export PATH=\"{}:$PATH\"' >> ~/.zprofile",
             dir.path().join("bin").display()
         ))
     );
@@ -70,10 +71,10 @@ fn another_mg_or_none_on_path_warns() {
     let this = executable(&dir.path().join("bin"), "mg");
     let other = executable(&dir.path().join("other"), "mg");
     let editor = Path::new("/usr/bin/mg");
-    let check = judge(&this, Some(&other), editor);
+    let check = judge(&this, Some(&other), editor, "~/.zprofile");
     assert_eq!(check.status, CheckStatus::Warn);
     assert!(check.message.starts_with("mg on PATH is "), "{check:?}");
-    let check = judge(&this, None, editor);
+    let check = judge(&this, None, editor, "~/.zprofile");
     assert_eq!(check.status, CheckStatus::Warn);
     assert!(check.message.starts_with("no mg on PATH"), "{check:?}");
     assert!(check.fix.is_some());
@@ -93,7 +94,7 @@ fn a_mise_shim_is_ok_for_an_mg_mise_installed() {
     let dir = tempfile::tempdir().unwrap();
     let shim = mise_shim(dir.path());
     let this = executable(&dir.path().join("installs/mg/0.1.0"), "mg");
-    let check = judge(&this, Some(&shim), Path::new("/usr/bin/mg"));
+    let check = judge(&this, Some(&shim), Path::new("/usr/bin/mg"), "~/.zprofile");
     assert_eq!(check.status, CheckStatus::Ok, "{check:?}");
 }
 
@@ -102,7 +103,7 @@ fn a_mise_shim_warns_for_an_mg_mise_did_not_install() {
     let dir = tempfile::tempdir().unwrap();
     let shim = mise_shim(&dir.path().join("mise"));
     let this = executable(&dir.path().join("cargo/bin"), "mg");
-    let check = judge(&this, Some(&shim), Path::new("/usr/bin/mg"));
+    let check = judge(&this, Some(&shim), Path::new("/usr/bin/mg"), "~/.zprofile");
     assert_eq!(check.status, CheckStatus::Warn, "{check:?}");
 }
 
@@ -112,13 +113,63 @@ fn an_mg_mise_installed_puts_its_shims_ahead_not_its_versioned_folder() {
     mise_shim(dir.path());
     let this = executable(&dir.path().join("installs/mg/0.1.0"), "mg");
     let editor = executable(&dir.path().join("usr/bin"), "mg");
-    let check = judge(&this, Some(&editor), &editor);
+    let check = judge(&this, Some(&editor), &editor, "~/.zprofile");
     assert_eq!(check.status, CheckStatus::Fail);
     assert_eq!(
         check.fix,
         Some(format!(
-            "export PATH=\"{}:$PATH\"",
+            "echo 'export PATH=\"{}:$PATH\"' >> ~/.zprofile",
             dir.path().join("shims").display()
         ))
     );
+}
+
+#[test]
+fn the_mg_beside_a_mergegate_copy_is_ok() {
+    let dir = tempfile::tempdir().unwrap();
+    let mg = executable(&dir.path().join("bin"), "mg");
+    let this = executable(&dir.path().join("bin"), "mergegate");
+    let check = judge(&this, Some(&mg), Path::new("/usr/bin/mg"), "~/.zprofile");
+    assert_eq!(check.status, CheckStatus::Ok, "{check:?}");
+}
+
+#[test]
+fn the_profile_is_the_one_a_login_shell_reads() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    let zsh = Some(OsStr::new("/bin/zsh"));
+    let bash = Some(OsStr::new("/opt/homebrew/bin/bash"));
+    assert_eq!(profile(zsh, home, None), home.join(".zprofile"));
+    let zdotdir = home.join(".config/zsh");
+    assert_eq!(
+        profile(zsh, home, Some(&zdotdir)),
+        zdotdir.join(".zprofile")
+    );
+    // A `~/.bash_profile` of bash's own would hide `~/.profile`.
+    assert_eq!(profile(bash, home, None), home.join(".profile"));
+    fs::write(home.join(".bash_profile"), "").unwrap();
+    assert_eq!(profile(bash, home, None), home.join(".bash_profile"));
+    assert_eq!(
+        profile(Some(OsStr::new("/bin/fish")), home, None),
+        home.join(".profile")
+    );
+    assert_eq!(profile(None, home, None), home.join(".profile"));
+}
+
+#[test]
+fn a_profile_under_home_is_shown_from_tilde() {
+    let home = Path::new("/Users/op");
+    assert_eq!(shown(&home.join(".zprofile"), home), "~/.zprofile");
+    assert_eq!(
+        shown(Path::new("/etc/zsh/zprofile"), home),
+        "/etc/zsh/zprofile"
+    );
+    assert_eq!(
+        shown(
+            &home.join("Library/Application Support/zsh/.zprofile"),
+            home
+        ),
+        "~/'Library/Application Support/zsh/.zprofile'"
+    );
+    assert_eq!(shown(Path::new(".zprofile"), Path::new("")), ".zprofile");
 }
