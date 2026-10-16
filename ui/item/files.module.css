@@ -102,6 +102,25 @@ input.viewed {
   font: var(--type-p4);
 }
 
+/* The judge's score out of 100, wide enough for three digits so the chips
+   line up down the list; brand where the judge raised the file. */
+.score {
+  flex: none;
+  min-width: 3ch;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-small);
+  background: var(--background-tint-neutral);
+  color: var(--text-tint-neutral);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: center;
+}
+
+.score[data-raised] {
+  background: var(--background-tint-brand);
+  color: var(--text-tint-brand);
+}
+
 /* Every reason on one line, wrapped to two at most; the title has it all. */
 .why {
   grid-area: why;

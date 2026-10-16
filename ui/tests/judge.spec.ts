@@ -47,12 +47,19 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     );
     // Picked with the item open: its scores land without a reload.
     hub.mg(["judge", "set", "jev"], app.dir);
+    // Each file ends on its score, so the reason line doesn't repeat it.
     await expect(files.getByRole("listitem")).toHaveText([
-      /^session\.rs\s*src\s*raised by the judge 100\/100\s*\+1$/,
-      /^README\.md\s*the new setting · judged 23\/100\s*\+3$/,
-      /^main\.rs\s*src\s*wires the store in · judged 45\/100\s*\+1$/,
-      /^Cargo\.lock\s*judged 45\/100 · promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1$/,
+      /^session\.rs\s*src\s*raised by the judge\s*\+1\s*100$/,
+      /^README\.md\s*the new setting\s*\+3\s*23$/,
+      /^main\.rs\s*src\s*wires the store in\s*\+1\s*45$/,
+      /^Cargo\.lock\s*promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1\s*45$/,
     ]);
+    await expect(
+      files.getByRole("img", { name: "raised by the judge 100/100" }),
+    ).toHaveText("100");
+    await expect(files.getByRole("img", { name: "judged 23/100" })).toHaveText(
+      "23",
+    );
     // Nothing is left trusted, so there is no group to open.
     await expect(files.getByRole("button", { name: /^Trusted/ })).toHaveCount(
       0,
@@ -63,10 +70,10 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     // into their new order.
     hub.mg(["judge", "set", "jev", "--order", "judge"], app.dir);
     await expect(files.getByRole("listitem")).toHaveText([
-      /^session\.rs\s*src\s*judged 100\/100\s*\+1$/,
-      /^main\.rs\s*src\s*wires the store in · judged 45\/100\s*\+1$/,
-      /^Cargo\.lock\s*judged 45\/100 · promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1$/,
-      /^README\.md\s*the new setting · judged 23\/100\s*\+3$/,
+      /^session\.rs\s*src\s*\+1\s*100$/,
+      /^main\.rs\s*src\s*wires the store in\s*\+1\s*45$/,
+      /^Cargo\.lock\s*promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1\s*45$/,
+      /^README\.md\s*the new setting\s*\+3\s*23$/,
     ]);
     const diffs = page.getByRole("region", { name: "Diff" }).getByRole("code");
     await expect(diffs).toHaveCount(4);
