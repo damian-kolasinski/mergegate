@@ -1,0 +1,126 @@
+/* Prose in a comment: spaced blocks, small headings, code set apart. */
+.markdown {
+  overflow-wrap: anywhere;
+}
+
+.markdown > * + *,
+.markdown li > * + *,
+.markdown blockquote > * + * {
+  margin-top: var(--space-2);
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font: var(--type-h4);
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font: var(--type-h5);
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: var(--space-6);
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown li + li {
+  margin-top: var(--space-1);
+}
+
+/* A task list's checkbox stands in for the bullet. */
+.markdown li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+
+.markdown input[type="checkbox"] {
+  margin: 0 var(--space-1) 0 calc(-1 * var(--space-4));
+  vertical-align: middle;
+}
+
+.markdown blockquote {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border-container);
+  color: var(--text-secondary);
+}
+
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-small);
+  background: var(--background-subtle);
+}
+
+.markdown pre {
+  overflow-x: auto;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-small);
+  background: var(--background-subtle);
+  overflow-wrap: normal;
+}
+
+.markdown pre code {
+  padding: 0;
+  font: var(--type-mono);
+  background: none;
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--border-container);
+}
+
+.markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown th,
+.markdown td {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-container);
+}
+
+.markdown summary {
+  cursor: pointer;
+}
+
+/*
+ * Bots shrink a badge image with `<sub><sub>`; on its text chip that only
+ * pushes it off the line, so a `sub` or `sup` around one sits on the line.
+ */
+.markdown :is(sub, sup):has(.image, .shield) {
+  vertical-align: baseline;
+  font-size: inherit;
+}
+
+/* A shields.io badge, drawn as a Badge: its link needs no underline. */
+.shield {
+  vertical-align: 1px;
+  text-decoration: none;
+}
+
+/* An image the page won't load, as a link named by its alt text. */
+.image {
+  display: inline-block;
+  vertical-align: 1px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-container);
+  border-radius: var(--radius-small);
+  font: var(--type-p4);
+  text-decoration: none;
+  white-space: nowrap;
+}

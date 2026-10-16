@@ -1,7 +1,7 @@
 import { createMemo, For, Match, Show, Switch } from "solid-js";
 import type { Comment } from "../../api/Comment";
 import type { Spot } from "../../diff-view/diff-view";
-import { Badge, ErrorNote, Meta } from "../../design-system";
+import { Badge, ErrorNote, Markdown, Meta } from "../../design-system";
 import { linesOf, linesOn, sameSpot, spotOf } from "./anchor";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
@@ -169,7 +169,9 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
           <RejectionActions comments={props.comments} comment={props.comment} />
           <ReplyButton comments={props.comments} comment={props.comment} />
         </header>
-        <p class={styles.body}>{props.comment.body}</p>
+        <div class={styles.body}>
+          <Markdown source={props.comment.body} />
+        </div>
         <ReplyList comments={props.comments} comment={props.comment} />
         <OverrideEditor comments={props.comments} comment={props.comment} />
         <Show when={props.comments.drafts.failure(props.comment)}>

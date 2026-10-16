@@ -3,7 +3,13 @@ import type { Comment } from "../../api/Comment";
 import type { ItemDiff } from "../../api/ItemDiff";
 import type { Reply } from "../../api/Reply";
 import type { ReplyStatus } from "../../api/ReplyStatus";
-import { Badge, ErrorNote, Meta, type Tone } from "../../design-system";
+import {
+  Badge,
+  ErrorNote,
+  Markdown,
+  Meta,
+  type Tone,
+} from "../../design-system";
 import type { Comments } from "./comments";
 import { Editor } from "./editor";
 import { SettleRejection } from "./external";
@@ -107,7 +113,9 @@ function ReplyEntry(props: {
           </Show>
         </header>
         <Show when={props.reply.body}>
-          <p class={styles.body}>{props.reply.body}</p>
+          <div class={styles.body}>
+            <Markdown source={props.reply.body} />
+          </div>
         </Show>
         <Show
           when={

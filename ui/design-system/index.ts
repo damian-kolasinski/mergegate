@@ -8,6 +8,7 @@ export { Button } from "./button";
 export { Empty } from "./empty";
 export { ErrorNote } from "./error-note";
 export { ExternalLink } from "./external-link";
+export { Markdown, markdownText } from "./markdown";
 export { Row } from "./row";
 export { Section } from "./section";
 export { Select } from "./select";
