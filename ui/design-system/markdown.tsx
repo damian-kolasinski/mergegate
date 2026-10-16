@@ -1,7 +1,9 @@
 import DOMPurify from "dompurify";
 import { Marked } from "marked";
 import { createMemo } from "solid-js";
+import badgeStyles from "./badge.module.css";
 import styles from "./markdown.module.css";
+import { shieldOf } from "./shield";
 
 /**
  * Text written as GitHub-flavoured Markdown, such as a comment from a bot or
@@ -72,21 +74,30 @@ function render(source: string): DocumentFragment {
 
 /**
  * The CSP loads no image from elsewhere, which also keeps a comment's
- * tracking pixels quiet: an image is a link to it, named by its alt text.
+ * tracking pixels quiet: an image is a link to it, named by its alt text,
+ * and a shields.io badge a Badge in its colour.
  */
 function imageLink(image: HTMLImageElement): Node {
   const label = image.alt.trim() || "Image";
   const src = image.getAttribute("src");
-  // A linked badge keeps its own link: anchors don't nest.
-  if (!isOutward(src) || image.closest("a")) {
-    return document.createTextNode(label);
+  const shield = shieldOf(src);
+  // A linked image keeps the link it's in: anchors don't nest.
+  const linked = isOutward(src) && !image.closest("a");
+  if (!shield && !linked) return document.createTextNode(label);
+  const element = document.createElement(linked ? "a" : "span");
+  if (linked) element.setAttribute("href", src ?? "");
+  if (shield) {
+    element.className = `${badgeStyles.badge ?? ""} ${styles.shield ?? ""}`;
+    element.dataset.tone = shield.tone;
+    if (shield.solid) element.dataset.solid = "";
+    element.title = label;
+    element.textContent = shield.text;
+  } else {
+    element.className = styles.image ?? "";
+    element.title = src ?? "";
+    element.textContent = label;
   }
-  const link = document.createElement("a");
-  link.href = src ?? "";
-  link.className = styles.image ?? "";
-  link.title = src ?? "";
-  link.textContent = label;
-  return link;
+  return element;
 }
 
 function isOutward(href: string | null): boolean {

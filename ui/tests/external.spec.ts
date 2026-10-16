@@ -114,6 +114,7 @@ test("a comment from GitHub renders its Markdown, and nothing that runs", async 
       "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Hash the password**",
       "",
       "Use `argon2` here; see [the guide](https://example.com/guide).",
+      "![P0 Badge](https://img.shields.io/badge/P0-red?style=flat) ![diagram](https://example.com/d.png)",
       "A [relative link](../blob/main/x.rs) and <img src=x onerror=alert(1)>.",
       "",
       "<script>window.ran = true</script>",
@@ -130,10 +131,18 @@ test("a comment from GitHub renders its Markdown, and nothing that runs", async 
   await expect(
     comment.getByRole("link", { name: "the guide" }),
   ).toHaveAttribute("target", "_blank");
-  // The CSP loads no outside image, so a badge is a link to its image.
-  await expect(comment.getByRole("link", { name: "P2 Badge" })).toHaveAttribute(
+  // The CSP loads no outside image: a shields.io badge is drawn in its
+  // colour, louder for a higher priority, and any other image is a link.
+  const p2 = comment.getByRole("link", { name: "P2", exact: true });
+  await expect(p2).toHaveAttribute("href", /^https:\/\/img\.shields\.io\//);
+  await expect(p2).toHaveAttribute("data-tone", "warning");
+  await expect(p2).not.toHaveAttribute("data-solid");
+  const p0 = comment.getByRole("link", { name: "P0", exact: true });
+  await expect(p0).toHaveAttribute("data-tone", "error");
+  await expect(p0).toHaveAttribute("data-solid");
+  await expect(comment.getByRole("link", { name: "diagram" })).toHaveAttribute(
     "href",
-    /^https:\/\/img\.shields\.io\//,
+    "https://example.com/d.png",
   );
   await expect(comment.getByText("relative link")).toBeVisible();
   await expect(
@@ -147,6 +156,6 @@ test("a comment from GitHub renders its Markdown, and nothing that runs", async 
   // The Conversation list's one-line excerpt is the rendered text.
   await page.getByRole("button", { name: /^Conversation/ }).click();
   await expect(page.getByRole("listitem", { name: "c_1" })).toContainText(
-    "P2 Badge Hash the password Use argon2 here",
+    "P2 Hash the password Use argon2 here",
   );
 });
