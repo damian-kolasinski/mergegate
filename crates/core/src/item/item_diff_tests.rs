@@ -56,7 +56,7 @@ fn id(id: &str) -> ItemId {
 #[test]
 fn reads_every_files_diff() {
     let store = submitted();
-    let diff = item_diff(&store, &FakeGit::default(), &id("app#1"), Compare::Default)
+    let diff = item_diff(&store, &FakeGit::default(), &id("app#1"), Compare::All)
         .unwrap()
         .unwrap();
     assert_eq!(diff.item.title, "Add login");
@@ -76,11 +76,11 @@ fn reads_every_files_diff() {
 fn an_unknown_item_has_no_diff() {
     let git = FakeGit::default();
     assert_eq!(
-        item_diff(&submitted(), &git, &id("app#2"), Compare::Default).unwrap(),
+        item_diff(&submitted(), &git, &id("app#2"), Compare::All).unwrap(),
         None
     );
     assert_eq!(
-        item_diff(&submitted(), &git, &id("web#1"), Compare::Default).unwrap(),
+        item_diff(&submitted(), &git, &id("web#1"), Compare::All).unwrap(),
         None
     );
 }
@@ -89,20 +89,20 @@ fn an_unknown_item_has_no_diff() {
 fn a_diff_missing_from_the_cache_is_an_error() {
     let mut store = submitted();
     store.forget_diffs();
-    let err = item_diff(&store, &FakeGit::default(), &id("app#1"), Compare::Default).unwrap_err();
+    let err = item_diff(&store, &FakeGit::default(), &id("app#1"), Compare::All).unwrap_err();
     assert_eq!(err.to_string(), "app#1 has no cached diff for README.md");
 }
 
 #[test]
 fn an_abandoned_item_keeps_its_counts_but_not_its_diffs() {
     let (mut store, git) = submitted_with_git();
-    let open = item_diff(&store, &git, &id("app#1"), Compare::Default)
+    let open = item_diff(&store, &git, &id("app#1"), Compare::All)
         .unwrap()
         .unwrap();
     store.set_state(&id("app#1"), ItemState::Abandoned);
     store.forget_diffs();
     let read_at_submit = git.blobs_read().len();
-    let diff = item_diff(&store, &git, &id("app#1"), Compare::Default)
+    let diff = item_diff(&store, &git, &id("app#1"), Compare::All)
         .unwrap()
         .unwrap();
     for (file, was) in diff.files.iter().zip(&open.files) {
@@ -118,13 +118,13 @@ fn an_abandoned_item_keeps_its_counts_but_not_its_diffs() {
 #[test]
 fn a_merged_item_is_diffed_again_and_not_cached() {
     let (mut store, git) = submitted_with_git();
-    let open = item_diff(&store, &git, &id("app#1"), Compare::Default)
+    let open = item_diff(&store, &git, &id("app#1"), Compare::All)
         .unwrap()
         .unwrap();
     store.set_state(&id("app#1"), ItemState::Merged);
     store.forget_diffs();
     let read_at_submit = git.blobs_read().len();
-    let diff = item_diff(&store, &git, &id("app#1"), Compare::Default)
+    let diff = item_diff(&store, &git, &id("app#1"), Compare::All)
         .unwrap()
         .unwrap();
     assert_eq!(diff.files, open.files);
@@ -214,11 +214,11 @@ fn shows_what_changed_since_an_earlier_revision() {
 }
 
 #[test]
-fn defaults_to_since_the_last_reviewed_revision() {
+fn defaults_to_all_changes_after_a_review() {
     let (mut store, git) = rebased();
     submit_login(&mut store, &git, 2);
     let compare = |store: &FakeStore| {
-        let diff = item_diff(store, &git, &id("app#1"), Compare::Default)
+        let diff = item_diff(store, &git, &id("app#1"), Compare::default())
             .unwrap()
             .unwrap();
         (diff.since, diff.last_reviewed)
@@ -228,12 +228,11 @@ fn defaults_to_since_the_last_reviewed_revision() {
     assert_eq!(compare(&store), (None, Some(1)));
     submit_login(&mut store, &git, 4);
     submit_login(&mut store, &git, 5);
-    assert_eq!(compare(&store), (Some(1), Some(1)));
+    assert_eq!(compare(&store), (None, Some(1)));
 
-    let all = item_diff(&store, &git, &id("app#1"), Compare::All)
+    let all = item_diff(&store, &git, &id("app#1"), Compare::default())
         .unwrap()
         .unwrap();
-    assert_eq!(all.since, None);
     assert!(all.files.iter().all(|f| f.change.is_none()));
     assert_eq!(all.files.len(), 4);
 }
@@ -327,7 +326,7 @@ fn the_judge_orders_and_a_high_score_goes_ahead_of_the_guide() {
         &[("README.md", 40, None), ("src/login.rs", 10, None)],
     );
     let read = |store: &FakeStore| {
-        let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::Default)
+        let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::All)
             .unwrap()
             .unwrap();
         diff.files
@@ -360,7 +359,7 @@ fn the_judge_promotes_a_trusted_file_from_the_threshold() {
     let mut store = submitted();
     trust(&mut store, "src/login.rs");
     let read = |store: &FakeStore| {
-        let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::Default)
+        let diff = item_diff(store, &FakeGit::default(), &id("app#1"), Compare::All)
             .unwrap()
             .unwrap();
         diff.files

@@ -789,10 +789,8 @@ test("readme loop recording", async ({ browser }, info) => {
     await caption("The agent fixes it and submits r2");
     await expect(page.getByText(/r2 submitted/)).toBeVisible();
     await pause(1500);
-    await page
-      .getByRole("button", { name: /Show changes since r1|since r1/ })
-      .first()
-      .click();
+    await page.getByRole("button", { name: "Show r2" }).click();
+    await page.getByLabel("Compare").selectOption("1");
     await caption("You review only what changed since r1");
     await pause(3500);
     // The other files kept their viewed marks: only this one changed.

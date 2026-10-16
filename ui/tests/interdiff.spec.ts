@@ -62,10 +62,17 @@ test("f7 a new revision shows what changed since the review", async ({
   // What's typed survives the switch and comparing another way.
   const summary = review.getByRole("textbox", { name: "Review summary" });
   await summary.fill("Closer.");
-  await banner.getByRole("button", { name: "Show changes since r1" }).click();
+  await banner.getByRole("button", { name: "Show r2" }).click();
   await expect(banner).toHaveCount(0);
   await expect(summary).toHaveValue("Closer.");
-  await expect(screen.getByLabel("Compare")).toHaveValue("1");
+  // r2 opens on all its changes, and Compare narrows them to r1's.
+  await expect(screen.getByLabel("Compare")).toHaveValue("all");
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^login\.rs\s*src/,
+    /^lib\.rs\s*src/,
+  ]);
+  await screen.getByLabel("Compare").selectOption("1");
+  await expect(summary).toHaveValue("Closer.");
   // main's README isn't the item's, and login.rs is as r1 left it, its
   // mark with it.
   await expect(files.getByRole("listitem")).toHaveText([/^lib\.rs\s*src/]);
@@ -117,9 +124,9 @@ test("f7 the inbox counts what changed since the review", async ({
   await page.goto(hub.url);
   await expect(page.getByRole("listitem")).toContainText("1 changed since r1");
 
-  // Opening it starts there.
+  // Opening it starts on all changes.
   await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Compare")).toHaveValue("1");
+  await expect(page.getByLabel("Compare")).toHaveValue("all");
 });
 
 test("f7 a file new since the review says so", async ({ page, hub }) => {
@@ -132,7 +139,8 @@ test("f7 a file new since the review says so", async ({ page, hub }) => {
 
   const screen = page.getByRole("region", { name: "app#1" });
   const banner = screen.getByRole("region", { name: "Newer revision" });
-  await banner.getByRole("button", { name: "Show changes since r1" }).click();
+  await banner.getByRole("button", { name: "Show r2" }).click();
+  await screen.getByLabel("Compare").selectOption("1");
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
     /^token\.rs\s*src.*added/,
@@ -171,7 +179,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   // r2 leaves greet.py as it was, but the agent answered its comment: the
   // file stays in the diff, open over its viewed mark, with the thread.
   await page.reload();
-  await expect(screen.getByLabel("Compare")).toHaveValue("1");
+  await screen.getByLabel("Compare").selectOption("1");
   await expect(files.getByRole("listitem")).toHaveText([
     /^greet\.py\s*src.*unchanged since r1/,
     /^test_greet\.py\s*tests.*added/,
@@ -187,7 +195,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   await requestChanges(page, 2);
   app.revise("Name it", { "src/name.py": "NAME = 'you'\n" });
   await page.reload();
-  await expect(screen.getByLabel("Compare")).toHaveValue("2");
+  await screen.getByLabel("Compare").selectOption("2");
   await expect(files.getByRole("listitem")).toHaveText([/^name\.py\s*src/]);
   await expect(files.getByText("2 unchanged since r2")).toBeVisible();
   await expect(comment).toHaveCount(0);
@@ -233,7 +241,7 @@ test("f7 an unchanged file stays in the diff once its thread is settled", async 
   // greet.py is as r2 left it, but the agent asked on its removed line: the
   // file is in the diff, its own base on the left.
   await page.reload();
-  await expect(screen.getByLabel("Compare")).toHaveValue("2");
+  await screen.getByLabel("Compare").selectOption("2");
   await expect(files.getByRole("listitem")).toHaveText([
     /^greet\.py\s*src.*unchanged since r2/,
     /^test_more\.py\s*tests.*added/,
