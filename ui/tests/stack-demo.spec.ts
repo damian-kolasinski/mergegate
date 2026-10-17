@@ -3,7 +3,7 @@
 // `parent.updated`, and one merge landing the whole stack bottom first.
 // Skipped unless MG_SHOTS_DIR names where to write it:
 //
-//   MG_SHOTS_DIR=$PWD/docs/demos pnpm --dir ui e2e stack-demo --project chromium
+//   MG_SHOTS_DIR=$(mktemp -d) pnpm --dir ui e2e stack-demo --project chromium
 //
 // It writes stacked-items.mp4 and stacked-items.gif through ffmpeg, which
 // has to be on PATH.
