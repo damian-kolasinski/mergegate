@@ -23,6 +23,10 @@ pub struct Approve {
 pub struct Merge {
     pub item: Item,
     pub outcome: Outcome,
+    /// The items stacked on it that its merge moved, bottom first: merged
+    /// right after it, or told to rebase.
+    #[serde(default)]
+    pub stacked: Vec<Item>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -39,6 +43,9 @@ pub enum Outcome {
         target_commit: String,
         paths: Vec<String>,
     },
+    /// Approved, but not tried: it lands right after `parent`, which it's
+    /// stacked on.
+    Waiting { parent: String },
 }
 
 /// Why an open item's merge didn't land, while that still stands.
@@ -52,5 +59,15 @@ pub enum Blocked {
     Conflict {
         target_commit: String,
         paths: Vec<String>,
+    },
+    /// Approved, and lands right after `parent`, which it's stacked on.
+    Waiting {
+        parent: String,
+    },
+    /// Approved, but its own diff didn't apply once `parent` merged; it
+    /// lands once its agent rebases, on the same approval if the diff is
+    /// unchanged.
+    Behind {
+        parent: String,
     },
 }

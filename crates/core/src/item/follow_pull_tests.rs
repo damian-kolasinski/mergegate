@@ -3,7 +3,7 @@ use crate::external::{ExternalStore, NewExternal};
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit, submit_login};
 use crate::feedback::{Event, EventKind};
 use crate::github::{GithubRepo, PullCommentKind};
-use crate::item::{Submit, submit};
+use crate::item::{On, Submit, submit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 
 /// `app#1` on `login` at c2, pull request 1 of `acme/app`.
@@ -34,6 +34,7 @@ fn on_github() -> (FakeStore, FakeGit) {
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     (store, git)
@@ -52,6 +53,7 @@ fn merged() -> PullStatus {
     PullStatus::Merged {
         commit: commit(8),
         head: commit(2),
+        base: "main".into(),
     }
 }
 
@@ -98,6 +100,88 @@ fn a_pull_request_closed_on_github_abandons_the_item() {
     assert!(git.pins().is_empty());
 }
 
+/// `app#1`, with profile at c3 stacked on it.
+fn stacked() -> (FakeStore, FakeGit, Item) {
+    let (mut store, git) = on_github();
+    let git = git.commit(
+        &commit(3),
+        Some(&commit(2)),
+        "Add profile",
+        &["src/profile.rs"],
+    );
+    git.push("app", "profile", &commit(3));
+    let request = Submit {
+        project: "app".into(),
+        branch: "profile".into(),
+        head: commit(3),
+        title: None,
+        worktree: None,
+        wake: None,
+        guide: None,
+        priority: None,
+        note: None,
+        on: Some(On::Item(id())),
+    };
+    let child = submit(&mut store, &git, &FakeGithub::default(), request)
+        .unwrap()
+        .item;
+    (store, git, child)
+}
+
+#[test]
+fn a_parent_closed_on_github_hands_its_child_back() {
+    let (mut store, git, child) = stacked();
+    follow_pull(&mut store, &git, &id(), 1, PullStatus::Closed).unwrap();
+    let child = store.item(&child.id).unwrap().unwrap();
+    assert_eq!(child.state, ItemState::ChangesRequested);
+    let kinds: Vec<_> = store
+        .events(&child.id, 0)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        [EventKind::Notice(Notice {
+            revision: 1,
+            source: Source::Operator,
+            kind: NoticeKind::ParentAbandoned {
+                parent: id(),
+                upstream: commit(2),
+            },
+        })]
+    );
+}
+
+#[test]
+fn a_child_merged_on_github_into_its_parents_branch_did_not_land() {
+    let (mut store, git, child) = stacked();
+    let ItemBackend::Github { pull, .. } = &child.backend else {
+        panic!("{child:?}");
+    };
+    let into_login = PullStatus::Merged {
+        commit: commit(8),
+        head: commit(3),
+        base: "login".into(),
+    };
+    let closed = follow_pull(&mut store, &git, &child.id, pull.number, into_login)
+        .unwrap()
+        .unwrap();
+    assert_eq!(closed.state, ItemState::Abandoned);
+    let events = store.events(&child.id, 0).unwrap();
+    let EventKind::Notice(Notice {
+        kind: NoticeKind::Abandoned {
+            reason: Some(reason),
+        },
+        ..
+    }) = &events[0].kind
+    else {
+        panic!("{events:?}");
+    };
+    assert!(reason.contains("into login, not main"), "{reason}");
+    assert!(store.item(&id()).unwrap().unwrap().state.is_open());
+}
+
 #[test]
 fn a_held_merge_follows_its_pull_request_too() {
     let (mut store, git) = on_github();
@@ -114,6 +198,7 @@ fn a_merge_of_an_earlier_head_abandons_the_revision_that_did_not_land() {
     let earlier = PullStatus::Merged {
         commit: commit(8),
         head: commit(1),
+        base: "main".into(),
     };
     let item = follow_pull(&mut store, &git, &id(), 1, earlier)
         .unwrap()

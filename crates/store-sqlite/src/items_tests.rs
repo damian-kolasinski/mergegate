@@ -63,6 +63,7 @@ fn revision(head: char) -> NewRevision {
         guide: None,
         interdiffs: Vec::new(),
         viewed: Vec::new(),
+        parent: None,
     }
 }
 

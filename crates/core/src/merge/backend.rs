@@ -1,5 +1,5 @@
 use crate::git::GitError;
-use crate::item::Item;
+use crate::item::{Item, ItemId};
 use crate::project::{Backend, Project};
 
 /// Where approved work lands: the operator's repo for `local`, the pull
@@ -15,6 +15,17 @@ pub trait MergeBackend {
     /// merge that went through before the hub could record it lands again as
     /// the commit it made.
     fn land(&self, project: &Project, item: &Item, message: &str) -> Result<Landing, GitError>;
+
+    /// Points the review of `child`, stacked on an item that just landed, at
+    /// its target, before the parent's branch goes: GitHub retargets its pull
+    /// request, which was based on that branch.
+    fn restack(&self, _project: &Project, _child: &Item) -> Result<(), GitError> {
+        Ok(())
+    }
+
+    /// Clears up after `item` landed, once nothing stacked on it needs its
+    /// branch: GitHub deletes the branch. A failure only leaves clutter.
+    fn tidy(&self, _project: &Project, _item: &Item) {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,5 +44,10 @@ pub enum Landing {
     /// `reason` is git's or GitHub's.
     Held {
         reason: String,
+    },
+    /// Not tried: the item lands right after `parent`, the name of the item
+    /// it's stacked on, which hasn't yet. No backend returns it.
+    Waiting {
+        parent: ItemId,
     },
 }

@@ -162,6 +162,14 @@ export function ItemScreen(props: { id: string }) {
       } else if (next.item.revision.number === shown?.item.revision.number) {
         setDemo(next.demo);
         setBlocked(next.blocked);
+        // The items it's stacked with move without the operator acting
+        // here: a parent's revision leaves it behind, its merge lands this.
+        const moved = ({ stack, behind }: ItemDiff) =>
+          JSON.stringify({ stack, behind });
+        if (moved(next) !== moved(shown)) {
+          const { stack, behind } = next;
+          setDiff({ ...shown, stack, behind });
+        }
         follow(next);
       }
     }, failed);
@@ -578,6 +586,8 @@ function Review(props: {
           review={toReview().length}
           trusted={own().length - toReview().length}
           failure={viewed.failure()}
+          stack={props.diff.stack}
+          behind={props.diff.behind}
         >
           <Show when={props.demo}>
             {(demo) => (
@@ -768,6 +778,7 @@ function Review(props: {
           state={state()}
           pullRequest={pullRequest(props.diff.item)}
           blocked={props.blocked?.kind}
+          after={openParent(props.diff)}
           newest={props.newest}
           unviewed={own().filter((file) => !done().has(file.path)).length}
           changed={props.diff.changed_since}
@@ -788,6 +799,16 @@ function Review(props: {
       <DeletedDraft comments={comments} />
     </>
   );
+}
+
+/** The name of the open item this one is stacked on, which an approval
+ * lands after. */
+function openParent(diff: ItemDiff): string | undefined {
+  const parent = diff.item.parent;
+  const open = diff.stack.find(
+    (entry) => entry.id === parent && !closed(entry.state),
+  );
+  return open?.name;
 }
 
 /** An item on GitHub has a pull request, which merging or abandoning closes. */

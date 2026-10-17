@@ -113,6 +113,7 @@ fn revision(files: Vec<FileStat>) -> NewRevision {
         guide: None,
         interdiffs: Vec::new(),
         viewed: Vec::new(),
+        parent: None,
     }
 }
 
@@ -157,6 +158,7 @@ fn prunes_the_pairs_of_a_closed_item_no_open_item_has() {
                 })
                 .collect(),
         }],
+        parent: None,
         ..revision(Vec::new())
     };
     let mut second = interdiff(1, vec![changed(Some("y"), "d"), changed(Some("y"), "e")]);

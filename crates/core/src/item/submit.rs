@@ -3,12 +3,14 @@
 use super::diff_files::diff_files;
 use super::priority::note_of;
 use super::publish::{Revision, describe, description, publish};
+use super::stack::{self, StackError, pull_base};
 use super::{
-    Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, Priority,
-    valid_branch, valid_commit,
+    Item, ItemBackend, ItemError, ItemGit, ItemState, ItemStore, NewItem, NewRevision, On,
+    Priority, valid_branch, valid_commit,
 };
 use crate::agent::{self, AgentStore};
 use crate::diff::{DiffGit, DiffStore};
+use crate::feedback::FeedbackStore;
 use crate::git::Upstream;
 use crate::github::Github;
 use crate::interdiff::{InterdiffGit, Recorded, record};
@@ -37,6 +39,8 @@ pub struct Submit {
     /// can't undo a change the operator made since.
     pub priority: Option<Priority>,
     pub note: Option<String>,
+    /// What to stack the item on (§5.1); none keeps what it's on.
+    pub on: Option<On>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,8 +64,19 @@ pub struct Submitted {
 /// A `github` item is published before it's recorded: its branch pushed and
 /// its pull request opened or updated, described by the item's ID and guide.
 /// If GitHub fails, the submit fails and nothing is recorded.
+///
+/// A stacked item's revision is diffed against the newest parent revision
+/// its head contains, and its pull request is based on the parent's branch.
+/// The item stacked on this one hears of its new revision.
 pub fn submit<
-    S: ProjectStore + ItemStore + DiffStore + ViewedStore + AgentStore + RulesStore + ReviewStore,
+    S: ProjectStore
+        + ItemStore
+        + DiffStore
+        + ViewedStore
+        + AgentStore
+        + RulesStore
+        + ReviewStore
+        + FeedbackStore,
 >(
     store: &mut S,
     git: &(impl ItemGit + DiffGit + InterdiffGit + TriageGit),
@@ -78,6 +93,7 @@ pub fn submit<
         guide,
         priority,
         note,
+        on,
         ..
     } = request;
     let guide = guide.map(|text| (!text.trim().is_empty()).then_some(text));
@@ -90,14 +106,29 @@ pub fn submit<
         return Err(ItemError::InvalidCommit(head));
     }
     let existing = store.open_item(&project.name, &branch)?;
-    let target = existing
-        .as_ref()
-        .map_or(&project.target, |item| &item.target)
-        .clone();
+    let restacking = on.is_some();
+    let parent = stack::parent_of(store, &project.name, existing.as_ref(), on)?;
+    let target = match (&existing, &parent) {
+        (Some(item), _) => &item.target,
+        (None, Some(parent)) => &parent.target,
+        (None, None) => &project.target,
+    }
+    .clone();
     if branch == target || branch == project.target {
         return Err(ItemError::TargetBranch { branch });
     }
-    if let Some(item) = existing.as_ref().filter(|i| i.revision.head == head) {
+    if let Some(parent) = parent.as_ref().filter(|parent| parent.branch == branch) {
+        return Err(StackError::OnItself(parent.name()).into());
+    }
+    // Moving the item onto another parent at the same head is a new
+    // revision: its diff is against another base.
+    let restacked = existing
+        .as_ref()
+        .is_some_and(|item| restacking && item.parent.as_ref() != parent.as_ref().map(|p| &p.id));
+    if let Some(item) = existing
+        .as_ref()
+        .filter(|i| i.revision.head == head && !restacked)
+    {
         // Pinning again repairs a submit that failed after recording.
         git.pin(&project.name, &item.pin_ref(), &head)?;
         let mut item = item.clone();
@@ -149,8 +180,10 @@ pub fn submit<
         }
         Some(_) => {}
     }
-    // An open item stays where it was opened, whatever the project says now.
-    let github_repo = match existing.as_ref().map(|item| &item.backend) {
+    // An open item stays where it was opened, whatever the project says now,
+    // and a new one stacked on another goes where its parent went.
+    let opened = existing.as_ref().or(parent.as_ref());
+    let github_repo = match opened.map(|item| &item.backend) {
         Some(ItemBackend::Github { repo, .. }) => Some(repo.clone()),
         Some(ItemBackend::Local) => None,
         None => match project.backend {
@@ -168,12 +201,29 @@ pub fn submit<
         None => Upstream::Repo(project.upstream.clone()),
     };
     git.fetch_target(&project.name, &upstream, &target)?;
-    let Some(base) = git.merge_base(&project.name, &head, &target)? else {
-        return Err(ItemError::Unrelated { branch, target });
+    let base = match &parent {
+        Some(parent) => {
+            let base = stack::base(store, git, parent, &branch, &head)?;
+            if base == head {
+                return Err(ItemError::NothingToSubmit {
+                    branch,
+                    target: parent.branch.clone(),
+                });
+            }
+            base
+        }
+        None => {
+            let base = match git.merge_base(&project.name, &head, &target)? {
+                Some(base) if base == head => {
+                    return Err(ItemError::NothingToSubmit { branch, target });
+                }
+                Some(base) => base,
+                None => return Err(ItemError::Unrelated { branch, target }),
+            };
+            stack::off_merged_parent(store, git, existing.as_ref(), (&branch, &head), &base)?;
+            base
+        }
     };
-    if base == head {
-        return Err(ItemError::NothingToSubmit { branch, target });
-    }
     let files = git.changed_files(&project.name, &base, &head)?;
     let mut files = diff_files(store, git, &project.name, files)?;
     // A rename counts as generated only when both its paths are, as code
@@ -230,11 +280,19 @@ pub fn submit<
                     id: &id,
                     branch: &branch,
                     head: &head,
-                    target: &target,
+                    base: pull_base(&target, parent.as_ref()),
+                    // Stacked now or before: its parent may have moved,
+                    // merged or been abandoned since.
+                    restack: parent.is_some()
+                        || existing.as_ref().is_some_and(|item| item.parent.is_some()),
                     title: &title,
                     guide: guide.as_deref(),
                 },
             )?;
+            if let Some(left) = left_closed(store, existing.as_ref(), parent.as_ref())? {
+                // Its branch stayed only for this pull request to be based on.
+                let _ = github.delete_branch(&repo, &left.branch);
+            }
             ItemBackend::Github { repo, pull }
         }
         _ => ItemBackend::Local,
@@ -249,6 +307,7 @@ pub fn submit<
         guide,
         interdiffs,
         viewed,
+        parent: parent.map(|parent| parent.id),
     };
     let retitled = existing.as_ref().is_some_and(|item| item.title != title);
     let item = match existing {
@@ -267,12 +326,34 @@ pub fn submit<
     };
     git.pin(&project.name, &item.pin_ref(), &item.revision.head)?;
     agent::record(store, &item.id, worktree, wake)?;
+    stack::updated(store, &item)?;
     Ok(Submitted {
         item,
         new_revision: true,
         retitled,
         warnings,
     })
+}
+
+/// The closed parent `existing` moves off, if it was on one and no open item
+/// has taken its branch's name since: abandoned, or merged while its child's
+/// pull request couldn't be moved off it.
+fn left_closed(
+    store: &impl ItemStore,
+    existing: Option<&Item>,
+    parent: Option<&Item>,
+) -> Result<Option<Item>, StoreError> {
+    let Some(old) = existing.and_then(|item| item.parent.as_ref()) else {
+        return Ok(None);
+    };
+    if parent.is_some_and(|parent| parent.id == *old) {
+        return Ok(None);
+    }
+    let Some(old) = store.item(old)?.filter(|old| !old.state.is_open()) else {
+        return Ok(None);
+    };
+    let taken = store.open_item(old.id.project(), &old.branch)?.is_some();
+    Ok((!taken).then_some(old))
 }
 
 fn kept(item: &Item) -> String {

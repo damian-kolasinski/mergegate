@@ -116,6 +116,27 @@ pub enum EventBody {
         #[serde(default)]
         commands: Vec<String>,
     },
+    /// The item's parent has a new revision, or merged: the agent runs
+    /// `commands` to move its commits after `upstream`, the parent revision
+    /// they're built on, onto `onto`, the parent's new head or, once
+    /// `merged`, the target's. Then it submits again.
+    #[serde(rename = "parent.updated")]
+    ParentUpdated {
+        parent: String,
+        merged: bool,
+        onto: String,
+        upstream: String,
+        commands: Vec<String>,
+    },
+    /// The item's parent closed without merging, so the item is back with
+    /// its agent: `commands` move its commits after `upstream` onto the
+    /// target, and the next submit is reviewed against that.
+    #[serde(rename = "parent.abandoned")]
+    ParentAbandoned {
+        parent: String,
+        upstream: String,
+        commands: Vec<String>,
+    },
 }
 
 impl EventBody {
@@ -130,6 +151,8 @@ impl EventBody {
             Self::ExternalComments { .. } => "external.comments",
             Self::CommentOverride { .. } => "comment.override",
             Self::ItemMerged { .. } => "item.merged",
+            Self::ParentUpdated { .. } => "parent.updated",
+            Self::ParentAbandoned { .. } => "parent.abandoned",
         }
     }
 }

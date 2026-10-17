@@ -115,6 +115,11 @@ enum Command {
         /// Why it has that priority, for the operator; as --priority
         #[arg(long)]
         note: Option<String>,
+        /// Stack on an open item, as app#41 or 41, whose branch this one is
+        /// built on: reviewed as its own diff, it merges right after that
+        /// one; `none` moves it onto its target [default: as it was]
+        #[arg(long, value_name = "ITEM")]
+        on: Option<String>,
     },
     /// Add screenshots or recordings to the item's newest revision
     Attach {
@@ -243,7 +248,8 @@ fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
             guide,
             priority,
             note,
-        } => submit_cmd::run(title, wake, attach, guide, priority, note),
+            on,
+        } => submit_cmd::run(title, wake, attach, guide, priority, note, on),
         Command::Attach { item, files } => attach_cmd::run(item, files),
         Command::Wait {
             item,

@@ -80,12 +80,23 @@ async fn show(
                     .collect::<Result<Vec<_>, _>>()?;
                 let demo = attachment::demo(store, &id)?;
                 let changed = interdiff::changed_since_review(store, &diff.item)?;
-                Ok(Some((diff, blocked, spans, demo, changed, agent)))
+                let stack = item::stack(store, &diff.item)?.items;
+                let stack = if stack.len() > 1 { stack } else { Vec::new() };
+                let behind = diff.item.state.is_open() && item::behind(store, &diff.item)?;
+                Ok(Some((
+                    diff,
+                    blocked,
+                    spans,
+                    demo,
+                    changed,
+                    agent,
+                    (stack, behind),
+                )))
             })
             .await
             .map_err(items::failure)?
     };
-    let (diff, blocked, spans, demo, changed, agent) = found.ok_or_else(|| {
+    let (diff, blocked, spans, demo, changed, agent, (stack, behind)) = found.ok_or_else(|| {
         Failure::new(
             StatusCode::NOT_FOUND,
             "item_not_found",
@@ -104,6 +115,16 @@ async fn show(
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         guide: diff.guide,
         agent,
+        stack: stack
+            .iter()
+            .map(|item| api::diff::StackEntry {
+                id: item.id.to_string(),
+                name: item.name().to_string(),
+                title: item.title.clone(),
+                state: items::state_to_api(item.state),
+            })
+            .collect(),
+        behind,
         conversation: conversation::to_api(&diff.conversation),
     }))
 }

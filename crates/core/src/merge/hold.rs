@@ -2,7 +2,8 @@
 //! operator to retry or cancel it; nothing retries on its own.
 
 use super::land::{land, through};
-use super::{Merge, MergeBackend, MergeError};
+use super::stacked::tidy_parent;
+use super::{Landing, Merge, MergeBackend, MergeError};
 use crate::diff::DiffStore;
 use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::highlight::HighlightStore;
@@ -18,7 +19,11 @@ pub fn retry<S: ProjectStore + ItemStore + DiffStore + HighlightStore + Feedback
 ) -> Result<Merge, MergeError> {
     let item = merging(store, id)?;
     let backend = through(&item, backends)?;
-    land(store, git, backend, &item)
+    let merge = land(store, git, backend, &item)?;
+    if matches!(merge.landing, Landing::Merged { .. }) {
+        tidy_parent(store, backend, &item)?;
+    }
+    Ok(merge)
 }
 
 /// Puts the item back in Needs review, and tells its agent the approval is

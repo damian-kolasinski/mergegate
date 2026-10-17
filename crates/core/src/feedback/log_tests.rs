@@ -19,6 +19,7 @@ fn add(store: &mut FakeStore, branch: &str) -> ItemId {
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: None,
         },
         priority: None,
         note: None,

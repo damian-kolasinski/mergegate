@@ -5,6 +5,10 @@ use crate::project::ProjectName;
 use crate::review::{Author, NewComment, NewReply, ReplyStatus, ReviewStore, Side};
 
 fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
+    add_on(store, project, branch, None)
+}
+
+fn add_on(store: &mut FakeStore, project: &str, branch: &str, parent: Option<&ItemId>) -> ItemId {
     let item = NewItem {
         project: ProjectName::parse(project).unwrap(),
         branch: branch.into(),
@@ -19,6 +23,7 @@ fn add(store: &mut FakeStore, project: &str, branch: &str) -> ItemId {
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: parent.cloned(),
         },
         priority: None,
         note: None,
@@ -43,6 +48,27 @@ fn groups_open_items_by_who_acts_next_oldest_first() {
     assert_eq!(ids(&inbox.needs_you), [a, c]);
     assert_eq!(ids(&inbox.with_agents), [b]);
     assert_eq!(ids(&inbox.merging), [e]);
+}
+
+#[test]
+fn a_stack_reads_bottom_first_and_ranks_by_what_it_holds_up() {
+    let mut store = FakeStore::default();
+    let search = add(&mut store, "app", "search");
+    let login = add(&mut store, "app", "login");
+    let profile = add_on(&mut store, "app", "profile", Some(&login));
+    let avatar = add_on(&mut store, "app", "avatar", Some(&profile));
+    let theme = add(&mut store, "app", "theme");
+    let settings = add_on(&mut store, "app", "settings", Some(&theme));
+    store.set_state(&theme, ItemState::Merging);
+
+    let inbox = inbox(&store).unwrap();
+    let ids = |group: &[Item]| group.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+    // login holds up two, so comes before search, older but holding none.
+    assert_eq!(
+        ids(&inbox.needs_you),
+        [login, profile, avatar, search, settings]
+    );
+    assert_eq!(ids(&inbox.merging), [theme]);
 }
 
 #[test]

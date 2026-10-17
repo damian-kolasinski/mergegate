@@ -34,14 +34,14 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **A step starts once every row in its After column is gone from the table,** that is, once that step's last PR has merged, and runs in its own worktree. Rows with nothing there can start any time, whatever is running.
 - **Migrations take their number when they merge.** A step renumbers its unmerged migration onto whatever `main` has, and a dev home that ran the old number is reset; a merged migration never changes.
 - **Parallel steps meet in shared lists:** module lists, routes, CLI commands, `mg submit`'s flags and the skill's reference files. The one that merges second rebases onto the other.
-- **Where two steps' features meet, the one that lands second adds the meeting:** 13 adds stacked children to the early conflict watch (a conflict the parent also has is reported on the parent only) and to the inbox ordering ("items stacked on it"), both already on `main`.
+- **Where two steps' features meet, the one that lands second adds the meeting.**
 
 ## PRs
 
 | # | PR | Delivers | Flows | Faked | After |
 |---|---|---|---|---|---|
 | 11b | Comment guard | The guard that keeps in `review` a file the operator commented on in an earlier revision that changed again, measured with interdiffs (`interdiff_files`) | F7, F12 | — | 10 |
-| 13 | Stacked items | `mg submit --on`, own diff against the parent, `parent.updated` and `parent.abandoned`, landing bottom first, PR retargeting, stacks in the inbox and review header | F16 | GitHub | 12b |
+
 
 ## Why this order
 
@@ -49,7 +49,7 @@ The order of PRs that builds mergegate, chosen so each PR is tested end to end, 
 - **The whole loop runs on the `local` backend before GitHub** (PRs 1–8), so it is proven against real git with nothing faked.
 - **GitHub comes right after the skill**, so mergegate's own work keeps landing as GitHub PRs, cloud bots keep reviewing, and the switch happens early.
 - **Then the design's pain points:** triage for the flat file list, re-review for cheap revision cycles, stacks for oversized work, prioritization for many open items.
-- **Stacked items need re-review** (12b): keeping comments and approvals across a child's rebases relies on comment re-mapping, as viewed marks rely on interdiffs. Until PR 13 lands, agents submit the parts of a split one after another.
+- **Stacked items need re-review** (12b): keeping comments and approvals across a child's rebases relies on comment re-mapping, as viewed marks rely on interdiffs.
 
 ## Switching mergegate's own reviews to mergegate
 

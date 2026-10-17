@@ -633,8 +633,9 @@ sequenceDiagram
           <li>Each item shows only its own changes, against the parent revision it is built on.</li>
           <li>The hub never writes to an item's branch. The agent rebases with the command the event gives it, and submits.</li>
           <li>Viewed marks and an approval survive a rebase only where the own diff is unchanged.</li>
-          <li>If 41 lands by squash, 42 gets <code>parent.updated</code> and is rebased onto the target before it merges.</li>
-          <li>If 41 is abandoned, 42 goes back to its agent with <code>parent.abandoned</code>, and the agent moves it with <code>mg submit --on</code>.</li>
+          <li>Once 41 merges, an approved 42 lands right after it if its own diff applies. Only a conflict sends <code>parent.updated</code>; 42 then waits in Merging for the rebased revision, which merges on the same approval if its own diff is unchanged.</li>
+          <li>Stacks are linear: a second <code>mg submit --on 41</code> is refused, naming 42 to stack on instead.</li>
+          <li>If 41 is abandoned, 42 loses its approval and goes back to its agent with <code>parent.abandoned</code>, whose commands move it onto the target; the agent can stack it elsewhere with <code>mg submit --on</code> instead.</li>
         </ul>
       </section>
 

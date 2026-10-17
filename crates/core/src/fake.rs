@@ -534,6 +534,10 @@ impl ItemGit for FakeGit {
             .find(|id| ours.contains(id)))
     }
 
+    fn contains(&self, _project: &ProjectName, head: &str, commit: &str) -> Result<bool, GitError> {
+        Ok(self.history(head).iter().any(|id| id == commit))
+    }
+
     fn changed_files(
         &self,
         _project: &ProjectName,
@@ -652,6 +656,7 @@ impl MergeGit for FakeGit {
         upstream: &Upstream,
         target: &str,
         _head: &str,
+        _base: Option<&str>,
     ) -> Result<Trial, GitError> {
         self.fetch(project, upstream, target)?;
         Ok(match &self.conflicts {
@@ -838,6 +843,7 @@ impl FakeStore {
                 guide: None,
                 priority: None,
                 note: None,
+                on: None,
             };
             submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
         }
@@ -1064,6 +1070,14 @@ impl ItemStore for FakeStore {
         Ok(open.or(with.last()).map(|i| (*i).clone()))
     }
 
+    fn child(&self, id: &ItemId) -> Result<Option<Item>, StoreError> {
+        Ok(self
+            .items
+            .iter()
+            .find(|i| i.state.is_open() && i.parent.as_ref() == Some(id))
+            .cloned())
+    }
+
     fn revisions(&self, id: &ItemId) -> Result<Vec<Revision>, StoreError> {
         Ok(self
             .revisions
@@ -1093,6 +1107,7 @@ impl ItemStore for FakeStore {
             item.branch
         );
         let id = self.next_id(&item.project)?;
+        let parent = item.revision.parent.clone();
         let revision = self.revision(&id, 1, item.revision);
         let item = Item {
             id,
@@ -1106,6 +1121,7 @@ impl ItemStore for FakeStore {
             revision,
             priority: item.priority,
             note: item.note,
+            parent,
         };
         self.items.push(item.clone());
         Ok(item)
@@ -1120,8 +1136,10 @@ impl ItemStore for FakeStore {
     ) -> Result<Item, StoreError> {
         let index = self.items.iter().position(|i| i.id == *id).unwrap();
         let number = self.items[index].revision.number + 1;
+        let parent = revision.parent.clone();
         let revision = self.revision(id, number, revision);
         let item = &mut self.items[index];
+        item.parent = parent;
         item.title = title.into();
         item.state = state;
         item.revision = revision;
@@ -2226,6 +2244,9 @@ pub(crate) struct FakeBackend {
     kind: Backend,
     script: RefCell<Vec<Result<Landing, GitError>>>,
     landed: RefCell<Vec<(String, String)>>,
+    /// Every restack and tidy, as `restack app#2` or `tidy app#1`, in order.
+    stacking: RefCell<Vec<String>>,
+    failing_restack: bool,
 }
 
 impl FakeBackend {
@@ -2234,7 +2255,18 @@ impl FakeBackend {
             kind,
             script: RefCell::default(),
             landed: RefCell::default(),
+            stacking: RefCell::default(),
+            failing_restack: false,
         }
+    }
+
+    pub fn failing_restack(mut self) -> Self {
+        self.failing_restack = true;
+        self
+    }
+
+    pub fn stacking(&self) -> Vec<String> {
+        self.stacking.borrow().clone()
     }
 
     pub fn then(self, landing: Result<Landing, GitError>) -> Self {
@@ -2262,6 +2294,20 @@ impl MergeBackend for FakeBackend {
             return Ok(Landing::Merged { commit: commit(9) });
         }
         script.remove(0)
+    }
+
+    fn restack(&self, _project: &Project, child: &Item) -> Result<(), GitError> {
+        self.stacking
+            .borrow_mut()
+            .push(format!("restack {}", child.id));
+        if self.failing_restack {
+            return Err(GitError::Failed("the restack failed".into()));
+        }
+        Ok(())
+    }
+
+    fn tidy(&self, _project: &Project, item: &Item) {
+        self.stacking.borrow_mut().push(format!("tidy {}", item.id));
     }
 }
 
@@ -2482,6 +2528,13 @@ impl Github for FakeGithub {
         })
     }
 
+    fn retarget(&self, repo: &GithubRepo, number: u64, base: &str) -> Result<(), GithubError> {
+        self.pull(repo, number, |pull| {
+            pull.target = base.into();
+            Ok(())
+        })
+    }
+
     fn squash_merge(
         &self,
         repo: &GithubRepo,
@@ -2531,6 +2584,7 @@ impl Github for FakeGithub {
                 PullState::Merged { head, .. } => PullStatus::Merged {
                     commit: commit(8),
                     head: head.clone(),
+                    base: pull.target.clone(),
                 },
             })
         })
@@ -2754,6 +2808,7 @@ pub(crate) fn remapped(rebase: bool) -> (FakeStore, FakeGit) {
             guide: None,
             priority: None,
             note: None,
+            on: None,
         };
         submit(&mut store, &git, &FakeGithub::default(), request).unwrap();
     }
@@ -2777,6 +2832,7 @@ pub(crate) fn submit_login(store: &mut FakeStore, git: &FakeGit, head: u8) -> It
         guide: None,
         priority: None,
         note: None,
+        on: None,
     };
     submit(store, git, &FakeGithub::default(), request)
         .unwrap()

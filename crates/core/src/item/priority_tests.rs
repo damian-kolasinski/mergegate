@@ -18,6 +18,7 @@ fn add(store: &mut FakeStore) -> ItemId {
             guide: None,
             interdiffs: Vec::new(),
             viewed: Vec::new(),
+            parent: None,
         },
         priority: Some(Priority::P1),
         note: Some("blocks auth".into()),

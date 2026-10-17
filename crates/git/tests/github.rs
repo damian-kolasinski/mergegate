@@ -268,7 +268,7 @@ fn trial_merges_against_the_fetched_target() {
     let head = setup.repo.rev("login");
     let trial = setup
         .git
-        .trial_merge(&app(), &setup.upstream(), "main", &head)
+        .trial_merge(&app(), &setup.upstream(), "main", &head, None)
         .unwrap();
     assert_eq!(trial, Trial::Clean);
 
@@ -288,13 +288,59 @@ fn trial_merges_against_the_fetched_target() {
     );
     let trial = setup
         .git
-        .trial_merge(&app(), &setup.upstream(), "main", &head)
+        .trial_merge(&app(), &setup.upstream(), "main", &head, None)
         .unwrap();
     assert_eq!(
         trial,
         Trial::Conflict {
             target_commit: setup.repo.rev("main"),
             paths: vec!["login.rs".into()],
+        }
+    );
+}
+
+#[test]
+fn a_stacked_trial_is_clean_only_if_github_would_land_its_own_diff() {
+    let setup = Setup::new();
+    // `login` r1 also adds `extra.rs`, and `profile` is built on it.
+    setup
+        .repo
+        .commit_files("Add extra", &[("extra.rs", "fn extra() {}\n")]);
+    let parent = setup.repo.rev("login");
+    setup.repo.git(["checkout", "--quiet", "-b", "profile"]);
+    setup
+        .repo
+        .commit_files("Add profile", &[("profile.rs", "fn profile() {}\n")]);
+    setup.stage("profile");
+    let head = setup.repo.rev("profile");
+
+    // `login` r2 dropped `extra.rs`, and landed squashed on GitHub.
+    setup.repo.checkout("main");
+    setup
+        .repo
+        .commit_files("Add login (app#1)", &[("login.rs", "fn login() {}\n")]);
+    setup.github.git(
+        "acme/app",
+        [
+            "fetch".as_ref(),
+            "--quiet".as_ref(),
+            setup.repo.root().as_os_str(),
+            "main:main".as_ref(),
+        ],
+    );
+    let trial = |base| {
+        setup
+            .git
+            .trial_merge(&app(), &setup.upstream(), "main", &head, base)
+            .unwrap()
+    };
+    // GitHub would merge it, bringing `extra.rs` back.
+    assert_eq!(trial(None), Trial::Clean);
+    assert_eq!(
+        trial(Some(&parent)),
+        Trial::Conflict {
+            target_commit: setup.repo.rev("main"),
+            paths: vec!["extra.rs".into()],
         }
     );
 }

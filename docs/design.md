@@ -136,15 +136,17 @@ Principles
 
 ### 5.1 Stacked items
 
-An agent splits work too big for one review into a stack: `mg submit --on app#41` makes the new item a child of `app#41`. Stacks are for splitting one piece of work; independent work still starts from the target. A child always uses its parent's project, backend and target.
+An agent splits work too big for one review into a stack: `mg submit --on app#41` (or `--on 41`) makes the new item a child of `app#41`. Stacks are for splitting one piece of work; independent work still starts from the target. A child always uses its parent's project, backend and target. The parent sticks across submits; `--on` changes it and `--on none` puts the item onto the target. Once the parent has closed, the child's next revision is on the target and it's no longer stacked.
+
+- **Stacks are linear.** An item has at most one open child: a second `--on` to it is refused, naming the child to stack on instead. `--on` is also refused for a closed item, another project's, the item itself or one stacked on it, and for a branch that contains none of the parent's revisions.
 
 - **Own diff only.** A child's diff is against the parent revision it is built on: the newest revision of the parent that its branch contains. The operator reviews only what the child adds, even while the child is behind its parent.
-- **The agent keeps the child current; the hub never writes to an item's branch.** The child's agent gets `parent.updated` when the parent gets a new revision, or lands without its commits reaching the target (squash or rebase merge). The event carries the exact command (`git rebase --onto <new base> <old parent revision>`), and the agent submits the result. Until then the inbox shows the child as behind its parent.
+- **The agent keeps the child current; the hub never writes to an item's branch.** The child's agent gets `parent.updated` when the parent gets a new revision, or merges without the hub landing the child. The event carries the exact command (`git rebase --onto <new base> <old parent revision>`), and the agent submits the result. Until then the inbox shows the child as behind its parent.
 - **Viewed marks and approval follow the own diff.** On a new child revision, a file stays viewed if its own diff is unchanged, and an approval stays only if the whole own diff is unchanged. Whether the rebase was clean doesn't matter.
-- **Land bottom first.** Approving a child ("Approve, merge after app#41") parks it in *merging*. Once the parent has merged and the child is up to date with it, the hub retargets the child to the target and merges it. Children that aren't approved are retargeted too and keep their state.
-- **Conflicts.** Children are test-merged against the target like any item. A conflict their parent also has is reported on the parent only.
-- **Parent abandoned.** Children get `parent.abandoned`, lose any approval and go back to their agent. The agent rebases them and moves them with `mg submit --on <other item>`, or `--on none` to put them onto the target.
-- **GitHub.** A child's PR targets its parent's branch. The hub never deletes a branch that open children target, so GitHub never closes their PRs.
+- **Land bottom first.** Approving a child ("Approve, merge after app#41") parks it in *merging*, untried. Right after the parent merges, the hub lands the child's own diff onto the new target if it applies cleanly: locally a three-way merge from the parent revision, squashed; on GitHub it retargets the PR and squashes it there. So approving a stack top-down and then its bottom lands all of it. A child whose own diff doesn't apply gets `parent.updated` and waits in *merging* for its rebased revision, which merges on the same approval when its own diff is unchanged (§5). Children that aren't approved are retargeted too and keep their state.
+- **Conflicts.** A stacked child isn't test-merged against the target: its own diff is tried when the parent lands, and once the parent has closed, its agent has already been told to rebase off it. On GitHub, which merges a pull request from its merge-base, a child whose head still carries changes its parent dropped before landing is sent the same `parent.updated` rather than merged, so only its own diff lands. Items of one stack aren't tried against each other, and a conflict with another item that the child's parent also has is reported on the parent only.
+- **Parent abandoned.** Children get `parent.abandoned` with the commands to move their own commits onto the target, lose any approval and go back to their agent, who rebases them and submits, or stacks them elsewhere with `mg submit --on <other item>`. A child of an abandoned parent can't be approved.
+- **GitHub.** A child's PR targets its parent's branch. The hub retargets it before it deletes the parent's branch, and keeps a branch an open child's PR still targets, so GitHub never closes the child's PR.
 
 ## 6. Agent interface (CLI)
 
@@ -400,7 +402,7 @@ The judge is per project and off until the operator picks one, since it sends th
 | Merge | Squash through the GitHub merge API | Squash in staging, push to the operator's repo (`updateInstead`) |
 | Stacked item | PR targets the parent's branch; retargeted to the target after the parent merges | Merged in staging after its parent |
 
-A PR merged or closed on GitHub directly closes its item the same way: merged, with GitHub's commit, or abandoned, and the agent hears it was GitHub's doing. A merged PR's branch is deleted, as after the hub's own merge; a closed one's stays, for whoever closed it to reopen. One pushed to on GitHub directly isn't picked up yet: the item stays open, and its next submit stops at the moved branch.
+A PR merged or closed on GitHub directly closes its item the same way: merged, with GitHub's commit, or abandoned, and the agent hears it was GitHub's doing. A merged PR's branch is deleted, as after the hub's own merge; a closed one's stays, for whoever closed it to reopen. What's stacked on it follows as it would the hub's own merge or abandon (§5.1): retargeted, then landed or sent `parent.updated`, or sent `parent.abandoned`. A stacked item's PR merged on GitHub into its parent's branch landed nothing on the target, so the item is abandoned with GitHub's reason rather than told it merged. Deleting a closed parent's branch on GitHub closes the child's PR too, which then abandons the child. One pushed to on GitHub directly isn't picked up yet: the item stays open, and its next submit stops at the moved branch.
 
 The only things mergegate writes to GitHub are branches, PRs and merges. Agent replies stay in mergegate, which keeps the GitHub thread clean for human reviewers there.
 
@@ -428,7 +430,7 @@ Colours and type come from the Academy Figma; light and dark follow the OS, the 
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Order, within every group: explicit priority (set by the operator agent or the operator) → age, oldest first. An item that conflicts with its target shows "Conflicts with main" (§5).
+- Order, within every group: explicit priority (set by the operator agent or the operator) → how many open items are stacked on it, most first, since landing it moves them along → age, oldest first. An item that conflicts with its target shows "Conflicts with main" (§5).
 - When rules trust some files, the file count shows the ones left to review next to the total ("9 of 14 files"). That is the real cost of the item.
 - A stack shows as one group, bottom item first, each child marked "↳ on app#41" (or "behind app#41" until its agent catches up) with its own to-review count.
 - An item the operator reviewed on an earlier revision shows how many of its files changed since then ("2 changed since r1", or "since approved r1" when that review approved it, §5).

@@ -74,6 +74,15 @@ pub(crate) fn edit(
     update(api, repo, number, body)
 }
 
+pub(crate) fn retarget(
+    api: &Api,
+    repo: &GithubRepo,
+    number: u64,
+    base: &str,
+) -> Result<(), GithubError> {
+    update(api, repo, number, json!({ "base": base }))
+}
+
 pub(crate) fn close(api: &Api, repo: &GithubRepo, number: u64) -> Result<(), GithubError> {
     update(api, repo, number, json!({ "state": "closed" }))
 }
@@ -138,7 +147,11 @@ pub(crate) fn status(api: &Api, repo: &GithubRepo, number: u64) -> Result<PullSt
             GithubError::Failed("GitHub sent a merged pull request without its head".into())
         })?;
         let head = head.to_owned();
-        return Ok(PullStatus::Merged { commit, head });
+        let base = reply.body["base"]["ref"].as_str().ok_or_else(|| {
+            GithubError::Failed("GitHub sent a merged pull request without its base".into())
+        })?;
+        let base = base.to_owned();
+        return Ok(PullStatus::Merged { commit, head, base });
     }
     Ok(match reply.body["state"].as_str() {
         Some("closed") => PullStatus::Closed,

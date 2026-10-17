@@ -1,4 +1,4 @@
-use super::ItemId;
+use super::{ItemId, StackError};
 use crate::git::GitError;
 use crate::github::GithubError;
 use crate::project::ProjectError;
@@ -37,6 +37,8 @@ pub enum ItemError {
     BranchMoved { branch: String, found: String },
     #[error("GitHub no longer has {branch}, which mergegate pushed for an open pull request")]
     BranchGone { branch: String },
+    #[error(transparent)]
+    Stack(#[from] StackError),
     #[error(transparent)]
     Git(#[from] GitError),
     #[error(transparent)]
