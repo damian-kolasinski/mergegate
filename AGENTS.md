@@ -7,7 +7,7 @@ Commits and PRs carry only the operator's authorship: no AI co-author trailers, 
 ## Working
 
 - Run checks with `.claude/scripts/check.sh` (usage at its top), not cargo directly.
-- Ship work with `mg submit`, as the `mergegate` skill describes, not the `ship` skill: the hub opens the GitHub PR. Use the `ship` skill only when the hub is down or the operator asks for it.
+- Ship work with the `ship` skill: it submits through mergegate, where the hub opens the GitHub PR, and follows the `mergegate` skill's review loop until the work is merged.
 
 ## Code
 
