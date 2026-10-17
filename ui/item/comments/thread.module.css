@@ -25,3 +25,29 @@
 .body {
   margin-top: var(--space-1);
 }
+
+/* A folded thread's comment, on one line, its reply count kept whole after
+   it; clicking it unfolds the thread. */
+.excerpt {
+  display: flex;
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.excerpt:hover {
+  color: var(--text-primary);
+}

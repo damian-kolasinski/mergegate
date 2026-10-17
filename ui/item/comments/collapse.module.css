@@ -1,0 +1,39 @@
+/* Points right while folded, down while open, as GitHub's does. */
+.fold {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: calc(-1 * var(--space-1));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.fold:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fold:hover:enabled {
+  background: var(--background-hover);
+  color: var(--text-primary);
+}
+
+.fold svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--motion-fast);
+}
+
+.fold[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}

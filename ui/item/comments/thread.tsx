@@ -1,13 +1,20 @@
 import { createMemo, For, Match, Show, Switch } from "solid-js";
 import type { Comment } from "../../api/Comment";
 import type { Spot } from "../../diff-view/diff-view";
-import { Badge, ErrorNote, Markdown, Meta } from "../../design-system";
+import {
+  Badge,
+  ErrorNote,
+  Markdown,
+  Meta,
+  markdownText,
+} from "../../design-system";
 import { linesOf, linesOn, sameSpot, spotOf } from "./anchor";
+import { FoldButton } from "./collapse";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
 import { Editor } from "./editor";
 import { ExternalMeta, OverrideEditor, RejectionActions } from "./external";
-import { ReplyList } from "./replies";
+import { ReplyList, StatusBadge } from "./replies";
 import { ReplyButton } from "./reply-drafts";
 import styles from "./thread.module.css";
 
@@ -126,8 +133,14 @@ export function Thread(props: { comments: Comments; spot: Spot }) {
   );
 }
 
-/** A comment with its thread, or its editor while it's being edited. */
+/**
+ * A comment with its thread, or its editor while it's being edited. Folded,
+ * the thread is its header and a line of the comment, with the agent's
+ * latest answer on the header in place of the replies.
+ */
 export function CommentCard(props: { comments: Comments; comment: Comment }) {
+  const folded = () => props.comments.collapse.folded(props.comment);
+  const replies = () => props.comments.thread(props.comment).length;
   return (
     <Show
       when={!props.comments.drafts.editing(props.comment)}
@@ -143,6 +156,7 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
         aria-label={`Comment ${props.comment.id}`}
       >
         <header class={styles.meta}>
+          <FoldButton comments={props.comments} comment={props.comment} />
           <Show
             when={props.comment.external}
             fallback={
@@ -165,15 +179,49 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
             {(lines) => <Meta>{linesOf(lines().start, lines().line)}</Meta>}
           </Show>
           <Placed comment={props.comment} revision={props.comments.revision} />
+          <Show when={folded() && props.comments.replies.answer(props.comment)}>
+            {(answer) => (
+              <StatusBadge
+                status={answer().status}
+                addressedIn={answer().addressed_in}
+              />
+            )}
+          </Show>
           <DraftActions comments={props.comments} comment={props.comment} />
           <RejectionActions comments={props.comments} comment={props.comment} />
           <ReplyButton comments={props.comments} comment={props.comment} />
         </header>
-        <div class={styles.body}>
-          <Markdown source={props.comment.body} />
-        </div>
-        <ReplyList comments={props.comments} comment={props.comment} />
-        <OverrideEditor comments={props.comments} comment={props.comment} />
+        <Show
+          when={!folded()}
+          fallback={
+            <button
+              type="button"
+              class={styles.excerpt}
+              onClick={(event) => {
+                props.comments.collapse.toggle(props.comment);
+                // A focused button would take Enter from the shortcuts.
+                event.currentTarget.blur();
+              }}
+            >
+              <span class={styles.line}>
+                {markdownText(props.comment.body)}
+              </span>
+              <Show when={replies()}>
+                {(count) => (
+                  <Meta>
+                    {" "}· {count()} {count() === 1 ? "reply" : "replies"}
+                  </Meta>
+                )}
+              </Show>
+            </button>
+          }
+        >
+          <div class={styles.body}>
+            <Markdown source={props.comment.body} />
+          </div>
+          <ReplyList comments={props.comments} comment={props.comment} />
+          <OverrideEditor comments={props.comments} comment={props.comment} />
+        </Show>
         <Show when={props.comments.drafts.failure(props.comment)}>
           {(failure) => <ErrorNote failure={failure()} />}
         </Show>

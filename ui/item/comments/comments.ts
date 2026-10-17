@@ -3,6 +3,7 @@ import type { Comment } from "../../api/Comment";
 import type { Review } from "../../api/Review";
 import type { Spot } from "../../diff-view/diff-view";
 import { spotOf } from "./anchor";
+import { useCollapse } from "./collapse";
 import { useDrafts } from "./drafts";
 import { useEditor } from "./editor";
 import { useExternal } from "./external";
@@ -43,6 +44,7 @@ export function useComments(
   const revision = diff.item.revision.number;
   const editor = useEditor();
   const sent = useSent(diff);
+  const collapse = useCollapse(diff.item.id, editor);
   /** Puts a comment back on the page: in the diff, or in the list. */
   const show = (id: string) => {
     const comment = threads.all().find((comment) => comment.id === id);
@@ -116,6 +118,7 @@ export function useComments(
     replyDrafts,
     external,
     threads,
+    collapse,
     /** The Conversation list mustn't close over text typed in it. */
     aside: () => {
       const id = editor.open()?.comment;
