@@ -24,6 +24,7 @@ mod languages;
 mod lifecycle;
 mod merge;
 mod names;
+mod presence;
 mod priority;
 mod projects;
 mod replies;

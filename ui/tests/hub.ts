@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -43,6 +43,26 @@ export class Hub {
     });
     return JSON.parse(stdout);
   }
+
+  /**
+   * Starts an agent's `mg wait` on `item`, as one blocked on its feedback
+   * is; kill it to end the wait. `stop` kills any still running.
+   */
+  wait(item: string): ChildProcess {
+    const wait = spawn(mgBin(), ["wait", item, "--timeout", "0"], {
+      cwd: this.root,
+      env: {
+        ...isolated(),
+        ...this.env,
+        MERGEGATE_HOME: join(this.root, "home"),
+      },
+      stdio: "ignore",
+    });
+    this.waits.push(wait);
+    return wait;
+  }
+
+  private readonly waits: ChildProcess[] = [];
 
   /** A repo named `name` with one commit on `main`, registered and pushed to. */
   project(name: string): Project {
@@ -90,6 +110,7 @@ export class Hub {
   }
 
   stop() {
+    for (const wait of this.waits) wait.kill();
     try {
       this.mg(["hub", "stop"]);
     } finally {

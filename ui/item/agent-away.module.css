@@ -1,0 +1,16 @@
+/* A strip under the header, tinted as a held merge's: what the operator
+   sends goes nowhere until they act. */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-container);
+  background: var(--background-tint-warning);
+  animation: var(--motion-arrive);
+}
+
+.notice > :not(:first-child) {
+  white-space: normal;
+}
