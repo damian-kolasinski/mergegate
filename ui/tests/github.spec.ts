@@ -58,6 +58,50 @@ test("f8 approving merges the pull request", async ({ page, github }) => {
   await expect(page.getByText(/^Merged as [0-9a-f]{7}$/)).toBeVisible();
 });
 
+test("a pull request merged on GitHub merges the item on screen", async ({
+  page,
+  github,
+}) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(
+    page.getByRole("button", { name: "Approve & merge" }),
+  ).toBeVisible();
+
+  // No reload: the hub's poll finds it and the screen follows.
+  await github.github.onGithub(1, "merge");
+  await expect(screen.getByRole("region", { name: "Merged" })).toContainText(
+    "Merged into main",
+  );
+  await expect(
+    page.getByRole("button", { name: "Approve & merge" }),
+  ).toHaveCount(0);
+
+  await page.goto(github.hub.url);
+  await expect(page.getByRole("region", { name: "Needs you" })).toContainText(
+    "Nothing to review",
+  );
+  await expect(page.getByText("Closed today (1)")).toBeVisible();
+});
+
+test("a pull request closed on GitHub abandons the item", async ({
+  page,
+  github,
+}) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(
+    page.getByRole("button", { name: "Approve & merge" }),
+  ).toBeVisible();
+
+  await github.github.onGithub(1, "close");
+  await expect(screen.getByRole("region", { name: "Abandoned" })).toBeVisible();
+});
+
 test("an item on the local backend has no pull request", async ({
   page,
   hub,

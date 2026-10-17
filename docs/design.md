@@ -400,11 +400,11 @@ The judge is per project and off until the operator picks one, since it sends th
 | Merge | Squash through the GitHub merge API | Squash in staging, push to the operator's repo (`updateInstead`) |
 | Stacked item | PR targets the parent's branch; retargeted to the target after the parent merges | Merged in staging after its parent |
 
-A PR merged, closed or pushed to on GitHub directly isn't picked up yet: the item stays open, and its next submit stops at the moved branch.
+A PR merged or closed on GitHub directly closes its item the same way: merged, with GitHub's commit, or abandoned, and the agent hears it was GitHub's doing. A merged PR's branch is deleted, as after the hub's own merge; a closed one's stays, for whoever closed it to reopen. One pushed to on GitHub directly isn't picked up yet: the item stays open, and its next submit stops at the moved branch.
 
 The only things mergegate writes to GitHub are branches, PRs and merges. Agent replies stay in mergegate, which keeps the GitHub thread clean for human reviewers there.
 
-The hub polls each open github item's pull request comments every 30s, with ETag-conditional requests, and `mg sync` refetches on demand. Webhooks would need a public endpoint, which conflicts with local-only.
+The hub polls each open github item's pull request comments every 30s, with ETag-conditional requests, then where the pull request stands, and `mg sync` refetches both on demand. Webhooks would need a public endpoint, which conflicts with local-only.
 
 ## 9. UX
 

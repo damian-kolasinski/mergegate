@@ -432,6 +432,61 @@ fn f8_a_merge_github_refuses_is_held_until_retried() {
 }
 
 #[test]
+fn f8_a_pull_request_merged_on_github_merges_the_item() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github);
+    let commit = github.merge_on_github(ACME, 1);
+
+    // The poller finds it in time; a sync finds it at once.
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    assert_eq!(item(&env)["state"], "merged");
+    let wait = env.mg(&["wait", "app#1"]).assert_code(0).stdout;
+    assert!(
+        wait.contains(&format!(
+            "item.merged app#1 r1: it was merged on GitHub as {commit}"
+        )),
+        "{wait}"
+    );
+    let replay = env
+        .mg(&["--json", "feedback", "app#1", "--since", "0"])
+        .assert_code(0)
+        .json();
+    assert_eq!(replay["events"][0]["source"], "external", "{replay}");
+    // As after a merge through the hub, the branch goes from GitHub.
+    assert_eq!(github.rev(ACME, "login"), None);
+
+    // Approving now finds nothing left to merge.
+    let reply = send(
+        &env,
+        "POST",
+        "/api/items/app%231/approve",
+        &json!({ "revision": 1, "summary": "" }),
+    );
+    assert_eq!(reply.status, 409, "{}", reply.body);
+    assert_eq!(json_of(&reply)["error"]["code"], "item_closed");
+}
+
+#[test]
+fn f14_a_pull_request_closed_on_github_abandons_the_item() {
+    let github = FakeGithub::start();
+    let (env, repo) = submitted(&github);
+    github.close_on_github(ACME, 1);
+
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    assert_eq!(item(&env)["state"], "abandoned");
+    let wait = env.mg(&["wait", "app#1"]).assert_code(0).stdout;
+    assert!(
+        wait.contains(
+            "item.abandoned app#1 r1: GitHub abandoned it\n  \
+             Its pull request was closed on GitHub without merging."
+        ),
+        "{wait}"
+    );
+    // Whoever closed it may reopen it on GitHub, so its branch stays there.
+    assert_eq!(github.rev(ACME, "login"), Some(repo.rev("login")));
+}
+
+#[test]
 fn f9_a_conflict_on_github_sends_the_item_back_to_rebase() {
     let github = FakeGithub::start();
     let (env, repo) = submitted(&github);

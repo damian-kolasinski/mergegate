@@ -293,6 +293,40 @@ pub(super) fn open_elsewhere(shared: &Shared, request: &Request) -> Response {
     Response::empty(204)
 }
 
+/// Merges or closes pull request `number` of `repo` from GitHub's own page,
+/// as someone there does without the hub: `action` is `merge`, squashing it
+/// under GitHub's default title, or `close`.
+pub(super) fn act_elsewhere(shared: &Shared, repo: &str, number: u64, action: &str) -> Response {
+    let mut state = shared.state();
+    let call = Call {
+        shared,
+        repo: repo.into(),
+        can_push: true,
+    };
+    let number = number.to_string();
+    match action {
+        "merge" => call.merge(&mut state, &number, &Value::Null),
+        "close" => call.update(&mut state, &number, &json!({ "state": "closed" })),
+        _ => message(404, "Not Found"),
+    }
+}
+
+/// `POST /_fake/pulls/{number}/merge` or `.../close` with `{repo}`, for a
+/// process that can't call [`FakeGithub`](super::FakeGithub)'s own methods.
+pub(super) fn control(shared: &Shared, request: &Request) -> Response {
+    let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+    let segments: Vec<&str> = request.path.trim_start_matches('/').split('/').collect();
+    let (["_fake", "pulls", number, action], Some(repo)) =
+        (segments.as_slice(), body["repo"].as_str())
+    else {
+        return Response::empty(400);
+    };
+    let Ok(number) = number.parse() else {
+        return Response::empty(400);
+    };
+    act_elsewhere(shared, repo, number, action)
+}
+
 fn message(status: u16, message: &str) -> Response {
     Response::json(status, &json!({ "message": message }))
 }

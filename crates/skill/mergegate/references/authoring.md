@@ -65,6 +65,8 @@ On an item with a GitHub pull request, the hub reads the pull request's comments
 - The operator can agree with a rejection, or override it with `comment.override`: then make the change.
 - `mg feedback app#3` hands over the held comments at once along with anything else new. `mg sync app#3` reads the pull request now and hands over everything held; use it when you know a comment is there that never arrived.
 
+The pull request can also end on GitHub, without the operator. Merged there, the item merges with it: `item.merged` says it was merged on GitHub and as which commit. Closed there unmerged, the item is abandoned: `item.abandoned` says GitHub abandoned it. Either way the item is closed; there's nothing left to submit.
+
 ## The queue
 
 `mg inbox` shows every open item: those waiting for the operator, those with their agents, and those merging, each with the files the operator has to read when rules trust some, as in `4 of 6 files to review`. Each group is ordered by priority (`p0` first, then none), then oldest first, with each item's note under it.

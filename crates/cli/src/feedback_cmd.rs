@@ -216,7 +216,11 @@ pub(crate) fn event(event: &Event) -> String {
             branch,
             commands,
         } => {
-            let mut out = format!("{head} the operator merged it as {commit}");
+            let how = match event.source {
+                Source::External => "it was merged on GitHub",
+                _ => "the operator merged it",
+            };
+            let mut out = format!("{head} {how} as {commit}");
             // A hub older than the cleanup commands sends none.
             if !commands.is_empty() {
                 out.push_str(&format!(

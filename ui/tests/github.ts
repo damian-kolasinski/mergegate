@@ -88,6 +88,19 @@ export class FakeGithub {
       throw new Error(`fake-github answered ${response.status}`);
   }
 
+  /**
+   * Merges or closes pull request `pull` of `acme/app` on GitHub, as someone
+   * there would, without the hub.
+   */
+  async onGithub(pull: number, action: "merge" | "close") {
+    const response = await fetch(`${this.web}/_fake/pulls/${pull}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ repo: "acme/app" }),
+    });
+    if (!response.ok)
+      throw new Error(`fake-github answered ${response.status}`);
+  }
+
   stop() {
     // Closing stdin is how it's told to stop.
     this.process.stdin?.end();

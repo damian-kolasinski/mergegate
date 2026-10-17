@@ -238,6 +238,33 @@ impl FakeGithub {
             .or_default() += count;
     }
 
+    /// Squash-merges pull request `pull` of `repo` from GitHub's page, as
+    /// someone there does without the hub; the commit it landed as.
+    #[track_caller]
+    pub fn merge_on_github(&self, repo: &str, pull: u64) -> String {
+        let reply = rest::act_elsewhere(&self.shared, repo, pull, "merge");
+        assert_eq!(
+            reply.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&reply.body)
+        );
+        let body: serde_json::Value = serde_json::from_slice(&reply.body).unwrap();
+        body["sha"].as_str().unwrap().to_owned()
+    }
+
+    /// Closes pull request `pull` of `repo` unmerged from GitHub's page.
+    #[track_caller]
+    pub fn close_on_github(&self, repo: &str, pull: u64) {
+        let reply = rest::act_elsewhere(&self.shared, repo, pull, "close");
+        assert_eq!(
+            reply.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&reply.body)
+        );
+    }
+
     pub fn pulls(&self) -> Vec<Pull> {
         self.state().pulls.clone()
     }

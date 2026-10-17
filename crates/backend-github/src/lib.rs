@@ -11,7 +11,9 @@ mod token;
 use std::path::PathBuf;
 
 use mergegate_core::git::Remote;
-use mergegate_core::github::{Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind};
+use mergegate_core::github::{
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullStatus,
+};
 
 use api::Api;
 
@@ -113,6 +115,10 @@ impl Github for GithubClient {
         head: &str,
     ) -> Result<Option<String>, GithubError> {
         pulls::merged(&self.api, repo, number, head)
+    }
+
+    fn pull_status(&self, repo: &GithubRepo, number: u64) -> Result<PullStatus, GithubError> {
+        pulls::status(&self.api, repo, number)
     }
 
     fn close_pull(&self, repo: &GithubRepo, number: u64) -> Result<(), GithubError> {

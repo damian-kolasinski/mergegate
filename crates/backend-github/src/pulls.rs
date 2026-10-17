@@ -1,6 +1,6 @@
 //! Pull requests.
 
-use mergegate_core::github::{GithubError, GithubRepo, Pull};
+use mergegate_core::github::{GithubError, GithubRepo, Pull, PullStatus};
 use serde_json::{Value, json};
 use ureq::http::Method;
 
@@ -125,6 +125,25 @@ pub(crate) fn merged(
         return sha(&reply.body["merge_commit_sha"]).map(Some);
     }
     Ok(None)
+}
+
+pub(crate) fn status(api: &Api, repo: &GithubRepo, number: u64) -> Result<PullStatus, GithubError> {
+    let reply = api.get(&format!("/repos/{repo}/pulls/{number}"))?;
+    if !reply.ok() {
+        return Err(not_found_is_access(repo, &reply));
+    }
+    if reply.body["merged"] == true {
+        let commit = sha(&reply.body["merge_commit_sha"])?;
+        let head = reply.body["head"]["sha"].as_str().ok_or_else(|| {
+            GithubError::Failed("GitHub sent a merged pull request without its head".into())
+        })?;
+        let head = head.to_owned();
+        return Ok(PullStatus::Merged { commit, head });
+    }
+    Ok(match reply.body["state"].as_str() {
+        Some("closed") => PullStatus::Closed,
+        _ => PullStatus::Open,
+    })
 }
 
 fn update(api: &Api, repo: &GithubRepo, number: u64, body: Value) -> Result<(), GithubError> {
