@@ -635,7 +635,7 @@ extension Locale {
     ["--priority", "p2"],
   );
 
-  await page.setViewportSize({ width: 1440, height: 490 });
+  await page.setViewportSize({ width: 1440, height: 600 });
   await age(page, {
     "app#1": 42,
     "web#1": 18,
