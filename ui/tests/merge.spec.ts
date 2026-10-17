@@ -67,7 +67,7 @@ test("f9 a conflict shows what to rebase", async ({ page }) => {
     await page.keyboard.press("Escape");
     const withAgents = page.getByRole("region", { name: "With agents" });
     await expect(
-      withAgents.getByRole("listitem").getByText("Conflict"),
+      withAgents.getByRole("listitem").getByText("Conflicts with main"),
     ).toBeVisible();
   } finally {
     hub.stop();

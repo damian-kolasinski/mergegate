@@ -1,6 +1,7 @@
 //! Early conflict detection (F9): the hub test-merges open items as their
-//! target moves, sends a conflict to the agent before the operator gets to
-//! the item, and shows the open items that conflict with each other.
+//! target moves and sends a conflict to the agent before the operator gets
+//! to the item. Open items aren't merged into each other: only the target
+//! they merge into counts.
 
 use std::time::{Duration, Instant};
 
@@ -139,27 +140,33 @@ fn f9_a_target_moved_outside_the_hub_sends_the_conflict_before_review() {
 }
 
 #[test]
-fn f9_open_items_that_conflict_with_each_other_show_it_first() {
-    let (env, _repo) = submitted(&[
+fn f9_items_conflicting_only_with_each_other_show_nothing_until_one_lands() {
+    let (env, repo) = submitted(&[
         ("greet", &[("README", "hello\n")]),
-        ("docs", &[("docs/guide.md", "Guide\n")]),
         ("wave", &[("README", "hey\n")]),
     ]);
-    let found = inbox_once(&env, |inbox| {
-        inbox["needs_you"][0]["conflicts_with"] != json!([])
-    });
-    let needs_you = &found["needs_you"];
-    assert_eq!(ids(needs_you), ["app#1", "app#3", "app#2"]);
-    assert_eq!(needs_you[0]["conflicts_with"], json!(["app#3"]));
-    assert_eq!(needs_you[1]["conflicts_with"], json!(["app#1"]));
-    assert_eq!(needs_you[2]["conflicts_with"], json!([]));
-    // Priority still comes first.
-    env.mg(&["prioritize", "app#2", "--priority", "p3"])
-        .assert_code(0);
-    assert_eq!(ids(&inbox(&env)["needs_you"]), ["app#2", "app#1", "app#3"]);
-
-    let text = env.mg(&["inbox"]).assert_code(0).stdout;
-    assert!(text.contains("conflicts with app#3"), "{text}");
-    // Neither agent hears of it: only landing one makes it real.
+    std::thread::sleep(Duration::from_millis(800));
+    let both = inbox(&env);
+    assert_eq!(ids(&both["needs_you"]), ["app#1", "app#2"]);
+    for item in both["needs_you"].as_array().unwrap() {
+        assert_eq!(item["target"], "main");
+        assert_eq!(item["blocked"], Value::Null);
+    }
     assert!(log(&env).is_empty());
+
+    // Landing one makes the other conflict with the target.
+    repo.git(["merge", "--quiet", "--ff-only", "greet"]);
+    let found = inbox_once(&env, |inbox| inbox["with_agents"] != json!([]));
+    assert_eq!(ids(&found["needs_you"]), ["app#1"]);
+    assert_eq!(ids(&found["with_agents"]), ["app#2"]);
+    assert_eq!(
+        found["with_agents"][0]["blocked"]["paths"],
+        json!(["README"])
+    );
+    let text = env.mg(&["inbox"]).assert_code(0).stdout;
+    let short = &repo.rev("main")[..12];
+    assert!(
+        text.contains(&format!("conflicts with main at {short}: README")),
+        "{text}"
+    );
 }

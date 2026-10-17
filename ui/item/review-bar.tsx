@@ -29,8 +29,6 @@ export function ReviewBar(props: {
    * its number, as `#42`, and branch.
    */
   pullRequest: { label: string; branch: string } | undefined;
-  /** Open items this one conflicts with, which the confirm step names. */
-  conflictsWith: readonly string[];
   /** The newest revision's merge is held or conflicts. */
   blocked: "held" | "conflict" | undefined;
   /** The newer revision submitted, if any: only it can be approved. */
@@ -338,12 +336,6 @@ export function ReviewBar(props: {
                 <Show when={props.unviewed}>
                   <Meta tone="removed">
                     {plural(props.unviewed, "file")} not reviewed yet.
-                  </Meta>
-                </Show>
-                <Show when={props.conflictsWith.length}>
-                  <Meta>
-                    Conflicts with {props.conflictsWith.join(", ")}, which go
-                    back to their agents once this lands.
                   </Meta>
                 </Show>
               </span>

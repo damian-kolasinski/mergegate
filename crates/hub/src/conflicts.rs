@@ -1,13 +1,13 @@
 //! Early conflict detection's loop (design §5): every project's open items
-//! test-merged into their targets and into each other on every submit, after
-//! each of the hub's merges, and on a poll for targets moved outside the hub.
+//! test-merged into their targets on every submit, after each of the hub's
+//! merges, and on a poll for targets moved outside the hub.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use api::event::UiEvent;
-use mergegate_core::conflict::{ConflictError, Pairing, Seen, Watch, save_pairs};
+use mergegate_core::conflict::{Seen, Watch};
 use mergegate_core::project::{ProjectName, ProjectStore};
 
 use crate::server::AppState;
@@ -18,7 +18,6 @@ const POLL_MS: u64 = 60_000;
 
 const READING: &str = "reading open items to test-merge";
 const INTO_TARGETS: &str = "test-merging open items into their targets";
-const WITH_EACH_OTHER: &str = "test-merging open items with each other";
 
 pub(crate) async fn run(state: Arc<AppState>) {
     // For tests of what a merge finds, which the watch could find first.
@@ -58,17 +57,12 @@ async fn pass(
         let tried = seen.remove(&name).unwrap_or_default();
         let project = name.clone();
         let read = state
-            .blocking(move |store, _| {
-                Ok::<_, ConflictError>((
-                    Watch::read(store, &project)?,
-                    Pairing::read(store, &project)?,
-                ))
-            })
+            .blocking(move |store, _| Watch::read(store, &project))
             .await;
-        let (watch, pairing) = match read {
-            Ok((Some(watch), pairing)) => (watch, pairing),
+        let watch = match read {
+            Ok(Some(watch)) => watch,
             // Removed since it was listed.
-            Ok((None, _)) => continue,
+            Ok(None) => continue,
             Err(e) => {
                 report(failing, &name, READING, vec![e.to_string()]);
                 seen.insert(name, tried);
@@ -78,24 +72,16 @@ async fn pass(
         report(failing, &name, READING, Vec::new());
         // Fetches and merges run without the store, so a slow upstream never
         // holds up the hub's requests; with nothing moved, they merge nothing.
-        let (mut merges, paired) = state
-            .unlocked(move |git, github| {
-                (watch.try_merges(git, github, &tried), pairing.try_all(git))
-            })
+        let mut merges = state
+            .unlocked(move |git, github| watch.try_merges(git, github, &tried))
             .await;
         let mut errors: Vec<String> = std::mem::take(&mut merges.errors)
             .iter()
             .map(ToString::to_string)
             .collect();
         let next_seen = std::mem::take(&mut merges.seen);
-        let project = name.clone();
-        let (handed_back, saved) = state
-            .blocking(move |store, git| {
-                (
-                    merges.hand_back(store, git),
-                    paired.and_then(|tried| save_pairs(store, &project, &tried)),
-                )
-            })
+        let handed_back = state
+            .blocking(move |store, git| merges.hand_back(store, git))
             .await;
         // A hand-back that failed partway may have notified some items, so
         // the clients refresh anyway, and the next pass tries every item.
@@ -110,33 +96,13 @@ async fn pass(
             }
         };
         report(failing, &name, INTO_TARGETS, errors);
-        let paired = match saved {
-            Ok(changed) => {
-                report(failing, &name, WITH_EACH_OTHER, Vec::new());
-                changed
-            }
-            Err(e) => {
-                report(failing, &name, WITH_EACH_OTHER, vec![e.to_string()]);
-                Vec::new()
-            }
-        };
         if failed || !handed_back.is_empty() {
             state.events.logged();
-        }
-        // An open item's page shows what it conflicts with, as the inbox does.
-        let mut changed = handed_back.clone();
-        changed.extend(
-            paired
-                .iter()
-                .filter(|id| !handed_back.contains(id))
-                .cloned(),
-        );
-        for id in &changed {
-            state.events.send(UiEvent::ItemChanged {
-                item: id.to_string(),
-            });
-        }
-        if failed || !changed.is_empty() {
+            for id in &handed_back {
+                state.events.send(UiEvent::ItemChanged {
+                    item: id.to_string(),
+                });
+            }
             state.events.send(UiEvent::InboxChanged);
         }
     }

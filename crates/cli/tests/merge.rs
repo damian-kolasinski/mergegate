@@ -200,7 +200,7 @@ fn f9_a_conflict_sends_the_item_back_to_rebase() {
     assert_eq!(inbox["with_agents"][0]["blocked"], conflict);
     let text = env.mg(&["inbox"]).assert_code(0).stdout;
     let blocked = format!(
-        "\n      conflicts with the target at {}: src/login.rs\n",
+        "\n      conflicts with main at {}: src/login.rs\n",
         &target[..12]
     );
     assert!(text.contains(&blocked), "{text}");

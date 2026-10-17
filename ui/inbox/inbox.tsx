@@ -268,7 +268,6 @@ function flagged(item: InboxItem): boolean {
       item.state === "changes_requested" ||
       item.changed_since ||
       item.blocked ||
-      item.conflicts_with.length ||
       item.demo,
   );
 }
@@ -365,20 +364,12 @@ function Entry(props: {
             {(blocked) => (
               <span class={styles.flag} title={why(blocked())}>
                 <Badge tone="warning" solid>
-                  {blocked().kind === "held" ? "Merge held" : "Conflict"}
+                  {blocked().kind === "held"
+                    ? "Merge held"
+                    : `Conflicts with ${props.item.target}`}
                 </Badge>
               </span>
             )}
-          </Show>
-          <Show when={props.item.conflicts_with.length}>
-            <span
-              class={styles.flag}
-              title={`Conflicts with ${props.item.conflicts_with.join(", ")} now: whichever merges first may leave the other to rebase`}
-            >
-              <Badge tone="warning">
-                ⚡ conflicts with {props.item.conflicts_with.join(", ")}
-              </Badge>
-            </span>
           </Show>
           <Show when={props.item.demo}>
             <span class={styles.flag} title="Has screenshots or recordings">

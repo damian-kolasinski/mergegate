@@ -11,9 +11,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use mergegate_core::attachment::AttachmentStore;
 use mergegate_core::interdiff::{self, ChangedSince};
-use mergegate_core::item::{
-    self, Item, ItemBackend, ItemError, ItemId, ItemState, ItemStore, Submit,
-};
+use mergegate_core::item::{self, Item, ItemBackend, ItemError, ItemState, ItemStore, Submit};
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::review::Waiting;
 use mergegate_core::store::StoreError;
@@ -135,11 +133,6 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
     let inbox = state
         .blocking(|store, _| {
             let inbox = item::inbox(store)?;
-            // Conflicts are between open items, which are all listed.
-            let open: Vec<&Item> = [&inbox.needs_you, &inbox.with_agents, &inbox.merging]
-                .into_iter()
-                .flatten()
-                .collect();
             let entries = |items: &[Item]| -> Result<Vec<_>, StoreError> {
                 items
                     .iter()
@@ -147,10 +140,8 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                         let blocked = merge::blocked(store, item)?;
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
-                        let with = inbox.conflicts.get(&item.id).map_or(&[][..], Vec::as_slice);
-                        let with = names(&open, with);
                         let waiting = inbox.waiting.get(&item.id).copied().unwrap_or_default();
-                        Ok(inbox_entry(item, blocked, demo, changed, with, waiting))
+                        Ok(inbox_entry(item, blocked, demo, changed, waiting))
                     })
                     .collect()
             };
@@ -220,7 +211,6 @@ fn inbox_entry(
     blocked: Option<api::merge::Blocked>,
     demo: bool,
     changed: Option<ChangedSince>,
-    conflicts_with: Vec<String>,
     waiting: Waiting,
 ) -> api::item::InboxItem {
     let revision = &item.revision;
@@ -230,6 +220,7 @@ fn inbox_entry(
         title: item.title.clone(),
         branch: item.branch.clone(),
         state: state_to_api(item.state),
+        target: item.target.clone(),
         revision: revision.number,
         files: revision.stat.files,
         additions: revision.stat.additions,
@@ -243,21 +234,9 @@ fn inbox_entry(
         changed_since: changed.map(changed_to_api),
         priority: item.priority.map(priority::to_api),
         note: item.note.clone(),
-        conflicts_with,
         questions: waiting.questions,
         rejections: waiting.rejections,
     }
-}
-
-/// The names of the items `ids` are of, among `items`; an ID none of them
-/// has stands for itself.
-pub(crate) fn names(items: &[&Item], ids: &[ItemId]) -> Vec<String> {
-    ids.iter()
-        .map(|id| match items.iter().find(|item| item.id == *id) {
-            Some(item) => item.name().to_string(),
-            None => id.to_string(),
-        })
-        .collect()
 }
 
 pub(crate) fn changed_to_api(changed: ChangedSince) -> api::item::ChangedSince {

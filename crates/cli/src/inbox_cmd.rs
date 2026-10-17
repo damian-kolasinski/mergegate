@@ -91,15 +91,12 @@ fn line(i: &InboxItem) -> String {
         }) => {
             let short = &target_commit[..target_commit.len().min(12)];
             out.push_str(&format!(
-                "\n      conflicts with the target at {short}: {}",
+                "\n      conflicts with {} at {short}: {}",
+                i.target,
                 listed(paths)
             ));
         }
         None => {}
-    }
-    if !i.conflicts_with.is_empty() {
-        let with = i.conflicts_with.join(", ");
-        out.push_str(&format!("\n      conflicts with {with}"));
     }
     out
 }
