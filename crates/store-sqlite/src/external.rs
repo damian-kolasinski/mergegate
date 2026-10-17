@@ -1,20 +1,26 @@
 //! The `external_comments` and `event_comments` tables: comments from a
 //! pull request, the batches that carry them, and the operator's override.
 
-use mergegate_core::external::{Batch, Delivered, ExternalStore, Held, NewExternal, Override};
+use mergegate_core::external::{
+    Batch, Delivered, ExternalStore, Held, NewExternal, Override, Vote,
+};
 use mergegate_core::feedback::{Event, EventKind};
 use mergegate_core::item::ItemId;
 use mergegate_core::review::{Comment, CommentId, NewReply, Reply};
 use mergegate_core::store::StoreError;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
-use crate::comments::{self, CommentRow, FROM};
+use crate::comments::{self, COLUMNS, CommentRow, FROM};
 use crate::items::NOW;
 use crate::{Store, replies};
 
 /// `?1` and `?2` name the item.
 const ITEM: &str = "SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
                     WHERE p.name = ?1 AND i.number = ?2";
+
+/// Held comments of item `?1`, as `x`, that a batch may carry: those voted
+/// up.
+const READY: &str = "x.item_id = ?1 AND x.pending_at IS NOT NULL AND x.vote = 'up'";
 
 impl ExternalStore for Store {
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError> {
@@ -79,10 +85,12 @@ impl ExternalStore for Store {
             params![id.0 as i64, body],
         )
         .map_err(StoreError::new)?;
+        // SET reads the row as it was, so `vote` is the vote before the edit.
         tx.execute(
             "UPDATE external_comments
-             SET seen_at = ?2, pending_at = coalesce(pending_at, ?2),
-                 dated_at = max(dated_at, ?3)
+             SET seen_at = ?2, dated_at = max(dated_at, ?3),
+                 pending_at = CASE vote WHEN 'down' THEN NULL ELSE coalesce(pending_at, ?2) END,
+                 vote = CASE vote WHEN 'down' THEN 'down' END
              WHERE comment_id = ?1",
             params![id.0 as i64, now as i64, dated as i64],
         )
@@ -133,15 +141,17 @@ impl ExternalStore for Store {
 
     fn held(&self, id: &ItemId) -> Result<Option<Held>, StoreError> {
         let item = params![id.project().as_str(), id.number() as i64];
-        let (first, last): (Option<i64>, Option<i64>) = self
+        let (first, last, awaiting): (Option<i64>, Option<i64>, bool) = self
             .conn
             .query_row(
                 &format!(
-                    "SELECT min(pending_at), max(seen_at) FROM external_comments
+                    "SELECT min(pending_at), max(seen_at),
+                            coalesce(max(vote IS NULL), 0)
+                     FROM external_comments
                      WHERE item_id = ({ITEM}) AND pending_at IS NOT NULL"
                 ),
                 item,
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .map_err(StoreError::new)?;
         let (Some(first), Some(last)) = (first, last) else {
@@ -183,6 +193,7 @@ impl ExternalStore for Store {
             .collect::<Result<_, _>>()
             .map_err(StoreError::new)?;
         Ok(Some(Held {
+            awaiting,
             first: first as u64,
             last: last as u64,
             pushed: pushed as u64,
@@ -193,15 +204,14 @@ impl ExternalStore for Store {
     fn release(&mut self, id: &ItemId, revision: u32) -> Result<Option<Event>, StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
         let item_id = item_id(&tx, id)?;
-        let held: bool = tx
+        let ready: bool = tx
             .query_row(
-                "SELECT EXISTS (SELECT 1 FROM external_comments
-                                WHERE item_id = ?1 AND pending_at IS NOT NULL)",
+                &format!("SELECT EXISTS (SELECT 1 FROM external_comments x WHERE {READY})"),
                 params![item_id],
                 |row| row.get(0),
             )
             .map_err(StoreError::new)?;
-        if !held {
+        if !ready {
             return Ok(None);
         }
         let cursor: i64 = tx
@@ -213,18 +223,19 @@ impl ExternalStore for Store {
             )
             .map_err(StoreError::new)?;
         tx.execute(
-            "INSERT INTO event_comments (cursor, comment_id, body, edited)
-             SELECT ?2, c.id, c.body,
-                    EXISTS (SELECT 1 FROM event_comments e
-                            WHERE e.comment_id = c.id AND e.cursor < ?2)
-             FROM comments c JOIN external_comments x ON x.comment_id = c.id
-             WHERE x.item_id = ?1 AND x.pending_at IS NOT NULL",
+            &format!(
+                "INSERT INTO event_comments (cursor, comment_id, body, edited)
+                 SELECT ?2, c.id, c.body,
+                        EXISTS (SELECT 1 FROM event_comments e
+                                WHERE e.comment_id = c.id AND e.cursor < ?2)
+                 FROM comments c JOIN external_comments x ON x.comment_id = c.id
+                 WHERE {READY}"
+            ),
             params![item_id, cursor],
         )
         .map_err(StoreError::new)?;
         tx.execute(
-            "UPDATE external_comments SET pending_at = NULL
-             WHERE item_id = ?1 AND pending_at IS NOT NULL",
+            &format!("UPDATE external_comments AS x SET pending_at = NULL WHERE {READY}"),
             params![item_id],
         )
         .map_err(StoreError::new)?;
@@ -234,6 +245,19 @@ impl ExternalStore for Store {
             cursor: cursor as u64,
             kind: EventKind::ExternalComments(Batch { revision, comments }),
         }))
+    }
+
+    fn set_vote(&mut self, id: CommentId, vote: Vote, now: u64) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE external_comments
+                 SET vote = ?2,
+                     pending_at = CASE ?2 WHEN 'up' THEN coalesce(pending_at, ?3) END
+                 WHERE comment_id = ?1",
+                params![id.0 as i64, vote.as_str(), now as i64],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
     }
 
     fn set_agreed(&mut self, id: CommentId, reply: u64) -> Result<(), StoreError> {
@@ -285,7 +309,7 @@ pub(crate) fn batch(
         .map_err(StoreError::new)?;
     let rows = stmt
         .query_map(params![cursor as i64], |row| {
-            Ok((CommentRow::read(row)?, row.get::<_, bool>(18)?))
+            Ok((CommentRow::read(row)?, row.get::<_, bool>(COLUMNS)?))
         })
         .map_err(StoreError::new)?;
     rows.map(|row| {

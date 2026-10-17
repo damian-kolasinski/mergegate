@@ -27,6 +27,7 @@ fn from_github(agreed_reply: Option<u64>) -> Option<External> {
         path: None,
         pending: false,
         agreed_reply,
+        vote: None,
     })
 }
 

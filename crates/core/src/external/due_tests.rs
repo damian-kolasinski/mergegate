@@ -1,5 +1,5 @@
 use super::*;
-use crate::external::{ExternalStore, NewExternal};
+use crate::external::{ExternalStore, NewExternal, Vote};
 use crate::fake::FakeStore;
 use crate::feedback::EventKind;
 use crate::github::PullCommentKind;
@@ -13,6 +13,7 @@ const TIMING: Timing = Timing {
 
 fn held(first: u64, last: u64, heard: &[&str]) -> Held {
     Held {
+        awaiting: false,
         first,
         last,
         pushed: 0,
@@ -81,7 +82,8 @@ fn comment(store: &mut FakeStore, github_id: u64, login: &str, now: u64) {
     posted(store, github_id, login, now, now);
 }
 
-/// A comment GitHub dates `dated` that the hub sees at `now`.
+/// A comment GitHub dates `dated` that the hub sees at `now`, which the
+/// operator votes up at once, so only the timing holds it.
 fn posted(store: &mut FakeStore, github_id: u64, login: &str, dated: u64, now: u64) {
     let new = NewExternal {
         item: id(),
@@ -96,7 +98,8 @@ fn posted(store: &mut FakeStore, github_id: u64, login: &str, dated: u64, now: u
         path: None,
         dated,
     };
-    store.insert_external(new, now).unwrap();
+    let id = store.insert_external(new, now).unwrap().id;
+    store.set_vote(id, Vote::Up, now).unwrap();
 }
 
 fn expecting(store: &mut FakeStore, bots: &[&str]) {
@@ -173,6 +176,7 @@ fn a_bot_editing_an_older_comment_after_the_push_counts() {
     store
         .edit_external(summary, "Reviewing", pushed - 500, pushed + 20)
         .unwrap();
+    store.set_vote(summary, Vote::Up, pushed + 20).unwrap();
     assert_eq!(
         release_due(&mut store, &id(), pushed + 500, TIMING).unwrap(),
         None
@@ -181,6 +185,7 @@ fn a_bot_editing_an_older_comment_after_the_push_counts() {
     store
         .edit_external(summary, "Reviewed", pushed + 600, pushed + 600)
         .unwrap();
+    store.set_vote(summary, Vote::Up, pushed + 600).unwrap();
     assert!(
         release_due(&mut store, &id(), pushed + 660, TIMING)
             .unwrap()
@@ -197,6 +202,7 @@ fn a_comment_carried_again_is_edited() {
     store
         .edit_external(carried, "Changed my mind", 5, 5)
         .unwrap();
+    store.set_vote(carried, Vote::Up, 5).unwrap();
 
     let event = release(&mut store, &id()).unwrap().unwrap();
     let EventKind::ExternalComments(batch) = event.kind else {

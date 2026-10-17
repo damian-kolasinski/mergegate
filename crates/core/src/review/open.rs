@@ -12,7 +12,8 @@ pub struct Thread {
 
 /// The sent comments that aren't settled, oldest first; an external one is
 /// sent once its batch went, so a session started meanwhile isn't handed it
-/// ahead of the batch, which would wake it again. One is settled when
+/// ahead of the batch, which would wake it again, and one the operator voted
+/// down never is. One is settled when
 /// its agent's latest reply rejects it, or addresses it in a revision
 /// submitted since, and the operator hasn't replied after that. Anything else
 /// needs the agent: an answer, a revision with the change, or the reply
@@ -21,7 +22,13 @@ pub fn open_threads(conversation: &Conversation) -> Vec<Thread> {
     conversation
         .comments
         .iter()
-        .filter(|c| !c.is_draft() && !c.external.as_ref().is_some_and(|e| e.pending))
+        .filter(|c| {
+            !c.is_draft()
+                && !c
+                    .external
+                    .as_ref()
+                    .is_some_and(|e| e.pending || e.dismissed())
+        })
         .map(|comment| Thread {
             comment: comment.clone(),
             replies: conversation

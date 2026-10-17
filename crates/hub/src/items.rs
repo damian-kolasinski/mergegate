@@ -285,6 +285,7 @@ fn inbox_entry(
         rejections: waiting.rejections,
         parent: None,
         behind: false,
+        votes: waiting.votes,
     }
 }
 

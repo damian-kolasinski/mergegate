@@ -1,8 +1,8 @@
 //! External review, against a fake GitHub: comments on an item's pull
-//! request reach its agent in one batch once reviewers go quiet,
-//! expected bots hold the batch until they've commented, `mg sync` hands
-//! over what's held at once, and the operator agrees with or overrides the
-//! agent's rejection of one.
+//! request the operator votes up reach its agent in one batch once
+//! reviewers go quiet, expected bots hold the batch until they've
+//! commented, `mg sync` hands over what's held at once, and the
+//! operator agrees with or overrides the agent's rejection of one.
 
 use std::time::{Duration, Instant};
 
@@ -88,6 +88,9 @@ fn f5_comments_reach_the_agent_in_one_batch_once_reviewers_go_quiet() {
     github.comment(ACME, 1, GithubNewComment::review("alice", "Close."));
     // The operator's own comments are theirs to make in mergegate.
     github.comment(ACME, 1, GithubNewComment::issue("operator", "Mine."));
+    for body in ["Hash it.", "Needs a test.", "Close."] {
+        vote(&env, body, "up");
+    }
 
     let feedback = env
         .mg(&["--json", "wait", "app#1", "--timeout", "30"])
@@ -142,16 +145,20 @@ fn f5_expected_bots_hold_the_batch_until_they_have_commented() {
     env.mg(&["--json", "project", "set", "app", "bots", "codex"])
         .assert_code(0);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    vote(&env, "Needs a test.", "up");
     env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
         .assert_code(75);
 
     github.comment(ACME, 1, GithubNewComment::issue("codex[bot]", "LGTM."));
+    // Heard, though the operator keeps it from the agent.
+    vote(&env, "LGTM.", "down");
     let feedback = env
         .mg(&["--json", "wait", "app#1", "--timeout", "30"])
         .assert_code(0)
         .json();
     let comments = &feedback["events"][0]["comments"];
-    assert_eq!(comments.as_array().unwrap().len(), 2, "{feedback}");
+    assert_eq!(comments.as_array().unwrap().len(), 1, "{feedback}");
+    assert_eq!(comments[0]["body"], "Needs a test.", "{feedback}");
 }
 
 #[test]
@@ -160,8 +167,12 @@ fn sync_hands_over_held_comments_at_once_and_edits_again() {
     let (env, _repo) = submitted(&github, [NEVER, NEVER, NEVER]);
     let posted = github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
 
+    // Brought in, it waits for the operator's vote.
     let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 1, "edited": 0, "released": 1 }));
+    assert_eq!(synced, json!({ "new": 1, "edited": 0, "released": 0 }));
+    vote(&env, "Needs a test.", "up");
+    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
+    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 1 }));
     let feedback = env
         .mg(&["--json", "feedback", "app#1"])
         .assert_code(0)
@@ -169,11 +180,15 @@ fn sync_hands_over_held_comments_at_once_and_edits_again() {
     let comment = &feedback["events"][0]["comments"][0];
     assert_eq!(comment["body"], "Needs a test.", "{feedback}");
 
+    // The edit asks for a new vote before it goes again.
     github.edit_comment(posted, "Needs two tests.");
+    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
+    assert_eq!(synced, json!({ "new": 0, "edited": 1, "released": 0 }));
+    vote(&env, "Needs two tests.", "up");
     let synced = env.mg(&["sync", "app#1"]).assert_code(0);
     assert_eq!(
         synced.stdout.trim(),
-        "synced app#1 with GitHub: 0 new, 1 edited\n\
+        "synced app#1 with GitHub: 0 new, 0 edited\n\
          1 comment is waiting for you: mg feedback app#1"
     );
     let feedback = env
@@ -194,6 +209,9 @@ fn the_operator_agrees_with_or_overrides_a_rejection() {
     let (env, _repo) = submitted(&github, [NEVER, NEVER, NEVER]);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    vote(&env, "Rename it.", "up");
+    vote(&env, "Split it.", "up");
     env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     let feedback = env
         .mg(&["--json", "feedback", "app#1"])
@@ -271,6 +289,7 @@ fn f5_a_batch_wakes_the_agent() {
     env.mg_at(repo.root(), &["--json", "submit", "--wake", &wake])
         .assert_code(0);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    vote(&env, "Needs a test.", "up");
 
     let deadline = Instant::now() + Duration::from_secs(10);
     while !woken.exists() && Instant::now() < deadline {
@@ -298,13 +317,10 @@ fn a_wait_for_the_operator_leaves_held_comments_held() {
     let github = FakeGithub::start();
     let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
+    vote(&env, "Rename it.", "up");
     env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while conversation(&env)["comments"].as_array().unwrap().len() < 2 {
-        assert!(Instant::now() < deadline, "the poller never saw it");
-        std::thread::sleep(Duration::from_millis(50));
-    }
+    vote(&env, "Split it.", "up");
 
     // The batch it doesn't wait for stays unacknowledged, and the comment
     // after it waits for its own batch rather than riding along.
@@ -340,13 +356,12 @@ fn a_wait_since_the_printed_cursor_takes_held_comments_along() {
     let github = FakeGithub::start();
     let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
+    vote(&env, "Rename it.", "up");
     env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     let first = env.mg(&["--json", "wait", "app#1"]).assert_code(0).json();
     let cursor = first["cursor"].to_string();
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
-    until(&env, "the poller never saw it", |c| {
-        c.as_array().unwrap().len() == 2
-    });
+    vote(&env, "Split it.", "up");
 
     // A look back before the delivered cursor leaves it held.
     let back = env
@@ -393,15 +408,85 @@ fn until(env: &Env, what: &str, done: impl Fn(&Value) -> bool) {
     }
 }
 
+/// The operator's `vote` on the comment whose body is `body`, once the
+/// poller has it; the comment as voted.
+fn vote(env: &Env, body: &str, vote: &str) -> Value {
+    until(env, "the poller never saw it", |c| {
+        c.as_array().unwrap().iter().any(|c| c["body"] == body)
+    });
+    let comments = conversation(env)["comments"].clone();
+    let comment = id(with_body(&comments, body)).to_owned();
+    let reply = post(
+        env,
+        &format!("/api/comments/{comment}/vote"),
+        &json!({ "vote": vote }),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    json_of(&reply)
+}
+
+#[test]
+fn a_comment_waits_for_the_operators_vote_and_only_a_vote_up_sends_it() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", "200", NEVER]);
+    github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
+    github.comment(ACME, 1, GithubNewComment::issue("codex[bot]", "Hash it."));
+    github.comment(ACME, 1, GithubNewComment::issue("codex[bot]", "Use tabs."));
+    until(&env, "the poller never saw them", |c| {
+        c.as_array().unwrap().len() == 3
+    });
+    // Quiet, but a person's comment waits on the operator like a bot's.
+    env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
+        .assert_code(75);
+    let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert!(inbox.to_string().contains("\"votes\":3"), "{inbox}");
+
+    vote(&env, "Needs a test.", "up");
+    let up = vote(&env, "Hash it.", "up");
+    assert_eq!(
+        (&up["external"]["vote"], &up["external"]["pending"]),
+        (&json!("up"), &json!(true))
+    );
+    let down = vote(&env, "Use tabs.", "down");
+    assert_eq!(
+        (&down["external"]["vote"], &down["external"]["pending"]),
+        (&json!("down"), &json!(false))
+    );
+    let feedback = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
+        .assert_code(0)
+        .json();
+    let bodies: Vec<_> = feedback["events"][0]["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["body"].clone())
+        .collect();
+    assert_eq!(
+        bodies,
+        [json!("Needs a test."), json!("Hash it.")],
+        "{feedback}"
+    );
+
+    // Sent, it takes no more votes.
+    let late = conversation(&env)["comments"].clone();
+    let late = id(with_body(&late, "Hash it.")).to_owned();
+    let late = post(
+        &env,
+        &format!("/api/comments/{late}/vote"),
+        &json!({ "vote": "down" }),
+    );
+    assert_eq!(late.status, 409, "{}", late.body);
+}
+
 #[test]
 fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
     let github = FakeGithub::start();
     let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
     let doomed = github.comment(ACME, 1, GithubNewComment::issue("alice", "Typo here."));
     let kept = github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
-    until(&env, "the poller never saw them", |c| {
-        c.as_array().unwrap().len() == 2
-    });
+    vote(&env, "Typo here.", "up");
+    vote(&env, "Needs a test.", "up");
 
     github.delete_comment(doomed);
     let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
@@ -473,6 +558,8 @@ fn f5_an_expected_bots_comment_from_before_the_newest_push_doesnt_count() {
     until(&env, "the poller never saw them", |c| {
         c.as_array().unwrap().len() == 2
     });
+    vote(&env, "r1 looks fine.", "up");
+    vote(&env, "Needs a test.", "up");
     env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
         .assert_code(75);
 
@@ -481,6 +568,7 @@ fn f5_an_expected_bots_comment_from_before_the_newest_push_doesnt_count() {
         1,
         GithubNewComment::issue("codex[bot]", "r2 looks fine."),
     );
+    vote(&env, "r2 looks fine.", "up");
     let feedback = env
         .mg(&["--json", "wait", "app#1", "--timeout", "30"])
         .assert_code(0)
@@ -508,16 +596,16 @@ fn an_expected_bot_editing_its_comment_after_the_newest_push_counts() {
         &[("MG_GITHUB_POLL_MS", "100")],
     )
     .assert_code(0);
-    until(&env, "the poller never saw it", |c| {
-        c.as_array().unwrap().len() == 1
-    });
+    vote(&env, "Reviewing r1.", "up");
     // Also takes the edit below past the push's second, the finest date
     // GitHub gives.
     env.mg(&["--json", "wait", "app#1", "--timeout", "2"])
         .assert_code(75);
 
-    // A bot that keeps one summary comment edits it when it reviews a push.
+    // A bot that keeps one summary comment edits it when it reviews a push,
+    // and the edit asks for a new vote.
     github.edit_comment(summary, "r2 looks fine.");
+    vote(&env, "r2 looks fine.", "up");
     let feedback = env
         .mg(&["--json", "wait", "app#1", "--timeout", "30"])
         .assert_code(0)
@@ -583,6 +671,7 @@ fn the_poller_closes_an_item_merged_on_github_and_wakes_its_agent() {
         1,
         GithubNewComment::issue("alice", "Merging it myself."),
     );
+    vote(&env, "Merging it myself.", "up");
     let commit = github.merge_on_github(ACME, 1);
 
     // No sync: the poller alone closes it, which ends the agent's wait. The

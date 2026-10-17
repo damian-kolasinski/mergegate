@@ -1,5 +1,5 @@
 use super::*;
-use crate::external::NewExternal;
+use crate::external::{NewExternal, Vote};
 use crate::fake::{FakeGit, FakeStore};
 use crate::feedback::{acknowledge, feedback};
 use crate::github::PullCommentKind;
@@ -23,7 +23,8 @@ fn hold(store: &mut FakeStore, github_id: u64) {
         path: None,
         dated: 0,
     };
-    store.insert_external(new, 0).unwrap();
+    let id = store.insert_external(new, 0).unwrap().id;
+    store.set_vote(id, Vote::Up, 0).unwrap();
 }
 
 fn review(store: &mut FakeStore) -> u64 {

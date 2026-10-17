@@ -11,11 +11,13 @@ pub struct Waiting {
     /// agrees or overrides. A rejection of the operator's own comment asks
     /// nothing of them, so it doesn't count.
     pub rejections: u32,
+    /// GitHub comments held from the agent until the operator votes on them.
+    pub votes: u32,
 }
 
 impl Waiting {
     pub fn any(&self) -> bool {
-        self.questions > 0 || self.rejections > 0
+        self.questions > 0 || self.rejections > 0 || self.votes > 0
     }
 }
 
@@ -23,6 +25,9 @@ impl Waiting {
 pub fn waiting(comments: &[Comment], replies: &[Reply]) -> Waiting {
     let mut waiting = Waiting::default();
     for comment in comments {
+        if comment.external.as_ref().is_some_and(|e| e.awaiting_vote()) {
+            waiting.votes += 1;
+        }
         // Replies are oldest first, so the last one says who spoke last.
         let Some(last) = replies
             .iter()

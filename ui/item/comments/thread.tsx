@@ -13,7 +13,12 @@ import { FoldButton } from "./collapse";
 import type { Comments } from "./comments";
 import { DraftActions } from "./drafts";
 import { Editor } from "./editor";
-import { ExternalMeta, OverrideEditor, RejectionActions } from "./external";
+import {
+  ExternalMeta,
+  OverrideEditor,
+  RejectionActions,
+  VoteActions,
+} from "./external";
 import { ReplyList, StatusBadge } from "./replies";
 import { ReplyButton } from "./reply-drafts";
 import styles from "./thread.module.css";
@@ -189,6 +194,7 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
           </Show>
           <DraftActions comments={props.comments} comment={props.comment} />
           <RejectionActions comments={props.comments} comment={props.comment} />
+          <VoteActions comments={props.comments} comment={props.comment} />
           <ReplyButton comments={props.comments} comment={props.comment} />
         </header>
         <Show

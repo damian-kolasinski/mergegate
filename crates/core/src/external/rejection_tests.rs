@@ -1,5 +1,5 @@
 use super::*;
-use crate::external::{NewExternal, release};
+use crate::external::{NewExternal, Vote, release};
 use crate::fake::{FakeGit, FakeStore};
 use crate::feedback::Source;
 use crate::feedback::{EventKind, FeedbackStore};
@@ -27,7 +27,8 @@ fn answered(status: ReplyStatus) -> FakeStore {
         path: None,
         dated: 0,
     };
-    store.insert_external(new, 0).unwrap();
+    let comment = store.insert_external(new, 0).unwrap().id;
+    store.set_vote(comment, Vote::Up, 0).unwrap();
     release(&mut store, &id()).unwrap();
     let answer = WriteReply {
         comment: CommentId(1),

@@ -2,7 +2,7 @@
 //! one. `ReviewStore`'s impl in `reviews` calls these, as a review sends the
 //! drafts, and its tests cover them.
 
-use mergegate_core::external::External;
+use mergegate_core::external::{External, Vote};
 use mergegate_core::github::PullCommentKind;
 use mergegate_core::item::ItemId;
 use mergegate_core::project::ProjectName;
@@ -24,9 +24,12 @@ pub(crate) fn columns(body: &str) -> String {
     format!(
         "c.id, c.revision, c.review_id, c.path, c.side, c.start_line, c.line, {body}, c.quote,
          c.created_at, x.kind, x.github_id, x.login, x.bot, x.url, x.path,
-         x.pending_at IS NOT NULL, x.agreed_reply"
+         x.pending_at IS NOT NULL, x.agreed_reply, x.vote"
     )
 }
+
+/// How many [`columns`] there are, the index of one a query adds after them.
+pub(crate) const COLUMNS: usize = 19;
 
 pub(crate) fn insert(conn: &Connection, comment: NewComment) -> Result<Comment, StoreError> {
     let id: i64 = conn
@@ -217,6 +220,7 @@ struct ExternalRow {
     path: Option<String>,
     pending: bool,
     agreed_reply: Option<i64>,
+    vote: Option<String>,
 }
 
 impl CommentRow {
@@ -231,6 +235,7 @@ impl CommentRow {
                 path: row.get(15)?,
                 pending: row.get(16)?,
                 agreed_reply: row.get(17)?,
+                vote: row.get(18)?,
             }),
             None => None,
         };
@@ -271,6 +276,13 @@ impl CommentRow {
         };
         let external = match self.external {
             Some(row) => Some(External {
+                vote: row
+                    .vote
+                    .map(|vote| {
+                        Vote::parse(&vote)
+                            .ok_or_else(|| StoreError::new(format!("unknown vote {vote:?}")))
+                    })
+                    .transpose()?,
                 kind: PullCommentKind::ALL
                     .into_iter()
                     .find(|k| k.as_str() == row.kind)

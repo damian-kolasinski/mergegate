@@ -1,9 +1,20 @@
 use super::*;
+use crate::external::Vote;
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::github::PullLines;
 
 fn id() -> ItemId {
     ItemId::parse("app#1").unwrap()
+}
+
+/// Votes up every comment `app#1` holds and hands them to the agent.
+fn send_all(store: &mut FakeStore) {
+    for comment in store.comments(&id()).unwrap() {
+        if comment.external.is_some_and(|e| e.awaiting_vote()) {
+            store.set_vote(comment.id, Vote::Up, 0).unwrap();
+        }
+    }
+    store.release(&id(), 1).unwrap();
 }
 
 fn issue(github_id: u64, login: &str, body: &str) -> PullComment {
@@ -163,7 +174,7 @@ fn an_edit_is_held_again_and_the_rest_is_known() {
         1_000,
     )
     .unwrap();
-    store.release(&id(), 1).unwrap();
+    send_all(&mut store);
 
     let again = ingest(&mut store, &git, &id(), first, &BTreeSet::new(), 2_000).unwrap();
     assert_eq!(again, Ingested::default());
@@ -191,7 +202,7 @@ fn a_held_comment_github_deleted_is_withdrawn() {
     let git = FakeGit::default();
     let first = vec![issue(1, "alice", "One"), issue(2, "bob", "Two")];
     ingest(&mut store, &git, &id(), first, &BTreeSet::new(), 1_000).unwrap();
-    store.release(&id(), 1).unwrap();
+    send_all(&mut store);
     let held = vec![
         issue(1, "alice", "One, edited"),
         issue(2, "bob", "Two"),

@@ -213,6 +213,9 @@ pub struct InboxItem {
     /// or on a parent that closed: its agent has a rebase to do.
     #[serde(default)]
     pub behind: bool,
+    /// GitHub comments held from the agent until the operator votes on them.
+    #[serde(default)]
+    pub votes: u32,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
