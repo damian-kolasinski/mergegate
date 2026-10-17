@@ -23,6 +23,7 @@ import {
   type Span,
 } from "../diff-view/diff-view";
 import { Button, Empty, ErrorNote } from "../design-system";
+import { CollapseAll, toggleAll } from "./comments/collapse";
 import { useComments } from "./comments/comments";
 import { DeletedDraft } from "./comments/drafts";
 import { ComparePicker } from "./compare";
@@ -534,6 +535,7 @@ function Review(props: {
       "]": unlessWriting(() => nav.stepHunk(1)),
       "[": unlessWriting(() => nav.stepHunk(-1)),
       v: unlessWriting(toggleViewed),
+      z: unlessWriting(() => toggleAll(comments)),
       // `p` is the previous file here.
       P: unlessWriting(() => {
         if (open(state())) setPicking(true);
@@ -547,6 +549,7 @@ function Review(props: {
         ["] / [", "Next / previous change"],
         ["c", "Comment on the line"],
         ["v", "Mark the file viewed, then go on"],
+        ["z", "Collapse / expand every comment"],
         ["P", "Set the priority"],
         ["Esc", "Close what's open, then back to the inbox"],
       ],
@@ -577,6 +580,7 @@ function Review(props: {
             holding={comments.editor.holding()}
             onChange={props.onCompare}
           />
+          <CollapseAll comments={comments} />
           <Conversation
             comments={comments}
             open={talking()}
