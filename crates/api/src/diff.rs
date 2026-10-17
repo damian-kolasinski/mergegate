@@ -33,10 +33,6 @@ pub struct ItemDiff {
     pub files: Vec<File>,
     /// The agent's review guide, Markdown as it sent it.
     pub guide: Option<String>,
-    /// The names of the open items the newest revision conflicts with, as on
-    /// the inbox: merging this one hands them back to their agents.
-    #[serde(default)]
-    pub conflicts_with: Vec<String>,
     /// Whether what the operator sends reaches an agent; null once the item
     /// is closed.
     #[serde(default)]

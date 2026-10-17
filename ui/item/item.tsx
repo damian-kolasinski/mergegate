@@ -8,6 +8,7 @@ import {
   untrack,
 } from "solid-js";
 import type { AgentPresence } from "../api/AgentPresence";
+import type { Blocked } from "../api/Blocked";
 import type { Demo as DemoData } from "../api/Demo";
 import type { Item } from "../api/Item";
 import type { ItemDiff } from "../api/ItemDiff";
@@ -79,10 +80,10 @@ export function ItemScreen(props: { id: string }) {
   // The item as the hub last gave it, for what changes without a new diff:
   // its state, priority and note.
   const [latest, setLatest] = createSignal<Item>();
-  // The open items the revision on screen conflicts with, kept apart from
-  // the diff so the watch finding or dropping one doesn't re-render it.
-  const [conflicts, setConflicts] = createSignal<readonly string[]>([], {
-    equals: (a, b) => a.join() === b.join(),
+  // Why the revision on screen can't merge, kept apart from the diff so the
+  // conflict watch handing it back shows without re-rendering the diff.
+  const [blocked, setBlocked] = createSignal<Blocked | null>(null, {
+    equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
   });
   // Whether an agent will read what's sent: the item's, not the revision's,
   // so a refetch of any revision updates it.
@@ -126,7 +127,7 @@ export function ItemScreen(props: { id: string }) {
     setDiff(next);
     setDemo(next.demo);
     setLatest(next.item);
-    setConflicts(next.conflicts_with);
+    setBlocked(next.blocked);
     setAgent(next.agent);
   };
   // A highlights refetch answered before the first diff, which it's newer
@@ -160,7 +161,7 @@ export function ItemScreen(props: { id: string }) {
         setNewest(next.item.revision.number);
       } else if (next.item.revision.number === shown?.item.revision.number) {
         setDemo(next.demo);
-        setConflicts(next.conflicts_with);
+        setBlocked(next.blocked);
         follow(next);
       }
     }, failed);
@@ -214,7 +215,7 @@ export function ItemScreen(props: { id: string }) {
             <Review
               diff={current()}
               latest={latest() ?? current().item}
-              conflictsWith={conflicts()}
+              blocked={blocked()}
               agent={agent()}
               demo={demo()}
               newest={newest()}
@@ -249,8 +250,8 @@ function leave() {
 function Review(props: {
   diff: ItemDiff;
   latest: Item;
-  /** The open items the revision on screen conflicts with. */
-  conflictsWith: readonly string[];
+  /** Why the revision on screen can't merge, as the hub last said. */
+  blocked: Blocked | null;
   agent: AgentPresence | null;
   demo: DemoData | null;
   /** A revision newer than the one on screen. */
@@ -665,7 +666,7 @@ function Review(props: {
         <Show when={props.diff.guide}>
           {(guide) => <Intent guide={guide()} />}
         </Show>
-        <Show when={props.diff.blocked}>
+        <Show when={props.blocked}>
           {(blocked) => (
             <MergeBlocked
               item={props.diff.item.id}
@@ -766,8 +767,7 @@ function Review(props: {
           target={props.diff.item.target}
           state={state()}
           pullRequest={pullRequest(props.diff.item)}
-          conflictsWith={props.conflictsWith}
-          blocked={props.diff.blocked?.kind}
+          blocked={props.blocked?.kind}
           newest={props.newest}
           unviewed={own().filter((file) => !done().has(file.path)).length}
           changed={props.diff.changed_since}

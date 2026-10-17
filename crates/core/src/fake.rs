@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::agent::{Agent, AgentStore, DueWake};
 use crate::attachment::{Attachment, AttachmentStore, Media, NewAttachment};
-use crate::conflict::{ConflictGit, ConflictStore, Pair};
+use crate::conflict::ConflictGit;
 use crate::device::{DeviceId, DeviceStore, Record};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
@@ -792,7 +792,6 @@ pub(crate) struct FakeStore {
     /// Every item's, oldest first.
     attachments: Vec<(ItemId, Attachment)>,
     settings: BTreeMap<String, String>,
-    pairs: BTreeMap<ProjectName, Vec<Pair>>,
     devices: BTreeMap<DeviceId, Record>,
     judges: BTreeMap<ProjectName, JudgeSetting>,
     /// By item and revision: the judge's key and its verdicts.
@@ -1638,22 +1637,6 @@ impl InterdiffStore for FakeStore {
             .filter(|(item, _, t)| item == id && *t == to)
             .map(|(_, from, _)| *from)
             .collect())
-    }
-}
-
-impl ConflictStore for FakeStore {
-    fn pairs(&self, project: Option<&ProjectName>) -> Result<Vec<Pair>, StoreError> {
-        Ok(self
-            .pairs
-            .iter()
-            .filter(|(name, _)| project.is_none_or(|p| p == *name))
-            .flat_map(|(_, pairs)| pairs.iter().cloned())
-            .collect())
-    }
-
-    fn set_pairs(&mut self, project: &ProjectName, pairs: &[Pair]) -> Result<(), StoreError> {
-        self.pairs.insert(project.clone(), pairs.to_vec());
-        Ok(())
     }
 }
 

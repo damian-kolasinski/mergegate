@@ -34,7 +34,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 
 ## Features
 
-- **One inbox for every agent's work.** Items that need you come first, ordered by priority, then by how many other open items each one conflicts with, then by age. Items with agents and merging follow, and those closed today fold underneath.
+- **One inbox for every agent's work.** Items that need you come first, ordered by priority, then by age. Items with agents and merging follow, and those closed today fold underneath.
 - **Files ordered by importance, not alphabetically.** Each file to review carries a one-line reason, from the agent's own reviewer guide, an optional AI judge, or path heuristics (lockfiles, generated files and tests sink; migrations, config and changed declarations rise).
 - **Trusted files hidden by rules you approve.** Rules such as "`**/*.xcstrings` is trusted" fold whole file kinds out of the way. Agents can propose rules; only you can approve one that hides a file.
 - **Feedback straight back to the agent.** Your review arrives as an event with each comment's file, line range and quoted code. The agent fixes it, answers each comment (`addressed`, `rejected` with a reason, or a `question`) and submits a new revision.
@@ -42,7 +42,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 - **Images and docs as they look.** A changed PNG, JPEG, GIF or WebP opens before and after, side by side, with the pixels that differ marked. A changed Markdown file opens rendered.
 - **External reviewers keep working.** Comments from review bots (Codex, Claude and other GitHub connectors) and teammates on the GitHub PR flow into mergegate in batches. The agent weighs and answers them, and you can accept or override its decisions.
 - **Approve means merge.** One click squash-merges the item: through the GitHub API on the `github` backend, or straight into your local repo on the `local` backend. Each item lands as one commit authored by you, its message the item's title and the summary from the agent's guide. An approval follows the diff, so a rebase that changes nothing merges without a second look.
-- **Conflicts caught before you review.** The hub test-merges every open item against its target, so an agent hears about a conflict and rebases before you get to it.
+- **Conflicts caught before you review.** The hub test-merges every open item against its target, so an agent hears about a conflict and rebases before you get to it, and the inbox flags the item as conflicting with that branch.
 - **Demos next to the diff.** Agents attach screenshots and screen recordings with `mg submit --attach`.
 - **Agents across machines.** Workers on other machines connect over Tailscale. No tokens, no ports opened beyond your tailnet.
 - **Keyboard-first UI.** `j`/`k`, `n`/`p`, `v` to mark viewed, `c` to comment, `a` to approve; `?` lists every shortcut.
@@ -143,7 +143,7 @@ The commands an agent uses most:
 | Getting feedback to the agent | Copy and paste into its chat | Structured events the agent waits on |
 | File order | Alphabetical, all files equal | By importance, with a reason per file |
 | Generated and low-risk files | Mark viewed one by one | Hidden by rules you approve |
-| Many open PRs | One tab each | One inbox ordered by priority and conflicts |
+| Many open PRs | One tab each | One inbox ordered by priority |
 | Re-review after a force-push | Full diff again | Interdiff against your last reviewed revision |
 | Bot review comments | Agent polls the API | Batched, answered, and audited by you |
 | Where it runs | github.com | Your machine; GitHub stays the record |

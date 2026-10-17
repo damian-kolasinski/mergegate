@@ -647,7 +647,6 @@ extension Locale {
   });
   await page.goto(hub.url);
   await expect(page.getByText("Retry once on 401")).toBeVisible();
-  await expect(page.getByText("conflicts with").first()).toBeVisible();
   await page.getByText(/^Closed today/).click();
   await expect(page.getByText("Reconnecting to hub")).toHaveCount(0);
   await page.screenshot({ path: join(out, "inbox.png") });

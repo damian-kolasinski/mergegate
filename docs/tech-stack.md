@@ -141,7 +141,7 @@ mg lang remove <name>
 | Stacks | Parent links, own-diff base, `parent.*` events, landing order, retargeting | in `core`, over `Git` and `Backend` |
 | Comment anchoring | Place earlier revisions' comments onto the one on screen (moved, changed, outdated); move drafts with a review, holding it for flagged ones | in `core`, over `Git` |
 | File triage | Pipeline: guards → rules (only stage that can hide) → rankers (agent guide, structural heuristics, judge) | `FileRanker` |
-| Inbox prioritization | Explicit priority → conflict pressure and stacked children → age → optional judge | `ItemRanker` |
+| Inbox prioritization | Explicit priority → stacked children → age → optional judge | `ItemRanker` |
 | Judge | Provider for both rankers | `Judge` |
 | Events & delivery | Event log, cursors, debounce, long-poll, `--wake` | in `hub` |
 | Identity & transport | Listen modes, Tailscale whois, device trust, `mg connect` | `Tailnet`, `DeviceStore` |

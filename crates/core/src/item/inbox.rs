@@ -1,33 +1,27 @@
-use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
 use super::priority::rank;
 use super::{Item, ItemId, ItemState, ItemStore};
-use crate::conflict::{ConflictStore, conflicting};
 use crate::review::{ReviewStore, Waiting, waiting};
 use crate::store::StoreError;
 
 /// Open items grouped by who acts next, each group in the order to act on
-/// them (§9.1): by priority, none last, then by how many open items each
-/// conflicts with, most first, then oldest first. Then the items closed
-/// today, most recently closed first.
+/// them (§9.1): by priority, none last, then oldest first. Then the items
+/// closed today, most recently closed first.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Inbox {
     pub needs_you: Vec<Item>,
     pub with_agents: Vec<Item>,
     pub merging: Vec<Item>,
     pub closed: Vec<Item>,
-    /// The open items each item's head conflicts with; none isn't listed.
-    pub conflicts: BTreeMap<ItemId, Vec<ItemId>>,
     /// What each open item's agent waits on the operator for; nothing isn't
     /// listed.
     pub waiting: BTreeMap<ItemId, Waiting>,
 }
 
-pub fn inbox(store: &(impl ItemStore + ConflictStore + ReviewStore)) -> Result<Inbox, StoreError> {
+pub fn inbox(store: &(impl ItemStore + ReviewStore)) -> Result<Inbox, StoreError> {
     let open = store.open_items(None)?;
     let mut inbox = Inbox {
-        conflicts: conflicting(&open, &store.pairs(None)?),
         closed: store.closed_today()?,
         ..Inbox::default()
     };
@@ -46,14 +40,13 @@ pub fn inbox(store: &(impl ItemStore + ConflictStore + ReviewStore)) -> Result<I
         };
         group.push(item);
     }
-    let pressure = |item: &Item| inbox.conflicts.get(&item.id).map_or(0, Vec::len);
     // Stable, so items that tie keep the store's oldest-first order.
     for group in [
         &mut inbox.needs_you,
         &mut inbox.with_agents,
         &mut inbox.merging,
     ] {
-        group.sort_by_key(|item| (rank(item.priority), Reverse(pressure(item))));
+        group.sort_by_key(|item| rank(item.priority));
     }
     Ok(inbox)
 }

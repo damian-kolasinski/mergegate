@@ -4,7 +4,6 @@
 mod agents;
 mod attachments;
 mod comments;
-mod conflicts;
 mod devices;
 mod diffs;
 mod external;

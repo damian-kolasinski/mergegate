@@ -1,5 +1,4 @@
 use super::*;
-use crate::conflict::{ConflictStore, Pair};
 use crate::fake::FakeStore;
 use crate::item::{ItemBackend, ItemId, NewItem, NewRevision, Priority};
 use crate::project::ProjectName;
@@ -70,40 +69,6 @@ fn orders_each_group_by_priority_then_age() {
     let [a, b, c, d, e] = ids.try_into().unwrap();
     assert_eq!(ids_of(&inbox.needs_you), [c, b, e, a]);
     assert_eq!(ids_of(&inbox.with_agents), [d]);
-}
-
-#[test]
-fn breaks_priority_ties_by_how_many_items_each_conflicts_with() {
-    let mut store = FakeStore::default();
-    let ids: Vec<_> = ["a", "b", "c", "d", "e"]
-        .into_iter()
-        .map(|branch| add(&mut store, "app", branch))
-        .collect();
-    let [a, b, c, d, e] = ids.try_into().unwrap();
-    store.set_priority(&a, Some(Priority::P1), None).unwrap();
-    let pair = |item: &ItemId, other: &ItemId| Pair {
-        item: item.clone(),
-        item_head: "1".repeat(40),
-        other: other.clone(),
-        other_head: "1".repeat(40),
-        conflicts: true,
-    };
-    let project = ProjectName::parse("app").unwrap();
-    store
-        .set_pairs(&project, &[pair(&b, &d), pair(&b, &e), pair(&d, &e)])
-        .unwrap();
-    store.set_state(&b, ItemState::Merging);
-
-    let inbox = inbox(&store).unwrap();
-    let ids_of = |group: &[Item]| group.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
-    // Priority first; then d and e, which conflict with two each, by age.
-    assert_eq!(
-        ids_of(&inbox.needs_you),
-        [a.clone(), d.clone(), e.clone(), c]
-    );
-    assert_eq!(inbox.conflicts[&b], [d.clone(), e.clone()]);
-    assert_eq!(inbox.conflicts[&d], [b, e]);
-    assert!(!inbox.conflicts.contains_key(&a));
 }
 
 #[test]

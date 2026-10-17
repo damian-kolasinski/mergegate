@@ -162,6 +162,9 @@ pub struct InboxItem {
     pub title: String,
     pub branch: String,
     pub state: ItemState,
+    /// The branch it merges into.
+    #[serde(default)]
+    pub target: String,
     /// The newest revision's number.
     pub revision: u32,
     pub files: u32,
@@ -182,9 +185,6 @@ pub struct InboxItem {
     pub changed_since: Option<ChangedSince>,
     pub priority: Option<Priority>,
     pub note: Option<String>,
-    /// The names of the open items its head conflicts with, of its project
-    /// and target, oldest first: landing one of them hands this one back.
-    pub conflicts_with: Vec<String>,
     /// Threads whose agent asked the operator something and waits on the
     /// answer.
     #[serde(default)]

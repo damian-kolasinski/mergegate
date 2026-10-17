@@ -26,6 +26,7 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0015_interdiff_added.sql"),
     include_str!("../migrations/0016_diff_lines_after.sql"),
     include_str!("../migrations/0017_closed_on_github.sql"),
+    include_str!("../migrations/0018_drop_conflicts.sql"),
 ];
 
 /// The schema version this build migrates databases to.

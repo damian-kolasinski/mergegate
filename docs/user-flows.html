@@ -592,7 +592,7 @@ sequenceDiagram
         </pre></div>
         <ul class="rules">
           <li>Conflicts go to the agent, not to you. You usually only see the badge.</li>
-          <li>The hub also tests open items against each other. "Conflicts with item 45" in the inbox tells you which item to merge first.</li>
+          <li>Only the branch an item merges into counts: the badge reads "Conflicts with main". Two open items that touch the same lines show nothing until one lands.</li>
         </ul>
       </section>
 
@@ -665,7 +665,7 @@ sequenceDiagram
   Hub-->>Op: the latest change wins
         </pre></div>
         <ul class="rules">
-          <li>Sort order: priority, then how much merging it unblocks (conflict pressure), then age.</li>
+          <li>Sort order: priority, then age.</li>
           <li>Each row shows the size of its Review tier, the real cost of the item, not its total line count.</li>
         </ul>
       </section>
