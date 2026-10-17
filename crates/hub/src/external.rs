@@ -1,8 +1,10 @@
 //! External review: comments on a github item's pull request. The poller
-//! brings them in; `POST /api/items/{id}/sync` does it at once, for when
+//! brings them in, and closes an item whose pull request was merged or
+//! closed on GitHub; `POST /api/items/{id}/sync` does both at once, for when
 //! polling missed something, and `POST /api/comments/{comment}/agree` and
 //! `.../override` are the operator's say on the agent's rejection of one.
 
+mod follow;
 mod poll;
 
 use std::sync::Arc;
@@ -49,6 +51,11 @@ async fn sync(
             .map_err(failure)?
     };
     changed(&state, &id, ingested, released.is_some());
+    // The comments went either way; the next poll follows the pull request
+    // again.
+    if let Err(e) = follow::follow(&state, &id).await {
+        tracing::warn!("following {id}'s pull request: {e}");
+    }
     Ok(Json(api::review::Synced {
         new: ingested.new as u32,
         edited: ingested.edited as u32,

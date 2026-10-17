@@ -84,6 +84,9 @@ pub trait Github {
         head: &str,
     ) -> Result<Option<String>, GithubError>;
 
+    /// Where the pull request stands, whoever moved it there.
+    fn pull_status(&self, repo: &GithubRepo, number: u64) -> Result<PullStatus, GithubError>;
+
     /// Closing a closed pull request is fine.
     fn close_pull(&self, repo: &GithubRepo, number: u64) -> Result<(), GithubError>;
 
@@ -114,6 +117,19 @@ pub trait Github {
         kind: PullCommentKind,
         id: u64,
     ) -> Result<Option<PullComment>, GithubError>;
+}
+
+/// Where a pull request stands on GitHub.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PullStatus {
+    Open,
+    /// Closed without merging.
+    Closed,
+    /// Merged as `commit` by whichever method, with the branch at `head`.
+    Merged {
+        commit: String,
+        head: String,
+    },
 }
 
 /// A comment on a pull request as GitHub has it.

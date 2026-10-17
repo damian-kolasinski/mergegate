@@ -1,6 +1,6 @@
 use mergegate_backend_github::GithubClient;
 use mergegate_core::github::{
-    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullLines,
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullLines, PullStatus,
 };
 use testkit::{FakeGithub, GithubNewComment, GithubPullState, TestRepo, git};
 
@@ -169,6 +169,31 @@ fn squash_merges_only_the_approved_head() {
             .unwrap(),
         commit
     );
+}
+
+#[test]
+fn reads_where_a_pull_request_stands_whoever_moved_it() {
+    let (github, client, repo) = setup();
+    client
+        .open_pull(&acme(), "login", "main", "Add login", "")
+        .unwrap();
+    assert_eq!(client.pull_status(&acme(), 1).unwrap(), PullStatus::Open);
+    let head = repo.git(["rev-parse", "login"]).trim().to_owned();
+    let commit = github.merge_on_github("acme/app", 1);
+    assert_eq!(
+        client.pull_status(&acme(), 1).unwrap(),
+        PullStatus::Merged { commit, head }
+    );
+
+    let (github, client, _repo) = setup();
+    client
+        .open_pull(&acme(), "login", "main", "Add login", "")
+        .unwrap();
+    github.close_on_github("acme/app", 1);
+    assert_eq!(client.pull_status(&acme(), 1).unwrap(), PullStatus::Closed);
+
+    let err = client.pull_status(&acme(), 9).unwrap_err();
+    assert!(matches!(err, GithubError::NoAccess(_)), "{err:?}");
 }
 
 #[test]

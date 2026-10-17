@@ -84,6 +84,7 @@ fn handle(stream: TcpStream, shared: &Shared) -> std::io::Result<()> {
     let response = match request.path.strip_prefix("/api") {
         Some(path) => rest::handle(shared, &request, path),
         None if request.path == "/_fake/pulls" => rest::open_elsewhere(shared, &request),
+        None if request.path.starts_with("/_fake/pulls/") => rest::control(shared, &request),
         None if request.path.starts_with("/_fake/") => comments::control(shared, &request),
         None if request.path.contains("/pull/") => page::handle(shared, &request),
         None => git_http::handle(shared, &request),

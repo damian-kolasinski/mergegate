@@ -210,6 +210,37 @@ fn every_merge_notice_reads_back_as_written() {
 }
 
 #[test]
+fn a_close_on_github_reads_back_as_github_s() {
+    let (_dir, mut store) = store();
+    let kinds = [
+        (
+            "app#1",
+            ItemState::Merged,
+            NoticeKind::Merged {
+                commit: "c".repeat(40),
+            },
+        ),
+        (
+            "web#1",
+            ItemState::Abandoned,
+            NoticeKind::Abandoned {
+                reason: Some("Closed on GitHub".into()),
+            },
+        ),
+    ];
+    for (item, state, kind) in kinds {
+        let notice = Notice {
+            revision: 1,
+            source: Source::External,
+            kind,
+        };
+        let written = store.notify(&id(item), state, notice).unwrap();
+        assert_eq!(written.source(), Source::External);
+        assert_eq!(store.events(&id(item), 0).unwrap(), [written]);
+    }
+}
+
+#[test]
 fn a_notice_for_an_unknown_item_changes_nothing() {
     let (_dir, mut store) = store();
     let notice = Notice {

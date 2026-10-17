@@ -13,7 +13,9 @@ use crate::diff::{DiffGit, DiffStore, FileDiff};
 use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
-use crate::github::{Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind};
+use crate::github::{
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullStatus,
+};
 use crate::highlight::{
     Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, PackSource,
     Release, Span, Tag,
@@ -2535,6 +2537,19 @@ impl Github for FakeGithub {
                 matches!(&pull.state, PullState::Merged { head: merged, .. } if merged == head)
                     .then(|| commit(8)),
             )
+        })
+    }
+
+    fn pull_status(&self, repo: &GithubRepo, number: u64) -> Result<PullStatus, GithubError> {
+        self.pull(repo, number, |pull| {
+            Ok(match &pull.state {
+                PullState::Open => PullStatus::Open,
+                PullState::Closed => PullStatus::Closed,
+                PullState::Merged { head, .. } => PullStatus::Merged {
+                    commit: commit(8),
+                    head: head.clone(),
+                },
+            })
         })
     }
 

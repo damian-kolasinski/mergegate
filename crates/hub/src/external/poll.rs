@@ -1,5 +1,6 @@
 //! Polls every open github item's pull request for comments, and hands what
-//! it holds to the agent once it's due (design §6.1).
+//! it holds to the agent once it's due (design §6.1); then for where the pull
+//! request stands, so one merged or closed on GitHub closes its item.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,11 +9,12 @@ use std::time::Duration;
 use mergegate_core::external::{self, Ingested, Timing};
 use mergegate_core::item::{ItemId, ItemStore};
 
+use super::follow::follow;
 use super::{changed, now, pull};
 use crate::server::AppState;
 
-/// GitHub allows 5000 requests an hour; three lists every 30s is 360 per
-/// item, and a 304 is free.
+/// GitHub allows 5000 requests an hour; three lists and the pull request
+/// every 30s is 480 per item, and a 304 is free.
 const POLL_MS: u64 = 30_000;
 
 pub(crate) async fn run(state: Arc<AppState>) {
@@ -24,7 +26,7 @@ pub(crate) async fn run(state: Arc<AppState>) {
     };
     let mut stopping = state.events.stopping();
     // The last failure per item, so one that persists is logged once.
-    let mut failing: HashMap<ItemId, String> = HashMap::new();
+    let mut failing = Failing::default();
     loop {
         once(&state, timing, &mut failing).await;
         tokio::select! {
@@ -34,7 +36,15 @@ pub(crate) async fn run(state: Arc<AppState>) {
     }
 }
 
-async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut HashMap<ItemId, String>) {
+/// Reading comments and reading the pull request fail apart, so one failing
+/// while the other recovers isn't logged on every poll.
+#[derive(Default)]
+struct Failing {
+    comments: HashMap<ItemId, String>,
+    pull: HashMap<ItemId, String>,
+}
+
+async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut Failing) {
     let items = state
         .blocking(|store, _| store.open_items(None))
         .await
@@ -49,18 +59,19 @@ async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut HashMap<ItemI
         Ok(items) => items,
         Err(e) => return tracing::error!("listing items to poll GitHub for: {e}"),
     };
-    failing.retain(|id, _| items.contains(id));
+    failing.comments.retain(|id, _| items.contains(id));
+    failing.pull.retain(|id, _| items.contains(id));
     for id in items {
         let ingested = match pull(state, &id, false).await {
             Ok(ingested) => {
-                failing.remove(&id);
+                failing.comments.remove(&id);
                 ingested
             }
             Err(e) => {
                 let message = e.to_string();
-                if failing.get(&id) != Some(&message) {
+                if failing.comments.get(&id) != Some(&message) {
                     tracing::warn!("reading {id}'s comments on GitHub: {message}");
-                    failing.insert(id.clone(), message);
+                    failing.comments.insert(id.clone(), message);
                 }
                 Ingested::default()
             }
@@ -77,6 +88,20 @@ async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut HashMap<ItemI
             None
         });
         changed(state, &id, ingested, released.is_some());
+        // After the comments, so those left just before the merge still
+        // reach the agent ahead of it.
+        match follow(state, &id).await {
+            Ok(_) => {
+                failing.pull.remove(&id);
+            }
+            Err(e) => {
+                let message = e.to_string();
+                if failing.pull.get(&id) != Some(&message) {
+                    tracing::warn!("following {id}'s pull request: {message}");
+                    failing.pull.insert(id.clone(), message);
+                }
+            }
+        }
     }
 }
 

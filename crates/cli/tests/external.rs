@@ -573,3 +573,34 @@ fn a_held_comment_a_list_misses_stays_until_github_says_it_is_gone() {
     });
     assert_eq!(conversation(&env)["draft_replies"], json!([]));
 }
+
+#[test]
+fn the_poller_closes_an_item_merged_on_github_and_wakes_its_agent() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    github.comment(
+        ACME,
+        1,
+        GithubNewComment::issue("alice", "Merging it myself."),
+    );
+    let commit = github.merge_on_github(ACME, 1);
+
+    // No sync: the poller alone closes it, which ends the agent's wait. The
+    // comment, though reviewers never went quiet, goes first.
+    let wait = env.mg(&["wait", "app#1", "--timeout", "20"]);
+    assert_eq!(wait.code, 0, "{}{}", wait.stdout, wait.stderr);
+    let said = wait.stdout.find("Merging it myself.");
+    let merged = wait.stdout.find("it was merged on GitHub");
+    assert!(said.is_some() && said < merged, "{}", wait.stdout);
+    assert!(
+        wait.stdout
+            .contains(&format!("it was merged on GitHub as {commit}")),
+        "{}",
+        wait.stdout
+    );
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1", "--since", "0"])
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["state"], "merged", "{feedback}");
+}
