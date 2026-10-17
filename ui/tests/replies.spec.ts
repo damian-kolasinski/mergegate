@@ -1,4 +1,4 @@
-// F7's last step: the agent answers a comment with `mg reply`, and the open
+// The agent answers a comment with `mg reply`, and the open
 // item screen shows it on the comment's thread as it happens. The operator
 // answers back with a draft reply, which the next review sends.
 

@@ -1,4 +1,4 @@
-//! Landing a stack bottom first (design §5.1): an approved item waits in
+//! Landing a stack bottom first: an approved item waits in
 //! Merging for its parent, and lands right after it when its own diff
 //! applies onto the target. The hub never writes the item's branch, so an
 //! item that can't land that way goes back to its agent to rebase.

@@ -1,4 +1,4 @@
-// F14 from the UI: the operator abandons an item from its header, or sees
+// Abandoning from the UI: the operator abandons an item from its header, or sees
 // the one its agent abandoned close under them.
 
 import { expect, type Hub, test } from "./hub";

@@ -1,4 +1,4 @@
-//! F12's ranking and promotion: a project's judge scores each submitted
+//! The judge's ranking and promotion: a project's judge scores each submitted
 //! revision in the background, its scores rank the files to review, and a
 //! confident one pulls a rule-trusted file back into review.
 

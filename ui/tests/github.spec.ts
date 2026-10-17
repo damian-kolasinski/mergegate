@@ -1,4 +1,4 @@
-// F4 and F8 on the github backend, from the UI: an item's pull request is
+// The github backend from the UI: an item's pull request is
 // linked from the inbox and the review screen, and opens on GitHub.
 
 import { expect, test } from "./hub";

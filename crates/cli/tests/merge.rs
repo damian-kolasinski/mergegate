@@ -1,7 +1,7 @@
-//! Approving an item merges it (F8): the operator's approval reaches the
+//! Approving an item merges it: the operator's approval reaches the
 //! agent, the revision lands on the target as one commit authored by the
 //! operator, and a merge that can't land either goes back to the agent to
-//! rebase (F9) or waits for the operator to retry or cancel it.
+//! rebase or waits for the operator to retry or cancel it.
 
 use serde_json::{Value, json};
 use testkit::{Env, Reply, TestRepo, http_reply};

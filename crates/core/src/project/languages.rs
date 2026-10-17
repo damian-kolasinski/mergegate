@@ -1,5 +1,5 @@
 //! The language packs a new project asks for: the ones its files use that
-//! aren't installed, installed by default (tech-stack §6).
+//! aren't installed, installed by default.
 
 use std::path::Path;
 

@@ -1,5 +1,5 @@
 //! Interdiffs: what a revision changes since an earlier one of its item, with
-//! the target's own changes left out when the base moved (F7, design §9.2).
+//! the target's own changes left out when the base moved.
 
 mod changed;
 mod git;

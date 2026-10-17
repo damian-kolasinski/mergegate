@@ -1,5 +1,5 @@
-// F6: the operator drafts comments on lines of the diff, and the review sends
-// them to the agent, which reads them with their lines (F7).
+// The operator drafts comments on lines of the diff, and the review sends
+// them to the agent, which reads them with their lines.
 
 import { expect, type Hub, test } from "./hub";
 

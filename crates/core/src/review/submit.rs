@@ -1,4 +1,4 @@
-//! Submitting a review: the end of F6, and F7's first step.
+//! Submitting a review, which sends its comments to the agent.
 
 use super::{
     Comment, NewReview, Reply, Review, ReviewError, ReviewStore, Verdict, move_drafts, reviewable,

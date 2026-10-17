@@ -7,7 +7,7 @@ use crate::review::{ReviewStore, Waiting, waiting};
 use crate::store::StoreError;
 
 /// Open items grouped by who acts next, each group in the order to act on
-/// them (§9.1): by priority, none last, then by how many open items are
+/// them: by priority, none last, then by how many open items are
 /// stacked on each, most first, then oldest first. An item stacked on one in
 /// its group follows it, so a stack reads bottom first. Then the items closed
 /// today, most recently closed first.

@@ -1,4 +1,4 @@
-// The approval part of F12: a rule that would hide files waits in the UI
+// Approving rules: a rule that would hide files waits in the UI
 // until the operator approves it, after seeing what it would have hidden.
 
 import { mkdirSync, writeFileSync } from "node:fs";

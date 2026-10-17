@@ -1,4 +1,4 @@
-// F5 from the UI: comments on an item's pull request show on the review
+// External review from the UI: comments on an item's pull request show on the review
 // screen as they arrive, held until the reviewers go quiet or the operator
 // syncs; the operator agrees with or overrides the agent's rejection of one.
 

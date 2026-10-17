@@ -1,6 +1,6 @@
 //! Language packs: tree-sitter grammars compiled to wasm with their
 //! highlight queries, installed by the operator and run in wasmtime, so a
-//! grammar is data rather than code built into mg (tech-stack §6).
+//! grammar is data rather than code built into mg.
 
 mod archive;
 mod catalogue;

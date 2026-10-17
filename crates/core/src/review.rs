@@ -1,6 +1,6 @@
 //! Reviews: the operator's verdict on a revision and the line comments drafted
 //! for it, sent to its agent as one `review.submitted` event, and the replies
-//! that thread on each comment (design §9.2, F6, F7).
+//! that thread on each comment.
 
 mod comment;
 mod conversation;

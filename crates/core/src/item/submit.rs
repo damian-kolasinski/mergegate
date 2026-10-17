@@ -1,4 +1,4 @@
-//! Registering pushed work as an item or a new revision (F4).
+//! Registering pushed work as an item or a new revision.
 
 use super::diff_files::diff_files;
 use super::priority::note_of;
@@ -31,15 +31,15 @@ pub struct Submit {
     /// The command that wakes the item's agent; empty removes it. Kept when
     /// none is sent.
     pub wake: Option<String>,
-    /// The agent's review guide (F11); blank removes it. The last one is
+    /// The agent's review guide; blank removes it. The last one is
     /// kept when none is sent.
     pub guide: Option<String>,
-    /// The item's priority and note from the agent's brief (§10). Only the
+    /// The item's priority and note from the agent's brief. Only the
     /// submit that opens the item sets them, so an agent repeating its brief
     /// can't undo a change the operator made since.
     pub priority: Option<Priority>,
     pub note: Option<String>,
-    /// What to stack the item on (§5.1); none keeps what it's on.
+    /// What to stack the item on; none keeps what it's on.
     pub on: Option<On>,
 }
 

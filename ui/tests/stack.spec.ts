@@ -1,4 +1,4 @@
-// F16 from the UI: an item submitted `--on` another reads as its own diff
+// Stacked items from the UI: an item submitted `--on` another reads as its own diff
 // in a stack, bottom first, and an approval of it lands right after its
 // parent does.
 

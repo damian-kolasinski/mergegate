@@ -1,4 +1,4 @@
-//! F3's first step: `mg skill install` writes the skill embedded in `mg` and
+//! Installing the skill: `mg skill install` writes the skill embedded in `mg` and
 //! says where, for the agent to load from wherever its harness looks.
 
 use testkit::Env;

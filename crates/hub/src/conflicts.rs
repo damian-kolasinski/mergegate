@@ -1,4 +1,4 @@
-//! Early conflict detection's loop (design §5): every project's open items
+//! Early conflict detection's loop: every project's open items
 //! test-merged into their targets on every submit, after each of the hub's
 //! merges, and on a poll for targets moved outside the hub.
 

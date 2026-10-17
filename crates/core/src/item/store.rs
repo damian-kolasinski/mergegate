@@ -28,7 +28,7 @@ pub trait ItemStore {
     /// then the newest.
     fn item_with_pull(&self, project: &ProjectName, pull: u64) -> Result<Option<Item>, StoreError>;
 
-    /// The open item stacked on `id`, of which there's at most one (§5.1).
+    /// The open item stacked on `id`, of which there's at most one.
     fn child(&self, id: &ItemId) -> Result<Option<Item>, StoreError>;
 
     /// Every revision of `id`, oldest first.

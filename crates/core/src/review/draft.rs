@@ -1,5 +1,5 @@
 //! Draft comments: written on lines of the diff, kept on the hub until the
-//! operator submits a review, which sends them all (design §9.2).
+//! operator submits a review, which sends them all.
 
 use super::shown::Shown;
 use super::{
@@ -102,7 +102,7 @@ pub fn write_draft<S: ItemStore + DiffStore + ReviewStore + InterdiffStore>(
 
 /// Re-places a draft: puts it on other lines, of any revision, as if it were
 /// written there, keeping its ID and body. It's how a draft that can't move
-/// with a review on its own gets onto the review's revision (F13).
+/// with a review on its own gets onto the review's revision.
 pub fn move_draft<S: ItemStore + DiffStore + ReviewStore + InterdiffStore>(
     store: &mut S,
     git: &impl DiffGit,

@@ -1,4 +1,4 @@
-//! Hub-wide settings, changed with `mg hub set` (design §6.0). Each has a
+//! Hub-wide settings, changed with `mg hub set`. Each has a
 //! default, so a hub that never set one reads it.
 
 mod ttl;
@@ -27,7 +27,7 @@ pub struct Settings {
     pub listen: Listen,
 }
 
-/// Where the hub listens besides 127.0.0.1 (design §4).
+/// Where the hub listens besides 127.0.0.1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Listen {
     #[default]

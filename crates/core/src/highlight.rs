@@ -1,6 +1,6 @@
 //! Syntax highlighting with the language packs the operator installs: spans
 //! are computed for open items' files in the background, cached per blob and
-//! grammar, and read with an item's diff (tech-stack §6).
+//! grammar, and read with an item's diff.
 
 mod detect;
 mod file;

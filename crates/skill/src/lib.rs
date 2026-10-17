@@ -1,4 +1,4 @@
-//! The mergegate agent skill (design §11), embedded so `mg skill install`
+//! The mergegate agent skill, embedded so `mg skill install`
 //! writes the copy that matches the binary.
 
 /// The skill's folder name, which is also its `name`.

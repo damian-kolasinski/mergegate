@@ -1,5 +1,5 @@
 //! Runs an item's wake command when it has events from the operator its agent
-//! hasn't read, so a harness whose session ended can start one (design §6.5).
+//! hasn't read, so a harness whose session ended can start one.
 //!
 //! Each event wakes at most once, even across restarts: the store keeps the
 //! newest cursor a command ran for. A command doesn't run while a read of

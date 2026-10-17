@@ -1,4 +1,4 @@
-// F10 in the UI: the inbox shows each item's priority and note and orders
+// Priorities in the UI: the inbox shows each item's priority and note and orders
 // by them, and the operator changes them with `p` there or `P` on the item.
 
 import { expect, type Hub, test } from "./hub";

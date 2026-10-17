@@ -1,4 +1,4 @@
-// F8 and F9 from the UI: the operator approves an item and it merges, or
+// Merging from the UI: the operator approves an item and it merges, or
 // sees why it couldn't: a conflict sent back to the agent, or a merge held
 // until they retry or cancel it.
 

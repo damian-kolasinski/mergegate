@@ -1,4 +1,4 @@
-//! Triage (F12): the operator's rules.toml sorts each submitted file into
+//! Triage: the operator's rules.toml sorts each submitted file into
 //! review or trusted, the hub serves the tiers with their reasons, and the
 //! inbox counts only the files left to review.
 

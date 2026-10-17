@@ -1,4 +1,4 @@
-// F9 before review: an item whose target moved under it goes back to its
+// Conflicts before review: an item whose target moved under it goes back to its
 // agent without the operator doing anything, and the inbox and its page say
 // it conflicts with the target. Open items aren't merged into each other.
 

@@ -1,4 +1,4 @@
-//! The UI's live updates (F6): `GET /api/events/ui` tells open pages when the
+//! The UI's live updates: `GET /api/events/ui` tells open pages when the
 //! inbox changes, and stopping the hub ends the stream.
 
 use std::io::{BufRead, BufReader, Read, Write};

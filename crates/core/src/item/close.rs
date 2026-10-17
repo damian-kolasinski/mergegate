@@ -1,5 +1,5 @@
 //! Closing an item, merged or abandoned, and dropping what only an open item
-//! needs (design §5).
+//! needs.
 
 use super::{Item, ItemError, ItemGit, ItemState, ItemStore};
 use crate::diff::DiffStore;

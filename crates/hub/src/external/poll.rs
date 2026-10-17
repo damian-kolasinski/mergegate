@@ -1,5 +1,5 @@
 //! Polls every open github item's pull request for comments, and hands what
-//! it holds to the agent once it's due (design §6.1); then for where the pull
+//! it holds to the agent once it's due; then for where the pull
 //! request stands, so one merged or closed on GitHub closes its item.
 
 use std::collections::HashMap;

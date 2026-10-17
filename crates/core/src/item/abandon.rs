@@ -1,4 +1,4 @@
-//! Abandoning an item: its agent or the operator gives up on it (F14).
+//! Abandoning an item: its agent or the operator gives up on it.
 
 use super::close::close;
 use super::stack;

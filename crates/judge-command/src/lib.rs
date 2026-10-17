@@ -1,6 +1,6 @@
 //! A judge the operator runs as a command, e.g. `claude -p` or a script in
 //! front of a local model: the change goes in as JSON on stdin, the verdicts
-//! come back as JSON on stdout (design §7.4).
+//! come back as JSON on stdout.
 
 mod run;
 mod wire;

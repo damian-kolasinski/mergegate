@@ -1,4 +1,4 @@
-/// Where an item is in its lifecycle (design §5).
+/// Where an item is in its lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemState {
     NeedsReview,

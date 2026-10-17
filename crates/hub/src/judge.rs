@@ -1,5 +1,5 @@
 //! `/api/projects/{name}/judge`: each project's judge, and the background
-//! pass that has it score open items' newest revisions (design §7.4).
+//! pass that has it score open items' newest revisions.
 
 mod pass;
 mod setting;

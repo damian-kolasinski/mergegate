@@ -1,6 +1,6 @@
 //! The judge: an optional model that scores how much each file of a revision
-//! needs the operator, and may pull a rule-trusted file back into review
-//! (design §7.2, §7.4). It sees the whole change once per revision, in the
+//! needs the operator, and may pull a rule-trusted file back into review.
+//! It sees the whole change once per revision, in the
 //! background; its verdicts are cached under the setting that produced them
 //! and applied when the item is read.
 

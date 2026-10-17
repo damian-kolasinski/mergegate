@@ -82,7 +82,7 @@ pub struct DiffedFile {
 /// `None` when there's no such item. An open item's diffs were all cached at
 /// submit, so this only reads. A merged item's are diffed again from staging,
 /// where the target's history and its newest revision's pin keep its blobs,
-/// and not cached: closing it dropped them on purpose (design §5).
+/// and not cached: closing it dropped them on purpose.
 ///
 /// A closed item shows all changes: its interdiffs' diffs were dropped with
 /// the rest.

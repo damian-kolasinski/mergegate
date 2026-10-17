@@ -1,5 +1,5 @@
 //! `mg resume`: a prompt that brings a fresh agent session up to date on an
-//! item whose last session ended (F14). It marks nothing delivered, so the
+//! item whose last session ended. It marks nothing delivered, so the
 //! new session's `mg wait` still returns what the old one missed.
 
 use api::item::ItemState;

@@ -1,4 +1,4 @@
-// F7 from the UI: a revision submitted mid-review waits behind a banner, and
+// Interdiffs from the UI: a revision submitted mid-review waits behind a banner, and
 // switching to it shows only what changed since the revision reviewed, over
 // a target that moved meanwhile.
 

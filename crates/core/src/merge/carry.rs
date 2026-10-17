@@ -1,7 +1,7 @@
 //! An approval follows the diff, not the revision: a new revision that
 //! changes every file exactly as the approved one did lands without a
 //! second look, as after a rebase onto a target that moved under a held
-//! merge (design §5).
+//! merge.
 
 use std::collections::BTreeSet;
 

@@ -1,4 +1,4 @@
-//! Prioritizing the queue (F10): the authoring agent passes a priority and
+//! Prioritizing the queue: the authoring agent passes a priority and
 //! note from its brief on the item's first submit, the operator's agent
 //! changes them with `mg prioritize`, and the inbox orders every group by
 //! them.

@@ -1,7 +1,7 @@
 //! The github backend, against a fake GitHub: registering a repo with a
-//! GitHub remote (F1), submitting opens and updates a pull request (F4),
-//! approving squash-merges it there (F8), abandoning closes it, and a
-//! project switches backends under open items (F15).
+//! GitHub remote, submitting opens and updates a pull request,
+//! approving squash-merges it there, abandoning closes it, and a
+//! project switches backends under open items.
 
 use std::path::Path;
 

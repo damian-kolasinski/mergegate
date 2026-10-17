@@ -1,4 +1,4 @@
-//! F14: an agent session ended mid-review, and `mg resume` brings a new one
+//! An agent session ended mid-review, and `mg resume` brings a new one
 //! up to date without taking the old one's unread events from `mg wait`.
 
 use serde_json::{Value, json};

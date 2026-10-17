@@ -1,4 +1,4 @@
-// The viewing part of F6: open an item, see every changed file in one
+// Viewing an item: open an item, see every changed file in one
 // column, walk it with `n/p`, `j/k` and `]/[`, expand the gaps between hunks.
 
 import { chmodSync, mkdirSync, symlinkSync } from "node:fs";
@@ -284,7 +284,7 @@ test("f6 escape goes back to the inbox", async ({ page, hub }) => {
   await expect(page.getByRole("region", { name: "Needs you" })).toBeVisible();
 });
 
-// tech-stack.md §9: a 5k-line diff scrolls at 60 fps. Measured everywhere,
+// Budget: a 5k-line diff scrolls at 60 fps. Measured everywhere,
 // enforced with MG_ENFORCE_BUDGETS=1, which CI sets on Ubuntu only.
 test("a 5k-line diff scrolls within budget", async ({ page, hub }, info) => {
   const files: Record<string, string> = {};
@@ -331,7 +331,7 @@ test("a 5k-line diff scrolls within budget", async ({ page, hub }, info) => {
   if (process.env.MG_ENFORCE_BUDGETS === "1") expect(at(0.95)).toBeLessThan(25);
 });
 
-// tech-stack.md §9: opening an item from the inbox shows its diff within
+// Budget: opening an item from the inbox shows its diff within
 // 100 ms, and moving through it (`n`, `j`, `v`) shows by the frame after the
 // next.
 test("a large item opens and answers keys within budget", async ({
@@ -428,7 +428,7 @@ async function highlighted(hub: Hub, id: string) {
 const json = (count: number, entry: (n: number) => string) =>
   `{\n${lines(count, entry)}  "end": 0\n}\n`;
 
-// tech-stack.md §9: the largest file the hub keeps hunks for opens within
+// Budget: the largest file the hub keeps hunks for opens within
 // 150 ms, highlighted by an installed pack: 3.6× the lines of the 100 ms
 // item, all in one file, which renders whole.
 test("a single large file opens within budget", async ({ page, hub }, info) => {
@@ -461,7 +461,7 @@ test("a single large file opens within budget", async ({ page, hub }, info) => {
   report(info, "open a single large file", opened, 150);
 });
 
-// tech-stack.md §9: expanding a gap between hunks shows its lines within
+// Budget: expanding a gap between hunks shows its lines within
 // 50 ms, the file's blobs and their spans fetched from the hub included.
 // Every file's gaps are long and its rows virtualized as the 5k-line diff's.
 test("a gap expands within budget", async ({ page, hub }, info) => {

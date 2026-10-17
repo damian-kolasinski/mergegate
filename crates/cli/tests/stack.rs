@@ -1,4 +1,4 @@
-//! Stacked items (F16): an item submitted `--on` another is reviewed as its
+//! Stacked items: an item submitted `--on` another is reviewed as its
 //! own commits, lands right after its parent, and is told how to move its
 //! commits whenever its parent moves on, on either backend.
 

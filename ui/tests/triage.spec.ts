@@ -1,4 +1,4 @@
-// The review part of F12: files the operator's rules trust fold into a group
+// Triage on the review screen: files the operator's rules trust fold into a group
 // of their own, count as viewed, and leave the inbox's count of files to review.
 
 import { expect, type Hub, test } from "./hub";
