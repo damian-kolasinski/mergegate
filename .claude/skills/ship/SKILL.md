@@ -1,13 +1,13 @@
 ---
 name: ship
-description: Commit scoped changes, review and fix them, and submit them for the operator's review through mergegate (or a sequence of items when the work holds parts better reviewed apart) when the user asks to ship, submit, or open a PR.
+description: Commit scoped changes, review and fix them, submit them for the operator's review through mergegate (or a sequence of items when the work holds parts better reviewed apart), and follow the review until the work merges, when the user asks to ship, submit, or open a PR.
 ---
 
 # Ship
 
 Deliver a reviewed mergegate item for the requested changes. An optional user-provided title overrides the generated title. Reuse the branch's open item: submitting again from the same branch adds a revision.
 
-This repository is reviewed through mergegate, so follow the `mergegate` skill for submitting, waiting and replying. Never `git push` or `gh pr create`: the hub pushes the branch to GitHub and opens its pull request itself.
+This repository is reviewed through mergegate, so follow the `mergegate` skill for submitting, waiting and replying. Never `git push` or `gh pr create`: the hub pushes the branch to GitHub and opens its pull request itself. If `mg` can't reach the hub, stop and tell the operator.
 
 ## Prepare and verify
 
@@ -50,4 +50,11 @@ Commit messages and guides follow the authorship rule in `AGENTS.md`: the guide'
 
 Remove the task-created guide file once the submit is verified.
 
-Report the item ID and pull request link (and the parts still to submit, bottom first) and validation. Shipping ends once the item is submitted unless the user also asks to wait for the review, address feedback, or see it merged; then continue with the `mergegate` skill's loop.
+## Follow the review
+
+Shipping goes on until the work merges; stop once the item is submitted only when the user asked for just that. Start waiting for the item's events as the `mergegate` skill's waiting reference describes, then report the item ID, pull request link and validation, and work through the skill's loop as events arrive: answer every comment, resubmit, and wait again.
+
+- On `item.merged` with parts still to submit, move the next part onto the target as [Size](#size) describes before the default cleanup deletes the merged branch, submit it, and follow its review the same way.
+- On `item.abandoned`, a pull request closed unmerged on GitHub included, stop, and ask the operator before deleting branches or submitting a part built on it.
+
+When the loop ends, report how: merged, or abandoned, and the parts still to submit, bottom first.
