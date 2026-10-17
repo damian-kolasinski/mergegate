@@ -21,8 +21,8 @@ use store_sqlite::Store;
 use crate::{
     Home, HubError, HubInfo, abandon, attachments, branches, comments, conflicts, conversation,
     devices, diff, doctor, draft_replies, event_log, events, external, feedback, git_http, guard,
-    highlights, io, items, judge, languages, lifecycle, merge, names, priority, projects, replies,
-    reply, resume, reviews, rules, settings, tailnet, ui, viewed, wake,
+    highlights, io, items, judge, languages, lifecycle, merge, names, presence, priority, projects,
+    replies, reply, resume, reviews, rules, settings, tailnet, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -31,6 +31,7 @@ pub(crate) struct AppState {
     pub shutdown: Notify,
     pub events: events::Events,
     pub wakes: wake::Wakes,
+    pub presence: presence::Readers,
     pub wake_logs: PathBuf,
     pub wake_bin: PathBuf,
     /// Held across a pull of pull request comments, from asking GitHub to
@@ -164,6 +165,7 @@ pub(crate) async fn serve(
         shutdown: Notify::new(),
         events: events::Events::new(),
         wakes: wake::Wakes::default(),
+        presence: presence::Readers::default(),
         wake_logs: home.wake_logs(),
         wake_bin: home.wake_bin(),
         pulling: tokio::sync::Mutex::new(()),

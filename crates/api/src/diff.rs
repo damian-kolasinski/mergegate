@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::agent::AgentPresence;
 use crate::attachment::Demo;
 use crate::highlight::Span;
 use crate::item::{ChangedSince, Item};
@@ -36,6 +37,10 @@ pub struct ItemDiff {
     /// the inbox: merging this one hands them back to their agents.
     #[serde(default)]
     pub conflicts_with: Vec<String>,
+    /// Whether what the operator sends reaches an agent; null once the item
+    /// is closed.
+    #[serde(default)]
+    pub agent: Option<AgentPresence>,
     #[serde(flatten)]
     pub conversation: Conversation,
 }

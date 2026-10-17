@@ -2,7 +2,8 @@
 //! in, which `mg resume` names, and the command that wakes it when the item
 //! has events (design §6.5).
 
-use crate::item::ItemId;
+use crate::feedback::{FeedbackStore, Source};
+use crate::item::{Item, ItemId, ItemState};
 use crate::store::StoreError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -62,6 +63,57 @@ pub(crate) fn record<S: AgentStore>(
         agent.wake = (!wake.is_empty()).then(|| wake.to_owned());
     }
     store.set_agent(id, &agent)
+}
+
+/// Whether what the operator sends an open item reaches an agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    /// Something reads the item's feedback now, or did moments ago: an
+    /// `mg wait` blocked on it, or one between two timed-out waits.
+    Waiting,
+    /// Back with its agent, who has read everything sent to it and is
+    /// presumably working on it.
+    Working,
+    /// Nothing reads it, but the hub runs the item's wake command for what
+    /// the operator sends.
+    Wakes,
+    /// Nothing reads it and nothing wakes one: what the operator sends waits
+    /// until a session picks the item up.
+    Away,
+}
+
+/// `item`'s [`Presence`], none once it's closed. Only the hub knows whether
+/// a read of its feedback is `reading`, and whether its wake command `wakes`,
+/// which takes a worktree that is still there.
+pub fn presence<S: FeedbackStore>(
+    store: &S,
+    item: &Item,
+    reading: bool,
+    wakes: bool,
+) -> Result<Option<Presence>, StoreError> {
+    if !item.state.is_open() {
+        return Ok(None);
+    }
+    if reading {
+        return Ok(Some(Presence::Waiting));
+    }
+    // Under review, or merging, the agent should be waiting for what comes
+    // next. Back with it, an agent that read what was sent is off doing it.
+    if item.state == ItemState::ChangesRequested {
+        let delivered = store.delivered(&item.id)?;
+        let unread = store
+            .events(&item.id, delivered)?
+            .iter()
+            .any(|e| e.source() != Source::Agent);
+        if !unread {
+            return Ok(Some(Presence::Working));
+        }
+    }
+    Ok(Some(if wakes {
+        Presence::Wakes
+    } else {
+        Presence::Away
+    }))
 }
 
 /// Variables a coding agent's harness sets for its own session. Commands the

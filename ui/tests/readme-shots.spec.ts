@@ -653,6 +653,8 @@ extension Locale {
   await page.screenshot({ path: join(out, "inbox.png") });
 
   await page.setViewportSize({ width: 1440, height: 900 });
+  // Its agent waits, as one would, so the screen doesn't warn of none.
+  hub.wait("app#1");
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
   await expect(screen.getByText("chatgpt-codex-connector[bot]")).toBeVisible();
@@ -736,6 +738,8 @@ test("readme loop recording", async ({ browser }, info) => {
         bar.textContent = text;
       }, text);
 
+    // Its agent waits, as one would, so the screen doesn't warn of none.
+    hub.wait("app#1");
     await page.goto(hub.url);
     await expect(page.getByText("Retry once on 401")).toBeVisible();
     await caption("Agents submit their work with mg submit");

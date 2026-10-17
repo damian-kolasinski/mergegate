@@ -20,7 +20,7 @@ use tokio::time::Instant;
 use crate::guard::{self, Caller};
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{comments, external, items, replies, reviews};
+use crate::{comments, external, items, presence, replies, reviews};
 
 /// The longest one request waits; `mg wait` asks again to wait longer.
 const MAX_WAIT: Duration = Duration::from_secs(3600);
@@ -61,6 +61,7 @@ async fn read(
     let mut last = query.wait == 0;
     // Its agent is awake while this reads, and needs no wake command run.
     let _reading = state.wakes.reading(&id);
+    let _present = presence::reading(&state, &id);
     let mut since = query.since;
     loop {
         log.mark_unchanged();

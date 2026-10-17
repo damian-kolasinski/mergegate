@@ -7,6 +7,7 @@ import {
   Show,
   untrack,
 } from "solid-js";
+import type { AgentPresence } from "../api/AgentPresence";
 import type { Demo as DemoData } from "../api/Demo";
 import type { Item } from "../api/Item";
 import type { ItemDiff } from "../api/ItemDiff";
@@ -31,6 +32,7 @@ import { Conversation } from "./conversation";
 import { Thread } from "./comments/thread";
 import { FileList } from "./files";
 import { Abandon } from "./abandon";
+import { AgentAway } from "./agent-away";
 import { Closed } from "./closed";
 import { Demo } from "./demo/demo";
 import { Intent } from "./intent";
@@ -82,6 +84,9 @@ export function ItemScreen(props: { id: string }) {
   const [conflicts, setConflicts] = createSignal<readonly string[]>([], {
     equals: (a, b) => a.join() === b.join(),
   });
+  // Whether an agent will read what's sent: the item's, not the revision's,
+  // so a refetch of any revision updates it.
+  const [agent, setAgent] = createSignal<AgentPresence | null>(null);
   createEffect(() => {
     const item = latest();
     if (item) learnName(item.id, item.name);
@@ -122,6 +127,7 @@ export function ItemScreen(props: { id: string }) {
     setDemo(next.demo);
     setLatest(next.item);
     setConflicts(next.conflicts_with);
+    setAgent(next.agent);
   };
   // A highlights refetch answered before the first diff, which it's newer
   // than: the hub may have served the first one before it had the spans.
@@ -139,6 +145,7 @@ export function ItemScreen(props: { id: string }) {
     void fetchDiff().then((next) => {
       setFailure(undefined);
       setLatest(next.item);
+      setAgent(next.agent);
       const shown = diff();
       if (
         replace ||
@@ -208,6 +215,7 @@ export function ItemScreen(props: { id: string }) {
               diff={current()}
               latest={latest() ?? current().item}
               conflictsWith={conflicts()}
+              agent={agent()}
               demo={demo()}
               newest={newest()}
               failure={failure()}
@@ -243,6 +251,7 @@ function Review(props: {
   latest: Item;
   /** The open items the revision on screen conflicts with. */
   conflictsWith: readonly string[];
+  agent: AgentPresence | null;
   demo: DemoData | null;
   /** A revision newer than the one on screen. */
   newest: number | undefined;
@@ -665,6 +674,9 @@ function Review(props: {
               onChanged={props.onMerge}
             />
           )}
+        </Show>
+        <Show when={props.agent === "away"}>
+          <AgentAway name={props.latest.name} />
         </Show>
         <Show when={props.newest}>
           {(newest) => (
