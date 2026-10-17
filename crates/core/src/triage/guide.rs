@@ -1,4 +1,4 @@
-//! The agent's review guide (F11): Markdown whose `## Files` list orders the
+//! The agent's review guide: Markdown whose `## Files` list orders the
 //! files to review and says why each matters. It can't hide a file or bring
 //! a trusted one back; only the operator's rules sort files into tiers.
 

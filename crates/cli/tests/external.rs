@@ -1,5 +1,5 @@
 //! External review, against a fake GitHub: comments on an item's pull
-//! request reach its agent in one batch once reviewers go quiet (F5),
+//! request reach its agent in one batch once reviewers go quiet,
 //! expected bots hold the batch until they've commented, `mg sync` hands
 //! over what's held at once, and the operator agrees with or overrides the
 //! agent's rejection of one.

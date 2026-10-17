@@ -1,4 +1,4 @@
-//! Changing a project's settings after setup (F15).
+//! Changing a project's settings after setup.
 
 use std::path::PathBuf;
 

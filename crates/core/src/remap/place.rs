@@ -1,9 +1,9 @@
 //! Placing comments written on an earlier revision onto a later one, so a
-//! review of the later shows them on the lines they were about (F7, F13).
+//! review of the later shows them on the lines they were about.
 //!
 //! It runs as the item is read: a placement depends on the revision on
 //! screen, and costs one cached diff per file, or a diff of two blobs when
-//! the base moved (tech-stack §9).
+//! the base moved.
 
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};

@@ -1,5 +1,5 @@
 //! Demo attachments: the screenshots and recordings an agent adds to a
-//! revision, for the operator to watch before reading the diff (design §9.2).
+//! revision, for the operator to watch before reading the diff.
 //! A closed item keeps them for the hub's `attachment-ttl`.
 
 mod attach;

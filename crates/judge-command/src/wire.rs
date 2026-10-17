@@ -1,5 +1,5 @@
-//! The JSON a judge command reads and writes. It's the command's contract,
-//! documented in design §7.4: fields are only ever added.
+//! The JSON a judge command reads and writes. It's the command's contract:
+//! fields are only ever added.
 
 use mergegate_core::item::FileMode;
 use mergegate_core::judge::{JudgeError, Request, Verdict};

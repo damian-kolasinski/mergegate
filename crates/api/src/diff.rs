@@ -29,7 +29,7 @@ pub struct ItemDiff {
     /// is closed.
     pub interdiffs: Vec<u32>,
     /// The files to review, ranked by the guide, the judge and the
-    /// heuristics (design §7.2), then the trusted ones in path order.
+    /// heuristics, then the trusted ones in path order.
     pub files: Vec<File>,
     /// The agent's review guide, Markdown as it sent it.
     pub guide: Option<String>,

@@ -1,4 +1,4 @@
-//! Performance budgets (tech-stack §9) for the paths agents and the operator
+//! Performance budgets for the paths agents and the operator
 //! wait on: an agent's submit, its wake on feedback and its read of it, and
 //! the operator's comment, viewed mark, review and merge. Meaningful only for
 //! release builds, so CI runs them with

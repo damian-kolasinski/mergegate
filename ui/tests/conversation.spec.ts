@@ -1,4 +1,4 @@
-// F6 and F7 end to end: the operator comments on lines and requests changes,
+// A review conversation end to end: the operator comments on lines and requests changes,
 // the agent waits for it and answers, the operator answers back, and once the
 // agent's next revision is in, r1's comments follow their lines into it.
 

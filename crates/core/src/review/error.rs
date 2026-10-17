@@ -24,7 +24,7 @@ pub enum ReviewError {
     #[error("a review needs a summary, a comment or a reply")]
     Empty,
     /// Drafts from earlier revisions whose lines changed: each has to be
-    /// re-placed on the review's revision or deleted first (F13).
+    /// re-placed on the review's revision or deleted first.
     #[error("{} draft(s) can't move to {id} r{revision}; re-place or delete them", drafts.len())]
     Unplaced {
         id: ItemId,

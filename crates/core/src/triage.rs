@@ -1,5 +1,5 @@
-//! File triage: which group each changed file of a revision lands in
-//! (design §7). Only a rule the operator approved can hide a file.
+//! File triage: which group each changed file of a revision lands in.
+//! Only a rule the operator approved can hide a file.
 
 mod classify;
 mod edit;

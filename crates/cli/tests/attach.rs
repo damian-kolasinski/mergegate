@@ -1,4 +1,4 @@
-//! Demo attachments (F16): screenshots and recordings an agent adds with
+//! Demo attachments: screenshots and recordings an agent adds with
 //! `mg submit --attach` or `mg attach`, served to the review screen and
 //! dropped a while after the item closes.
 

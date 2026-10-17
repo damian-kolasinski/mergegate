@@ -1,8 +1,8 @@
-//! External review (F5): comments that bots and teammates leave on a github
+//! External review: comments that bots and teammates leave on a github
 //! item's pull request. The hub polls them, shows them as they come, and
 //! hands them to the item's agent in batches once the reviewers have gone
 //! quiet; the operator can agree with the agent's rejection of one or
-//! override it (design §6.3).
+//! override it.
 
 mod due;
 mod error;

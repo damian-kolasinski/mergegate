@@ -1,5 +1,5 @@
 //! Replies: each sent comment's thread. The agent answers with a status, and
-//! its latest one counts (design §6.1).
+//! its latest one counts.
 
 use super::{CommentId, NewReply, ReviewError, ReviewStore, reviewable};
 use crate::item::{ItemId, ItemStore};

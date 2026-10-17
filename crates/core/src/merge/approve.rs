@@ -1,4 +1,4 @@
-//! Approving a revision, which merges it (F8).
+//! Approving a revision, which merges it.
 
 use super::land::{land, through};
 use super::stacked::tidy_parent;
@@ -24,7 +24,7 @@ pub struct Approve {
 /// to Merging, then lands it. The review is recorded first, so the agent
 /// learns of the approval even if the merge never finishes. Drafts move to
 /// the revision as a submitted review's do. An item stacked on one that
-/// hasn't landed waits in Merging and lands right after it (§5.1).
+/// hasn't landed waits in Merging and lands right after it.
 pub fn approve<
     S: ProjectStore
         + ItemStore

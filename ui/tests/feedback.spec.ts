@@ -1,5 +1,5 @@
-// F6's last step: the operator's review goes to the agent, which reads it
-// with `mg feedback` (F7).
+// The operator's review goes to the agent, which reads it
+// with `mg feedback`.
 
 import { expect, git, type Hub, test } from "./hub";
 

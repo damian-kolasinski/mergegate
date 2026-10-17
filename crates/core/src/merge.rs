@@ -1,5 +1,5 @@
-//! Merging: an approved revision lands on its item's target as one commit
-//! (design §5, F8, F9). A merge that can't land yet holds the item in
+//! Merging: an approved revision lands on its item's target as one commit.
+//! A merge that can't land yet holds the item in
 //! Merging until the operator retries or cancels it; one that conflicts hands
 //! the item back to its agent.
 

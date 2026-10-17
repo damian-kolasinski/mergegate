@@ -1,4 +1,4 @@
-//! Abandoning an item (F14): its agent with `mg abandon`, or the operator
+//! Abandoning an item: its agent with `mg abandon`, or the operator
 //! from the UI. Either way the other side hears of it: the agent's `mg wait`
 //! prints who closed it and why and exits 3, and the UI shows it closed, its
 //! diffs dropped.

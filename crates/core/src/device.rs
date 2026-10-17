@@ -1,5 +1,5 @@
-//! Devices on the operator's tailnet, and which of them may reach the hub
-//! (design §4). Tailscale says who a caller is; the hub's owner and the
+//! Devices on the operator's tailnet, and which of them may reach the hub.
+//! Tailscale says who a caller is; the hub's owner and the
 //! operator's `mg hub allow` and `deny` say whether it may.
 
 use std::net::IpAddr;

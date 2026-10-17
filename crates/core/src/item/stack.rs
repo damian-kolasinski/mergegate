@@ -1,4 +1,4 @@
-//! Stacks (design §5.1, F16): an item submitted `--on` another is reviewed
+//! Stacks: an item submitted `--on` another is reviewed
 //! against the parent revision its branch is built on, lands right after its
 //! parent, and hears from the hub whenever its parent moves on.
 

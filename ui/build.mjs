@@ -27,7 +27,7 @@ await copyFile("index.html", join(outdir, "index.html"));
 
 // Shiki loads every grammar and theme through a dynamic import, which esbuild
 // inlines: 10 MB. The diff view renders plain text with Pierre's two themes
-// until highlighting lands (roadmap PR 15), so the rest resolve to a module
+// until highlighting lands, so the rest resolve to a module
 // that throws if anything ever asks for one.
 const shikiAssets = {
   name: "shiki-assets",

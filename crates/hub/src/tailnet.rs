@@ -1,4 +1,4 @@
-//! The hub's second listener, on the tailnet (design §4): with `listen` set to
+//! The hub's second listener, on the tailnet: with `listen` set to
 //! `tailnet`, the hub also serves its tailnet address, so workers on other
 //! machines reach it, and keeps trying while Tailscale is down.
 

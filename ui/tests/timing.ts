@@ -1,4 +1,4 @@
-// Timing for the budget tests (tech-stack.md §9): from what the operator did
+// Timing for the budget tests: from what the operator did
 // to the frame that shows its result, painted. Measured everywhere, enforced
 // with MG_ENFORCE_BUDGETS=1, which CI sets on Ubuntu only.
 

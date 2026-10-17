@@ -99,7 +99,7 @@ fn errors_name_the_fix() {
     );
 }
 
-/// Budget: `mg --version` cold start under 10 ms (tech-stack §9). Meaningful
+/// Budget: `mg --version` cold start under 10 ms. Meaningful
 /// only for release builds, so CI runs it with
 /// `cargo test --release -p mg --test contract -- --ignored`; it fails over
 /// budget when `MG_ENFORCE_BUDGETS=1` and otherwise only reports.
@@ -127,7 +127,7 @@ fn cold_start_budget() {
     }
 }
 
-/// Budget: `mg inbox --json` under 30 ms (tech-stack §9), over a hub with 20
+/// Budget: `mg inbox --json` under 30 ms, over a hub with 20
 /// open items. Run and enforced like `cold_start_budget`.
 #[test]
 #[ignore]
@@ -161,7 +161,7 @@ fn inbox_budget() {
     }
 }
 
-/// Budget: opening an item under 50 ms (tech-stack §9), comments placed
+/// Budget: opening an item under 50 ms, comments placed
 /// included. `app#1`'s 20 files carry 60 comments from r1, placed onto an r2
 /// rebased onto a moved base, so each file's two blobs are read from git and
 /// diffed; `app#2` is the same item without comments, and the difference is

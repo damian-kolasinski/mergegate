@@ -1,5 +1,5 @@
-//! `GET /api/items/{id}/resume`: what `mg resume` hands a fresh agent session
-//! (F14). It acknowledges nothing.
+//! `GET /api/items/{id}/resume`: what `mg resume` hands a fresh agent session.
+//! It acknowledges nothing.
 
 use std::sync::Arc;
 

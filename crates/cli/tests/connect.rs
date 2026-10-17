@@ -1,4 +1,4 @@
-//! F2, multi-machine: a hub listens on the tailnet, a worker machine's `mg`
+//! Multi-machine: a hub listens on the tailnet, a worker machine's `mg`
 //! connects to it, and the hub lets in the owner's devices and the ones the
 //! operator allowed. Both machines are homes on this one, and a fake
 //! `tailscale` says which device each request over "the tailnet" comes from.

@@ -1,5 +1,5 @@
-//! Projects: registering a repo with the local backend (F1) and changing its
-//! settings later (F15), against a real hub and real repos.
+//! Projects: registering a repo with the local backend and changing its
+//! settings later, against a real hub and real repos.
 
 use std::path::Path;
 

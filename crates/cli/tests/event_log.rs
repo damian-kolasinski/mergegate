@@ -1,4 +1,4 @@
-//! Following the hub (F8, F10): `mg events` reads every item's events for
+//! Following the hub: `mg events` reads every item's events for
 //! the operator's agent, and `--follow` streams them as they come, without
 //! taking them from the items' own agents.
 

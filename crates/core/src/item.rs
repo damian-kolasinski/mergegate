@@ -58,11 +58,11 @@ pub struct Item {
     pub created_at: String,
     /// When it merged or was abandoned; none while it's open.
     pub closed_at: Option<String>,
-    /// None sorts after p3 (§10).
+    /// None sorts after p3.
     pub priority: Option<Priority>,
     /// Why it has its priority, for the operator.
     pub note: Option<String>,
-    /// The item it's stacked on (§5.1), set by `mg submit --on`. It stays
+    /// The item it's stacked on, set by `mg submit --on`. It stays
     /// once the parent closes, until the item's next revision.
     pub parent: Option<ItemId>,
 }

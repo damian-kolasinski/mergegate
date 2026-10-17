@@ -1,7 +1,6 @@
-//! The operator's review reaching the agent (F6's last steps, F7, F3's
-//! `mg wait`): drafts on lines of the diff go out with the review, the hub
-//! logs it, `mg wait` and `mg feedback` deliver it once, and `--since`
-//! replays it.
+//! The operator's review reaching the agent: drafts on lines of the diff go
+//! out with the review, the hub logs it, `mg wait` and `mg feedback` deliver
+//! it once, and `--since` replays it.
 
 use std::time::{Duration, Instant};
 

@@ -1,4 +1,4 @@
-// The judge part of F12: a model the operator picked scores each file, its
+// The judge: a model the operator picked scores each file, its
 // high scores raise files ahead of the guide's order, and a trusted file it
 // is sure needs a look comes back into review.
 

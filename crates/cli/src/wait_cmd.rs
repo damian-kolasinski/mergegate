@@ -1,4 +1,4 @@
-//! `mg wait`: blocks until an item has events for its agent (design §6.5).
+//! `mg wait`: blocks until an item has events for its agent.
 
 use std::time::{Duration, Instant};
 

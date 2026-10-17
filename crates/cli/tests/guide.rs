@@ -1,4 +1,4 @@
-//! F11's guide step: `mg submit --guide` sends the agent's Markdown, whose
+//! The review guide: `mg submit --guide` sends the agent's Markdown, whose
 //! `## Files` list orders the files to review, and the hub serves it with
 //! the item.
 

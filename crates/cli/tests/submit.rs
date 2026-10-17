@@ -1,5 +1,5 @@
-//! Submitting work (F4): workers push to the hub and register items and
-//! revisions, and the inbox lists them. Also F15's open items, against a real
+//! Submitting work: workers push to the hub and register items and
+//! revisions, and the inbox lists them. Also a project's settings changed under open items, against a real
 //! hub and real repos.
 
 use std::path::{Path, PathBuf};

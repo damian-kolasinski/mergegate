@@ -1,5 +1,5 @@
 //! The event log: what an item's agent has to react to, read with `mg wait`
-//! and `mg feedback` (design §6.1, §6.3). Each item keeps the cursor of the
+//! and `mg feedback`. Each item keeps the cursor of the
 //! newest event its agent acknowledged, so a wait that dropped before the
 //! agent saw its events returns them again.
 
@@ -84,7 +84,7 @@ pub enum NoticeKind {
     },
     /// The approved revision landed as `commit` on the target.
     Merged { commit: String },
-    /// The item's parent moved on (§5.1): it got a revision, or it merged
+    /// The item's parent moved on: it got a revision, or it merged
     /// and the item couldn't land with it. The item's agent rebases the
     /// commits after `upstream`, the parent revision they're built on, onto
     /// `onto`: the parent's new head, or the target's once it merged.

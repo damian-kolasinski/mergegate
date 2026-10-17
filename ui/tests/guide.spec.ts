@@ -1,4 +1,4 @@
-// The guide part of F11: the agent's guide shows as the item's intent, and
+// The review guide: the agent's guide shows as the item's intent, and
 // its `## Files` list orders the files to review and says why each matters.
 
 import { writeFileSync } from "node:fs";

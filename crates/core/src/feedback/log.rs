@@ -1,5 +1,5 @@
 //! The whole hub's event log, which `mg events --follow` streams to the
-//! operator agent so it can start work that waited on an item (§6.2, F8).
+//! operator agent so it can start work that waited on an item.
 //! Reading it acknowledges nothing: the log belongs to each item's agent.
 
 use super::{Event, FeedbackStore};

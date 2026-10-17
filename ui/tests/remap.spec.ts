@@ -1,4 +1,4 @@
-// F7 and F13 from the UI: once the agent's next revision is in, comments on
+// Comments on a later revision, from the UI: once the agent's next revision is in, comments on
 // lines it kept or changed follow them into its diff, those on lines it
 // deleted stay in the Conversation list, and drafts that can't move hold the
 // review until the operator re-places or deletes them.

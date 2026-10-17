@@ -1,4 +1,4 @@
-//! F3's resumable harness: `mg submit --wake CMD` leaves a command the hub
+//! A resumable harness: `mg submit --wake CMD` leaves a command the hub
 //! runs when the item has events from the operator its agent hasn't read, at most once per
 //! event and never while the agent waits.
 

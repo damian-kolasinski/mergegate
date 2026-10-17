@@ -25,7 +25,7 @@ pub struct Seen(BTreeSet<(u64, String, String)>);
 /// Merging are left to their merge, and one whose agent already heard of a
 /// conflict on its revision isn't tried again, though its target is fetched.
 ///
-/// Nor is an item stacked on an open one (§5.1): its branch carries its
+/// Nor is an item stacked on an open one: its branch carries its
 /// parent's commits, whose conflict is the parent's to fix, and rebasing
 /// onto the target would take it off its parent. Its own diff is tried when
 /// its parent lands.

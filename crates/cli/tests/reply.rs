@@ -1,4 +1,4 @@
-//! The agent answering the operator's comments (F7's last step): `mg reply`
+//! The agent answering the operator's comments: `mg reply`
 //! marks a sent comment addressed, rejected or a question, and the item shows
 //! the reply on the comment's thread. The operator answers back with draft
 //! replies, which the next review sends.

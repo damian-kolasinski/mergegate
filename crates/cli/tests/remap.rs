@@ -1,4 +1,4 @@
-//! Comments on a later revision (F7, F13): read onto it, each comment from an
+//! Comments on a later revision: read onto it, each comment from an
 //! earlier one is placed on the lines that kept or replaced its own, or is
 //! outdated, and a review of it waits for drafts that can't move until the
 //! operator re-places or deletes them.

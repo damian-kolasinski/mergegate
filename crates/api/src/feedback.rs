@@ -1,4 +1,4 @@
-//! What `mg wait` and `mg feedback` read: an item's events (design §6.3).
+//! What `mg wait` and `mg feedback` read: an item's events.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-//! Opening an item for review (F6): the hub serves each file's diff, computed
+//! Opening an item for review: the hub serves each file's diff, computed
 //! when the work was submitted, and the blobs that show more of a file.
 
 use serde_json::{Value, json};

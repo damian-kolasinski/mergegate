@@ -1,4 +1,4 @@
-// The review-screen part of F16: what an agent attaches shows as a chip in
+// Demo attachments on the review screen: what an agent attaches shows as a chip in
 // the item's header, opens full size, and marks its row in the inbox.
 
 import { fileURLToPath } from "node:url";

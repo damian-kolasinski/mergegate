@@ -1,6 +1,6 @@
 //! What an item's agent leaves the hub when it submits: the worktree it works
 //! in, which `mg resume` names, and the command that wakes it when the item
-//! has events (design §6.5).
+//! has events.
 
 use crate::feedback::{FeedbackStore, Source};
 use crate::item::{Item, ItemId, ItemState};

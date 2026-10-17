@@ -1,5 +1,5 @@
 //! Approving an item, which squash-merges it, and the held merge it can leave
-//! behind (design §5, F8).
+//! behind.
 
 use serde::{Deserialize, Serialize};
 

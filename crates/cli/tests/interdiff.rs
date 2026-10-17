@@ -1,4 +1,4 @@
-//! Re-reviewing a revision by what changed since the last review (F7, F13):
+//! Re-reviewing a revision by what changed since the last review:
 //! the hub diffs each revision against every earlier one when it's submitted,
 //! leaving out what the target changed meanwhile, and viewed marks follow the
 //! files that didn't change.

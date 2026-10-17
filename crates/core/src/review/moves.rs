@@ -1,6 +1,6 @@
 //! Drafts written on an earlier revision go with a review of a later one, on
 //! the lines they were about: they move by themselves only when those lines
-//! didn't change (F13).
+//! didn't change.
 
 use super::{Comment, CommentId, ReviewError, ReviewStore};
 use crate::diff::{DiffGit, DiffStore};

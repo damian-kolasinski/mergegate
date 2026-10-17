@@ -1,5 +1,5 @@
-//! What a fresh agent session needs to pick up an item whose session ended
-//! (F14): the item, where its agent worked, the last review and the comments
+//! What a fresh agent session needs to pick up an item whose session ended:
+//! the item, where its agent worked, the last review and the comments
 //! still open. It reads no delivered cursor and acknowledges nothing, so the
 //! old session's unread events still reach `mg wait`.
 

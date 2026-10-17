@@ -2,7 +2,7 @@
 // with three projects' worth of believable work. Skipped unless
 // MG_SHOTS_DIR names where to write them:
 //
-//   MG_SHOTS_DIR=$PWD/docs/images MG_SHOTS_PACKS=<dir of pack archives> \
+//   MG_SHOTS_DIR=$PWD/readme MG_SHOTS_PACKS=<dir of pack archives> \
 //     pnpm --dir ui e2e readme-shots --project chromium
 //
 // MG_SHOTS_PACKS is optional: without it the diffs show unhighlighted. The

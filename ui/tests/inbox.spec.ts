@@ -1,4 +1,4 @@
-// The inbox part of F6: open the hub, see open items grouped, move with
+// The inbox: open the hub, see open items grouped, move with
 // `j/k`, open with `enter`. State comes from real `mg` commands.
 
 import { expect, test } from "./hub";
@@ -100,7 +100,7 @@ test("f6 enter opens the selected item while a clicked link keeps focus", async 
   await expect(page).toHaveURL(/#\/items\/app%232(\?.*)?$/);
 });
 
-// tech-stack.md §9: first paint under 100 ms. Measured everywhere, enforced
+// Budget: first paint under 100 ms. Measured everywhere, enforced
 // with MG_ENFORCE_BUDGETS=1, which CI sets on Ubuntu only.
 test("the inbox paints within budget", async ({ page, hub }, info) => {
   const app = hub.project("app");
@@ -129,7 +129,7 @@ test("the inbox paints within budget", async ({ page, hub }, info) => {
   if (process.env.MG_ENFORCE_BUDGETS === "1") expect(median).toBeLessThan(100);
 });
 
-// tech-stack.md §9: a change made elsewhere, here a review handing items
+// Budget: a change made elsewhere, here a review handing items
 // back to their agents, shows in an open inbox within 50 ms.
 test("the inbox follows the hub within budget", async ({ page, hub }, info) => {
   const app = hub.project("app");

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/review-loop.gif" alt="The mergegate review loop: the operator opens an agent's item from the inbox, comments on a line, marks files viewed and requests changes; the agent submits revision 2, the operator reviews only what changed since revision 1 and approves, and the item merges." width="900">
+  <img src="readme/review-loop.gif" alt="The mergegate review loop: the operator opens an agent's item from the inbox, comments on a line, marks files viewed and requests changes; the agent submits revision 2, the operator reviews only what changed since revision 1 and approves, and the item merges." width="900">
 </p>
 
 **mergegate** is an open-source, self-hosted code review hub for agentic coding. Coding agents such as Claude Code, OpenAI Codex, opencode and Cursor submit their branches through the `mg` CLI instead of opening pull requests by hand. You review every agent's work in one local inbox, and your comments come back to the right agent as structured events it acts on. GitHub pull requests or plain git stay the system of record underneath.
@@ -49,7 +49,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 - **Token-cheap waiting.** `mg wait` blocks without a model in the loop, and `mg submit --wake` can resume an agent session only when there is feedback.
 
 <p align="center">
-  <img src="docs/images/review-screen.png" alt="The mergegate review screen: the agent's intent at the top, files to review ordered by importance with a reason for each, lockfile and translations trusted by rules and folded away, and a review bot's GitHub comment the agent rejected, with Accept rejection and Override buttons." width="900">
+  <img src="readme/review-screen.png" alt="The mergegate review screen: the agent's intent at the top, files to review ordered by importance with a reason for each, lockfile and translations trusted by rules and folded away, and a review bot's GitHub comment the agent rejected, with Accept rejection and Override buttons." width="900">
 </p>
 
 ## How does mergegate work?
@@ -75,7 +75,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 The hub is the only stateful component and the only part that talks to GitHub, using the token your `gh` CLI is signed in with. Worker machines need no GitHub credentials.
 
 <p align="center">
-  <img src="docs/images/inbox.png" alt="The mergegate inbox: items from three projects ordered by priority, with an agent's rejection and question waiting, attached demos, conflicts between open items, line counts, how many files are left to review, and items with agents and closed today below." width="900">
+  <img src="readme/inbox.png" alt="The mergegate inbox: items from three projects ordered by priority, with an agent's rejection and question waiting, attached demos, conflicts between open items, line counts, how many files are left to review, and items with agents and closed today below." width="900">
 </p>
 
 ## Which coding agents does mergegate support?

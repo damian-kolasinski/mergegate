@@ -1,4 +1,4 @@
-//! Dropping closed items' branches from staging (design §5).
+//! Dropping closed items' branches from staging.
 //!
 //! A closed item's branch would keep names that nest with it (`a/b` beside
 //! `a`) from being pushed, as git refuses those, and nothing reads it once
@@ -41,7 +41,7 @@ pub fn drop_closed_branches<S: ItemStore>(
 fn drop_closed<S: ItemStore>(store: &S, git: &impl ItemGit, item: &Item) -> Result<(), ItemError> {
     let project = item.id.project();
     // An item stacked on this one needs none of it: its own head has the
-    // commits its base is, and its pins keep them (§5.1).
+    // commits its base is, and its pins keep them.
     if item.state.is_open() || store.open_item(project, &item.branch)?.is_some() {
         return Ok(());
     }

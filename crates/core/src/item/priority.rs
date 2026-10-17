@@ -1,4 +1,4 @@
-//! How urgent an item is, and why (design §10, F10). The authoring agent
+//! How urgent an item is, and why. The authoring agent
 //! passes both from its brief on the item's first submit; the operator and
 //! their agent change them any time after.
 

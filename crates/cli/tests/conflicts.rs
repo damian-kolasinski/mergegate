@@ -1,4 +1,4 @@
-//! Early conflict detection (F9): the hub test-merges open items as their
+//! Early conflict detection: the hub test-merges open items as their
 //! target moves and sends a conflict to the agent before the operator gets
 //! to the item. Open items aren't merged into each other: only the target
 //! they merge into counts.
