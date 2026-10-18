@@ -15,6 +15,8 @@ pub enum ExternalError {
     NoComment(CommentId),
     #[error("the agent's latest reply on {0} doesn't reject it")]
     NotRejected(CommentId),
+    #[error("{0} went to the agent already")]
+    AlreadySent(CommentId),
     #[error(transparent)]
     Github(#[from] GithubError),
     #[error(transparent)]

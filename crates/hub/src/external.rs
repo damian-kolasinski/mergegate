@@ -1,8 +1,9 @@
 //! External review: comments on a github item's pull request. The poller
 //! brings them in, and closes an item whose pull request was merged or
 //! closed on GitHub; `POST /api/items/{id}/sync` does both at once, for when
-//! polling missed something, and `POST /api/comments/{comment}/agree` and
-//! `.../override` are the operator's say on the agent's rejection of one.
+//! polling missed something. `POST /api/comments/{comment}/vote` is the
+//! operator's vote on a comment before the agent gets it, and
+//! `.../agree` and `.../override` their say on the agent's rejection of one.
 
 mod follow;
 mod poll;
@@ -16,11 +17,11 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use mergegate_core::external::{self, Batch, ExternalError, Ingested};
+use mergegate_core::external::{self, Batch, ExternalError, Ingested, Vote};
 use mergegate_core::feedback::{Event, EventKind};
 use mergegate_core::github::PullCommentKind;
 use mergegate_core::item::{ItemId, ItemStore};
-use mergegate_core::review::{Comment, ReviewError};
+use mergegate_core::review::{Comment, ReviewError, ReviewStore};
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -31,6 +32,7 @@ pub(crate) use poll::run;
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/items/{id}/sync", post(sync))
+        .route("/api/comments/{comment}/vote", post(vote))
         .route("/api/comments/{comment}/agree", post(agree))
         .route("/api/comments/{comment}/override", post(override_rejection))
 }
@@ -61,6 +63,42 @@ async fn sync(
         edited: ingested.edited as u32,
         released: released.as_ref().map_or(0, carried) as u32,
     }))
+}
+
+async fn vote(
+    State(state): State<Arc<AppState>>,
+    comment: Result<Path<String>, PathRejection>,
+    request: Result<Json<api::review::CastVote>, JsonRejection>,
+) -> Result<Json<api::review::Comment>, Failure> {
+    let Path(comment) = comment?;
+    let Json(request) = request?;
+    let comment = comments::comment_id(&comment)?;
+    let vote = match request.vote {
+        api::review::Vote::Up => Vote::Up,
+        api::review::Vote::Down => Vote::Down,
+    };
+    let (voted, released) = state
+        .blocking(move |store, _| {
+            let item = external::vote(store, comment, vote, now())?.item;
+            // The last vote the batch waited for sends it, rather than the
+            // next poll.
+            let released = external::release_due(store, &item, now(), poll::timing())?;
+            let voted = store
+                .comment(comment)?
+                .ok_or(ExternalError::NoComment(comment))?;
+            Ok::<_, ExternalError>((voted, released))
+        })
+        .await
+        .map_err(failure)?;
+    if released.is_some() {
+        state.events.logged();
+    }
+    // The vote no longer waits on the operator in the inbox.
+    state.events.send(UiEvent::ItemChanged {
+        item: voted.item.to_string(),
+    });
+    state.events.send(UiEvent::InboxChanged);
+    Ok(Json(comments::to_api(&voted)))
 }
 
 async fn agree(
@@ -170,6 +208,10 @@ pub(crate) fn to_api(comment: &Comment) -> Option<api::review::ExternalComment> 
         url: external.url.clone(),
         path: external.path.clone(),
         pending: external.pending,
+        vote: external.vote.map(|vote| match vote {
+            Vote::Up => api::review::Vote::Up,
+            Vote::Down => api::review::Vote::Down,
+        }),
         agreed_reply: external.agreed_reply,
     })
 }
@@ -208,6 +250,7 @@ fn failure(e: ExternalError) -> Failure {
         E::NotGithub(_) => (S::CONFLICT, "not_github", None),
         E::NoComment(_) => (S::NOT_FOUND, "comment_not_found", None),
         E::NotRejected(_) => (S::CONFLICT, "not_rejected", None),
+        E::AlreadySent(_) => (S::CONFLICT, "already_sent", None),
         E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };

@@ -136,6 +136,7 @@ fn held_external_comments_are_not_threads_yet() {
             path: None,
             pending,
             agreed_reply: None,
+            vote: None,
         });
         comment
     };

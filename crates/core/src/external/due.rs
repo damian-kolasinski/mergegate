@@ -1,6 +1,7 @@
 //! When held comments go to the agent. The hub waits so the agent doesn't:
 //! reviewers post one comment at a time, bots take minutes, and an agent
-//! woken on every comment would spend a session on each.
+//! woken on every comment would spend a session on each. Each comment also
+//! waits for the operator's vote, which only they can give.
 
 use super::{ExternalError, ExternalStore, Held, same_login};
 use crate::feedback::Event;
@@ -26,12 +27,17 @@ impl Default for Timing {
     }
 }
 
-/// Whether the held comments go now: once they have been quiet for a while
-/// and every bot in `expected` has spoken since the newest revision was
-/// pushed, or enough time passed since the push that one never will. They go
-/// regardless once the oldest has waited the cap, so a busy thread can't
-/// hold them forever.
+/// Whether the held comments go now. Never while one awaits the operator's
+/// vote: the batch waits for the operator as it does for the bots, but with
+/// no cap, since only they can say which comments are worth sending. Then
+/// once they have been quiet for a while and every bot in
+/// `expected` has spoken since the newest revision was pushed, or enough time
+/// passed since the push that one never will. They go regardless once the
+/// oldest has waited the cap, so a busy thread can't hold them forever.
 pub fn due(held: &Held, expected: &[String], now: u64, timing: Timing) -> bool {
+    if held.awaiting {
+        return false;
+    }
     if now >= held.first.saturating_add(timing.cap) {
         return true;
     }

@@ -1,3 +1,4 @@
+use super::Vote;
 use crate::feedback::Event;
 use crate::github::PullCommentKind;
 use crate::item::ItemId;
@@ -8,11 +9,12 @@ use crate::store::StoreError;
 /// milliseconds by the hub's clock, which the caller passes.
 pub trait ExternalStore {
     /// Records a comment from GitHub, sent from the start and waiting for the
-    /// next batch.
+    /// operator's vote and the next batch.
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError>;
 
     /// Replaces an external comment's body, which GitHub dates `dated`, and
-    /// has it wait for the next batch again.
+    /// has it wait for the next batch again. A vote up was on the old body,
+    /// so it's cleared; a comment voted down stays down and doesn't wait.
     fn edit_external(
         &mut self,
         id: CommentId,
@@ -30,10 +32,15 @@ pub trait ExternalStore {
     /// What `id` holds back from its agent; none when nothing waits.
     fn held(&self, id: &ItemId) -> Result<Option<Held>, StoreError>;
 
-    /// Logs every comment `id` holds as one `external.comments` event about
-    /// `revision`, with their bodies as they are now, and stops holding them,
-    /// all or nothing. None when nothing was held.
+    /// Logs every comment `id` holds that the operator voted up, as one
+    /// `external.comments` event about `revision`, with their bodies as they
+    /// are now, and stops holding them, all or nothing. Those awaiting a vote
+    /// stay held. None when none may go.
     fn release(&mut self, id: &ItemId, revision: u32) -> Result<Option<Event>, StoreError>;
+
+    /// Records the operator's vote on external comment `id`: up holds it for the
+    /// next batch, down stops holding it.
+    fn set_vote(&mut self, id: CommentId, vote: Vote, now: u64) -> Result<(), StoreError>;
 
     fn set_agreed(&mut self, id: CommentId, reply: u64) -> Result<(), StoreError>;
 
@@ -59,9 +66,11 @@ pub struct NewExternal {
     pub dated: u64,
 }
 
-/// An item's held comments.
+/// An item's held comments, but those voted down.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Held {
+    /// The operator hasn't voted on some yet.
+    pub awaiting: bool,
     /// When the one held longest began waiting.
     pub first: u64,
     /// When the hub last saw one change.

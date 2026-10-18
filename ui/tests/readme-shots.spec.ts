@@ -420,6 +420,25 @@ async function approve(hub: Hub, item: string) {
   expect(merged.ok).toBe(true);
 }
 
+/** Votes up every comment from GitHub on `item` that awaits a vote. */
+async function voteUp(hub: Hub, item: string) {
+  const shown = await fetch(
+    `${hub.url}api/items/${encodeURIComponent(item)}/conversation`,
+    { headers: ui },
+  );
+  const { comments } = (await shown.json()) as {
+    comments: { id: string; external: { pending: boolean } | null }[];
+  };
+  for (const comment of comments.filter((c) => c.external?.pending)) {
+    const voted = await fetch(`${hub.url}api/comments/${comment.id}/vote`, {
+      method: "POST",
+      headers: ui,
+      body: JSON.stringify({ vote: "up" }),
+    });
+    expect(voted.ok).toBe(true);
+  }
+}
+
 /** The IDs of the comments in `item`'s unread events, oldest first. */
 function commentIds(hub: Hub, item: string): string[] {
   const feedback = hub.mg(["feedback", item]) as {
@@ -530,6 +549,8 @@ export function limited(key: string, max = 5, windowMs = 60_000): boolean {
     path: "src/auth/tokenStore.ts",
     line: lineOf(tokenStoreR1, '.post<Tokens>("/auth/refresh"'),
   });
+  hub.mg(["sync", "app#1"]);
+  await voteUp(hub, "app#1");
   hub.mg(["sync", "app#1"]);
   const [bot] = commentIds(hub, "app#1");
   hub.mg([

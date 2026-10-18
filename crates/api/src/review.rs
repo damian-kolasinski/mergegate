@@ -96,10 +96,25 @@ pub struct ExternalComment {
     /// placed on a revision.
     pub path: Option<String>,
     /// Not handed to the agent yet: the hub waits for the reviewers to go
-    /// quiet.
+    /// quiet, and for the operator's vote.
     pub pending: bool,
+    /// The operator's vote, none until they cast it: only a comment voted up
+    /// reaches the agent.
+    #[serde(default)]
+    pub vote: Option<Vote>,
     /// The agent's rejection the operator agreed with.
     pub agreed_reply: Option<u64>,
+}
+
+/// The operator's say on a comment from GitHub before the agent sees it.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Vote {
+    /// Worth the agent's time: it goes with the next batch.
+    Up,
+    /// Not: the agent never gets it.
+    Down,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -233,6 +248,15 @@ pub struct OverrideRejection {
     pub note: String,
 }
 
+/// `POST /api/comments/{comment}/vote`: the operator's vote on a
+/// GitHub comment the hub holds from the agent, which they can change until a batch
+/// carries it. Answered with the [`Comment`].
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CastVote {
+    pub vote: Vote,
+}
+
 /// `POST /api/items/{id}/sync`: reads the pull request's comments again,
 /// whatever GitHub cached, and hands what's held to the agent now.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -242,7 +266,8 @@ pub struct Synced {
     pub new: u32,
     /// Comments edited since the hub last saw them.
     pub edited: u32,
-    /// How many comments went to the agent, in an `external.comments` event.
+    /// How many comments went to the agent, in an `external.comments` event;
+    /// one waits for the operator's vote.
     pub released: u32,
 }
 

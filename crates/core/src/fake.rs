@@ -10,7 +10,9 @@ use crate::attachment::{Attachment, AttachmentStore, Media, NewAttachment};
 use crate::conflict::ConflictGit;
 use crate::device::{DeviceId, DeviceStore, Record};
 use crate::diff::{DiffGit, DiffStore, FileDiff};
-use crate::external::{Batch, Delivered, External, ExternalStore, Held, NewExternal, Override};
+use crate::external::{
+    Batch, Delivered, External, ExternalStore, Held, NewExternal, Override, Vote,
+};
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
 use crate::github::{
@@ -2056,6 +2058,7 @@ impl ExternalStore for FakeStore {
                 url: comment.url,
                 path: comment.path,
                 pending: true,
+                vote: None,
                 agreed_reply: None,
             }),
             created_at: self.now(),
@@ -2077,8 +2080,14 @@ impl ExternalStore for FakeStore {
         *known = (*known).max(dated);
         let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
         comment.body = body.into();
-        comment.external.as_mut().unwrap().pending = true;
+        let external = comment.external.as_mut().unwrap();
         let times = self.external.get_mut(&id).unwrap();
+        if external.dismissed() {
+            times.0 = now;
+            return Ok(());
+        }
+        external.pending = true;
+        external.vote = None;
         *times = (now, Some(times.1.unwrap_or(now)));
         Ok(())
     }
@@ -2121,6 +2130,7 @@ impl ExternalStore for FakeStore {
         let pushed = Self::millis(&item.revision.submitted_at);
         let mut held: Option<Held> = None;
         let mut heard = Vec::new();
+        let mut awaiting = false;
         for comment in self.comments.iter().filter(|c| c.item == *id) {
             let Some(external) = &comment.external else {
                 continue;
@@ -2130,7 +2140,9 @@ impl ExternalStore for FakeStore {
                 heard.push(external.login.clone());
             }
             if let Some(pending) = pending {
+                awaiting |= external.awaiting_vote();
                 let held = held.get_or_insert(Held {
+                    awaiting: false,
                     first: pending,
                     last: seen,
                     pushed,
@@ -2140,7 +2152,11 @@ impl ExternalStore for FakeStore {
                 held.last = held.last.max(seen);
             }
         }
-        Ok(held.map(|held| Held { heard, ..held }))
+        Ok(held.map(|held| Held {
+            awaiting,
+            heard,
+            ..held
+        }))
     }
 
     fn release(&mut self, id: &ItemId, revision: u32) -> Result<Option<Event>, StoreError> {
@@ -2149,10 +2165,12 @@ impl ExternalStore for FakeStore {
             let Some(times) = self.external.get_mut(&comment.id) else {
                 continue;
             };
-            if times.1.take().is_none() {
+            let external = comment.external.as_mut().unwrap();
+            if times.1.is_none() || external.vote != Some(Vote::Up) {
                 continue;
             }
-            comment.external.as_mut().unwrap().pending = false;
+            times.1 = None;
+            external.pending = false;
             comments.push(Delivered {
                 comment: comment.clone(),
                 edited: !self.batched.insert(comment.id),
@@ -2165,6 +2183,19 @@ impl ExternalStore for FakeStore {
         Ok(Some(
             self.push_event(id, EventKind::ExternalComments(batch)),
         ))
+    }
+
+    fn set_vote(&mut self, id: CommentId, vote: Vote, now: u64) -> Result<(), StoreError> {
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        let external = comment.external.as_mut().unwrap();
+        let times = self.external.get_mut(&id).unwrap();
+        external.vote = Some(vote);
+        external.pending = vote == Vote::Up;
+        times.1 = match vote {
+            Vote::Up => Some(times.1.unwrap_or(now)),
+            Vote::Down => None,
+        };
+        Ok(())
     }
 
     fn set_agreed(&mut self, id: CommentId, reply: u64) -> Result<(), StoreError> {

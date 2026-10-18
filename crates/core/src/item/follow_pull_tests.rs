@@ -1,5 +1,5 @@
 use super::*;
-use crate::external::{ExternalStore, NewExternal};
+use crate::external::{ExternalStore, NewExternal, Vote};
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit, submit_login};
 use crate::feedback::{Event, EventKind};
 use crate::github::{GithubRepo, PullCommentKind};
@@ -234,7 +234,8 @@ fn held_comments_reach_the_agent_before_the_close() {
         path: None,
         dated: 0,
     };
-    store.insert_external(comment, 0).unwrap();
+    let comment = store.insert_external(comment, 0).unwrap().id;
+    store.set_vote(comment, Vote::Up, 0).unwrap();
     follow_pull(&mut store, &git, &id(), 1, PullStatus::Closed).unwrap();
     let events = events(&store);
     assert!(

@@ -265,6 +265,7 @@ function flagged(item: InboxItem): boolean {
   return Boolean(
     item.questions ||
       item.rejections ||
+      item.votes ||
       item.state === "changes_requested" ||
       item.changed_since ||
       item.parent ||
@@ -337,6 +338,18 @@ function Entry(props: {
               >
                 <Badge tone="warning" solid>
                   {count()} {count() === 1 ? "rejection" : "rejections"}
+                </Badge>
+              </span>
+            )}
+          </Show>
+          <Show when={props.item.votes}>
+            {(count) => (
+              <span
+                class={styles.flag}
+                title="Comments from GitHub wait for your vote before the agent gets them"
+              >
+                <Badge tone="warning" solid>
+                  {count()} to vote on
                 </Badge>
               </span>
             )}

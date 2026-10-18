@@ -163,6 +163,8 @@ fn agreeing_with_a_rejection_tells_open_pages_the_inbox_changed() {
     let rename = GithubNewComment::issue("alice", "Rename it.");
     github.comment("acme/app", 1, rename);
     env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    post(&env, "/api/comments/c_1/vote", &json!({ "vote": "up" }));
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     let feedback = env
         .mg(&["--json", "feedback", "app#1"])
         .assert_code(0)

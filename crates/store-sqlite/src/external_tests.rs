@@ -199,6 +199,8 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
     let second = store
         .insert_external(external(8, "ana", "Why?", false), 150)
         .unwrap();
+    store.set_vote(first.id, Vote::Up, 150).unwrap();
+    store.set_vote(second.id, Vote::Up, 150).unwrap();
     let released = store.release(&app(), 1).unwrap().unwrap();
     let EventKind::ExternalComments(batch) = &released.kind else {
         panic!("not a batch: {released:?}");
@@ -237,6 +239,7 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
     store
         .edit_external(first.id, "Leaks a handle", 0, 300)
         .unwrap();
+    store.set_vote(first.id, Vote::Up, 300).unwrap();
     let held = store.held(&app()).unwrap().unwrap();
     assert_eq!((held.first, held.last), (300, 300));
     let again = store.release(&app(), 1).unwrap().unwrap();
@@ -259,6 +262,7 @@ fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
     let sent = store
         .insert_external(external(1, "ana", "Leaks", false), 100)
         .unwrap();
+    store.set_vote(sent.id, Vote::Up, 100).unwrap();
     store.release(&app(), 1).unwrap();
     store
         .insert_reply(reply(sent.id, Author::Operator, None, "Where?"))
@@ -320,6 +324,7 @@ fn an_override_goes_out_at_once_and_isnt_a_draft() {
     let comment = store
         .insert_external(external(7, "codex[bot]", "Leaks", true), 100)
         .unwrap();
+    store.set_vote(comment.id, Vote::Up, 100).unwrap();
     store.release(&app(), 1).unwrap();
     let rejection = store
         .insert_reply(reply(
@@ -403,4 +408,57 @@ fn the_table_keeps_comments_well_formed() {
         [],
     );
     assert!(half.is_err());
+}
+
+#[test]
+fn a_comment_goes_out_only_once_voted_up() {
+    let (_dir, mut store) = store();
+    let carried = |event: Option<Event>| -> Vec<CommentId> {
+        let Some(Event {
+            kind: EventKind::ExternalComments(batch),
+            ..
+        }) = event
+        else {
+            return Vec::new();
+        };
+        batch.comments.iter().map(|d| d.comment.id).collect()
+    };
+    let external_of = |store: &Store, id| store.comment(id).unwrap().unwrap().external.unwrap();
+    let mut insert = |github_id, login, body| {
+        store
+            .insert_external(external(github_id, login, body, false), 100)
+            .unwrap()
+            .id
+    };
+    let person = insert(1, "ana", "Why?");
+    let useful = insert(2, "codex[bot]", "Leaks");
+    let noise = insert(3, "codex[bot]", "Rename");
+    assert!(store.held(&app()).unwrap().unwrap().awaiting);
+    assert_eq!(store.release(&app(), 1).unwrap(), None);
+
+    store.set_vote(person, Vote::Up, 200).unwrap();
+    store.set_vote(useful, Vote::Up, 200).unwrap();
+    assert_eq!(carried(store.release(&app(), 1).unwrap()), [person, useful]);
+    assert!(store.held(&app()).unwrap().unwrap().awaiting);
+    store.set_vote(noise, Vote::Down, 300).unwrap();
+    assert_eq!(store.held(&app()).unwrap(), None);
+    let dismissed = external_of(&store, noise);
+    assert_eq!(
+        (dismissed.vote, dismissed.pending),
+        (Some(Vote::Down), false)
+    );
+
+    // An edit asks for a new vote, unless the operator voted it down.
+    store.edit_external(useful, "Leaks more", 0, 400).unwrap();
+    store.edit_external(noise, "Rename it", 0, 400).unwrap();
+    assert!(external_of(&store, useful).awaiting_vote());
+    let dismissed = external_of(&store, noise);
+    assert!(dismissed.dismissed() && !dismissed.pending);
+    assert!(store.held(&app()).unwrap().unwrap().awaiting);
+
+    let forced = store.conn.execute(
+        "UPDATE external_comments SET vote = 'maybe' WHERE comment_id = ?1",
+        params![person.0 as i64],
+    );
+    assert!(forced.is_err());
 }

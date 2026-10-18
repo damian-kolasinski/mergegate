@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import type { Comment } from "../api/Comment";
 import { Badge, Button, markdownText, Meta, Mono } from "../design-system";
 import type { Comments } from "./comments/comments";
+import { awaitingVote, ExternalStatus } from "./comments/external";
 import { StatusBadge } from "./comments/replies";
 import { CommentCard } from "./comments/thread";
 import styles from "./conversation.module.css";
@@ -24,6 +25,11 @@ export function Conversation(props: {
         (comment) =>
           props.comments.replies.answer(comment)?.status === "question",
       ).length;
+  const votes = () =>
+    props.comments.threads
+      .all()
+      .filter((comment) => comment.external && awaitingVote(comment.external))
+      .length;
   return (
     <>
       <span class={styles.talk}>
@@ -38,6 +44,13 @@ export function Conversation(props: {
             {(count) => (
               <Badge tone="brand" solid>
                 {count()} {count() === 1 ? "question" : "questions"}
+              </Badge>
+            )}
+          </Show>
+          <Show when={votes()}>
+            {(count) => (
+              <Badge tone="warning" solid>
+                {count()} to vote on
               </Badge>
             )}
           </Show>
@@ -106,10 +119,10 @@ function Entry(props: {
                 when={props.comments.drafts.isDraft(props.comment)}
                 fallback={
                   <Show
-                    when={props.comment.external?.pending}
+                    when={props.comment.external}
                     fallback={<Badge tone="success">Sent to agent</Badge>}
                   >
-                    <Badge tone="warning">Not sent yet</Badge>
+                    {(external) => <ExternalStatus external={external()} />}
                   </Show>
                 }
               >

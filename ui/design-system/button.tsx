@@ -15,6 +15,8 @@ export function Button(props: {
   /** The shortcut that does the same, shown after the label. */
   keyHint?: string | undefined;
   onClick: () => void;
+  /** For one of a set of choices: whether it's the one taken. */
+  pressed?: boolean | undefined;
   /** For a button that opens a panel: whether it's open, and the panel's id. */
   expanded?: boolean;
   controls?: string;
@@ -28,6 +30,7 @@ export function Button(props: {
       data-variant={props.variant ?? "outline"}
       disabled={props.disabled || props.busy}
       aria-busy={props.busy ? "true" : undefined}
+      aria-pressed={props.pressed}
       aria-expanded={props.expanded}
       aria-controls={props.controls}
       aria-keyshortcuts={props.keyHint}

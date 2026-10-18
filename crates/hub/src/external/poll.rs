@@ -19,11 +19,7 @@ const POLL_MS: u64 = 30_000;
 
 pub(crate) async fn run(state: Arc<AppState>) {
     let poll = Duration::from_millis(env_ms("MG_GITHUB_POLL_MS").unwrap_or(POLL_MS));
-    let defaults = Timing::default();
-    let timing = Timing {
-        quiet: env_ms("MG_EXTERNAL_QUIET_MS").unwrap_or(defaults.quiet),
-        cap: env_ms("MG_EXTERNAL_CAP_MS").unwrap_or(defaults.cap),
-    };
+    let timing = timing();
     let mut stopping = state.events.stopping();
     // The last failure per item, so one that persists is logged once.
     let mut failing = Failing::default();
@@ -102,6 +98,15 @@ async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut Failing) {
                 }
             }
         }
+    }
+}
+
+/// When held comments are due, which the environment can shorten for tests.
+pub(super) fn timing() -> Timing {
+    let defaults = Timing::default();
+    Timing {
+        quiet: env_ms("MG_EXTERNAL_QUIET_MS").unwrap_or(defaults.quiet),
+        cap: env_ms("MG_EXTERNAL_CAP_MS").unwrap_or(defaults.cap),
     }
 }
 

@@ -6,7 +6,7 @@ import { spotOf } from "./anchor";
 import { useCollapse } from "./collapse";
 import { useDrafts } from "./drafts";
 import { useEditor } from "./editor";
-import { useExternal } from "./external";
+import { awaitingVote, useExternal } from "./external";
 import { useReplies } from "./replies";
 import { useReplyDrafts } from "./reply-drafts";
 import { useSent } from "./sent";
@@ -82,13 +82,15 @@ export function useComments(
   });
   /**
    * Over a diff since rK, a thread the operator should see again: theirs
-   * not sent yet, written on rK or later, or one the agent answered last,
-   * unless the answer is a fix rK already had or a rejection they agreed to.
+   * not sent yet, one awaiting their vote, written on rK or later, or
+   * one the agent answered last, unless the answer is a fix rK already had
+   * or a rejection they agreed to.
    */
   const waiting = (comment: Comment) => {
     const since = options.since();
     if (since === null) return false;
     if (drafts.isDraft(comment) || replyDrafts.to(comment).length) return true;
+    if (comment.external && awaitingVote(comment.external)) return true;
     if (comment.revision >= since) return true;
     const latest = replies.to(comment).at(-1);
     if (latest?.author !== "agent" || external.agreed(comment)) return false;

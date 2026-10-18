@@ -1,4 +1,4 @@
-use mergegate_core::external::{ExternalStore, NewExternal};
+use mergegate_core::external::{ExternalStore, NewExternal, Vote};
 use mergegate_core::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use mergegate_core::github::{GithubRepo, Pull, PullCommentKind};
 use mergegate_core::item::{ItemBackend, ItemState, ItemStore, NewItem, NewRevision};
@@ -173,8 +173,10 @@ fn a_batch_of_external_comments_wakes_the_agent() {
         path: None,
         dated: 1,
     };
-    store.insert_external(comment, 1).unwrap();
-    // A held comment doesn't wake it; the batch does.
+    let comment = store.insert_external(comment, 1).unwrap().id;
+    // A held comment doesn't wake it, voted up or not; the batch does.
+    assert_eq!(due(&store), []);
+    store.set_vote(comment, Vote::Up, 1).unwrap();
     assert_eq!(due(&store), []);
     store.release(&id("app#1"), 1).unwrap();
     assert_eq!(due(&store), [("app#1".into(), "a".into(), 1)]);

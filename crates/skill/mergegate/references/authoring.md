@@ -69,13 +69,13 @@ The latest reply on a comment is the one that counts, so reply again when you ch
 
 ## Comments from GitHub
 
-On an item with a GitHub pull request, the hub reads the pull request's comments for you: inline ones, conversation comments, and review summaries, from people and bots, not the operator's own. It holds them until the reviewers are done, so you get one `external.comments` event instead of one per comment: until the project's bots (`mg project set app bots coderabbitai,copilot`) have all commented since your latest submit, and then a minute goes by with no new comment, or at most 20 minutes.
+On an item with a GitHub pull request, the hub reads the pull request's comments for you: inline ones, conversation comments, and review summaries, from people and bots, not the operator's own. It holds them until the reviewers are done, so you get one `external.comments` event instead of one per comment: until the project's bots (`mg project set app bots coderabbitai,copilot`) have all commented since your latest submit, and then a minute goes by with no new comment, or at most 20 minutes. A comment reaches you only once the operator votes it up: the batch waits for their votes, and one they vote down never arrives.
 
 - Each comment has an ID like the operator's (`c_23`) and names its author. One on lines no revision's diff shows, or on no file, is about the whole item.
 - Answer them with `mg reply` as you would the operator's. Your replies stay in mergegate; nothing is posted to GitHub, and the operator sees them.
 - A comment edited on GitHub comes back in a later batch marked edited.
 - The operator can agree with a rejection, or override it with `comment.override`: then make the change.
-- `mg feedback app#3` hands over the held comments at once along with anything else new. `mg sync app#3` reads the pull request now and hands over everything held; use it when you know a comment is there that never arrived.
+- `mg feedback app#3` hands over the held comments at once along with anything else new. `mg sync app#3` reads the pull request now and hands over everything held but the comments still waiting for the operator's vote; use it when you know a comment is there that never arrived.
 
 The pull request can also end on GitHub, without the operator. Merged there, the item merges with it: `item.merged` says it was merged on GitHub and as which commit. Closed there unmerged, the item is abandoned: `item.abandoned` says GitHub abandoned it. Either way the item is closed; there's nothing left to submit.
 
