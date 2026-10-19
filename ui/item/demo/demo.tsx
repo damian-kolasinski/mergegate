@@ -39,6 +39,7 @@ export function Demo(props: { demo: DemoData; revision: number }) {
       <Show when={shown() !== undefined}>
         <Viewer
           attachments={props.demo.attachments}
+          zipUrl={props.demo.zip_url}
           index={shown() ?? 0}
           onStep={setShown}
           onClose={close}

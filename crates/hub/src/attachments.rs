@@ -20,13 +20,14 @@ use axum::http::header::{
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use futures_util::{StreamExt, stream};
+use futures_util::{Stream, StreamExt, stream};
 use mergegate_core::attachment::{
     self, Attach, Attachment, AttachmentError, AttachmentStore, MAX_SIZE,
 };
 use mergegate_core::item::ItemId;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
+use crate::demo_zip;
 use crate::reply::Failure;
 use crate::server::AppState;
 
@@ -167,18 +168,7 @@ async fn serve(
             .await
             .map_err(io_failure)?;
     }
-    let body = stream::try_unfold((file, end - start), |(mut file, left)| async move {
-        if left == 0 {
-            return Ok(None);
-        }
-        let mut chunk = vec![0; CHUNK.min(left as usize)];
-        let n = file.read(&mut chunk).await?;
-        if n == 0 {
-            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
-        }
-        chunk.truncate(n);
-        Ok::<_, std::io::Error>(Some((chunk, (file, left - n as u64))))
-    });
+    let body = chunks(file, end - start);
     let mut response = (status, Body::from_stream(body)).into_response();
     let headers = response.headers_mut();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static(media.mime()));
@@ -197,6 +187,25 @@ async fn serve(
         );
     }
     Ok(response)
+}
+
+/// The next `len` bytes of `file`; an error if it ends sooner.
+pub(crate) fn chunks(
+    file: tokio::fs::File,
+    len: u64,
+) -> impl Stream<Item = std::io::Result<Vec<u8>>> + Send + 'static {
+    stream::try_unfold((file, len), |(mut file, left)| async move {
+        if left == 0 {
+            return Ok(None);
+        }
+        let mut chunk = vec![0; CHUNK.min(left as usize)];
+        let n = file.read(&mut chunk).await?;
+        if n == 0 {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+        chunk.truncate(n);
+        Ok(Some((chunk, (file, left - n as u64))))
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -272,9 +281,10 @@ pub(crate) async fn prune(state: Arc<AppState>) {
     }
 }
 
-pub(crate) fn demo_to_api(demo: attachment::Demo) -> api::attachment::Demo {
+pub(crate) fn demo_to_api(id: &ItemId, demo: attachment::Demo) -> api::attachment::Demo {
     api::attachment::Demo {
         revision: demo.revision,
+        zip_url: demo_zip::url(id),
         attachments: demo.attachments.into_iter().map(to_api).collect(),
     }
 }
@@ -286,6 +296,7 @@ fn to_api(attachment: Attachment) -> api::attachment::Attachment {
         media,
         size,
         sha256,
+        crc32: _,
     } = attachment;
     api::attachment::Attachment {
         revision,
@@ -301,7 +312,7 @@ fn header_value(value: &str) -> HeaderValue {
     HeaderValue::from_str(value).expect("digits, spaces, a dash and a slash")
 }
 
-fn io_failure(e: std::io::Error) -> Failure {
+pub(crate) fn io_failure(e: std::io::Error) -> Failure {
     tracing::error!("reading an attachment failed: {e}");
     Failure::new(
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -311,7 +322,7 @@ fn io_failure(e: std::io::Error) -> Failure {
     )
 }
 
-fn failure(e: AttachmentError) -> Failure {
+pub(crate) fn failure(e: AttachmentError) -> Failure {
     use AttachmentError as E;
     use StatusCode as S;
     let (status, code, hint) = match &e {

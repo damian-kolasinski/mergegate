@@ -1,14 +1,16 @@
 import { onCleanup, onMount, Show } from "solid-js";
 import type { Attachment } from "../../api/Attachment";
-import { Button, Meta } from "../../design-system";
+import { Button, Download, Meta } from "../../design-system";
 import styles from "./demo.module.css";
 
 /**
  * One attachment at full size over the review. Escape closes it and the
- * arrows step through the rest.
+ * arrows step through the rest; Download all saves every one as a zip.
  */
 export function Viewer(props: {
   attachments: Attachment[];
+  /** Where the hub serves them all as one zip. */
+  zipUrl: string;
   index: number;
   onStep: (index: number) => void;
   onClose: () => void;
@@ -62,6 +64,12 @@ export function Viewer(props: {
             {props.index + 1} / {props.attachments.length}
           </Meta>
           <span class={styles.actions}>
+            <Download
+              href={props.zipUrl}
+              title={`Save all ${props.attachments.length} as one zip`}
+            >
+              Download all
+            </Download>
             <Button disabled={props.index === 0} onClick={() => step(-1)}>
               ←
             </Button>

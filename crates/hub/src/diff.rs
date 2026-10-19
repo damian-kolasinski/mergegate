@@ -107,7 +107,7 @@ async fn show(
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
         blocked,
-        demo: demo.map(attachments::demo_to_api),
+        demo: demo.map(|demo| attachments::demo_to_api(&diff.item.id, demo)),
         since: diff.since,
         last_reviewed: diff.last_reviewed,
         changed_since: changed.map(items::changed_to_api),

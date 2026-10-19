@@ -24,6 +24,9 @@ pub struct Attachment {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Demo {
     pub revision: u32,
+    /// Where the hub serves them all as one zip, as in
+    /// `/api/items/app%2342/demo.zip`.
+    pub zip_url: String,
     /// In the order attached.
     pub attachments: Vec<Attachment>,
 }

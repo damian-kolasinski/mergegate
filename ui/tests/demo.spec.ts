@@ -1,6 +1,7 @@
 // Demo attachments on the review screen: what an agent attaches shows as a chip in
 // the item's header, opens full size, and marks its row in the inbox.
 
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "./hub";
 
@@ -36,6 +37,28 @@ test("f16 attachments show in the header and open full size", async ({
   await expect(viewer).toBeHidden();
   await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
   await expect(chip).toBeFocused();
+});
+
+test("f16 the viewer downloads the whole demo as one zip", async ({
+  page,
+  hub,
+}) => {
+  hub
+    .project("app")
+    .submit("parser", "Add the parser", { "p.rs": "p\n" }, [screen, flow]);
+  await page.goto(`${hub.url}#/items/app%231`);
+  await page.getByRole("button", { name: /^Demo \(/ }).click();
+
+  const saved = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download all" }).click();
+  const download = await saved;
+  expect(download.suggestedFilename()).toBe("app-1-r1-demo.zip");
+  const zip = readFileSync(await download.path());
+  expect(zip.subarray(0, 4).toString("latin1")).toBe("PK\x03\x04");
+  expect(zip.includes(readFileSync(screen))).toBe(true);
+  expect(zip.includes(readFileSync(flow))).toBe(true);
+  // Saving leaves the viewer where it was.
+  await expect(page.getByRole("dialog")).toHaveAccessibleName("screen.png");
 });
 
 test("f16 Enter on the viewer's Close button closes it, not the item", async ({

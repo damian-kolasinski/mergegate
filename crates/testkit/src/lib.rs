@@ -21,7 +21,7 @@ pub use github::{
     Comment as GithubComment, CommentKind as GithubCommentKind, FakeGithub, Inline as GithubInline,
     NewComment as GithubNewComment, Pull as GithubPull, PullState as GithubPullState,
 };
-pub use http::{Reply, http, http_reply};
+pub use http::{Reply, http, http_bytes, http_reply};
 pub use jev::{FakeJev, JEV_KEY};
 pub use repo::{TestRepo, commit_files, git};
 pub use tailscale::{FakeTailscale, HUB_OWNER};

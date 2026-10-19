@@ -25,4 +25,7 @@ pub struct Attachment {
     pub size: u64,
     /// Lowercase hex; the stored file and its URL are named by it.
     pub sha256: String,
+    /// Of the bytes, for a zip of the demo; None for one attached before
+    /// the store kept it.
+    pub crc32: Option<u32>,
 }

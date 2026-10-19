@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
-use testkit::{Env, Reply, TestRepo, http_reply};
+use testkit::{Env, Reply, TestRepo, http_bytes, http_reply};
 
 /// All ASCII, so the raw HTTP reader can hold it as a string.
 const GIF: &[u8] = b"GIF89a demo frame";
@@ -240,6 +240,54 @@ fn f16_serves_attachments_by_hash_with_ranges() {
     assert_eq!(unknown.status, 404, "{unknown:?}");
     let bogus = get(&env, "/api/attachments/..%2Fhub.db", "");
     assert_eq!(bogus.status, 404, "{bogus:?}");
+}
+
+/// [`get`] for a body that may not be text, such as a zip's.
+fn get_bytes(env: &Env, path: &str) -> Reply<Vec<u8>> {
+    let addr = env.hub_addr();
+    http_bytes(
+        &addr,
+        &format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"),
+    )
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+#[test]
+fn f16_serves_the_whole_demo_as_one_zip() {
+    let (env, repo) = hub_with_work();
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    assert_eq!(item(&env)["demo"], Value::Null);
+    let missing = get_bytes(&env, "/api/items/app%231/demo.zip");
+    assert_eq!(missing.status, 404, "{missing:?}");
+    assert_eq!(missing.header("content-type"), Some("application/json"));
+
+    let png = file(&repo, "shot.png", PNG);
+    let gif = file(&repo, "flow.gif", GIF);
+    for path in [&png, &gif, &png] {
+        env.mg(&["attach", "app#1", arg(path)]).assert_code(0);
+    }
+    let url = item(&env)["demo"]["zip_url"].as_str().unwrap().to_owned();
+    assert_eq!(url, "/api/items/app%231/demo.zip");
+
+    let zip = get_bytes(&env, &url);
+    assert_eq!(zip.status, 200, "{:?}", zip.headers);
+    assert_eq!(zip.header("content-type"), Some("application/zip"));
+    assert_eq!(
+        zip.header("content-disposition"),
+        Some("attachment; filename=\"app-1-r1-demo.zip\"")
+    );
+    let length = zip.body.len().to_string();
+    assert_eq!(zip.header("content-length"), Some(length.as_str()));
+    let body = zip.body;
+    assert!(body.starts_with(b"PK\x03\x04"));
+    // Stored as they are, under names a folder holds side by side.
+    assert!(contains(&body, PNG) && contains(&body, GIF));
+    for name in ["shot.png", "flow.gif", "shot (2).png"] {
+        assert!(contains(&body, name.as_bytes()), "{name}");
+    }
 }
 
 #[test]
