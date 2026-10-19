@@ -2,6 +2,7 @@ import { type JSX, Show } from "solid-js";
 import { hubConnected } from "./hub";
 import { KeyHelpOverlay } from "./key-help";
 import styles from "./shell.module.css";
+import { HubVersion } from "./version";
 
 /**
  * The frame every screen renders in. A `fill` screen takes the whole window
@@ -20,6 +21,7 @@ export function Shell(props: {
           <Logo />
           mergegate
         </a>
+        <HubVersion />
         <Show when={props.trail}>
           <nav class={styles.trail} aria-label="Breadcrumb">
             {props.trail}
