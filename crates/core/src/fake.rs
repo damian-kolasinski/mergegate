@@ -1050,6 +1050,10 @@ impl ItemStore for FakeStore {
             .collect())
     }
 
+    fn weekly_closures(&self) -> Result<crate::item::WeeklyClosures, StoreError> {
+        Ok(Default::default())
+    }
+
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError> {
         Ok(self
             .open_items(Some(project))?

@@ -206,6 +206,21 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                 with_agents: entries(&inbox.with_agents)?,
                 merging: entries(&inbox.merging)?,
                 closed: entries(&inbox.closed)?,
+                weekly: {
+                    let week = store.weekly_closures()?;
+                    api::weekly::WeeklyClosures {
+                        monday: week.monday,
+                        today: week.today,
+                        repositories: week
+                            .repositories
+                            .into_iter()
+                            .map(|repo| api::weekly::RepositoryClosures {
+                                project: repo.project.to_string(),
+                                days: repo.days,
+                            })
+                            .collect(),
+                    }
+                },
                 rules: pending,
             })
         })

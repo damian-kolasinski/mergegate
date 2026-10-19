@@ -20,6 +20,7 @@ mod reviews;
 mod rules;
 mod settings;
 mod viewed;
+mod weekly;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

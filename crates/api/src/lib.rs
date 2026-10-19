@@ -21,6 +21,7 @@ pub mod review;
 pub mod rules;
 pub mod settings;
 pub mod viewed;
+pub mod weekly;
 
 include!(concat!(env!("OUT_DIR"), "/api_version.rs"));
 
