@@ -68,14 +68,16 @@ test("f7 a new revision shows what changed since the review", async ({
   // r2 opens on all its changes, and Compare narrows them to r1's.
   await expect(screen.getByLabel("Compare")).toHaveValue("all");
   await expect(files.getByRole("listitem")).toHaveText([
-    /^login\.rs\s*src/,
-    /^lib\.rs\s*src/,
+    /^login\.rs(?!\s*src)/,
+    /^lib\.rs(?!\s*src)/,
   ]);
+  // Both are in src, which the list says once over them.
+  await expect(files.getByTitle("src", { exact: true })).toHaveText("src");
   await screen.getByLabel("Compare").selectOption("1");
   await expect(summary).toHaveValue("Closer.");
   // main's README isn't the item's, and login.rs is as r1 left it, its
   // mark with it.
-  await expect(files.getByRole("listitem")).toHaveText([/^lib\.rs\s*src/]);
+  await expect(files.getByRole("listitem")).toHaveText([/^lib\.rs(?!\s*src)/]);
   // login.rs was current, and isn't shown now.
   await expect(current).toContainText("lib.rs");
   await expect(diff.getByText("mod token;")).toBeVisible();
@@ -89,8 +91,8 @@ test("f7 a new revision shows what changed since the review", async ({
 
   await screen.getByLabel("Compare").selectOption("all");
   await expect(files.getByRole("listitem")).toHaveText([
-    /^login\.rs\s*src/,
-    /^lib\.rs\s*src/,
+    /^login\.rs(?!\s*src)/,
+    /^lib\.rs(?!\s*src)/,
   ]);
   await expect(files.getByText("unchanged since")).toHaveCount(0);
   await expect(summary).toHaveValue("Closer.");
@@ -143,8 +145,9 @@ test("f7 a file new since the review says so", async ({ page, hub }) => {
   await screen.getByLabel("Compare").selectOption("1");
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^token\.rs\s*src.*added/,
+    /^token\.rs(?!\s*src).*added/,
   ]);
+  await expect(files.getByTitle("src", { exact: true })).toBeVisible();
   const diff = screen.getByRole("region", { name: "Diff" });
   await expect(
     diff.getByText("Added since the earlier revision"),

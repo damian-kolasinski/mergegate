@@ -3,16 +3,16 @@ import type { File } from "../api/File";
 /**
  * Why a file is where it is, in one line: the agent's reason, the judge's
  * score, the rule that tiered it, or failing those the heuristics' hint.
- * The file list and the diff's file header both show it; the list leaves
- * the score out with `score: false`, as it shows it on its own.
+ * The diff's file header shows it, and the file list on hover; the list
+ * itself shows `lead`.
  */
 export function describe(
   file: File,
-  { score = true }: { score?: boolean } = {},
+  { score = true, judge = true }: { score?: boolean; judge?: boolean } = {},
 ): string | undefined {
   const parts = [
     file.reason,
-    judged(file, score),
+    judge && judged(file, score),
     file.why && tier(file, file.why),
   ];
   const said = parts.filter((part): part is string => Boolean(part));
@@ -21,6 +21,16 @@ export function describe(
     said.push(file.hint);
   }
   return said.length ? said.join(" · ") : undefined;
+}
+
+/**
+ * What the file list says under a file, in the little room there: never
+ * the score, which the list shows on its own, and the judge's line only
+ * when the agent gave no reason to lead with. The rule's always stays, as
+ * nothing else in the list says why a file is or isn't trusted.
+ */
+export function lead(file: File): string | undefined {
+  return describe(file, { score: false, judge: !file.reason });
 }
 
 /** The judge's score out of 100, as the file list's chip titles it. */
