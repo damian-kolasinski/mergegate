@@ -38,6 +38,10 @@ fn types_follow_the_extension() {
 #[test]
 fn every_asset_has_a_type_and_the_index_exists() {
     assert!(ASSETS.iter().any(|a| a.path == "index.html"));
+    // index.html links it; the stub page doesn't.
+    if BUILT {
+        assert!(ASSETS.iter().any(|a| a.path == "assets/favicon.svg"));
+    }
     for asset in ASSETS {
         assert_ne!(
             content_type(asset.path),
