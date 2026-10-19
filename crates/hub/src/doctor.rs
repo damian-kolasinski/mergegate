@@ -15,6 +15,8 @@ use crate::server::AppState;
 use crate::tailnet::Listening;
 use crate::ui;
 
+mod firewall;
+
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/doctor", get(doctor))
 }
@@ -44,7 +46,15 @@ async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::
             )
         })?;
     let tailnet = tailnet_check(&state).await;
-    let checks = std::iter::once(ui::check()).chain(tailnet).chain(checks);
+    // Only a listener on the tailnet takes connections the firewall filters.
+    let firewall = match state.tailnet.listening() {
+        Listening::Bound(bound) if bound.ip.is_some() => firewall::check().await,
+        _ => None,
+    };
+    let checks = std::iter::once(ui::check())
+        .chain(tailnet)
+        .chain(firewall)
+        .chain(checks);
     Ok(Json(api::doctor::Report {
         checks: checks.map(to_api).collect(),
     }))
