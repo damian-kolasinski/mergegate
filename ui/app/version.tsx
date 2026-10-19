@@ -1,8 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import type { Health } from "../api/Health";
-import { getJson, onHubEvent } from "../app/hub";
 import { Meta } from "../design-system";
-import styles from "./version.module.css";
+import { getJson, onHubEvent } from "./hub";
 
 /**
  * The `mg` running the hub, so the operator can tell a hub left running
@@ -24,9 +23,9 @@ export function HubVersion() {
   return (
     <Show when={version()}>
       {(current) => (
-        <footer class={styles.version}>
-          <Meta>mergegate {current()}</Meta>
-        </footer>
+        <span title="The mergegate running the hub">
+          <Meta>{current()}</Meta>
+        </span>
       )}
     </Show>
   );

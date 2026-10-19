@@ -12,7 +12,7 @@ test("f6 an empty inbox says how items arrive", async ({ page, hub }) => {
   await expect(needsYou).toContainText("mg submit");
 });
 
-test("f6 the inbox shows the mg version running the hub", async ({
+test("f6 the header shows the mg version running the hub", async ({
   page,
   hub,
 }) => {
@@ -21,7 +21,7 @@ test("f6 the inbox shows the mg version running the hub", async ({
   ).json()) as Health;
   await page.goto(hub.url);
   await expect(
-    page.getByText(`mergegate ${health.version}`, { exact: true }),
+    page.getByRole("banner").getByText(health.version, { exact: true }),
   ).toBeVisible();
 });
 
