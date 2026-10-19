@@ -192,10 +192,15 @@ export function CommentCard(props: { comments: Comments; comment: Comment }) {
               />
             )}
           </Show>
-          <DraftActions comments={props.comments} comment={props.comment} />
-          <RejectionActions comments={props.comments} comment={props.comment} />
-          <VoteActions comments={props.comments} comment={props.comment} />
-          <ReplyButton comments={props.comments} comment={props.comment} />
+          <span class={styles.actions}>
+            <DraftActions comments={props.comments} comment={props.comment} />
+            <RejectionActions
+              comments={props.comments}
+              comment={props.comment}
+            />
+            <VoteActions comments={props.comments} comment={props.comment} />
+            <ReplyButton comments={props.comments} comment={props.comment} />
+          </span>
         </header>
         <Show
           when={!folded()}

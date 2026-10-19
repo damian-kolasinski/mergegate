@@ -18,8 +18,23 @@
 
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* One cluster at the header's end, so its groups of buttons line up
+   together; on a narrow card it wraps under the header's other parts. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+/* With no buttons to show, it would still take a gap, or a row of its own. */
+.actions:empty {
+  display: none;
 }
 
 .body {
