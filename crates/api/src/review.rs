@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::item::ItemState;
+
 /// `POST /api/items/{id}/reviews`, answered with [`Review`].
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,7 +17,9 @@ pub struct SubmitReview {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
-    /// Leaves the item waiting for review.
+    /// Sends the item back to its agent when it sends new comments on the
+    /// newest revision, which the agent acts on; otherwise leaves it where it
+    /// is.
     Comment,
     /// Sends the item back to its agent.
     ChangesRequested,
@@ -36,6 +40,8 @@ pub struct Review {
     /// The operator's draft replies the review sent, oldest first.
     pub replies: Vec<Reply>,
     pub submitted_at: String,
+    /// Where the review left the item.
+    pub state: ItemState,
 }
 
 /// A comment on lines `start_line..=line` of one side of a file, or, only

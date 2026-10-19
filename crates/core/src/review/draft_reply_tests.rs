@@ -72,7 +72,9 @@ fn the_next_review_sends_the_draft_replies() {
     let draft = write_draft_reply(&mut store, CommentId(1), "Both.".into()).unwrap();
 
     // A draft reply is enough to send a review, with the draft comment too.
-    let sent = submit(&mut store, &FakeGit::default(), review("")).unwrap();
+    let sent = submit(&mut store, &FakeGit::default(), review(""))
+        .unwrap()
+        .review;
     assert_eq!(sent.replies.len(), 1);
     assert_eq!(sent.replies[0].id, draft.id);
     assert_eq!(sent.replies[0].review, Some(sent.id));

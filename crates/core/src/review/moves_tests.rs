@@ -37,7 +37,7 @@ fn a_review_moves_drafts_whose_lines_didnt_change() {
     let new = draft(&mut store, &git, "src/moved.rs", Side::New);
     let old = draft(&mut store, &git, "src/moved.rs", Side::Old);
 
-    let sent = submit(&mut store, &git, review(2)).unwrap();
+    let sent = submit(&mut store, &git, review(2)).unwrap().review;
     let placed: Vec<_> = sent
         .comments
         .iter()
@@ -89,7 +89,7 @@ fn a_review_waits_for_drafts_whose_lines_changed() {
     assert_eq!(replaced.anchor.as_ref().unwrap().quote, "B2");
     delete_draft(&mut store, &id(), gone.id).unwrap();
 
-    let sent = submit(&mut store, &git, review(2)).unwrap();
+    let sent = submit(&mut store, &git, review(2)).unwrap().review;
     let placed: Vec<_> = sent.comments.iter().map(|c| (c.id, c.revision)).collect();
     assert_eq!(placed, [(moved.id, 2), (changed.id, 2)]);
 }

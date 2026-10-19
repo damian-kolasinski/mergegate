@@ -1,7 +1,7 @@
 use super::*;
 use crate::fake::{FakeGit, FakeStore};
 use crate::feedback::{EventKind, FeedbackStore};
-use crate::review::{Side, WriteDraft, write_draft};
+use crate::review::{Side, WriteDraft, write_draft, write_draft_reply};
 
 fn id(id: &str) -> ItemId {
     ItemId::parse(id).unwrap()
@@ -32,7 +32,8 @@ fn requesting_changes_sends_the_item_back_with_an_event() {
             "  Handle the expired token.\n",
         ),
     )
-    .unwrap();
+    .unwrap()
+    .review;
     assert_eq!(review.summary, "Handle the expired token.");
     assert_eq!(review.revision, 1);
     assert_eq!(state(&store), ItemState::ChangesRequested);
@@ -64,7 +65,8 @@ fn a_review_sends_every_draft_on_the_item() {
         &FakeGit::default(),
         request(2, Verdict::ChangesRequested, ""),
     )
-    .unwrap();
+    .unwrap()
+    .review;
     let sent: Vec<_> = review
         .comments
         .iter()
@@ -81,7 +83,8 @@ fn a_review_sends_every_draft_on_the_item() {
         &FakeGit::default(),
         request(2, Verdict::Comment, "And?"),
     )
-    .unwrap();
+    .unwrap()
+    .review;
     assert_eq!(next.comments, []);
     assert_eq!(
         submit(
@@ -117,6 +120,80 @@ fn a_comment_leaves_the_item_where_it_is() {
     assert_eq!(store.events(&id("app#1"), 0).unwrap().len(), 2);
 }
 
+fn draft_on(store: &mut FakeStore, revision: u32) {
+    let draft = WriteDraft {
+        id: id("app#1"),
+        revision,
+        path: "README.md".into(),
+        side: Side::New,
+        start_line: 1,
+        line: 1,
+        body: "Rename this.".into(),
+    };
+    write_draft(store, &FakeGit::default(), draft).unwrap();
+}
+
+#[test]
+fn a_comment_that_sends_comments_hands_the_item_to_its_agent() {
+    let mut store = FakeStore::with_item(1);
+    draft_on(&mut store, 1);
+    let reviewed = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, ""),
+    )
+    .unwrap();
+    assert_eq!(reviewed.state, ItemState::ChangesRequested);
+    assert_eq!(state(&store), ItemState::ChangesRequested);
+}
+
+#[test]
+fn comments_on_an_older_revision_leave_the_newest_for_review() {
+    let mut store = FakeStore::with_item(2);
+    draft_on(&mut store, 1);
+    let reviewed = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, ""),
+    )
+    .unwrap();
+    assert_eq!(reviewed.state, ItemState::NeedsReview);
+    assert_eq!(state(&store), ItemState::NeedsReview);
+
+    // A draft written on the newest goes out on it, whichever revision the
+    // review is on.
+    draft_on(&mut store, 2);
+    submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, ""),
+    )
+    .unwrap();
+    assert_eq!(state(&store), ItemState::ChangesRequested);
+}
+
+#[test]
+fn replies_alone_leave_the_item_where_it_is() {
+    let mut store = FakeStore::with_item(1);
+    draft_on(&mut store, 1);
+    let sent = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, ""),
+    )
+    .unwrap()
+    .review;
+    store.set_state(&id("app#1"), ItemState::NeedsReview);
+    write_draft_reply(&mut store, sent.comments[0].id, "Fair enough.".into()).unwrap();
+    submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, ""),
+    )
+    .unwrap();
+    assert_eq!(state(&store), ItemState::NeedsReview);
+}
+
 #[test]
 fn a_review_may_be_on_an_older_revision() {
     let mut store = FakeStore::with_item(2);
@@ -125,7 +202,8 @@ fn a_review_may_be_on_an_older_revision() {
         &FakeGit::default(),
         request(1, Verdict::Comment, "Written on r1."),
     )
-    .unwrap();
+    .unwrap()
+    .review;
     assert_eq!(review.revision, 1);
 }
 

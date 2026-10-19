@@ -15,16 +15,25 @@ pub struct SubmitReview {
     pub summary: String,
 }
 
-/// Request changes sends the item back to its agent; Comment leaves it where
-/// it is. Either way the agent gets the review, with every draft and draft
-/// reply on the item, as an event. Drafts from earlier revisions go on the
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reviewed {
+    pub review: Review,
+    /// Where the review left the item.
+    pub state: ItemState,
+}
+
+/// Request changes sends the item back to its agent. So does a comment that
+/// sends new comments on the newest revision, which the agent acts on
+/// whatever the verdict; any other comment leaves the item where it is.
+/// Either way the agent gets the review, with every draft and draft reply on
+/// the item, as an event. Drafts from earlier revisions go on the
 /// review's revision when their lines didn't change; one from a later
 /// revision keeps its own.
 pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
     store: &mut S,
     git: &impl DiffGit,
     request: SubmitReview,
-) -> Result<Review, ReviewError> {
+) -> Result<Reviewed, ReviewError> {
     let SubmitReview {
         id,
         revision,
@@ -53,14 +62,24 @@ pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
         });
     }
     let summary = summary.trim().to_owned();
-    if summary.is_empty()
-        && !store.comments(&id)?.iter().any(Comment::is_draft)
-        && !store.replies(&id)?.iter().any(Reply::is_draft)
-    {
+    let drafts: Vec<Comment> = store
+        .comments(&id)?
+        .into_iter()
+        .filter(Comment::is_draft)
+        .collect();
+    if summary.is_empty() && drafts.is_empty() && !store.replies(&id)?.iter().any(Reply::is_draft) {
         return Err(ReviewError::Empty);
     }
+    // Every draft lands on the newest revision when the review is on it; on
+    // an older one, only those written on the newest keep it. Comments on an
+    // older revision alone leave the newest waiting for review.
+    let newest = item.revision.number;
+    let on_newest = drafts
+        .iter()
+        .any(|draft| revision == newest || draft.revision == newest);
     let state = match verdict {
         Verdict::ChangesRequested => ItemState::ChangesRequested,
+        Verdict::Comment if on_newest => ItemState::ChangesRequested,
         Verdict::Comment | Verdict::Approved => item.state,
     };
     let moved = move_drafts(store, git, &id, revision)?;
@@ -71,7 +90,8 @@ pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
         summary,
         moved,
     };
-    Ok(store.insert_review(review, state)?)
+    let review = store.insert_review(review, state)?;
+    Ok(Reviewed { review, state })
 }
 
 #[cfg(test)]

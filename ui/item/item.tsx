@@ -278,7 +278,8 @@ function Review(props: {
   onMerge: () => void;
 }) {
   // As the operator's review moved it, until the hub says where it is:
-  // Request changes hands the item back, Send comments keeps it.
+  // Request changes hands the item back, and so does Send comments with new
+  // comments on the newest revision.
   const [moved, setMoved] = createSignal<ItemState>();
   createEffect(
     on(
@@ -442,7 +443,7 @@ function Review(props: {
     return true;
   };
   const reviewed = (review: SentReview) => {
-    if (review.verdict === "changes_requested") setMoved("changes_requested");
+    setMoved(review.state);
     comments.submitted(review);
   };
   const writing = () => comments.editor.open() !== undefined;
