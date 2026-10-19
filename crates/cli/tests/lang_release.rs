@@ -1,10 +1,12 @@
 //! Language packs released with mg: listed and installed by name, detected
-//! from a project's files, and downloaded again once built for another mg.
+//! from a project's files, and downloaded again once built for another mg:
+//! by `mg lang update`, and by the hub when it starts.
 //! The release is a local file server, and the hub reads its index from
 //! `MG_LANGUAGES_INDEX` instead of the one baked into a release build.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -224,6 +226,32 @@ fn packs_built_for_another_mg_are_downloaded_again() {
     assert_eq!(names(&updated), ["json"]);
     let again = release.mg(&["lang", "update"]).assert_code(0).stdout;
     assert_eq!(again.trim_end(), "every pack is up to date");
+    let doctor = release.mg(&["--json", "doctor"]).json();
+    assert_eq!(checks(&doctor, "languages")["status"], "ok");
+}
+
+#[test]
+fn a_starting_hub_downloads_again_packs_built_for_another_mg() {
+    let release = Release::of(recompressed(&json_pack()));
+    let pack = json_pack();
+    release
+        .mg(&["--json", "lang", "add", "--from", pack.to_str().unwrap()])
+        .assert_code(0);
+    let outdated = |release: &Release| {
+        let available = release
+            .mg(&["--json", "lang", "list", "--available"])
+            .json();
+        available["packs"][0]["outdated"] == true
+    };
+    assert!(outdated(&release));
+    release.mg(&["hub", "stop"]).assert_code(0);
+    release.env.start_hub();
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while outdated(&release) {
+        assert!(Instant::now() < deadline, "never updated");
+        std::thread::sleep(Duration::from_millis(50));
+    }
     let doctor = release.mg(&["--json", "doctor"]).json();
     assert_eq!(checks(&doctor, "languages")["status"], "ok");
 }
