@@ -88,7 +88,12 @@ pub(crate) fn one(
 }
 
 /// Every item of the list at `path`, following its pages.
-fn items(api: &Api, cache: &Cache, path: &str, fresh: bool) -> Result<Vec<Value>, GithubError> {
+pub(crate) fn items(
+    api: &Api,
+    cache: &Cache,
+    path: &str,
+    fresh: bool,
+) -> Result<Vec<Value>, GithubError> {
     let lists = || cache.lists.lock().unwrap_or_else(|e| e.into_inner());
     let known = lists().get(path).filter(|_| !fresh).cloned();
     let reply = api.get_if(path, known.as_ref().map(|(etag, _)| etag.as_str()))?;

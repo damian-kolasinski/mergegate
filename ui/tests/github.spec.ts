@@ -42,6 +42,38 @@ test("f4 links an item to its pull request", async ({ page, github }) => {
   ).toHaveAttribute("aria-current", "page");
 });
 
+test("the header follows Codex's reactions on the pull request", async ({
+  page,
+  github,
+}) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const header = page.getByRole("region", { name: "app#1" }).locator("header");
+  await expect(header.getByRole("link", { name: "#1" })).toBeVisible();
+  const codex = "chatgpt-codex-connector[bot]";
+
+  // No reload: the hub's poll reads the reactions and the screen follows.
+  await github.github.react(1, codex, "eyes");
+  const reviewing = header.getByText("Codex reviewing");
+  await expect(reviewing).toBeVisible();
+  await expect(reviewing.locator("xpath=../..")).toHaveAttribute(
+    "title",
+    "Codex is reviewing the pull request (👀 on GitHub)",
+  );
+
+  await github.github.react(1, codex, "eyes", false);
+  await github.github.react(1, codex, "+1");
+  await expect(header.getByText("Codex approved")).toBeVisible();
+  await expect(reviewing).toHaveCount(0);
+
+  // A person's 👍 is theirs, not a review.
+  await github.github.react(1, codex, "+1", false);
+  await github.github.react(1, "teammate", "+1");
+  await expect(header.getByText("Codex approved")).toHaveCount(0);
+  await expect(header.getByText(/approved|reviewing/)).toHaveCount(0);
+});
+
 test("f8 approving merges the pull request", async ({ page, github }) => {
   const app = github.hub.githubProject("app", github.github);
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });

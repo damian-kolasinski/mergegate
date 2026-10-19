@@ -130,7 +130,7 @@ pub(super) fn add(
     id
 }
 
-fn secs() -> u64 {
+pub(super) fn secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -335,7 +335,7 @@ fn digest(text: &str) -> u64 {
 }
 
 /// `secs` since the epoch as GitHub writes a time: `2026-01-02T03:04:05Z`.
-fn stamp(secs: u64) -> String {
+pub(super) fn stamp(secs: u64) -> String {
     // Howard Hinnant's civil_from_days, on days since 1970-01-01.
     let z = secs / 86_400 + 719_468;
     let era = z / 146_097;

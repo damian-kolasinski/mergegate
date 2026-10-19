@@ -73,3 +73,42 @@ test("a thread folds to a line and back", async ({ page, hub }) => {
   await page.getByRole("button", { name: "Collapse comments" }).click();
   await expect(reply).toBeVisible();
 });
+
+test("the header's controls share one height", async ({ page, hub }) => {
+  const app = hub.project("app");
+  app.seed({ "login.rs": "fn login() {}\n" });
+  app.submit("work", "Add login", {
+    "login.rs": "fn login(password: &str) {}\n",
+  });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const diff = page.getByRole("region", { name: "Diff" });
+  await expect(diff.getByText("fn login(password: &str) {}")).toBeVisible();
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  await expect(
+    page.getByRole("textbox", { name: "Comment on login.rs line 1" }),
+  ).toBeFocused();
+  await page.keyboard.type("Reject an empty password.");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  const review = page.getByRole("form", { name: "Review" });
+  await review.getByRole("button", { name: "Request changes" }).click();
+  await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
+
+  // Collapse comments' key hint once made it taller than the rest.
+  // The first header is the item's; comments have their own.
+  const header = page
+    .getByRole("region", { name: "app#1" })
+    .locator("header")
+    .first();
+  await expect(
+    header.getByRole("button", { name: "Collapse comments" }),
+  ).toBeVisible();
+  const heights = await header
+    .locator("button:visible, select:visible")
+    .evaluateAll((controls) =>
+      controls.map((control) => control.getBoundingClientRect().height),
+    );
+  expect(heights.length).toBeGreaterThan(2);
+  expect(new Set(heights)).toEqual(new Set([32]));
+});

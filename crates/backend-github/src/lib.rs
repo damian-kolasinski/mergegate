@@ -5,6 +5,7 @@
 mod api;
 mod comments;
 mod pulls;
+mod reactions;
 mod repo;
 mod token;
 
@@ -12,7 +13,7 @@ use std::path::PathBuf;
 
 use mergegate_core::git::Remote;
 use mergegate_core::github::{
-    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullStatus,
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullReaction, PullStatus,
 };
 
 use api::Api;
@@ -154,5 +155,13 @@ impl Github for GithubClient {
         id: u64,
     ) -> Result<Option<PullComment>, GithubError> {
         comments::one(&self.api, repo, number, kind, id)
+    }
+
+    fn pull_reactions(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+    ) -> Result<Vec<PullReaction>, GithubError> {
+        reactions::of_pull(&self.api, &self.comments, repo, number)
     }
 }

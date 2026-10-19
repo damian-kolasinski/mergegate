@@ -76,6 +76,19 @@ export class FakeGithub {
   }
 
   /**
+   * `login` reacts `content`, as in `+1` or `eyes`, on pull request `pull`
+   * of `acme/app`'s description; with `on` false it takes it back.
+   */
+  async react(pull: number, login: string, content: string, on = true) {
+    const response = await fetch(`${this.web}/_fake/reactions`, {
+      method: on ? "POST" : "DELETE",
+      body: JSON.stringify({ repo: "acme/app", pull, login, content }),
+    });
+    if (!response.ok)
+      throw new Error(`fake-github answered ${response.status}`);
+  }
+
+  /**
    * Takes the next `count` numbers of `repo`'s pull requests, as ones opened
    * without the hub would, so its items' pull requests and IDs part ways.
    */
