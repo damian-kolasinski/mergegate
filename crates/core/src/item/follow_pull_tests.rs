@@ -232,6 +232,7 @@ fn held_comments_reach_the_agent_before_the_close() {
         bot: false,
         url: String::new(),
         path: None,
+        summary: false,
         dated: 0,
     };
     let comment = store.insert_external(comment, 0).unwrap().id;

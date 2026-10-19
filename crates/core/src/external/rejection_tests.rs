@@ -25,6 +25,7 @@ fn answered(status: ReplyStatus) -> FakeStore {
         bot: true,
         url: String::new(),
         path: None,
+        summary: false,
         dated: 0,
     };
     let comment = store.insert_external(new, 0).unwrap().id;

@@ -26,6 +26,7 @@ fn from_github(agreed_reply: Option<u64>) -> Option<External> {
         url: "https://github.com/acme/app/pull/1#discussion_r7".into(),
         path: None,
         pending: false,
+        summary: false,
         agreed_reply,
         vote: None,
     })

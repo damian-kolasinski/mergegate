@@ -24,12 +24,12 @@ pub(crate) fn columns(body: &str) -> String {
     format!(
         "c.id, c.revision, c.review_id, c.path, c.side, c.start_line, c.line, {body}, c.quote,
          c.created_at, x.kind, x.github_id, x.login, x.bot, x.url, x.path,
-         x.pending_at IS NOT NULL, x.agreed_reply, x.vote"
+         x.pending_at IS NOT NULL, x.agreed_reply, x.vote, x.summary"
     )
 }
 
 /// How many [`columns`] there are, the index of one a query adds after them.
-pub(crate) const COLUMNS: usize = 19;
+pub(crate) const COLUMNS: usize = 20;
 
 pub(crate) fn insert(conn: &Connection, comment: NewComment) -> Result<Comment, StoreError> {
     let id: i64 = conn
@@ -221,6 +221,7 @@ struct ExternalRow {
     pending: bool,
     agreed_reply: Option<i64>,
     vote: Option<String>,
+    summary: bool,
 }
 
 impl CommentRow {
@@ -236,6 +237,7 @@ impl CommentRow {
                 pending: row.get(16)?,
                 agreed_reply: row.get(17)?,
                 vote: row.get(18)?,
+                summary: row.get(19)?,
             }),
             None => None,
         };
@@ -293,6 +295,7 @@ impl CommentRow {
                 url: row.url,
                 path: row.path,
                 pending: row.pending,
+                summary: row.summary,
                 agreed_reply: row.agreed_reply.map(|r| r as u64),
             }),
             None => None,

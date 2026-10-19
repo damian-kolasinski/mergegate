@@ -1,12 +1,13 @@
 //! Bringing a pull request's comments in: a new one is placed on a revision
 //! and held for the next batch, an edited one held again, and a held one
-//! GitHub deleted withdrawn.
+//! GitHub deleted withdrawn. A bot's summary is kept for the operator to
+//! read and never held.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{ExternalError, ExternalStore, GithubKey, NewExternal};
+use super::{ExternalError, ExternalStore, GithubKey, NewExternal, summary};
 use crate::diff::{Content, DiffGit, DiffStore};
-use crate::github::{Github, GithubError, GithubRepo, PullComment, PullCommentKind, PullLines};
+use crate::github::{Github, GithubError, GithubRepo, PullComment, PullLines};
 use crate::item::{Item, ItemBackend, ItemId, ItemState, ItemStore, Revision};
 use crate::review::{Anchor, CommentId, ReviewError, ReviewStore, Side, quote, shown};
 
@@ -74,13 +75,18 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     if matches!(item.state, ItemState::Merged | ItemState::Abandoned) {
         return Ok(Ingested::default());
     }
-    let known: BTreeMap<(PullCommentKind, u64), (CommentId, String, bool)> = store
+    let known: BTreeMap<GithubKey, Known> = store
         .comments(id)?
         .into_iter()
         .filter_map(|c| {
             let external = c.external?;
-            let key = (external.kind, external.github_id);
-            Some((key, (c.id, c.body, external.pending)))
+            let known = Known {
+                id: c.id,
+                body: c.body,
+                pending: external.pending,
+                summary: external.summary,
+            };
+            Some(((external.kind, external.github_id), known))
         })
         .collect();
     let revisions = store.revisions(id)?;
@@ -88,10 +94,16 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     let mut found = BTreeSet::new();
     for comment in comments {
         found.insert((comment.kind, comment.id));
-        match known.get(&(comment.kind, comment.id)) {
-            Some((_, body, _)) if *body == comment.body => {}
-            Some((known, _, _)) => {
-                store.edit_external(*known, &comment.body, comment.dated, now)?;
+        let known = known.get(&(comment.kind, comment.id));
+        // One a batch carried stays the agent's, summary or not: its thread
+        // and the agent's replies on it are already there.
+        let summary = summary(&comment) && known.is_none_or(|k| k.pending || k.summary);
+        match known {
+            Some(known) if known.body == comment.body && known.summary == summary => {}
+            // Unedited, it's one the hub held before it told summaries apart:
+            // counted as edited, as the operator should see it change.
+            Some(known) => {
+                store.edit_external(known.id, &comment.body, comment.dated, summary, now)?;
                 ingested.edited += 1;
             }
             None => {
@@ -110,6 +122,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
                     bot: comment.bot,
                     url: comment.url,
                     path: comment.lines.map(|lines| lines.path),
+                    summary,
                     dated: comment.dated,
                 };
                 store.insert_external(new, now)?;
@@ -117,13 +130,21 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
             }
         }
     }
-    for (key, (comment, _, pending)) in known {
-        if pending && gone.contains(&key) && !found.contains(&key) {
-            store.withdraw_external(comment)?;
+    for (key, known) in known {
+        if known.pending && gone.contains(&key) && !found.contains(&key) {
+            store.withdraw_external(known.id)?;
             ingested.withdrawn += 1;
         }
     }
     Ok(ingested)
+}
+
+/// An external comment as the hub has it.
+struct Known {
+    id: CommentId,
+    body: String,
+    pending: bool,
+    summary: bool,
 }
 
 /// The revision an inline comment was written on and its lines there, where

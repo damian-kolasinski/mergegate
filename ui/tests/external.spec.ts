@@ -79,6 +79,11 @@ test("a comment from GitHub reaches the agent only once the operator votes it up
     body: "Consider renaming `login` to `sign_in`.",
   });
   await github.github.comment(1, { login: "alice", body: "Needs a test." });
+  // A bot's summary is there to read, and asks for no vote.
+  await github.github.comment(1, {
+    login: "coderabbitai[bot]",
+    body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough\n\nAdds a login.",
+  });
 
   // The item needs the operator, though no review is due from them.
   const row = page
@@ -110,6 +115,15 @@ test("a comment from GitHub reaches the agent only once the operator votes it up
   const needsTest = page.getByRole("article", { name: "Comment c_3" });
   await needsTest.getByRole("button", { name: "Send to agent" }).click();
   await expect(conversation).not.toContainText("to vote on");
+  const walkthrough = page.getByRole("article", { name: "Comment c_4" });
+  await expect(walkthrough).toContainText("Adds a login.");
+  await expect(walkthrough.getByText("Summary", { exact: true })).toBeVisible();
+  await expect(
+    walkthrough.getByRole("button", { name: "Send to agent" }),
+  ).toHaveCount(0);
+  await expect(walkthrough.getByRole("button", { name: "Reply" })).toHaveCount(
+    0,
+  );
   await page.keyboard.press("Escape");
 
   await screen.getByRole("button", { name: "More actions" }).click();

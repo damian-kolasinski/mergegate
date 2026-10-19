@@ -56,12 +56,14 @@ export function useReplyDrafts(
     isDraft: (reply: Reply) => list().some((other) => other.id === reply.id),
     /**
      * Sent comments take replies while the hub takes a review, except one
-     * the operator kept from the agent, as no one would read the reply.
+     * the operator kept from the agent or a bot's summary, as no one would
+     * read the reply.
      */
     canReply: (comment: Comment) =>
       options.reviewable() &&
       options.isSent(comment) &&
-      comment.external?.vote !== "down",
+      comment.external?.vote !== "down" &&
+      !comment.external?.summary,
     /** Draft replies change only while the hub takes a review. */
     canChange: options.reviewable,
     deleting,

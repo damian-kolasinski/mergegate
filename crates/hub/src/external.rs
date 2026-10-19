@@ -208,6 +208,7 @@ pub(crate) fn to_api(comment: &Comment) -> Option<api::review::ExternalComment> 
         url: external.url.clone(),
         path: external.path.clone(),
         pending: external.pending,
+        summary: external.summary,
         vote: external.vote.map(|vote| match vote {
             Vote::Up => api::review::Vote::Up,
             Vote::Down => api::review::Vote::Down,
@@ -251,6 +252,7 @@ fn failure(e: ExternalError) -> Failure {
         E::NoComment(_) => (S::NOT_FOUND, "comment_not_found", None),
         E::NotRejected(_) => (S::CONFLICT, "not_rejected", None),
         E::AlreadySent(_) => (S::CONFLICT, "already_sent", None),
+        E::Summary(_) => (S::CONFLICT, "summary", None),
         E::Git(_) => (S::INTERNAL_SERVER_ERROR, "git_failed", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
     };

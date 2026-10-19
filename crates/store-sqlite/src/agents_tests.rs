@@ -171,6 +171,7 @@ fn a_batch_of_external_comments_wakes_the_agent() {
         bot: false,
         url: "https://github.com/acme/app/pull/1#c1".into(),
         path: None,
+        summary: false,
         dated: 1,
     };
     let comment = store.insert_external(comment, 1).unwrap().id;

@@ -96,6 +96,7 @@ fn posted(store: &mut FakeStore, github_id: u64, login: &str, dated: u64, now: u
         bot: login.ends_with("[bot]"),
         url: String::new(),
         path: None,
+        summary: false,
         dated,
     };
     let id = store.insert_external(new, now).unwrap().id;
@@ -174,7 +175,7 @@ fn a_bot_editing_an_older_comment_after_the_push_counts() {
     let summary = store.comments(&id()).unwrap()[0].id;
     // An edit GitHub dates before the push, though seen after it, doesn't.
     store
-        .edit_external(summary, "Reviewing", pushed - 500, pushed + 20)
+        .edit_external(summary, "Reviewing", pushed - 500, false, pushed + 20)
         .unwrap();
     store.set_vote(summary, Vote::Up, pushed + 20).unwrap();
     assert_eq!(
@@ -183,7 +184,7 @@ fn a_bot_editing_an_older_comment_after_the_push_counts() {
     );
 
     store
-        .edit_external(summary, "Reviewed", pushed + 600, pushed + 600)
+        .edit_external(summary, "Reviewed", pushed + 600, false, pushed + 600)
         .unwrap();
     store.set_vote(summary, Vote::Up, pushed + 600).unwrap();
     assert!(
@@ -200,7 +201,7 @@ fn a_comment_carried_again_is_edited() {
     release(&mut store, &id()).unwrap().unwrap();
     let carried = store.comments(&id()).unwrap()[0].id;
     store
-        .edit_external(carried, "Changed my mind", 5, 5)
+        .edit_external(carried, "Changed my mind", 5, false, 5)
         .unwrap();
     store.set_vote(carried, Vote::Up, 5).unwrap();
 

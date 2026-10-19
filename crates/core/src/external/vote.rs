@@ -23,6 +23,9 @@ pub fn vote<S: ItemStore + ReviewStore + ExternalStore>(
         .external
         .as_ref()
         .ok_or(ExternalError::NoComment(comment))?;
+    if external.summary {
+        return Err(ExternalError::Summary(comment));
+    }
     if !external.pending && !external.dismissed() {
         return Err(ExternalError::AlreadySent(comment));
     }

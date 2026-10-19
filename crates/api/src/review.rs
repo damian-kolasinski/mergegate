@@ -98,6 +98,10 @@ pub struct ExternalComment {
     /// Not handed to the agent yet: the hub waits for the reviewers to go
     /// quiet, and for the operator's vote.
     pub pending: bool,
+    /// A bot's summary of the pull request or of its review, for the
+    /// operator to read: never held for a vote or sent to the agent.
+    #[serde(default)]
+    pub summary: bool,
     /// The operator's vote, none until they cast it: only a comment voted up
     /// reaches the agent.
     #[serde(default)]

@@ -1,7 +1,7 @@
 use super::*;
-use crate::external::Vote;
+use crate::external::{Vote, held_keys};
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
-use crate::github::PullLines;
+use crate::github::{PullCommentKind, PullLines};
 
 fn id() -> ItemId {
     ItemId::parse("app#1").unwrap()
@@ -239,6 +239,122 @@ fn a_held_comment_github_deleted_is_withdrawn() {
     assert_eq!(store.held(&id()).unwrap(), None);
     let again = ingest(&mut store, &git, &id(), Vec::new(), &all, 4_000).unwrap();
     assert_eq!(again, Ingested::default());
+}
+
+const WALKTHROUGH: &str =
+    "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough";
+
+#[test]
+fn a_bots_summary_is_kept_but_never_held() {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let summary = issue(1, "coderabbitai[bot]", WALKTHROUGH);
+    let ingested = ingest(
+        &mut store,
+        &git,
+        &id(),
+        vec![summary.clone()],
+        &BTreeSet::new(),
+        1_000,
+    )
+    .unwrap();
+    assert_eq!(ingested.new, 1);
+    let external = store.comments(&id()).unwrap()[0].external.clone().unwrap();
+    assert!(external.summary && !external.pending && !external.awaiting_vote());
+    assert_eq!(store.held(&id()).unwrap(), None);
+
+    // The bot rewrites it on every review; it still asks nothing.
+    let rewritten = PullComment {
+        body: format!("{WALKTHROUGH}\n\nReviewed again."),
+        ..summary
+    };
+    let ingested = ingest(
+        &mut store,
+        &git,
+        &id(),
+        vec![rewritten],
+        &BTreeSet::new(),
+        2_000,
+    )
+    .unwrap();
+    assert_eq!(ingested.edited, 1);
+    let external = store.comments(&id()).unwrap()[0].external.clone().unwrap();
+    assert!(external.summary && !external.pending);
+    assert_eq!(store.held(&id()).unwrap(), None);
+}
+
+#[test]
+fn a_summary_held_before_summaries_were_told_apart_stops_waiting() {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let summary = issue(1, "coderabbitai[bot]", WALKTHROUGH);
+    let held = NewExternal {
+        item: id(),
+        revision: 1,
+        anchor: None,
+        body: summary.body.clone(),
+        kind: summary.kind,
+        github_id: summary.id,
+        login: summary.login.clone(),
+        bot: true,
+        url: summary.url.clone(),
+        path: None,
+        summary: false,
+        dated: 0,
+    };
+    store.insert_external(held, 500).unwrap();
+    assert!(store.held(&id()).unwrap().unwrap().awaiting);
+
+    let ingested = ingest(
+        &mut store,
+        &git,
+        &id(),
+        vec![summary],
+        &BTreeSet::new(),
+        1_000,
+    )
+    .unwrap();
+    assert_eq!(ingested.edited, 1);
+    let external = store.comments(&id()).unwrap()[0].external.clone().unwrap();
+    assert!(external.summary && !external.pending);
+    assert_eq!(store.held(&id()).unwrap(), None);
+}
+
+#[test]
+fn a_summary_the_agent_got_before_summaries_were_told_apart_stays_its_own() {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let summary = issue(1, "coderabbitai[bot]", WALKTHROUGH);
+    let sent = NewExternal {
+        item: id(),
+        revision: 1,
+        anchor: None,
+        body: summary.body.clone(),
+        kind: summary.kind,
+        github_id: summary.id,
+        login: summary.login.clone(),
+        bot: true,
+        url: summary.url.clone(),
+        path: None,
+        summary: false,
+        dated: 0,
+    };
+    store.insert_external(sent, 500).unwrap();
+    send_all(&mut store);
+
+    let ingested = ingest(
+        &mut store,
+        &git,
+        &id(),
+        vec![summary],
+        &BTreeSet::new(),
+        1_000,
+    )
+    .unwrap();
+    assert_eq!(ingested, Ingested::default());
+    let external = store.comments(&id()).unwrap()[0].external.clone().unwrap();
+    assert!(!external.summary && !external.pending);
+    assert_eq!(held_keys(&store, &id()).unwrap(), BTreeSet::new());
 }
 
 #[test]

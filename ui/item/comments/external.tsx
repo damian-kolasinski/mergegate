@@ -140,6 +140,11 @@ export function awaitingVote(external: ExternalComment): boolean {
 export function ExternalStatus(props: { external: ExternalComment }) {
   return (
     <Switch fallback={<Badge tone="success">Sent to agent</Badge>}>
+      <Match when={props.external.summary}>
+        <Badge title="A bot's summary, for you to read: the agent gets its findings as comments of their own">
+          Summary
+        </Badge>
+      </Match>
       <Match when={props.external.vote === "down"}>
         <Badge title="You kept it from the agent">Dismissed</Badge>
       </Match>
