@@ -59,6 +59,34 @@ test("f11 the guide is the intent and orders the review", async ({
   await expect(intent).toBeHidden();
 });
 
+test("f11 a folder the files share is said once over them", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", {
+    "src/app/login.rs": "fn login() {}\n",
+    "src/lib/store.rs": "fn store() {}\n",
+    "src/main.rs": "fn main() {}\n",
+  });
+  const guide = join(hub.root, "guide.md");
+  writeFileSync(
+    guide,
+    "Adds login.\n\n## Files\n\n- `src/app/login.rs` — the login\n- `src/lib/store.rs` — where it keeps the session\n- `src/main.rs` — calls it\n",
+  );
+  hub.mg(["submit", "--guide", guide], app.dir);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const files = page.getByRole("navigation", { name: "Files" });
+  await expect(files.getByTitle("src", { exact: true })).toHaveText("src");
+  // Each keeps only the part of its folder that sets it apart.
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^login\.rs\s*app\s*the login\s*\+1$/,
+    /^store\.rs\s*lib\s*where it keeps the session\s*\+1$/,
+    /^main\.rs\s*calls it\s*\+1$/,
+  ]);
+});
+
 test("f11 a long reason gives way to the file's name in its header", async ({
   page,
   hub,

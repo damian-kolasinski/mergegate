@@ -17,7 +17,7 @@
   accent-color: var(--border-brand);
 }
 
-/* Drawn, as the tree's branch is, to keep it out of the entry's text. */
+/* Drawn rather than written, to keep it out of the entry's text. */
 span.viewed[role="img"]::before {
   content: "✓";
   content: "✓" / "";
@@ -28,17 +28,54 @@ input.viewed {
   cursor: pointer;
 }
 
+/* The folder every file is in, said once over them all. */
+.root {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  border-bottom: 1px solid var(--border-inactive);
+  font: var(--type-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-subtle);
+}
+
+.root > bdi::after {
+  content: "/";
+}
+
+/* The name and its counts, the folder and the score under them, then why
+   the file is here. The facts take only what they need, so the name has
+   the rest. */
 .entry {
   display: grid;
   flex: 1;
   grid-template-areas:
-    "folder folder"
-    "leaf facts"
+    "name facts"
+    "folder score"
     "why why";
   grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--space-2);
+  column-gap: var(--space-3);
   align-items: baseline;
   min-width: 0;
+}
+
+/* Wrapped where its words meet rather than cut, since a feature's files
+   share their start; two lines at most. */
+.name {
+  grid-area: name;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  font: var(--type-mono);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* Viewed is done with, so it steps back, as a viewed diff collapses. */
@@ -63,73 +100,52 @@ input.viewed {
   color: var(--text-subtle);
 }
 
-.folder > bdi::after {
-  content: "/";
-}
-
-/* The file under its folder, as a tree draws it. The branch is drawn
-   rather than written, so it isn't read out or part of the entry's text. */
-.leaf {
-  display: flex;
-  grid-area: leaf;
-  align-items: baseline;
-  min-width: 0;
-  font: var(--type-mono);
-}
-
-.leaf[data-nested]::before {
-  flex: none;
-  padding-left: var(--space-1);
-  margin-right: var(--space-2);
-  content: "└";
-  content: "└" / "";
-  color: var(--text-subtle);
-}
-
-.name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 .facts {
   display: flex;
   grid-area: facts;
+  justify-self: end;
   gap: var(--space-2);
   font: var(--type-p4);
 }
 
 /* The judge's score out of 100, wide enough for three digits so the chips
-   line up down the list; brand where the judge raised the file. */
+   line up down the list, over a bar filled as far as the score so the
+   list reads at a glance; brand where the judge raised the file. */
 .score {
-  flex: none;
+  --meter: var(--text-subtle);
+  grid-area: score;
+  justify-self: end;
   min-width: 3ch;
   padding: 0 var(--space-1);
   border-radius: var(--radius-small);
-  background: var(--background-tint-neutral);
+  background:
+    linear-gradient(var(--meter), var(--meter)) bottom left /
+    calc(var(--score) * 1%) 2px no-repeat,
+    var(--background-tint-neutral);
   color: var(--text-tint-neutral);
+  font: var(--type-p4);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   text-align: center;
 }
 
 .score[data-raised] {
-  background: var(--background-tint-brand);
+  --meter: var(--text-tint-brand);
+  background-color: var(--background-tint-brand);
   color: var(--text-tint-brand);
 }
 
-/* Every reason on one line, wrapped to two at most; the title has it all. */
+/* The reason in the room under the file, two lines at most; the title has
+   all of it. */
 .why {
   grid-area: why;
   display: -webkit-box;
+  margin-top: var(--space-1);
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font: var(--type-p4);
-  color: var(--text-subtle);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
