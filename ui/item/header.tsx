@@ -1,4 +1,5 @@
 import { type JSX, Show } from "solid-js";
+import type { BotReview } from "../api/BotReview";
 import type { Item } from "../api/Item";
 import type { ItemState } from "../api/ItemState";
 import type { Priority } from "../api/Priority";
@@ -13,6 +14,7 @@ import {
   type Tone,
 } from "../design-system";
 import { PriorityBadge } from "../priority/priority";
+import { BotReviews } from "./bot-reviews";
 import { Counts } from "./counts";
 import styles from "./header.module.css";
 import { StackTrail } from "./stack";
@@ -37,6 +39,8 @@ export function ItemHeader(props: {
   /** As the hub reads it: empty when the item isn't stacked. */
   stack: readonly StackEntry[];
   behind: boolean;
+  /** Review bots' say on the pull request, beside its link. */
+  bots: readonly BotReview[];
   /** At the end of the second line, which the Conversation list hangs below. */
   children?: JSX.Element;
 }) {
@@ -68,6 +72,7 @@ export function ItemHeader(props: {
             </ExternalLink>
           )}
         </Show>
+        <BotReviews bots={props.bots} />
         <Counts
           additions={props.item.revision.additions}
           deletions={props.item.revision.deletions}

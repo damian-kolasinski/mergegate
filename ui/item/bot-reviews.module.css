@@ -1,0 +1,36 @@
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.icon,
+.reviewing {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The eye blinks while the review runs, so it reads as under way. */
+.reviewing {
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* base.css only shortens animations, which would make an endless blink
+   flicker. */
+@media (prefers-reduced-motion: reduce) {
+  .reviewing {
+    animation: none;
+  }
+}

@@ -5,6 +5,7 @@
 //! operator's vote on a comment before the agent gets it, and
 //! `.../agree` and `.../override` their say on the agent's rejection of one.
 
+pub(crate) mod bots;
 mod follow;
 mod poll;
 
@@ -57,6 +58,9 @@ async fn sync(
     // again.
     if let Err(e) = follow::follow(&state, &id).await {
         tracing::warn!("following {id}'s pull request: {e}");
+    }
+    if let Err(e) = bots::watch(&state, &id).await {
+        tracing::warn!("reading {id}'s reactions on GitHub: {e}");
     }
     Ok(Json(api::review::Synced {
         new: ingested.new as u32,

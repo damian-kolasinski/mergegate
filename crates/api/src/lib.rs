@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod attachment;
+pub mod bot;
 pub mod decision;
 pub mod device;
 pub mod diff;

@@ -1,6 +1,7 @@
 //! Polls every open github item's pull request for comments, and hands what
 //! it holds to the agent once it's due; then for where the pull
-//! request stands, so one merged or closed on GitHub closes its item.
+//! request stands, so one merged or closed on GitHub closes its item; then
+//! for review bots' reactions on it.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,12 +10,13 @@ use std::time::Duration;
 use mergegate_core::external::{self, Ingested, Timing};
 use mergegate_core::item::{ItemId, ItemStore};
 
+use super::bots;
 use super::follow::follow;
 use super::{changed, now, pull};
 use crate::server::AppState;
 
-/// GitHub allows 5000 requests an hour; three lists and the pull request
-/// every 30s is 480 per item, and a 304 is free.
+/// GitHub allows 5000 requests an hour; four lists and the pull request
+/// every 30s is 600 per item, and a 304 is free.
 const POLL_MS: u64 = 30_000;
 
 pub(crate) async fn run(state: Arc<AppState>) {
@@ -32,12 +34,13 @@ pub(crate) async fn run(state: Arc<AppState>) {
     }
 }
 
-/// Reading comments and reading the pull request fail apart, so one failing
-/// while the other recovers isn't logged on every poll.
+/// Reading comments, the pull request and its reactions fail apart, so one
+/// failing while another recovers isn't logged on every poll.
 #[derive(Default)]
 struct Failing {
     comments: HashMap<ItemId, String>,
     pull: HashMap<ItemId, String>,
+    reactions: HashMap<ItemId, String>,
 }
 
 async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut Failing) {
@@ -57,6 +60,8 @@ async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut Failing) {
     };
     failing.comments.retain(|id, _| items.contains(id));
     failing.pull.retain(|id, _| items.contains(id));
+    failing.reactions.retain(|id, _| items.contains(id));
+    state.bots.retain(&items);
     for id in items {
         let ingested = match pull(state, &id, false).await {
             Ok(ingested) => {
@@ -95,6 +100,18 @@ async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut Failing) {
                 if failing.pull.get(&id) != Some(&message) {
                     tracing::warn!("following {id}'s pull request: {message}");
                     failing.pull.insert(id.clone(), message);
+                }
+            }
+        }
+        match bots::watch(state, &id).await {
+            Ok(()) => {
+                failing.reactions.remove(&id);
+            }
+            Err(e) => {
+                let message = e.to_string();
+                if failing.reactions.get(&id) != Some(&message) {
+                    tracing::warn!("reading {id}'s reactions on GitHub: {message}");
+                    failing.reactions.insert(id.clone(), message);
                 }
             }
         }

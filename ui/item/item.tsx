@@ -9,6 +9,7 @@ import {
 } from "solid-js";
 import type { AgentPresence } from "../api/AgentPresence";
 import type { Blocked } from "../api/Blocked";
+import type { BotReview } from "../api/BotReview";
 import type { Demo as DemoData } from "../api/Demo";
 import type { Item } from "../api/Item";
 import type { ItemDiff } from "../api/ItemDiff";
@@ -88,6 +89,10 @@ export function ItemScreen(props: { id: string }) {
   // Whether an agent will read what's sent: the item's, not the revision's,
   // so a refetch of any revision updates it.
   const [agent, setAgent] = createSignal<AgentPresence | null>(null);
+  // Review bots' reactions on the pull request, also the item's.
+  const [bots, setBots] = createSignal<readonly BotReview[]>([], {
+    equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  });
   createEffect(() => {
     const item = latest();
     if (item) learnName(item.id, item.name);
@@ -129,6 +134,7 @@ export function ItemScreen(props: { id: string }) {
     setLatest(next.item);
     setBlocked(next.blocked);
     setAgent(next.agent);
+    setBots(next.bots);
   };
   // A highlights refetch answered before the first diff, which it's newer
   // than: the hub may have served the first one before it had the spans.
@@ -147,6 +153,7 @@ export function ItemScreen(props: { id: string }) {
       setFailure(undefined);
       setLatest(next.item);
       setAgent(next.agent);
+      setBots(next.bots);
       const shown = diff();
       if (
         replace ||
@@ -225,6 +232,7 @@ export function ItemScreen(props: { id: string }) {
               latest={latest() ?? current().item}
               blocked={blocked()}
               agent={agent()}
+              bots={bots()}
               demo={demo()}
               newest={newest()}
               failure={failure()}
@@ -261,6 +269,7 @@ function Review(props: {
   /** Why the revision on screen can't merge, as the hub last said. */
   blocked: Blocked | null;
   agent: AgentPresence | null;
+  bots: readonly BotReview[];
   demo: DemoData | null;
   /** A revision newer than the one on screen. */
   newest: number | undefined;
@@ -589,6 +598,7 @@ function Review(props: {
           failure={viewed.failure()}
           stack={props.diff.stack}
           behind={props.diff.behind}
+          bots={props.bots}
         >
           <Show when={props.demo}>
             {(demo) => (

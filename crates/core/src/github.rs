@@ -2,11 +2,13 @@
 //! itself reaches GitHub through the git port, with a [`Remote`] this port
 //! hands out.
 
+mod bot_review;
 mod detect;
 mod repo;
 
 use std::fmt;
 
+pub use bot_review::{BotReview, BotReviewState, bot_reviews};
 pub use detect::{Detected, detect};
 pub use repo::GithubRepo;
 
@@ -120,6 +122,14 @@ pub trait Github {
         kind: PullCommentKind,
         id: u64,
     ) -> Result<Option<PullComment>, GithubError>;
+
+    /// The reactions on the pull request's description. The adapter may
+    /// answer from what it read last when GitHub says nothing changed.
+    fn pull_reactions(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+    ) -> Result<Vec<PullReaction>, GithubError>;
 }
 
 /// Where a pull request stands on GitHub.
@@ -194,6 +204,27 @@ pub struct PullLines {
     pub commit: String,
     pub start_line: Option<u32>,
     pub line: Option<u32>,
+}
+
+/// One account's reaction on a pull request's description.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullReaction {
+    pub login: String,
+    /// The account is a bot's.
+    pub bot: bool,
+    pub reaction: Reaction,
+    /// When it was left, in RFC 3339 UTC, as in `2026-10-19T10:50:07Z`.
+    pub at: String,
+}
+
+/// The reactions review bots say something with; the rest are `Other`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reaction {
+    /// 👍
+    ThumbsUp,
+    /// 👀
+    Eyes,
+    Other,
 }
 
 #[derive(Debug, thiserror::Error)]

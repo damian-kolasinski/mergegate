@@ -9,6 +9,7 @@
 mod comments;
 mod git_http;
 mod page;
+mod reactions;
 mod rest;
 mod server;
 
@@ -62,6 +63,7 @@ struct State {
     page_size: usize,
     /// How many list requests were answered 304.
     not_modified: usize,
+    reactions: Vec<(reactions::Reaction, u64)>,
 }
 
 impl Default for State {
@@ -79,6 +81,7 @@ impl Default for State {
             viewer: "operator".into(),
             page_size: 100,
             not_modified: 0,
+            reactions: Vec::new(),
         }
     }
 }
@@ -306,6 +309,18 @@ impl FakeGithub {
 
     pub fn comments(&self) -> Vec<Comment> {
         self.state().comments.clone()
+    }
+
+    /// `login` reacts `content`, as in `+1` or `eyes`, on pull request
+    /// `pull`'s description; with `on` false it takes the reaction back.
+    pub fn react(&self, repo: &str, pull: u64, login: &str, content: &str, on: bool) {
+        let reaction = reactions::Reaction {
+            repo: repo.into(),
+            pull,
+            login: login.into(),
+            content: content.into(),
+        };
+        reactions::set(&mut self.state(), reaction, on);
     }
 
     /// `GET /user` says `login` is signed in.

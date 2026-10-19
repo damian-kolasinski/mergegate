@@ -21,7 +21,9 @@ use serde::Deserialize;
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{attachments, conversation, highlights, items, merge, presence, projects, rules};
+use crate::{
+    attachments, conversation, external, highlights, items, merge, presence, projects, rules,
+};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -115,6 +117,10 @@ async fn show(
         files: diff.files.into_iter().zip(spans).map(file_to_api).collect(),
         guide: diff.guide,
         agent,
+        bots: match diff.item.state.is_open() {
+            true => external::bots::to_api(&state.bots.of(&id)),
+            false => Vec::new(),
+        },
         stack: stack
             .iter()
             .map(|item| api::diff::StackEntry {

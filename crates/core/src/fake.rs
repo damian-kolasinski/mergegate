@@ -16,7 +16,7 @@ use crate::external::{
 use crate::feedback::{Event, EventKind, FeedbackStore, Notice, Source};
 use crate::git::{Git, GitError, Remote, Repo, RepoRemote, Secret, Upstream};
 use crate::github::{
-    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullStatus,
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullReaction, PullStatus,
 };
 use crate::highlight::{
     Grammar, HighlightStore, Highlighter, Highlights, Installed, LangError, Pack, PackSource,
@@ -2692,6 +2692,15 @@ impl Github for FakeGithub {
             .iter()
             .find(|(r, n, c)| r == repo && *n == number && c.kind == kind && c.id == id)
             .map(|(_, _, c)| c.clone()))
+    }
+
+    fn pull_reactions(
+        &self,
+        _repo: &GithubRepo,
+        _number: u64,
+    ) -> Result<Vec<PullReaction>, GithubError> {
+        self.signed_in()?;
+        Ok(Vec::new())
     }
 }
 

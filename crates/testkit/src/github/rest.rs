@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::comments::{self, CommentKind};
 use super::server::{Request, Response};
-use super::{Pull, PullState, Shared, State};
+use super::{Pull, PullState, Shared, State, reactions};
 
 pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response {
     let mut state = shared.state();
@@ -54,6 +54,7 @@ pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response
             CommentKind::Review,
             id,
         ),
+        ("GET", ["issues", number, "reactions"]) => reactions::list(&state, &call.repo, number),
         ("GET", [list, number, which]) => {
             let kind = match (*list, *which) {
                 ("pulls", "comments") => CommentKind::Inline,

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::agent::AgentPresence;
 use crate::attachment::Demo;
+use crate::bot::BotReview;
 use crate::highlight::Span;
 use crate::item::{ChangedSince, Item, ItemState};
 use crate::merge::Blocked;
@@ -37,6 +38,10 @@ pub struct ItemDiff {
     /// is closed.
     #[serde(default)]
     pub agent: Option<AgentPresence>,
+    /// Review bots' say on its pull request, by login; empty off GitHub,
+    /// once the item is closed, and until the hub first polls it.
+    #[serde(default)]
+    pub bots: Vec<BotReview>,
     /// The stack the item is in, bottom first and the item among them: its
     /// parents down to the first closed one, then the open items stacked on
     /// it. Empty when it isn't stacked.

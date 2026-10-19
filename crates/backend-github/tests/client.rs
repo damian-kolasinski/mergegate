@@ -1,6 +1,7 @@
 use mergegate_backend_github::GithubClient;
 use mergegate_core::github::{
-    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullLines, PullStatus,
+    Github, GithubError, GithubRepo, Pull, PullComment, PullCommentKind, PullLines, PullReaction,
+    PullStatus, Reaction,
 };
 use testkit::{FakeGithub, GithubNewComment, GithubPullState, TestRepo, git};
 
@@ -444,6 +445,43 @@ fn reads_one_comment_a_list_left_out_and_none_once_deleted() {
         .pull_comment(&acme(), 1, PullCommentKind::ReviewComment, ids[0])
         .unwrap_err();
     assert!(matches!(err, GithubError::NotLoggedIn(_)), "{err:?}");
+}
+
+#[test]
+fn reads_reactions_on_the_description() {
+    let (github, client, _repo) = setup();
+    client
+        .open_pull(&acme(), "login", "main", "Add login", "")
+        .unwrap();
+    assert_eq!(client.pull_reactions(&acme(), 1).unwrap(), []);
+
+    let codex = "chatgpt-codex-connector[bot]";
+    github.react("acme/app", 1, codex, "eyes", true);
+    github.react("acme/app", 1, "operator", "heart", true);
+    // Without their times, which are the clock's.
+    let read = || {
+        let reactions = client.pull_reactions(&acme(), 1).unwrap();
+        for PullReaction { at, .. } in &reactions {
+            assert!(at.len() == 20 && at.ends_with('Z'), "{at}");
+        }
+        reactions
+            .into_iter()
+            .map(|r| (r.login, r.bot, r.reaction))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        read(),
+        [
+            (codex.to_owned(), true, Reaction::Eyes),
+            ("operator".to_owned(), false, Reaction::Other),
+        ]
+    );
+
+    github.react("acme/app", 1, codex, "eyes", false);
+    github.react("acme/app", 1, codex, "+1", true);
+    let reactions = read();
+    assert!(reactions.contains(&(codex.to_owned(), true, Reaction::ThumbsUp)));
+    assert!(!reactions.contains(&(codex.to_owned(), true, Reaction::Eyes)));
 }
 
 #[test]

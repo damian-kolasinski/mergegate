@@ -33,6 +33,7 @@ pub(crate) struct AppState {
     pub events: events::Events,
     pub wakes: wake::Wakes,
     pub presence: presence::Readers,
+    pub bots: external::bots::Bots,
     pub wake_logs: PathBuf,
     pub wake_bin: PathBuf,
     /// Held across a pull of pull request comments, from asking GitHub to
@@ -167,6 +168,7 @@ pub(crate) async fn serve(
         events: events::Events::new(),
         wakes: wake::Wakes::default(),
         presence: presence::Readers::default(),
+        bots: external::bots::Bots::default(),
         wake_logs: home.wake_logs(),
         wake_bin: home.wake_bin(),
         pulling: tokio::sync::Mutex::new(()),

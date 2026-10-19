@@ -92,6 +92,9 @@
   --space-8: 32px;
   --radius-small: 4px;
   --radius-pill: 999px;
+  /* Every control a row of them holds, so buttons, selects and chips line
+     up whatever they carry, a key hint included. */
+  --control-height: 32px;
 
   /* Derived: one speed for everything that moves. base.css stops it under
      prefers-reduced-motion. `--motion-pop` is a whole `animation` value so
