@@ -12,6 +12,7 @@ mod ingest;
 mod on_read;
 mod rejection;
 mod store;
+mod summary;
 mod vote;
 
 pub use due::{Timing, due, release, release_due};
@@ -21,6 +22,7 @@ pub use ingest::{Ingested, fetch, ingest, pull_of};
 pub use on_read::release_on_read;
 pub use rejection::{agree, override_rejection};
 pub use store::{ExternalStore, Held, NewExternal};
+use summary::summary;
 pub use vote::vote;
 
 use crate::github::PullCommentKind;
@@ -41,6 +43,9 @@ pub struct External {
     pub path: Option<String>,
     /// Waiting for the next batch to carry it to the agent.
     pub pending: bool,
+    /// A bot's summary of the pull request or of its review: shown to the
+    /// operator, never held for their vote or sent to the agent.
+    pub summary: bool,
     /// The operator's vote, none until they cast it. Only a comment voted up
     /// reaches the agent.
     pub vote: Option<Vote>,

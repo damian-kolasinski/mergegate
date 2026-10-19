@@ -21,6 +21,7 @@ fn hold(store: &mut FakeStore, github_id: u64) {
         bot: false,
         url: String::new(),
         path: None,
+        summary: false,
         dated: 0,
     };
     let id = store.insert_external(new, 0).unwrap().id;

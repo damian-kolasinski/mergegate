@@ -51,8 +51,9 @@ impl ExternalStore for Store {
         tx.execute(
             "INSERT INTO external_comments
                  (comment_id, item_id, kind, github_id, login, bot, url, path, seen_at,
-                  pending_at, dated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)",
+                  pending_at, dated_at, summary)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, CASE WHEN ?11 THEN NULL ELSE ?9 END,
+                     ?10, ?11)",
             params![
                 id,
                 item_id,
@@ -64,6 +65,7 @@ impl ExternalStore for Store {
                 comment.path,
                 now as i64,
                 comment.dated as i64,
+                comment.summary,
             ],
         )
         .map_err(StoreError::new)?;
@@ -77,6 +79,7 @@ impl ExternalStore for Store {
         id: CommentId,
         body: &str,
         dated: u64,
+        summary: bool,
         now: u64,
     ) -> Result<(), StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
@@ -88,11 +91,12 @@ impl ExternalStore for Store {
         // SET reads the row as it was, so `vote` is the vote before the edit.
         tx.execute(
             "UPDATE external_comments
-             SET seen_at = ?2, dated_at = max(dated_at, ?3),
-                 pending_at = CASE vote WHEN 'down' THEN NULL ELSE coalesce(pending_at, ?2) END,
-                 vote = CASE vote WHEN 'down' THEN 'down' END
+             SET seen_at = ?2, dated_at = max(dated_at, ?3), summary = ?4,
+                 pending_at = CASE WHEN ?4 OR vote = 'down' THEN NULL
+                                   ELSE coalesce(pending_at, ?2) END,
+                 vote = CASE WHEN NOT ?4 AND vote = 'down' THEN 'down' END
              WHERE comment_id = ?1",
-            params![id.0 as i64, now as i64, dated as i64],
+            params![id.0 as i64, now as i64, dated as i64, summary],
         )
         .map_err(StoreError::new)?;
         tx.commit().map_err(StoreError::new)

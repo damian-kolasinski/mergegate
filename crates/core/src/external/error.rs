@@ -17,6 +17,8 @@ pub enum ExternalError {
     NotRejected(CommentId),
     #[error("{0} went to the agent already")]
     AlreadySent(CommentId),
+    #[error("{0} is a bot's summary, which stays with the operator")]
+    Summary(CommentId),
     #[error(transparent)]
     Github(#[from] GithubError),
     #[error(transparent)]

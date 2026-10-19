@@ -31,6 +31,7 @@ fn comment(store: &mut FakeStore, github_id: u64, login: &str, now: u64) -> Comm
         bot: login.ends_with("[bot]"),
         url: String::new(),
         path: None,
+        summary: false,
         dated: now,
     };
     store.insert_external(new, now).unwrap().id
@@ -156,8 +157,10 @@ fn an_edit_asks_for_a_new_vote_up_but_keeps_one_down() {
     let down = comment(&mut store, 2, "ana", 10);
     vote(&mut store, up, Vote::Up, 20).unwrap();
     vote(&mut store, down, Vote::Down, 20).unwrap();
-    store.edit_external(up, "Also this", 30, 30).unwrap();
-    store.edit_external(down, "Still noise", 30, 30).unwrap();
+    store.edit_external(up, "Also this", 30, false, 30).unwrap();
+    store
+        .edit_external(down, "Still noise", 30, false, 30)
+        .unwrap();
 
     let up = store.comment(up).unwrap().unwrap().external.unwrap();
     assert!(up.awaiting_vote());
@@ -189,4 +192,38 @@ fn a_comment_awaiting_a_vote_waits_on_the_operator() {
 
     vote(&mut store, bot, Vote::Down, 20).unwrap();
     assert_eq!(owed(&store).votes, 0);
+}
+
+#[test]
+fn a_bots_summary_takes_no_vote_and_is_no_thread() {
+    let mut store = FakeStore::with_item(1);
+    let new = NewExternal {
+        item: id(),
+        revision: 1,
+        anchor: None,
+        body: "## Pull request overview".into(),
+        kind: PullCommentKind::Review,
+        github_id: 1,
+        login: "copilot-pull-request-reviewer[bot]".into(),
+        bot: true,
+        url: String::new(),
+        path: None,
+        summary: true,
+        dated: 10,
+    };
+    let summary = store.insert_external(new, 10).unwrap().id;
+
+    assert!(matches!(
+        vote(&mut store, summary, Vote::Up, 20),
+        Err(ExternalError::Summary(id)) if id == summary
+    ));
+    assert_eq!(store.held(&id()).unwrap(), None);
+    let comments = store.comments(&id()).unwrap();
+    assert_eq!(waiting(&comments, &[]).votes, 0);
+    let threads = open_threads(
+        &conversation(&store, &FakeGit::default(), &id(), None)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(threads.is_empty());
 }

@@ -124,8 +124,8 @@ fn drafts_are_not_threads() {
 }
 
 #[test]
-fn held_external_comments_are_not_threads_yet() {
-    let external = |pending| {
+fn held_external_comments_and_summaries_are_not_threads() {
+    let external = |pending, summary| {
         let mut comment = comment(1, None);
         comment.external = Some(External {
             kind: PullCommentKind::IssueComment,
@@ -135,18 +135,23 @@ fn held_external_comments_are_not_threads_yet() {
             url: "https://github.com/acme/app/pull/1#issuecomment-7".into(),
             path: None,
             pending,
+            summary,
             agreed_reply: None,
             vote: None,
         });
         comment
     };
-    for (pending, threads) in [(true, 0), (false, 1)] {
+    for (pending, summary, threads) in [(true, false, 0), (false, false, 1), (false, true, 0)] {
         let conversation = Conversation {
             newest: 1,
-            comments: vec![external(pending)],
+            comments: vec![external(pending, summary)],
             replies: Vec::new(),
             placements: Default::default(),
         };
-        assert_eq!(open_threads(&conversation).len(), threads, "{pending}");
+        assert_eq!(
+            open_threads(&conversation).len(),
+            threads,
+            "{pending} {summary}"
+        );
     }
 }

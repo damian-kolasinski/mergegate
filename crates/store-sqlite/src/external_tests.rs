@@ -73,6 +73,7 @@ fn external(github_id: u64, login: &str, body: &str, anchored: bool) -> NewExter
         bot: login.ends_with("[bot]"),
         url: format!("https://github.com/o/app/pull/1#c{github_id}"),
         path: anchored.then(|| "src/login.rs".into()),
+        summary: false,
         dated: 0,
     }
 }
@@ -168,11 +169,11 @@ fn heard_counts_who_spoke_since_the_newest_push() {
     };
     let stale = store.insert_external(stale, after).unwrap();
     store
-        .edit_external(stale.id, "Edited before", before + 500, after)
+        .edit_external(stale.id, "Edited before", before + 500, false, after)
         .unwrap();
     assert!(store.held(&app()).unwrap().unwrap().heard.is_empty());
     store
-        .edit_external(late.id, "Edited late", held.pushed + 1_000, after)
+        .edit_external(late.id, "Edited late", held.pushed + 1_000, false, after)
         .unwrap();
     for (github_id, login, body) in [
         (4, "codex[bot]", "Leaks"),
@@ -237,7 +238,7 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
 
     // An edit waits again, and goes out marked as one.
     store
-        .edit_external(first.id, "Leaks a handle", 0, 300)
+        .edit_external(first.id, "Leaks a handle", 0, false, 300)
         .unwrap();
     store.set_vote(first.id, Vote::Up, 300).unwrap();
     let held = store.held(&app()).unwrap().unwrap();
@@ -268,7 +269,7 @@ fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
         .insert_reply(reply(sent.id, Author::Operator, None, "Where?"))
         .unwrap();
     store
-        .edit_external(sent.id, "Leaks a handle", 0, 200)
+        .edit_external(sent.id, "Leaks a handle", 0, false, 200)
         .unwrap();
     let drafted = store
         .insert_external(external(2, "ana", "Why?", false), 200)
@@ -449,8 +450,12 @@ fn a_comment_goes_out_only_once_voted_up() {
     );
 
     // An edit asks for a new vote, unless the operator voted it down.
-    store.edit_external(useful, "Leaks more", 0, 400).unwrap();
-    store.edit_external(noise, "Rename it", 0, 400).unwrap();
+    store
+        .edit_external(useful, "Leaks more", 0, false, 400)
+        .unwrap();
+    store
+        .edit_external(noise, "Rename it", 0, false, 400)
+        .unwrap();
     assert!(external_of(&store, useful).awaiting_vote());
     let dismissed = external_of(&store, noise);
     assert!(dismissed.dismissed() && !dismissed.pending);
@@ -461,4 +466,32 @@ fn a_comment_goes_out_only_once_voted_up() {
         params![person.0 as i64],
     );
     assert!(forced.is_err());
+}
+
+#[test]
+fn a_summary_is_never_held() {
+    let (_dir, mut store) = store();
+    let external_of = |store: &Store, id| store.comment(id).unwrap().unwrap().external.unwrap();
+    let new = NewExternal {
+        summary: true,
+        ..external(1, "coderabbitai[bot]", "Walkthrough", false)
+    };
+    let summary = store.insert_external(new, 100).unwrap().id;
+    let found = external_of(&store, summary);
+    assert!(found.summary && !found.pending);
+    assert_eq!(store.held(&app()).unwrap(), None);
+
+    // One held, and voted up, before it was told apart.
+    let held = store
+        .insert_external(external(2, "codex[bot]", "Review summary", false), 100)
+        .unwrap()
+        .id;
+    store.set_vote(held, Vote::Up, 200).unwrap();
+    store
+        .edit_external(held, "Review summary", 0, true, 300)
+        .unwrap();
+    let found = external_of(&store, held);
+    assert!(found.summary && !found.pending && found.vote.is_none());
+    assert_eq!(store.held(&app()).unwrap(), None);
+    assert_eq!(store.release(&app(), 1).unwrap(), None);
 }

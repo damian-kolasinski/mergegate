@@ -2043,6 +2043,7 @@ impl ExternalStore for FakeStore {
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError> {
         self.last_comment += 1;
         let dated = comment.dated;
+        let summary = comment.summary;
         let comment = Comment {
             id: CommentId(self.last_comment),
             item: comment.item,
@@ -2057,14 +2058,16 @@ impl ExternalStore for FakeStore {
                 bot: comment.bot,
                 url: comment.url,
                 path: comment.path,
-                pending: true,
+                pending: !summary,
+                summary,
                 vote: None,
                 agreed_reply: None,
             }),
             created_at: self.now(),
         };
         self.comments.push(comment.clone());
-        self.external.insert(comment.id, (now, Some(now)));
+        self.external
+            .insert(comment.id, (now, (!summary).then_some(now)));
         self.dated.insert(comment.id, dated);
         Ok(comment)
     }
@@ -2074,6 +2077,7 @@ impl ExternalStore for FakeStore {
         id: CommentId,
         body: &str,
         dated: u64,
+        summary: bool,
         now: u64,
     ) -> Result<(), StoreError> {
         let known = self.dated.get_mut(&id).unwrap();
@@ -2082,6 +2086,13 @@ impl ExternalStore for FakeStore {
         comment.body = body.into();
         let external = comment.external.as_mut().unwrap();
         let times = self.external.get_mut(&id).unwrap();
+        external.summary = summary;
+        if summary {
+            external.pending = false;
+            external.vote = None;
+            *times = (now, None);
+            return Ok(());
+        }
         if external.dismissed() {
             times.0 = now;
             return Ok(());

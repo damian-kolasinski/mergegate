@@ -9,17 +9,21 @@ use crate::store::StoreError;
 /// milliseconds by the hub's clock, which the caller passes.
 pub trait ExternalStore {
     /// Records a comment from GitHub, sent from the start and waiting for the
-    /// operator's vote and the next batch.
+    /// operator's vote and the next batch, unless it's a summary, which waits
+    /// for neither.
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError>;
 
     /// Replaces an external comment's body, which GitHub dates `dated`, and
     /// has it wait for the next batch again. A vote up was on the old body,
     /// so it's cleared; a comment voted down stays down and doesn't wait.
+    /// One that is a `summary` now, with this body, waits for nothing and
+    /// loses its vote.
     fn edit_external(
         &mut self,
         id: CommentId,
         body: &str,
         dated: u64,
+        summary: bool,
         now: u64,
     ) -> Result<(), StoreError>;
 
@@ -62,6 +66,8 @@ pub struct NewExternal {
     pub bot: bool,
     pub url: String,
     pub path: Option<String>,
+    /// A bot's [`summary`](super::summary), which no batch carries.
+    pub summary: bool,
     /// When it was posted or last edited, by GitHub's clock.
     pub dated: u64,
 }
