@@ -31,7 +31,7 @@ pub use open::{Thread, open_threads};
 pub use reply::{Author, Reply, ReplyError, ReplyStatus, WriteReply, reply};
 pub(crate) use shown::{Shown, shown};
 pub use store::{NewComment, NewReply, NewReview, ReviewStore};
-pub use submit::{SubmitReview, submit};
+pub use submit::{Reviewed, SubmitReview, submit};
 pub use waiting::{Waiting, waiting};
 
 use crate::item::{Item, ItemId, ItemState};
@@ -57,7 +57,8 @@ pub struct Review {
 /// What the operator decided about a revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// Feedback that leaves the item waiting for review.
+    /// Feedback that leaves the item where it is, unless it sends new
+    /// comments on the newest revision, which hand it back to its agent.
     Comment,
     /// Sends the item back to its agent.
     ChangesRequested,

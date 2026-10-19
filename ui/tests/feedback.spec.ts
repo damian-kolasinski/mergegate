@@ -88,6 +88,33 @@ test("f6 comment leaves the item with the operator", async ({ page, hub }) => {
   expect(feedback.events).toMatchObject([{ verdict: "comment" }]);
 });
 
+test("f6 comments the agent acts on hand the item to it", async ({
+  page,
+  hub,
+}) => {
+  submitChange(hub);
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("fn login(password: &str) {}")).toBeVisible();
+
+  // `j` puts the cursor on the removed line, then the added one.
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  await page
+    .getByRole("textbox", { name: "Comment on login.rs line 1" })
+    .fill("Check the password.");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  const review = screen.getByRole("form", { name: "Review" });
+  await review.getByRole("button", { name: "Send comments" }).click();
+
+  await expect(review.getByText(/^Sent to the agent on r1/)).toBeVisible();
+  await expect(screen.getByText("Changes requested")).toBeVisible();
+  const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
+  expect(feedback.state).toBe("changes_requested");
+  expect(feedback.events).toMatchObject([{ verdict: "comment" }]);
+});
+
 test("f6 a newer revision takes request changes away, not comments", async ({
   page,
   hub,

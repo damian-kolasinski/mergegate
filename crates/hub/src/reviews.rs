@@ -10,11 +10,11 @@ use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
 use mergegate_core::item::ItemId;
-use mergegate_core::review::{self, Review, ReviewError, SubmitReview, Verdict};
+use mergegate_core::review::{self, ReviewError, Reviewed, SubmitReview, Verdict};
 
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{comments, replies};
+use crate::{comments, items, replies};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/items/{id}/reviews", post(submit))
@@ -39,16 +39,16 @@ async fn submit(
         },
         summary: request.summary,
     };
-    let review = state
+    let reviewed = state
         .blocking(move |store, git| review::submit(store, git, request))
         .await
         .map_err(failure)?;
     state.events.logged();
     state.events.send(UiEvent::InboxChanged);
-    Ok((StatusCode::CREATED, Json(to_api(&review))))
+    Ok((StatusCode::CREATED, Json(to_api(&reviewed))))
 }
 
-fn to_api(review: &Review) -> api::review::Review {
+fn to_api(Reviewed { review, state }: &Reviewed) -> api::review::Review {
     api::review::Review {
         id: review.id,
         revision: review.revision,
@@ -57,6 +57,7 @@ fn to_api(review: &Review) -> api::review::Review {
         comments: review.comments.iter().map(comments::to_api).collect(),
         replies: review.replies.iter().map(replies::sent).collect(),
         submitted_at: review.submitted_at.clone(),
+        state: items::state_to_api(*state),
     }
 }
 

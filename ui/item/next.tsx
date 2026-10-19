@@ -8,7 +8,8 @@ import { Mono } from "../design-system";
 import styles from "./next.module.css";
 
 // The items decided on since the page loaded, each as it stood after the
-// decision. A comment leaves its item in Needs you, as likely first in line
+// decision. A comment with no new comments, only a summary or replies,
+// leaves its item in Needs you, as likely first in line
 // as before, so without these the way on bounces between the first two
 // items and never reaches the rest. An item that changed since, with a new
 // revision or a question, waits on the operator afresh.

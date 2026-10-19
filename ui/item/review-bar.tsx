@@ -15,9 +15,10 @@ import styles from "./review-bar.module.css";
 
 /**
  * Sends the operator's review of one revision to its agent, with every draft
- * comment and reply on the item. Send comments leaves the item with the
- * operator; Request changes hands it back; Approve & merge lands it on the
- * target, after a confirm step.
+ * comment and reply on the item. Request changes hands it back; so does Send
+ * comments with new comments on the newest revision, which the agent acts on,
+ * while one with only a summary or replies leaves it with the operator;
+ * Approve & merge lands it on the target, after a confirm step.
  */
 export function ReviewBar(props: {
   item: string;
