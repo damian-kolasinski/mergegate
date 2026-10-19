@@ -1,4 +1,4 @@
-use super::{FileStat, Item, ItemBackend, ItemId, ItemState, Priority, Revision};
+use super::{FileStat, Item, ItemBackend, ItemId, ItemState, Priority, Revision, WeeklyClosures};
 use crate::interdiff::NewInterdiff;
 use crate::project::ProjectName;
 use crate::store::StoreError;
@@ -17,6 +17,9 @@ pub trait ItemStore {
     /// Items merged or abandoned since local midnight, the latest closed
     /// first.
     fn closed_today(&self) -> Result<Vec<Item>, StoreError>;
+
+    /// Merged and abandoned counts per project and local day this week.
+    fn weekly_closures(&self) -> Result<WeeklyClosures, StoreError>;
 
     fn open_item(&self, project: &ProjectName, branch: &str) -> Result<Option<Item>, StoreError>;
 

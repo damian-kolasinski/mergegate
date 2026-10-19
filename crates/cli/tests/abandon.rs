@@ -85,9 +85,16 @@ fn f14_the_agent_abandons_its_item() {
         closed_at > closed[0]["created_at"].as_str().unwrap(),
         "{closed}"
     );
+    let weekly = inbox["weekly"].take();
+    let repositories = weekly["repositories"].as_array().unwrap();
+    assert_eq!(repositories.len(), 1);
+    assert_eq!(repositories[0]["project"], "app");
+    let days = repositories[0]["days"].as_array().unwrap();
+    assert_eq!(days.len(), 7);
+    assert_eq!(days.iter().map(|n| n.as_u64().unwrap()).sum::<u64>(), 1);
     assert_eq!(
         inbox,
-        json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "rules": [] })
+        json!({ "needs_you": [], "with_agents": [], "merging": [], "closed": null, "weekly": null, "rules": [] })
     );
     repo.commit_files("Again", &[("src/login.rs", "fn login() { }\n")]);
     let again = env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);

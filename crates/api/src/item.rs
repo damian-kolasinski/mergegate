@@ -162,6 +162,8 @@ pub struct Inbox {
     pub merging: Vec<InboxItem>,
     #[serde(default)]
     pub closed: Vec<InboxItem>,
+    #[serde(default)]
+    pub weekly: crate::weekly::WeeklyClosures,
     /// Projects with changes to their rules waiting for the operator.
     pub rules: Vec<crate::rules::PendingRules>,
 }

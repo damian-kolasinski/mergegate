@@ -3,7 +3,7 @@
 use mergegate_core::github::{GithubRepo, Pull};
 use mergegate_core::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemBackend, ItemId, ItemState, ItemStore, NewItem,
-    NewRevision, Priority, Revision,
+    NewRevision, Priority, Revision, WeeklyClosures,
 };
 use mergegate_core::project::{Backend, ProjectName};
 use mergegate_core::store::StoreError;
@@ -52,6 +52,10 @@ const OPEN: &str = "i.state IN ('needs_review', 'changes_requested', 'merging')"
 pub(crate) const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 impl ItemStore for Store {
+    fn weekly_closures(&self) -> Result<WeeklyClosures, StoreError> {
+        self.weekly_closures_at("now")
+    }
+
     fn open_items(&self, project: Option<&ProjectName>) -> Result<Vec<Item>, StoreError> {
         let mut stmt = self
             .conn

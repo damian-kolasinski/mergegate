@@ -137,10 +137,14 @@ fn f4_submits_a_branch_and_its_revisions() {
 #[test]
 fn f4_lists_open_items_in_the_inbox() {
     let (env, repo) = hub_with_app();
-    let empty = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let mut empty = env.mg(&["--json", "inbox"]).assert_code(0).json();
+    let weekly = empty["weekly"].take();
+    assert_eq!(weekly["repositories"], json!([]));
+    assert_eq!(weekly["monday"].as_str().unwrap().len(), 10);
+    assert_eq!(weekly["today"].as_str().unwrap().len(), 10);
     assert_eq!(
         empty,
-        json!({"needs_you": [], "with_agents": [], "merging": [], "closed": [], "rules": []})
+        json!({"needs_you": [], "with_agents": [], "merging": [], "closed": [], "weekly": null, "rules": []})
     );
     assert_eq!(
         env.mg(&["inbox"]).assert_code(0).stdout.trim_end(),

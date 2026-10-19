@@ -1,0 +1,123 @@
+.weekly {
+  margin-top: var(--space-8);
+  padding: var(--space-4) 0 var(--space-8);
+}
+
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  font: var(--type-p4);
+  color: var(--text-secondary);
+}
+
+.scroll {
+  overflow-x: auto;
+  padding: 0 var(--space-4);
+}
+
+.table {
+  width: 100%;
+  min-width: 580px;
+  border-spacing: 0;
+  table-layout: fixed;
+  font: var(--type-p4);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-1);
+  vertical-align: middle;
+}
+
+.table th {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.table th:first-child {
+  width: 24%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.table th:last-child,
+.table td:last-child {
+  width: 10%;
+}
+
+.table thead th {
+  padding-bottom: var(--space-4);
+}
+
+.table th[aria-current="date"] {
+  color: var(--text-brand);
+  font-weight: 600;
+}
+
+.date {
+  display: block;
+  color: var(--text-subtle);
+}
+
+.cell {
+  display: block;
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-small);
+  background: var(--background-subtle);
+  color: var(--text-subtle);
+}
+
+.cell[data-level="1"] {
+  background: var(--background-tint-success);
+  color: var(--text-success);
+}
+
+.cell[data-level="2"] {
+  background: color-mix(
+    in srgb,
+    var(--background-success) 25%,
+    var(--background-page)
+  );
+  color: var(--text-success);
+}
+
+.cell[data-level="3"] {
+  background: var(--background-success);
+  color: var(--text-on-fill);
+}
+
+.cell[data-future="true"] {
+  background: transparent;
+  color: var(--text-inactive);
+}
+
+.total {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.table tfoot th,
+.table tfoot td {
+  padding-top: var(--space-4);
+}
+
+.empty {
+  padding: var(--space-3) var(--space-4) 0;
+  font: var(--type-p4);
+  color: var(--text-subtle);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -19,6 +19,7 @@ import {
   Section,
 } from "../design-system";
 import styles from "./inbox.module.css";
+import { WeeklyStats } from "./weekly";
 
 const GROUPS = [
   { key: "needs_you", title: "Needs you" },
@@ -61,7 +62,11 @@ export function InboxScreen() {
   });
 
   const [now, setNow] = createSignal(Date.now());
-  const clock = setInterval(() => setNow(Date.now()), 30_000);
+  const clock = setInterval(() => {
+    setNow(Date.now());
+    // Calendar sections roll over even when no item changes overnight.
+    void load();
+  }, 30_000);
   onCleanup(() => clearInterval(clock));
 
   // `j/k` walk the open groups as one list, in the order they're shown;
@@ -226,6 +231,9 @@ export function InboxScreen() {
                   </For>
                 </ul>
               </details>
+            </Show>
+            <Show when={current().weekly.monday}>
+              <WeeklyStats week={current().weekly} />
             </Show>
           </>
         )}

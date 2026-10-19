@@ -20,6 +20,7 @@ mod stack;
 mod state;
 mod store;
 mod submit;
+mod weekly;
 
 pub use abandon::{Abandon, abandon};
 pub use backend::ItemBackend;
@@ -40,6 +41,7 @@ pub use stack::{On, Stack, StackError, behind, stack};
 pub use state::ItemState;
 pub use store::{ItemStore, NewItem, NewRevision};
 pub use submit::{Submit, Submitted, submit};
+pub use weekly::{RepositoryClosures, WeeklyClosures};
 
 use crate::triage::Tier;
 
