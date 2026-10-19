@@ -1,7 +1,6 @@
 .actions {
   display: flex;
   gap: var(--space-1);
-  margin-left: auto;
 }
 
 /* Over the bottom of the screen, clear of the review bar's buttons. */
