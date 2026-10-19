@@ -66,15 +66,17 @@ impl Firewall {
 
     /// None when the global state isn't one this knows how to read.
     pub(super) fn parse(state: &str, block_all: &str, signed: &str, apps: &str) -> Option<Self> {
-        // 0 is off; 1 is on, and 2 on for essential services only.
-        let on = match state.split("(State = ").nth(1)?.chars().next()? {
-            '0' => false,
-            '1' | '2' => true,
+        // 0 is off; 1 is on, and 2 lets in essential services only, which
+        // blocks every app however its rule reads.
+        let (on, essential_only) = match state.split("(State = ").nth(1)?.chars().next()? {
+            '0' => (false, false),
+            '1' => (true, false),
+            '2' => (true, true),
             _ => return None,
         };
         Some(Self {
             on,
-            block_all: block_all.trim_end().ends_with("enabled."),
+            block_all: essential_only || block_all.trim_end().ends_with("enabled."),
             allow_signed: signed
                 .lines()
                 .any(|l| l.contains("downloaded signed software") && l.contains("ENABLED")),

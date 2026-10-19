@@ -45,6 +45,8 @@ fn parses_what_socketfilterfw_prints() {
     assert!(off.block_all);
     assert!(!off.allow_signed);
     assert!(off.apps.is_empty());
+    let essential = Firewall::parse("Firewall is enabled. (State = 2)\n", OPEN, SIGNED, APPS);
+    assert!(essential.unwrap().block_all);
     assert_eq!(
         Firewall::parse("Firewall is confused.\n", OPEN, SIGNED, APPS),
         None
