@@ -1,6 +1,7 @@
 // The inbox: open the hub, see open items grouped, move with
 // `j/k`, open with `enter`. State comes from real `mg` commands.
 
+import type { Health } from "../api/Health";
 import { expect, test } from "./hub";
 import { type Probe, report, sendToFrame } from "./timing";
 
@@ -9,6 +10,19 @@ test("f6 an empty inbox says how items arrive", async ({ page, hub }) => {
   const needsYou = page.getByRole("region", { name: "Needs you" });
   await expect(needsYou).toContainText("Nothing to review");
   await expect(needsYou).toContainText("mg submit");
+});
+
+test("f6 the inbox shows the mg version running the hub", async ({
+  page,
+  hub,
+}) => {
+  const health = (await (
+    await page.request.get(`${hub.url}api/health`)
+  ).json()) as Health;
+  await page.goto(hub.url);
+  await expect(
+    page.getByText(`mergegate ${health.version}`, { exact: true }),
+  ).toBeVisible();
 });
 
 test("f6 lists open items with their figures", async ({ page, hub }) => {

@@ -1,0 +1,5 @@
+/* Below everything and quiet: there to look up, not to read. */
+.version {
+  padding: var(--space-6) var(--space-4) 0;
+  text-align: right;
+}

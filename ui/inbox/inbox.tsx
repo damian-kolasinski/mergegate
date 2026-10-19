@@ -19,6 +19,7 @@ import {
   Section,
 } from "../design-system";
 import styles from "./inbox.module.css";
+import { HubVersion } from "./version";
 import { WeeklyStats } from "./weekly";
 
 const GROUPS = [
@@ -235,6 +236,8 @@ export function InboxScreen() {
             <Show when={current().weekly.monday}>
               <WeeklyStats week={current().weekly} />
             </Show>
+            {/* Under the inbox, so it doesn't paint first and jump. */}
+            <HubVersion />
           </>
         )}
       </Show>
