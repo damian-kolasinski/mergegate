@@ -241,6 +241,7 @@ pub(crate) async fn serve(
     branches::sweep(&state).await;
     tokio::spawn(wake::run(state.clone()));
     tokio::spawn(external::run(state.clone()));
+    tokio::spawn(languages::refresh(state.clone()));
     tokio::spawn(highlights::run(state.clone()));
     tokio::spawn(attachments::prune(state.clone()));
     tokio::spawn(rules::run(state.clone()));

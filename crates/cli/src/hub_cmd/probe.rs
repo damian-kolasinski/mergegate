@@ -18,6 +18,11 @@ impl Running {
         format!("http://{}", self.info.addr)
     }
 
+    /// The port it listens on, which a restart keeps.
+    pub fn port(&self) -> u16 {
+        self.info.addr.port()
+    }
+
     pub fn compatible(&self) -> bool {
         self.health.api_version == api::API_VERSION
     }

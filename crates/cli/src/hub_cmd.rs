@@ -9,6 +9,7 @@ mod spawn;
 mod start;
 mod status;
 mod stop;
+pub(crate) mod upgrade;
 
 use std::io;
 use std::time::Duration;

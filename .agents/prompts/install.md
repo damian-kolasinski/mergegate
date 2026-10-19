@@ -16,7 +16,7 @@ Set up two installations of mergegate that never share state:
 7. Link the skill to where agents load skills from, so `mg skill install` updates it in place: `ln -sfn ~/.mergegate/skill/mergegate ~/.claude/skills/mergegate`, and the same into `~/.codex/skills` for Codex.
 8. Run `mg doctor` and fix what it reports.
 
-To upgrade, run `mise up packslip:damian-kolasinski/mergegate`, then `mg hub stop`, `mg hub start` and `mg lang update`. Until the hub restarts it runs the old `mg`: `mg hub status` and `mg doctor` warn of it, and if the upgrade changed the API, every command that goes through the hub fails with `hub_incompatible`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
+To upgrade, run `mise up packslip:damian-kolasinski/mergegate`, then `mg doctor`: the first command that goes through the hub restarts its service on the new `mg`, and the restarted hub downloads again the language packs built for the old one. A hub started without the service, as with `MERGEGATE_HOME` set, is left running the old `mg`: `mg hub status` and `mg doctor` warn of it, and if the upgrade changed the API, every command that goes through the hub fails with `hub_incompatible`, until `mg hub stop && mg hub start`. Before migrating, the hub backs up its database as `hub.db.bak-<schema version>` in `~/.mergegate`.
 
 Prefer fixing forward to rolling back: a rollback loses review state written since the upgrade. If you must roll back:
 1. Run `mg hub stop`.

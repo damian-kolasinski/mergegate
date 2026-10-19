@@ -129,6 +129,24 @@ async fn source(state: &Arc<AppState>, request: api::lang::AddPacks) -> Result<S
     ))
 }
 
+/// Downloads again, once at start, the packs released for another mg, as an
+/// upgrade leaves them: their grammars may not load in this one, and nothing
+/// else would replace them until the operator ran `mg lang update`.
+pub(crate) async fn refresh(state: Arc<AppState>) {
+    let names = outdated(&state.languages.installed(), state.releases.releases());
+    if names.is_empty() {
+        return;
+    }
+    match install_released(&state, names).await {
+        Ok(packs) => {
+            let names: Vec<&str> = packs.iter().map(|p| p.name.as_str()).collect();
+            tracing::info!("updated the language packs {}", names.join(", "));
+            changed(&state);
+        }
+        Err(e) => tracing::warn!("updating the language packs: {e}; mg lang update tries again"),
+    }
+}
+
 /// Downloads `names` from mg's release and installs them, all or none.
 pub(crate) async fn install_released(
     state: &Arc<AppState>,

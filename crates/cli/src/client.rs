@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use ureq::http::Response;
 
 use crate::hub_cmd::probe::settle;
+use crate::hub_cmd::upgrade;
 use crate::output::{CliError, exit};
 
 /// How long a command waits for a hub that holds its lock but doesn't
@@ -230,7 +231,11 @@ pub(crate) fn running(home: &Home) -> Result<Hub, CliError> {
     // A hub that holds the lock without answering is not "not running":
     // `mg hub start` refuses while it holds it, so hinting that would send
     // the agent in a circle.
-    let running = settle(home, STARTING)?.ok_or_else(|| {
+    let running = match settle(home, STARTING)? {
+        Some(running) => upgrade::onto_this_mg(home, running)?,
+        None => None,
+    };
+    let running = running.ok_or_else(|| {
         CliError::new("hub_unavailable", "the hub is not running")
             .hint("mg hub start")
             .exit(exit::UNAVAILABLE)
