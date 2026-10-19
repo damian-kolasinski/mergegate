@@ -12,7 +12,7 @@
 
 .id {
   flex: none;
-  width: 14ch;
+  width: 20ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
