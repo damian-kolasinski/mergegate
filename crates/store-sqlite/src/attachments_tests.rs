@@ -102,6 +102,8 @@ fn lists_attachments_by_revision_then_the_order_added() {
         "16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4"
     );
     assert_eq!(b.size, 6);
+    // Kept for a zip of the demo, which carries it.
+    assert_eq!(b.crc32, Some(crc32fast::hash(b"second")));
     assert_eq!(
         std::fs::read(store.attachment_file(&b.sha256)).unwrap(),
         b"second"

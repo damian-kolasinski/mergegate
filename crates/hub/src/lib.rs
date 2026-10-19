@@ -6,6 +6,7 @@ mod branches;
 mod comments;
 mod conflicts;
 mod conversation;
+mod demo_zip;
 mod devices;
 mod diff;
 mod doctor;

@@ -5,6 +5,7 @@ import "./base.css";
 
 export { Badge, type Tone } from "./badge";
 export { Button } from "./button";
+export { Download } from "./download";
 export { Empty } from "./empty";
 export { ErrorNote } from "./error-note";
 export { ExternalLink } from "./external-link";

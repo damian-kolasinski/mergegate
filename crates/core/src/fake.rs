@@ -1719,6 +1719,7 @@ impl AttachmentStore for FakeStore {
                 .iter()
                 .map(|b| format!("{b:02x}"))
                 .collect(),
+            crc32: None,
         };
         self.attachments.push((id.clone(), attachment.clone()));
         Ok(attachment)

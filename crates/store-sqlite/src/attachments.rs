@@ -75,7 +75,7 @@ impl AttachmentStore for Store {
         let mut stmt = self
             .conn
             .prepare_cached(&format!(
-                "SELECT revision, name, media, size, sha256 FROM attachments
+                "SELECT revision, name, media, size, sha256, crc32 FROM attachments
                  WHERE item_id = ({ITEM}) ORDER BY revision, position"
             ))
             .map_err(StoreError::new)?;
@@ -87,17 +87,19 @@ impl AttachmentStore for Store {
                     row.get::<_, String>(2)?,
                     row.get::<_, i64>(3)?,
                     row.get::<_, String>(4)?,
+                    row.get::<_, Option<u32>>(5)?,
                 ))
             })
             .map_err(StoreError::new)?;
         rows.map(|row| {
-            let (revision, name, media, size, sha256) = row.map_err(StoreError::new)?;
+            let (revision, name, media, size, sha256, crc32) = row.map_err(StoreError::new)?;
             Ok(Attachment {
                 revision,
                 name,
                 media: media_of(&media)?,
                 size: size as u64,
                 sha256,
+                crc32,
             })
         })
         .collect()
@@ -112,6 +114,7 @@ impl AttachmentStore for Store {
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
+        let crc32 = crc32fast::hash(attachment.bytes);
         // The file goes first: a row naming a missing file would break the
         // panel, while a file with no row is swept by the next prune.
         self.keep(&sha256, attachment.bytes)?;
@@ -129,11 +132,12 @@ impl AttachmentStore for Store {
         self.conn
             .prepare_cached(&format!(
                 "INSERT INTO attachments
-                     (item_id, revision, position, name, media, size, sha256, created_at)
+                     (item_id, revision, position, name, media, size, sha256, crc32,
+                      created_at)
                  VALUES (?1, ?2, coalesce(
                              (SELECT max(position) + 1 FROM attachments
                               WHERE item_id = ?1 AND revision = ?2), 0),
-                         ?3, ?4, ?5, ?6, {NOW})"
+                         ?3, ?4, ?5, ?6, ?7, {NOW})"
             ))
             .map_err(StoreError::new)?
             .execute(params![
@@ -142,7 +146,8 @@ impl AttachmentStore for Store {
                 attachment.name,
                 attachment.media.mime(),
                 size as i64,
-                sha256
+                sha256,
+                crc32
             ])
             .map_err(StoreError::new)?;
         Ok(Attachment {
@@ -151,6 +156,7 @@ impl AttachmentStore for Store {
             media: attachment.media,
             size,
             sha256,
+            crc32: Some(crc32),
         })
     }
 

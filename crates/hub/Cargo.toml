@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 api.workspace = true
 backend-github.workspace = true
+crc32fast = "1.5.2"
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json", "query"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 git.workspace = true
@@ -30,3 +31,6 @@ thiserror = "2.0.21"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "signal", "macros", "sync", "time", "process", "io-util", "fs"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "ansi", "std"] }
+
+[dev-dependencies]
+zip = { version = "9.0.5", default-features = false }

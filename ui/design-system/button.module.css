@@ -20,6 +20,17 @@
   background: var(--background-subtle);
 }
 
+/* A link that looks like one, which is never :enabled. */
+a.button {
+  text-decoration: none;
+}
+
+/* Over base.css's a:hover, which would give it a link's colour. */
+a.button:hover {
+  background: var(--background-subtle);
+  color: var(--text-primary);
+}
+
 .button[data-variant="solid"] {
   border-color: var(--background-brand);
   background: var(--background-brand);

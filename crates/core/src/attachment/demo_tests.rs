@@ -11,6 +11,7 @@ fn attachment(revision: u32, name: &str) -> Attachment {
         media: Media::Png,
         size: 1,
         sha256: name.into(),
+        crc32: None,
     }
 }
 

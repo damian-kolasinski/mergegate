@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 mergegate-core.workspace = true
+crc32fast = "1.5.2"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 sha2 = "0.11.1"
 thiserror = "2.0.21"
