@@ -54,8 +54,8 @@ pub(crate) fn onto_this_mg(home: &Home, running: Running) -> Result<Option<Runni
 /// started it.
 fn due(running: &Running) -> bool {
     service::applies()
-        && service::installed().is_some()
         && newer(env!("MG_VERSION"), &running.health.version)
+        && service::installed().is_some()
 }
 
 /// `ours` is a release later than `theirs`. A build between releases, as in
