@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <!-- The shell's logo (app/shell.tsx) in the brand tokens' colours, with
+       heavier strokes so the branches still read at 16 px. -->
+  <style>
+    rect { fill: #003b66; }
+    path { stroke: #f7fcff; }
+    @media (prefers-color-scheme: dark) {
+      rect { fill: #66bfff; }
+      path { stroke: #222526; }
+    }
+  </style>
+  <rect width="20" height="20" rx="5"/>
+  <path d="M6 4.5v4.2c0 1.6 1.3 2.8 2.8 2.8H10m4-7v4.2c0 1.6-1.3 2.8-2.8 2.8H10m0 0v4" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

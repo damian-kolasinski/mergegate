@@ -24,6 +24,8 @@ const outdir = values.outdir;
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
 await copyFile("index.html", join(outdir, "index.html"));
+await mkdir(join(outdir, "assets"));
+await copyFile("favicon.svg", join(outdir, "assets", "favicon.svg"));
 
 // Shiki loads every grammar and theme through a dynamic import, which esbuild
 // inlines: 10 MB. The diff view renders plain text with Pierre's two themes
