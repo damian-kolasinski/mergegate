@@ -54,6 +54,7 @@ fn file(path: &str, lines: u64, triage: Triage) -> FileStat {
         deletions: Some(1),
         generated: path.ends_with(".lock"),
         triage,
+        placement: None,
     }
 }
 

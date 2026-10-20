@@ -38,14 +38,28 @@ export function useModalKeys(keymap: Keymap, help?: KeyHelp): void {
   if (help) describe(help);
 }
 
+/**
+ * As `useKeys`, for a popover the screen goes on working beside: its keys
+ * come before the screen's, which hear only the rest, so `Escape` closes it
+ * rather than leaving the screen.
+ */
+export function useFirstKeys(keymap: Keymap): void {
+  listen(keymap, false, true);
+}
+
 function describe(help: KeyHelp): void {
   setHelps((all) => [...all, help]);
   onCleanup(() => setHelps((all) => all.filter((other) => other !== help)));
 }
 
-function listen(keymap: Keymap, modal: boolean): void {
+// Dialogs bound right now. A popover's keys are captured beside theirs, on
+// the same window, where stopping the event doesn't reach: the count does.
+let modals = 0;
+
+function listen(keymap: Keymap, modal: boolean, first = modal): void {
   const onKey = (event: KeyboardEvent) => {
     if (event.defaultPrevented || isEditable(event.target)) return;
+    if (!modal && modals > 0) return;
     // A dialog keeps modified keys from the screens too, such as the review's
     // `⌘↩`, though not from the browser.
     if (modal) event.stopPropagation();
@@ -63,8 +77,14 @@ function listen(keymap: Keymap, modal: boolean): void {
     event.preventDefault();
     action();
   };
-  window.addEventListener("keydown", onKey, modal);
-  onCleanup(() => window.removeEventListener("keydown", onKey, modal));
+  // Captured, it runs before the screens', and its `preventDefault` turns
+  // them away.
+  window.addEventListener("keydown", onKey, first);
+  if (modal) modals++;
+  onCleanup(() => {
+    window.removeEventListener("keydown", onKey, first);
+    if (modal) modals--;
+  });
 }
 
 export function isEditable(target: EventTarget | null): boolean {

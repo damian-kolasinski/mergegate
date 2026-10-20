@@ -729,6 +729,7 @@ function Review(props: {
         current={nav.current()}
         onShow={nav.showFile}
         onViewed={mark}
+        writing={writing()}
       />
       <div class={styles.diff}>
         <Show

@@ -37,9 +37,9 @@ test("f6 an item shows every changed file", async ({ page, hub }) => {
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
     /^blob\.bin$/,
-    /^a\.txt\s*ranked low: docs\s*\+2\s*−2$/,
-    /^gone\.txt\s*ranked low: docs\s*−1$/,
-    /^new\.txt\s*ranked low: docs\s*\+1$/,
+    /^a\.txt\s*\+2\s*−2$/,
+    /^gone\.txt\s*−1$/,
+    /^new\.txt\s*\+1$/,
   ]);
 
   const diff = screen.getByRole("region", { name: "Diff" });

@@ -1,13 +1,14 @@
 //! Opening an item for review: its newest revision with every file's diff,
 //! against the base or since an earlier revision.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::diff_files::compute_diffs;
 use super::{ChangedFile, FileStat, Item, ItemError, ItemId, ItemState, ItemStore};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::interdiff::{Change, InterdiffStore};
 use crate::judge::JudgeStore;
+use crate::module::{self, Placement};
 use crate::review::{self, Conversation, ReviewStore};
 use crate::store::StoreError;
 use crate::triage::{self, Guide, Hint, Rank, Tier, Triage};
@@ -77,6 +78,9 @@ pub struct DiffedFile {
     /// The judge's score put the file ahead of the guide's order.
     pub raised: bool,
     pub hint: Option<Hint>,
+    /// The file's module; a dropped file takes the nearest one above it of
+    /// the files around it.
+    pub placement: Option<Placement>,
 }
 
 /// `None` when there's no such item. An open item's diffs were all cached at
@@ -127,6 +131,7 @@ pub fn item_diff<
                     if let Some(own) = own.remove(&stat.file.path) {
                         stat.generated = own.generated;
                         stat.triage = own.triage;
+                        stat.placement = own.placement;
                     }
                     (stat, Some(f.change))
                 })
@@ -138,6 +143,10 @@ pub fn item_diff<
             .map(|stat| (stat, None))
             .unzip(),
     };
+    let modules: BTreeSet<String> = stats
+        .iter()
+        .filter_map(|stat| Some(stat.placement.as_ref()?.module.clone()))
+        .collect();
     let viewed = store.viewed(id, newest)?;
     let mut contents = Vec::with_capacity(stats.len());
     for stat in &stats {
@@ -215,6 +224,11 @@ pub fn item_diff<
             judge_reason: verdict.and_then(|v| v.reason),
             promoted,
             raised: false,
+            placement: stat.placement.or_else(|| {
+                (change == Some(Change::Dropped))
+                    .then(|| module::adopt(&stat.file.path, modules.iter().map(String::as_str)))
+                    .flatten()
+            }),
             triage,
             file: stat.file,
             additions: stat.additions,

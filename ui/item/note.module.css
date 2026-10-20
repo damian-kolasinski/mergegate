@@ -1,0 +1,46 @@
+/* Beside the list, over the diff's edge, level with its file. */
+.note {
+  position: fixed;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 260px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--background-page);
+  box-shadow: var(--shadow-popover);
+  animation: var(--motion-pop);
+  cursor: auto;
+}
+
+.part h3 {
+  margin: 0;
+  font: var(--type-p4);
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+
+.part p {
+  margin: 0;
+  font: var(--type-p4);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.path {
+  margin: 0;
+  font: var(--type-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-subtle);
+  overflow-wrap: anywhere;
+}
+
+.keys {
+  margin: 0;
+  font: var(--type-p4);
+  font-size: 11px;
+  color: var(--text-inactive);
+}

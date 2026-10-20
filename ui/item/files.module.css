@@ -3,12 +3,155 @@
   border-right: 1px solid var(--border-container);
 }
 
+.files ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A module or folder: what's in it is indented under it. */
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  padding-left: calc(var(--space-4) + var(--depth) * 14px);
+  border: 0;
+  border-bottom: 1px solid var(--border-inactive);
+  background: none;
+  color: var(--text-secondary);
+  font: var(--type-p4);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-fast);
+}
+
+.head:hover {
+  background: var(--background-hover);
+}
+
+.head:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+/* A module stands out from its folders, which read as paths. */
+.group[data-kind="module"] > .head {
+  background: var(--background-subtle);
+}
+
+.group[data-kind="module"] > .head:hover {
+  background: var(--background-hover);
+}
+
+.label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-mono);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* A folder joined up from a run of single folders keeps its deepest end. */
+.group[data-kind="folder"] > .head .title {
+  direction: rtl;
+  text-align: left;
+}
+
+.group[data-kind="module"] > .head .title {
+  font: var(--type-h5);
+  line-height: 20px;
+  color: var(--text-primary);
+}
+
+/* Right to left, so the ellipsis eats where the module lives first and
+   the folder its files share stays. */
+.sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font: var(--type-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-subtle);
+}
+
+.chevron {
+  flex: none;
+  width: 1ch;
+  color: var(--text-subtle);
+}
+
+.chevron::before {
+  content: "▸";
+  content: "▸" / "";
+}
+
+[aria-expanded="true"] > .chevron::before {
+  content: "▾";
+  content: "▾" / "";
+}
+
+/* The judge's highest score in a group, as a swatch in its band's colour
+   and the number beside it. */
+.peak {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 28px;
+  justify-content: flex-end;
+  font: var(--type-p4);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+
+.peak::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--border-inactive);
+}
+
+.peak[data-band="high"]::before {
+  background: var(--background-brand);
+}
+
+.peak[data-band="mid"]::before {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--border-brand);
+}
+
+/* The tick, the name, its counts, the score and the ⓘ, which keep their
+   columns down the list whatever a row leaves out. */
+.entry {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 13px minmax(0, 1fr) auto 28px 18px;
+  column-gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  padding-left: calc(var(--depth) * 14px);
+}
+
 /* A checkbox where the file is marked here, otherwise a tick once it's
    viewed; the same width either way, so the names line up. */
 .viewed {
+  grid-column: 1;
   width: 13px;
-  flex: none;
-  align-self: flex-start;
   margin: 0;
   font: var(--type-p4);
   line-height: 18px;
@@ -24,58 +167,30 @@ span.viewed[role="img"]::before {
 }
 
 input.viewed {
+  align-self: start;
   margin-top: 2px;
   cursor: pointer;
-}
-
-/* The folder every file is in, said once over them all. */
-.root {
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  border-bottom: 1px solid var(--border-inactive);
-  font: var(--type-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--text-subtle);
-}
-
-.root > bdi::after {
-  content: "/";
-}
-
-/* The name and its counts, the folder and the score under them, then why
-   the file is here. The facts take only what they need, so the name has
-   the rest. */
-.entry {
-  display: grid;
-  flex: 1;
-  grid-template-areas:
-    "name facts"
-    "folder score"
-    "why why";
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--space-3);
-  align-items: baseline;
-  min-width: 0;
 }
 
 /* Wrapped where its words meet rather than cut, since a feature's files
    share their start; two lines at most. */
 .name {
-  grid-area: name;
+  grid-column: 2;
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
   font: var(--type-mono);
+  font-size: 12.5px;
   font-weight: 600;
+  line-height: 18px;
   color: var(--text-primary);
+}
+
+.ext {
+  font-weight: 400;
+  color: var(--text-subtle);
 }
 
 /* Viewed is done with, so it steps back, as a viewed diff collapses. */
@@ -84,72 +199,121 @@ input.viewed {
   color: var(--text-secondary);
 }
 
-/* Right to left, so the ellipsis eats the folder's start and the part
-   nearest the file stays. */
+/* A test hangs off the file it covers, and gives way to it. */
+.entry[data-test] .name {
+  font-weight: 400;
+}
+
+.entry[data-test] .name::before {
+  content: "└ ";
+  content: "└ " / "";
+  color: var(--text-inactive);
+}
+
+.tag {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-small);
+  background: var(--background-tint-neutral);
+  color: var(--text-tint-neutral);
+  font: var(--type-p4);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+/* Only where the list leaves the tree, which otherwise says it. */
 .folder {
-  grid-area: folder;
-  min-width: 0;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
   text-align: left;
-  font: var(--type-mono);
   font-size: 12px;
-  line-height: 18px;
+  font-weight: 400;
   color: var(--text-subtle);
 }
 
 .facts {
+  grid-column: 3;
   display: flex;
-  grid-area: facts;
   justify-self: end;
   gap: var(--space-2);
   font: var(--type-p4);
 }
 
-/* The judge's score out of 100, wide enough for three digits so the chips
-   line up down the list, over a bar filled as far as the score so the
-   list reads at a glance; brand where the judge raised the file. */
+/* The judge's score out of 100: solid where it says read this, outlined
+   where it may matter, grey where it hardly does. Its own column, so the
+   scores line up down the list's right edge. */
 .score {
-  --meter: var(--text-subtle);
-  grid-area: score;
-  justify-self: end;
-  min-width: 3ch;
-  padding: 0 var(--space-1);
+  grid-column: 4;
+  justify-self: stretch;
+  border: 1px solid var(--border-inactive);
   border-radius: var(--radius-small);
-  background:
-    linear-gradient(var(--meter), var(--meter)) bottom left /
-    calc(var(--score) * 1%) 2px no-repeat,
-    var(--background-tint-neutral);
-  color: var(--text-tint-neutral);
+  color: var(--text-subtle);
   font: var(--type-p4);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  line-height: 15px;
   text-align: center;
 }
 
-.score[data-raised] {
-  --meter: var(--text-tint-brand);
-  background-color: var(--background-tint-brand);
+.score[data-band="mid"] {
+  border-color: var(--border-brand);
   color: var(--text-tint-brand);
 }
 
-/* The reason in the room under the file, two lines at most; the title has
-   all of it. */
-.why {
-  grid-area: why;
-  display: -webkit-box;
-  margin-top: var(--space-1);
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font: var(--type-p4);
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
+.score[data-band="high"] {
+  border-color: var(--background-brand);
+  background: var(--background-brand);
+  color: var(--text-on-fill);
 }
 
-.group {
+/* Faint until the row is pointed at or current, so a column of them
+   doesn't crowd the names. */
+.info {
+  grid-column: 5;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-container);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-subtle);
+  font: 600 11px / 1 var(--font-sans);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity var(--motion-fast);
+}
+
+.info::before {
+  content: "i";
+  content: "i" / "";
+}
+
+li:hover .info,
+li[aria-current="true"] .info,
+.info:focus-visible,
+.info[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.info[aria-expanded="true"] {
+  border-color: var(--border-brand);
+  background: var(--background-tint-brand);
+  color: var(--text-tint-brand);
+}
+
+.trusted {
   display: flex;
   align-items: baseline;
   border-bottom: 1px solid var(--border-inactive);
@@ -180,10 +344,6 @@ input.viewed {
   color: var(--text-primary);
 }
 
-.chevron {
-  width: 1ch;
-}
-
 /* Not in the diff, so not a row the cursor or `n/p` visits. */
 .unchanged > summary {
   padding: var(--space-2) var(--space-4);
@@ -192,8 +352,6 @@ input.viewed {
 
 .still {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border-inactive);
 }

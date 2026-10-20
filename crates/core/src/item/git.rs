@@ -1,5 +1,6 @@
 use super::FileMode;
 use crate::git::{GitError, Remote, Upstream};
+use crate::module::Placement;
 use crate::project::ProjectName;
 use crate::triage::Triage;
 
@@ -106,6 +107,9 @@ pub struct FileStat {
     /// `linguist-generated` as the revision's base sets it.
     pub generated: bool,
     pub triage: Triage,
+    /// None when no module holds the file, and for a revision recorded
+    /// before modules were found.
+    pub placement: Option<Placement>,
 }
 
 /// A full object ID: 40 (SHA-1) or 64 (SHA-256) lowercase hex digits.

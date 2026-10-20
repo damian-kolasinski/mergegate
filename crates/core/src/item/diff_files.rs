@@ -45,6 +45,7 @@ pub(crate) fn diff_files(
             deletions,
             generated: false,
             triage: Triage::default(),
+            placement: None,
         })
         .collect())
 }
