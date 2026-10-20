@@ -195,7 +195,8 @@ fn open_log(path: &Path) -> std::io::Result<File> {
     File::create(path)
 }
 
-/// The `mg` binary this runs, as it was when it started.
+/// The `mg` binary this runs, by the path an upgrade moves, as it was when
+/// it started.
 struct Exe {
     path: PathBuf,
     identity: (u64, u64, i64),
@@ -203,7 +204,7 @@ struct Exe {
 
 impl Exe {
     fn this() -> Option<Self> {
-        let path = std::env::current_exe().ok()?;
+        let path = crate::hub_cmd::service::this_mg().ok()?;
         let identity = identity(&path)?;
         Some(Self { path, identity })
     }

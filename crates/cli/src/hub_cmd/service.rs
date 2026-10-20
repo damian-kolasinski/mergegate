@@ -225,7 +225,7 @@ pub(crate) fn load(home: &Home, role: Role, args: &[&str]) -> Result<Loaded, Str
         return Err("systemd has no user session here".into());
     }
     let user_home = user_home().ok_or("HOME is not set")?;
-    let exe = std::env::current_exe().map_err(|e| format!("locating the mg binary: {e}"))?;
+    let exe = this_mg().map_err(|e| format!("locating the mg binary: {e}"))?;
     let (outcome, log) = role.output(home);
     let spec = Spec {
         role,
@@ -280,6 +280,30 @@ pub(crate) fn remove(role: Role) -> Result<Option<Installed>, CliError> {
         systemd::forget();
     }
     Ok(Some(installed))
+}
+
+/// This `mg` by the path an upgrade moves to the next one, which a unit runs
+/// and the wake runner watches. mise installs each version in a directory of
+/// its own and points a `latest` link beside them at the newest: through the
+/// version's own path, a runner would never see an upgrade.
+pub(crate) fn this_mg() -> std::io::Result<PathBuf> {
+    std::env::current_exe().map(|exe| through_latest(&exe))
+}
+
+fn through_latest(exe: &Path) -> PathBuf {
+    let Ok(target) = fs::canonicalize(exe) else {
+        return exe.to_owned();
+    };
+    for dir in exe.ancestors().skip(1) {
+        let (Some(parent), Ok(rest)) = (dir.parent(), exe.strip_prefix(dir)) else {
+            continue;
+        };
+        let linked = parent.join("latest").join(rest);
+        if fs::canonicalize(&linked).is_ok_and(|path| path == target) {
+            return linked;
+        }
+    }
+    exe.to_owned()
 }
 
 fn user_home() -> Option<PathBuf> {
