@@ -201,6 +201,7 @@ fn own(files: &[ChangedFile]) -> Vec<FileStat> {
             deletions: None,
             generated: false,
             triage: Triage::default(),
+            placement: None,
         })
         .collect()
 }

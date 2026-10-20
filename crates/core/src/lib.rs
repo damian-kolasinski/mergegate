@@ -19,6 +19,7 @@ pub mod interdiff;
 pub mod item;
 pub mod judge;
 pub mod merge;
+pub mod module;
 pub mod project;
 pub mod remap;
 pub mod resume;

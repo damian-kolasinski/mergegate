@@ -185,6 +185,7 @@ fn file_to_api(
             promoted,
             raised,
             hint,
+            placement,
         },
         spans,
     ): (DiffedFile, FileHighlights),
@@ -194,8 +195,14 @@ fn file_to_api(
         Some(TriagedBy::Guard(guard)) => (None, Some(guard.why().to_owned())),
         Some(TriagedBy::Rule { id, why }) => (Some(id.to_string()), Some(why)),
     };
+    let path = file.path;
     api::diff::File {
-        path: file.path,
+        module: placement.map(|p| api::diff::FileModule {
+            layer: p.layer().map(str::to_owned),
+            inner: p.inner(&path).to_owned(),
+            path: p.module,
+        }),
+        path,
         old_path: file.old_path,
         old_blob: file.old_blob,
         new_blob: file.new_blob,

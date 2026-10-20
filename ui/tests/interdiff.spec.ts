@@ -72,7 +72,7 @@ test("f7 a new revision shows what changed since the review", async ({
     /^lib\.rs(?!\s*src)/,
   ]);
   // Both are in src, which the list says once over them.
-  await expect(files.getByTitle("src", { exact: true })).toHaveText("src");
+  await expect(files.getByRole("group", { name: "src" })).toBeVisible();
   await screen.getByLabel("Compare").selectOption("1");
   await expect(summary).toHaveValue("Closer.");
   // main's README isn't the item's, and login.rs is as r1 left it, its
@@ -147,7 +147,7 @@ test("f7 a file new since the review says so", async ({ page, hub }) => {
   await expect(files.getByRole("listitem")).toHaveText([
     /^token\.rs(?!\s*src).*added/,
   ]);
-  await expect(files.getByTitle("src", { exact: true })).toBeVisible();
+  await expect(files.getByRole("group", { name: "src" })).toBeVisible();
   const diff = screen.getByRole("region", { name: "Diff" });
   await expect(
     diff.getByText("Added since the earlier revision"),
@@ -184,8 +184,8 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   await page.reload();
   await screen.getByLabel("Compare").selectOption("1");
   await expect(files.getByRole("listitem")).toHaveText([
-    /^greet\.py\s*src.*unchanged since r1/,
-    /^test_greet\.py\s*tests.*added/,
+    /^greet\.py.*unchanged since r1/,
+    /^test_greet\.py\s*Tests.*added/,
   ]);
   await expect(files.getByText(/\d unchanged since/)).toHaveCount(0);
   await expect(diff.getByLabel("Viewed src/greet.py")).toBeChecked();
@@ -199,7 +199,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   app.revise("Name it", { "src/name.py": "NAME = 'you'\n" });
   await page.reload();
   await screen.getByLabel("Compare").selectOption("2");
-  await expect(files.getByRole("listitem")).toHaveText([/^name\.py\s*src/]);
+  await expect(files.getByRole("listitem")).toHaveText([/^name\.py/]);
   await expect(files.getByText("2 unchanged since r2")).toBeVisible();
   await expect(comment).toHaveCount(0);
   await screen.getByRole("button", { name: /^Conversation/ }).click();
@@ -246,8 +246,8 @@ test("f7 an unchanged file stays in the diff once its thread is settled", async 
   await page.reload();
   await screen.getByLabel("Compare").selectOption("2");
   await expect(files.getByRole("listitem")).toHaveText([
-    /^greet\.py\s*src.*unchanged since r2/,
-    /^test_more\.py\s*tests.*added/,
+    /^greet\.py.*unchanged since r2/,
+    /^test_more\.py\s*Tests.*added/,
   ]);
   await expect(current).toContainText("greet.py");
   const comment = diff.getByRole("article", { name: "Comment c_1" });
@@ -266,8 +266,8 @@ test("f7 an unchanged file stays in the diff once its thread is settled", async 
     review.getByText("Sent to the agent on r3 with 1 reply"),
   ).toBeVisible();
   await expect(files.getByRole("listitem")).toHaveText([
-    /^greet\.py\s*src.*unchanged since r2/,
-    /^test_more\.py\s*tests.*added/,
+    /^greet\.py.*unchanged since r2/,
+    /^test_more\.py\s*Tests.*added/,
   ]);
   await expect(current).toContainText("greet.py");
   await expect(comment).toContainText("Any name.");

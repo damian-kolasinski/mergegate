@@ -29,6 +29,7 @@ use crate::item::{
 };
 use crate::judge::{JudgeSetting, JudgeStore, Verdict};
 use crate::merge::{Landing, MergeBackend, MergeGit, Trial};
+use crate::module::{Entry, ModuleGit};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
     Anchor, Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
@@ -737,6 +738,38 @@ impl TriageGit for FakeGit {
         paths: &[&str],
     ) -> Result<Vec<bool>, GitError> {
         Ok(paths.iter().map(|p| self.generated.contains(*p)).collect())
+    }
+}
+
+impl ModuleGit for FakeGit {
+    fn listings(
+        &self,
+        _project: &ProjectName,
+        commit: &str,
+        dirs: &[&str],
+    ) -> Result<Vec<Vec<Entry>>, GitError> {
+        let paths = self.paths(commit);
+        Ok(dirs
+            .iter()
+            .map(|dir| {
+                let prefix = format!("{dir}/");
+                let entries: BTreeSet<Entry> = paths
+                    .iter()
+                    .filter_map(|path| path.strip_prefix(&prefix))
+                    .map(|rest| match rest.split_once('/') {
+                        Some((name, _)) => Entry {
+                            name: name.into(),
+                            dir: true,
+                        },
+                        None => Entry {
+                            name: rest.into(),
+                            dir: false,
+                        },
+                    })
+                    .collect();
+                entries.into_iter().collect()
+            })
+            .collect())
     }
 }
 

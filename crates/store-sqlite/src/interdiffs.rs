@@ -64,6 +64,7 @@ impl InterdiffStore for Store {
                     // A file's triage is its revision's, which rules change.
                     generated: false,
                     triage: Triage::default(),
+                    placement: None,
                 };
                 Ok(Ok((stat, row.get::<_, String>(6)?)))
             })

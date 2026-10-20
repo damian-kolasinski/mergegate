@@ -30,6 +30,7 @@ fn stat(path: &str, tier: Tier) -> FileStat {
                 why: "`*.lock` — lockfile".into(),
             }),
         },
+        placement: None,
     }
 }
 

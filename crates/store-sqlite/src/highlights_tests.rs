@@ -119,6 +119,7 @@ fn changed(old: Option<&str>, new: &str) -> FileStat {
         deletions: Some(0),
         generated: false,
         triage: Default::default(),
+        placement: None,
     }
 }
 

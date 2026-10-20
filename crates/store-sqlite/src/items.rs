@@ -5,6 +5,7 @@ use mergegate_core::item::{
     ChangedFile, DiffStat, FileStat, Item, ItemBackend, ItemId, ItemState, ItemStore, NewItem,
     NewRevision, Priority, Revision, WeeklyClosures,
 };
+use mergegate_core::module::Placement;
 use mergegate_core::project::{Backend, ProjectName};
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, Row, Transaction, params};
@@ -195,7 +196,8 @@ impl ItemStore for Store {
             .conn
             .prepare_cached(
                 "SELECT f.path, f.old_path, f.old_blob, f.new_blob, f.additions, f.deletions,
-                        f.generated, f.tier, f.rule, f.guard, f.why, f.old_mode, f.new_mode
+                        f.generated, f.tier, f.rule, f.guard, f.why, f.old_mode, f.new_mode,
+                        f.module, f.target
                  FROM revision_files f
                  JOIN items i ON i.id = f.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -215,6 +217,7 @@ impl ItemStore for Store {
                         Ok(modes) => modes,
                         Err(e) => return Ok(Err(e)),
                     };
+                    let target = row.get(14)?;
                     Ok(Ok(FileStat {
                         file: ChangedFile {
                             path: row.get(0)?,
@@ -228,6 +231,9 @@ impl ItemStore for Store {
                         deletions: row.get::<_, Option<i64>>(5)?.map(|n| n as u64),
                         generated: row.get(6)?,
                         triage,
+                        placement: row
+                            .get::<_, Option<String>>(13)?
+                            .map(|module| Placement { module, target }),
                     }))
                 },
             )
@@ -435,8 +441,10 @@ fn insert_revision(
         .prepare_cached(
             "INSERT INTO revision_files
                  (item_id, revision, position, path, old_path, old_blob, new_blob,
-                  additions, deletions, generated, tier, rule, guard, why, old_mode, new_mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                  additions, deletions, generated, tier, rule, guard, why, old_mode, new_mode,
+                  module, target)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                     ?17, ?18)",
         )
         .map_err(StoreError::new)?;
     for (position, file) in revision.files.iter().enumerate() {
@@ -459,6 +467,8 @@ fn insert_revision(
             why,
             old_mode,
             new_mode,
+            file.placement.as_ref().map(|p| &p.module),
+            file.placement.as_ref().and_then(|p| p.target.as_ref()),
         ])
         .map_err(StoreError::new)?;
     }

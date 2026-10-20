@@ -120,6 +120,22 @@ pub struct File {
     /// Why the heuristics ranked the file as they did, as in `ranked low:
     /// lockfile`.
     pub hint: Option<String>,
+    /// The module the file is in; null when none holds it, and for a file
+    /// recorded before the hub found modules.
+    pub module: Option<FileModule>,
+}
+
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileModule {
+    /// The module's folder.
+    pub path: String,
+    /// What the file's target holds besides the module's own code, as
+    /// `Interface` or `Tests`; null for the code itself.
+    pub layer: Option<String>,
+    /// The file's path within the module, without its target's folder, so a
+    /// test and the code it covers read alike.
+    pub inner: String,
 }
 
 /// A file's git mode, as git prints it.

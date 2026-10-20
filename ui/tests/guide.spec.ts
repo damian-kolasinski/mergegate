@@ -45,10 +45,17 @@ test("f11 the guide is the intent and orders the review", async ({
 
   const files = screen.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^parser\.rs\s*src\s*the new parser, start here\s*\+1$/,
-    /^main\.rs\s*src\s*now only calls it\s*\+1$/,
-    /^README\.md\s*ranked low: docs\s*\+1$/,
+    /^parser\.rs\s*\+1$/,
+    /^main\.rs\s*\+1$/,
+    /^README\.md\s*\+1$/,
   ]);
+  // Why each is here waits behind its ⓘ.
+  await expect(
+    files.getByRole("button", { name: "Why src/parser.rs is here" }),
+  ).toHaveAccessibleDescription("the new parser, start here");
+  await expect(
+    files.getByRole("button", { name: "Why README.md is here" }),
+  ).toHaveAccessibleDescription("ranked low: docs");
   const current = files.locator("li[aria-current=true]");
   await expect(current).toContainText("parser.rs");
   await page.keyboard.press("n");
@@ -59,10 +66,7 @@ test("f11 the guide is the intent and orders the review", async ({
   await expect(intent).toBeHidden();
 });
 
-test("f11 a folder the files share is said once over them", async ({
-  page,
-  hub,
-}) => {
+test("f11 files in no module sit in their folders", async ({ page, hub }) => {
   const app = hub.project("app");
   app.submit("login", "Add login", {
     "src/app/login.rs": "fn login() {}\n",
@@ -78,12 +82,18 @@ test("f11 a folder the files share is said once over them", async ({
   await page.goto(`${hub.url}#/items/app%231`);
 
   const files = page.getByRole("navigation", { name: "Files" });
-  await expect(files.getByTitle("src", { exact: true })).toHaveText("src");
-  // Each keeps only the part of its folder that sets it apart.
-  await expect(files.getByRole("listitem")).toHaveText([
-    /^login\.rs\s*app\s*the login\s*\+1$/,
-    /^store\.rs\s*lib\s*where it keeps the session\s*\+1$/,
-    /^main\.rs\s*calls it\s*\+1$/,
+  const src = files.getByRole("group", { name: "src" });
+  await expect(src.getByRole("group", { name: "app" })).toHaveText(
+    /^app\/\s*\+1\s*login\.rs\s*\+1$/,
+  );
+  await expect(src.getByRole("group", { name: "lib" })).toContainText(
+    "store.rs",
+  );
+  // In the guide's order, a folder where its first file is.
+  await expect(src.getByRole("listitem")).toHaveText([
+    /^login\.rs\s*\+1$/,
+    /^store\.rs\s*\+1$/,
+    /^main\.rs\s*\+1$/,
   ]);
 });
 

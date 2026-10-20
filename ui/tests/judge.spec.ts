@@ -47,13 +47,27 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     );
     // Picked with the item open: its scores land without a reload.
     hub.mg(["judge", "set", "jev"], app.dir);
-    // Each file ends on its score, so the reason line doesn't repeat it.
+    // Each file ends on its score, and src's files come together.
     await expect(files.getByRole("listitem")).toHaveText([
-      /^session\.rs\s*src\s*raised by the judge\s*\+1\s*100$/,
-      /^README\.md\s*the new setting\s*\+3\s*23$/,
-      /^main\.rs\s*src\s*wires the store in\s*\+1\s*45$/,
-      /^Cargo\.lock\s*promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1\s*45$/,
+      /^session\.rs\s*\+1\s*100$/,
+      /^main\.rs\s*\+1\s*45$/,
+      /^README\.md\s*\+3\s*23$/,
+      /^Cargo\.lock\s*\+1\s*45$/,
     ]);
+    const why = (path: string) =>
+      files.getByRole("button", { name: `Why ${path} is here` });
+    await expect(why("src/session.rs")).toHaveAccessibleDescription(
+      /raised by the judge/,
+    );
+    await expect(why("Cargo.lock")).toHaveAccessibleDescription(
+      /promoted by the judge; trusted by R1: `\*\*\/\*\.lock` — regenerated/,
+    );
+    // Folded, src still says how much its most important file matters.
+    await expect(
+      files.getByRole("group", { name: "src" }).getByRole("img", {
+        name: "Peaks at 100/100",
+      }),
+    ).toHaveText("100");
     await expect(
       files.getByRole("img", { name: "raised by the judge 100/100" }),
     ).toHaveText("100");
@@ -70,10 +84,10 @@ test("f12 the judge raises and pulls back files", async ({ page }) => {
     // into their new order.
     hub.mg(["judge", "set", "jev", "--order", "judge"], app.dir);
     await expect(files.getByRole("listitem")).toHaveText([
-      /^session\.rs\s*src\s*\+1\s*100$/,
-      /^main\.rs\s*src\s*wires the store in\s*\+1\s*45$/,
-      /^Cargo\.lock\s*promoted by the judge; trusted by R1: \*\*\/\*\.lock — regenerated\s*\+1\s*45$/,
-      /^README\.md\s*the new setting\s*\+3\s*23$/,
+      /^session\.rs\s*\+1\s*100$/,
+      /^main\.rs\s*\+1\s*45$/,
+      /^Cargo\.lock\s*\+1\s*45$/,
+      /^README\.md\s*\+3\s*23$/,
     ]);
     const diffs = page.getByRole("region", { name: "Diff" }).getByRole("code");
     await expect(diffs).toHaveCount(4);
@@ -104,7 +118,13 @@ test("f12 without a judge the heuristics explain the order", async ({
 
   const files = page.getByRole("navigation", { name: "Files" });
   await expect(files.getByRole("listitem")).toHaveText([
-    /^session\.rs\s*src\s*ranked high: changes a declaration\s*\+1$/,
-    /^README\.md\s*ranked low: docs\s*\+1$/,
+    /^session\.rs\s*\+1$/,
+    /^README\.md\s*\+1$/,
   ]);
+  await expect(
+    files.getByRole("button", { name: "Why src/session.rs is here" }),
+  ).toHaveAccessibleDescription("ranked high: changes a declaration");
+  await expect(
+    files.getByRole("button", { name: "Why README.md is here" }),
+  ).toHaveAccessibleDescription("ranked low: docs");
 });

@@ -12,6 +12,7 @@ mod inspect;
 mod interdiff;
 mod items;
 mod merge;
+mod modules;
 mod publish;
 mod remote;
 mod staging;

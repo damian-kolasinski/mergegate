@@ -14,6 +14,7 @@ use crate::feedback::FeedbackStore;
 use crate::git::Upstream;
 use crate::github::Github;
 use crate::interdiff::{InterdiffGit, Recorded, record};
+use crate::module::{self, ModuleGit};
 use crate::project::{Backend, ProjectError, ProjectStore, find};
 use crate::review::{CommentId, ReviewStore};
 use crate::store::StoreError;
@@ -81,7 +82,7 @@ pub fn submit<
         + FeedbackStore,
 >(
     store: &mut S,
-    git: &(impl ItemGit + DiffGit + InterdiffGit + TriageGit),
+    git: &(impl ItemGit + DiffGit + InterdiffGit + TriageGit + ModuleGit),
     github: &impl Github,
     request: Submit,
 ) -> Result<Submitted, ItemError> {
@@ -247,6 +248,9 @@ pub fn submit<
     }
     let rules = store.applied_rules(&project.name)?;
     triage_files(store, &rules, &mut files)?;
+    // Modules only shape how the list shows files, so a revision whose
+    // folders can't be read still submits, its files in no module.
+    let _ = module::locate(git, &project.name, &base, &head, &mut files);
     let Recorded { interdiffs, viewed } = match &existing {
         Some(item) => record(store, git, item, &head, &base, &files)?,
         None => Recorded::default(),

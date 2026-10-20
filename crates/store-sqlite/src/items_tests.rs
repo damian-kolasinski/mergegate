@@ -1,6 +1,7 @@
 use mergegate_core::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use mergegate_core::github::{GithubRepo, Pull};
 use mergegate_core::item::{ChangedFile, FileMode, FileStat};
+use mergegate_core::module::Placement;
 use mergegate_core::project::{Backend, Project, ProjectStore};
 
 use super::*;
@@ -44,6 +45,10 @@ fn revision(head: char) -> NewRevision {
                 deletions: Some(2),
                 generated: false,
                 triage: Default::default(),
+                placement: Some(Placement {
+                    module: "crates/hub".into(),
+                    target: Some("src".into()),
+                }),
             },
             FileStat {
                 file: ChangedFile {
@@ -58,6 +63,7 @@ fn revision(head: char) -> NewRevision {
                 deletions: None,
                 generated: false,
                 triage: Default::default(),
+                placement: None,
             },
         ],
         guide: None,

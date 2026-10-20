@@ -65,6 +65,7 @@ fn file(path: &str, old: Option<&str>, change: Change) -> InterdiffFile {
             deletions: old.map(|_| 1),
             generated: false,
             triage: Default::default(),
+            placement: None,
         },
         change,
     }

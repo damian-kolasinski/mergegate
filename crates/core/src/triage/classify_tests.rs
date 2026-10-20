@@ -48,6 +48,7 @@ fn file(spec: &str) -> (FileStat, Option<Content>) {
         deletions: Some(1),
         generated: false,
         triage: Triage::default(),
+        placement: None,
     };
     let mut content = Some(Content::Text(Vec::new()));
     for word in words {

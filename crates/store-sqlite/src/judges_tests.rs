@@ -24,6 +24,7 @@ fn file(path: &str, tier: Tier) -> FileStat {
         deletions: Some(0),
         generated: false,
         triage: Triage { tier, by: None },
+        placement: None,
     }
 }
 
