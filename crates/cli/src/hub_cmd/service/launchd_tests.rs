@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::super::{Role, Spec};
-use super::{exe, path, render};
+use super::{Session, exe, path, render};
 
 fn spec(exe: &str) -> Spec {
     Spec {
@@ -27,7 +27,7 @@ fn the_agent_lives_in_the_users_launch_agents() {
 
 #[test]
 fn the_plist_runs_the_hub_in_the_foreground_and_restarts_only_a_failed_one() {
-    let plist = render(&spec("/opt/homebrew/bin/mg"));
+    let plist = render(&spec("/opt/homebrew/bin/mg"), Session::Gui);
     for line in [
         "<string>dev.mergegate.hub</string>",
         "\t\t<string>/opt/homebrew/bin/mg</string>\n\t\t<string>--json</string>\n\t\t<string>hub</string>\n\t\t<string>start</string>\n\t\t<string>--foreground</string>\n\t\t<string>--port</string>\n\t\t<string>7777</string>\n",
@@ -43,9 +43,18 @@ fn the_plist_runs_the_hub_in_the_foreground_and_restarts_only_a_failed_one() {
 }
 
 #[test]
+fn only_an_agent_for_the_background_session_limits_itself_to_it() {
+    let key = "<key>LimitLoadToSessionType</key>\n\t<string>Background</string>";
+    let background = render(&spec("/opt/homebrew/bin/mg"), Session::Background);
+    assert!(background.contains(key), "{background}");
+    let gui = render(&spec("/opt/homebrew/bin/mg"), Session::Gui);
+    assert!(!gui.contains("LimitLoadToSessionType"), "{gui}");
+}
+
+#[test]
 fn the_binary_reads_back_through_xml_escapes() {
     let odd = "/Users/op/R&D <tools>/mg";
-    let plist = render(&spec(odd));
+    let plist = render(&spec(odd), Session::Gui);
     assert!(plist.contains("R&amp;D &lt;tools&gt;"), "{plist}");
     assert_eq!(exe(&plist), Some(PathBuf::from(odd)));
 }
