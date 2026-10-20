@@ -63,6 +63,16 @@ export function tree(files: File[], prefix: string): Node[] {
   return ordered(nodes);
 }
 
+/**
+ * `files`, in review order, as `tree` lays them out from top to bottom, a
+ * test after the file it covers. The diff follows it so it reads down the
+ * list; `tree` of it gives the same tree, as a test's pairing doesn't
+ * depend on the order and a group ranks by its first file.
+ */
+export function treeOrder(files: File[]): File[] {
+  return tree(files, "").flatMap(contents);
+}
+
 type Placed = { parts: string[]; file: File };
 
 function module(
@@ -163,11 +173,12 @@ function contents(node: Node): File[] {
 /** One folder's files, each test after the file it covers when that's
  * here too. */
 function paired(files: File[], rank: ReadonlyMap<string, number>): Leaf[] {
-  const subjects = new Map(
-    files.flatMap((file) =>
-      isTest(file) ? [] : [[stem(name(file)), file] as const],
-    ),
-  );
+  const subjects = new Map<string, File[]>();
+  for (const file of files) {
+    if (isTest(file)) continue;
+    const key = stem(name(file));
+    subjects.set(key, [...(subjects.get(key) ?? []), file]);
+  }
   const tests = new Map<File, File[]>();
   const leaves: Leaf[] = [];
   for (const file of files) {
@@ -176,7 +187,10 @@ function paired(files: File[], rank: ReadonlyMap<string, number>): Leaf[] {
     const covered = isTest(file)
       ? (tested(name(file)) ?? stem(name(file)))
       : undefined;
-    const subject = covered === undefined ? undefined : subjects.get(covered);
+    const subject =
+      covered === undefined
+        ? undefined
+        : subjectOf(file, subjects.get(covered) ?? []);
     if (subject) {
       tests.set(subject, [...(tests.get(subject) ?? []), file]);
       continue;
@@ -196,6 +210,26 @@ function paired(files: File[], rank: ReadonlyMap<string, number>): Leaf[] {
     }
   }
   return leaves;
+}
+
+/**
+ * Which of the files sharing a stem `test` covers: the one of its own kind,
+ * as `button.ts` rather than `button.css` for `button.test.ts`, else the
+ * first by path. Never by the order they came in, which `treeOrder`
+ * changes, so its tree hangs every test where this one did.
+ */
+function subjectOf(test: File, namesakes: File[]): File | undefined {
+  const kind = extension(name(test));
+  return [...namesakes].sort(
+    (a, b) =>
+      Number(extension(name(b)) === kind) -
+        Number(extension(name(a)) === kind) || (a.path < b.path ? -1 : 1),
+  )[0];
+}
+
+function extension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot) : "";
 }
 
 function ordered(nodes: Node[]): Node[] {

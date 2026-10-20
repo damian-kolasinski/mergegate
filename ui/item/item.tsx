@@ -48,6 +48,7 @@ import styles from "./item.module.css";
 import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
 import { SyncGithub } from "./sync-github";
+import { treeOrder } from "./tree";
 import { useViewed } from "./viewed";
 import { describe } from "./why";
 
@@ -392,11 +393,12 @@ function Review(props: {
     ),
   );
   // Trusted files stay out of the diff until the operator opens their group.
+  // Both in the file list's order, so the diff, `n` and `p` read down it.
   const review = createMemo(() =>
-    changed().filter((file) => file.tier === "review"),
+    treeOrder(changed().filter((file) => file.tier === "review")),
   );
   const trusted = createMemo(() =>
-    changed().filter((file) => file.tier === "trusted"),
+    treeOrder(changed().filter((file) => file.tier === "trusted")),
   );
   const shown = createMemo(() =>
     showTrusted() ? [...review(), ...trusted()] : review(),

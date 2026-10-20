@@ -57,6 +57,23 @@ test("f11 the list groups files by the Xcode target groups they're in", async ({
   ]);
   await expect(chatGroups.getByRole("group", { name: "Scenes" })).toBeVisible();
   await expect(files.getByRole("group", { name: "Profile" })).toBeVisible();
+  // The diff reads down the list rather than in the guide's order.
+  const diff = page.getByRole("region", { name: "Diff" });
+  await expect
+    .poll(() =>
+      diff
+        .getByRole("checkbox", { name: /^Viewed / })
+        .evaluateAll((boxes) =>
+          boxes.map((box) => box.getAttribute("aria-label")),
+        ),
+    )
+    .toEqual([
+      "Viewed Products/Messenger/ChatGroups/ChatGroups/Scenes/RenameView.swift",
+      "Viewed Products/Messenger/ChatGroups/ChatGroupsTests/Scenes/RenameViewTests.swift",
+      "Viewed Products/Messenger/ChatGroups/ChatGroupsInterface/ChatGroupsRoute.swift",
+      "Viewed Products/Messenger/Profile/Profile/Avatar.swift",
+      "Viewed README.md",
+    ]);
 
   // Why a file is here waits behind its ⓘ, beside the list.
   const note = page.getByRole("dialog", { name: "Why this file" });
@@ -74,10 +91,10 @@ test("f11 the list groups files by the Xcode target groups they're in", async ({
   await expect(note).toHaveCount(0);
   await expect(page.getByRole("region", { name: "app#1" })).toBeVisible();
 
-  // `i` opens it for the current file, and it follows `n`.
+  // `i` opens it for the current file, and it follows `p` up the list.
   await page.keyboard.press("i");
   await expect(note).toContainText("shows the new name");
-  await page.keyboard.press("n");
+  await page.keyboard.press("p");
   await expect(current).toContainText("ChatGroupsRoute.swift");
   await expect(note).toContainText("the route to it");
   await page.keyboard.press("i");
@@ -139,4 +156,53 @@ test("f11 the list groups files by the crates they're in", async ({
   await expect(files.getByRole("button", { name: /^web/ })).toContainText(
     /^web\s*pages\//,
   );
+});
+
+test("f11 a test hangs under the file of its own kind, and the diff follows", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("button", "Add a button", {
+    "web/button.test.ts": "test();\n",
+    "web/button.css": ".button {}\n",
+    "web/button.ts": "export {};\n",
+  });
+  // The test first, so the order the list and the diff are in differs from
+  // the guide's.
+  const guide = join(hub.root, "guide.md");
+  writeFileSync(
+    guide,
+    `Adds a button.
+
+## Files
+
+- \`web/button.test.ts\` — start here
+- \`web/button.css\` — its look
+- \`web/button.ts\` — the button
+`,
+  );
+  hub.mg(["submit", "--guide", guide], app.dir);
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const files = page.getByRole("navigation", { name: "Files" });
+  await expect(files.getByRole("listitem")).toHaveText([
+    /^button\.ts/,
+    /^button\.test\.ts/,
+    /^button\.css/,
+  ]);
+  const diff = page.getByRole("region", { name: "Diff" });
+  await expect
+    .poll(() =>
+      diff
+        .getByRole("checkbox", { name: /^Viewed / })
+        .evaluateAll((boxes) =>
+          boxes.map((box) => box.getAttribute("aria-label")),
+        ),
+    )
+    .toEqual([
+      "Viewed web/button.ts",
+      "Viewed web/button.test.ts",
+      "Viewed web/button.css",
+    ]);
 });

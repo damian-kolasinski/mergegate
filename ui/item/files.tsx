@@ -31,7 +31,7 @@ import { describe, importance } from "./why";
 export function FileList(props: {
   /** Whose rules sorted the files, linked from the trusted group. */
   project: string;
-  /** In review order, which `n` and `p` follow whatever the tree's. */
+  /** In the tree's order, as the diff shows them. */
   files: File[];
   trusted: File[];
   /** Whether the trusted group is open, and its files in the diff. */
