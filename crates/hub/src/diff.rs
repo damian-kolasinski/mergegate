@@ -66,7 +66,7 @@ async fn show(
                 let Some(diff) = item::item_diff(store, git, &id, compare)? else {
                     return Ok(None);
                 };
-                let blocked = merge::blocked(store, &diff.item)?;
+                let blocked = merge::blocked(store, &diff.item, known.landing_now())?;
                 let agent = presence::of(store, &known.presence, &known.wakes, &diff.item)?;
                 let spans = diff
                     .files

@@ -15,6 +15,7 @@ use mergegate_core::project::{
     self, AddProject, Added, Backend, Changed, Languages, Project, ProjectError, ProjectStore,
     Setting,
 };
+use mergegate_core::store::Shared;
 
 use crate::languages;
 use crate::reply::{self, Failure};
@@ -64,8 +65,11 @@ async fn add(
         github: request.github,
         languages,
     };
+    // Under landing, as it fetches the target into staging.
     let (project, names) = match state
-        .blocking_github(move |store, git, github| project::add(store, git, github, request))
+        .stepwise(move |steps, git, github| {
+            steps.with(|store| project::add(store, git, github, request))
+        })
         .await
     {
         Ok(Added::Project { project, languages }) => (project, languages),
@@ -136,9 +140,10 @@ async fn set(
         absolute(&path.to_string_lossy())?;
     }
     let confirm = request.confirm;
+    // Under landing, as it may fetch the target into staging.
     match state
-        .blocking_github(move |store, git, github| {
-            project::set(store, git, github, &name, setting, confirm)
+        .stepwise(move |steps, git, github| {
+            steps.with(|store| project::set(store, git, github, &name, setting, confirm))
         })
         .await
         .map_err(failure)?

@@ -10,7 +10,7 @@ use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::highlight::HighlightStore;
 use crate::item::{Item, ItemGit, ItemId, ItemState, ItemStore};
 use crate::project::{Project, ProjectStore, find};
-use crate::store::StoreError;
+use crate::store::{Shared, StoreError};
 
 /// The open item `item` is stacked on, which it lands after.
 pub(super) fn open_parent(store: &impl ItemStore, item: &Item) -> Result<Option<Item>, StoreError> {
@@ -25,13 +25,13 @@ pub(super) fn open_parent(store: &impl ItemStore, item: &Item) -> Result<Option<
 /// rebase. The parent's branch is tidied away only once its child no longer
 /// needs it. Returns every item this moved, up the stack.
 pub(super) fn follow<S: ProjectStore + ItemStore + DiffStore + HighlightStore + FeedbackStore>(
-    store: &mut S,
+    store: &impl Shared<S>,
     git: &impl ItemGit,
     backend: &dyn MergeBackend,
     project: &Project,
     (parent, commit): (&Item, &str),
 ) -> Result<Vec<Item>, MergeError> {
-    let Some(child) = store.child(&parent.id)? else {
+    let Some(child) = store.with(|store| store.child(&parent.id))? else {
         backend.tidy(project, parent);
         return Ok(Vec::new());
     };
@@ -57,8 +57,7 @@ pub(super) fn follow<S: ProjectStore + ItemStore + DiffStore + HighlightStore + 
             },
             _ => rebase(),
         };
-        store.notify(&child.id, child.state, notice)?;
-        return Ok(vec![reread(store, &child)?]);
+        return told(store, &child, notice);
     }
     backend.tidy(project, parent);
     if child.state == ItemState::Merging {
@@ -67,8 +66,22 @@ pub(super) fn follow<S: ProjectStore + ItemStore + DiffStore + HighlightStore + 
         moved.extend(merge.stacked);
         return Ok(moved);
     }
-    store.notify(&child.id, child.state, rebase())?;
-    Ok(vec![reread(store, &child)?])
+    told(store, &child, rebase())
+}
+
+/// `child` once its agent has `notice`, in the state it's in now: the
+/// operator may have reviewed it, or the conflict watch handed it back,
+/// while its parent's merge called the backend.
+fn told<S: ItemStore + FeedbackStore>(
+    store: &impl Shared<S>,
+    child: &Item,
+    notice: Notice,
+) -> Result<Vec<Item>, MergeError> {
+    store.with(|store| {
+        let child = reread(store, child)?;
+        store.notify(&child.id, child.state, notice)?;
+        Ok(vec![reread(store, &child)?])
+    })
 }
 
 /// After `id` merged as `commit` other than through the hub, as on GitHub:
@@ -77,17 +90,19 @@ pub(super) fn follow<S: ProjectStore + ItemStore + DiffStore + HighlightStore + 
 pub fn merged_elsewhere<
     S: ProjectStore + ItemStore + DiffStore + HighlightStore + FeedbackStore,
 >(
-    store: &mut S,
+    store: &impl Shared<S>,
     git: &impl ItemGit,
     backends: &[&dyn MergeBackend],
     id: &ItemId,
     commit: &str,
 ) -> Result<Vec<Item>, MergeError> {
-    let item = store
-        .item(id)?
-        .ok_or_else(|| MergeError::NoItem(id.clone()))?;
+    let (item, project) = store.with(|store| -> Result<_, MergeError> {
+        let item = store
+            .item(id)?
+            .ok_or_else(|| MergeError::NoItem(id.clone()))?;
+        Ok((item, find(store, id.project().as_str())?))
+    })?;
     let backend = through(&item, backends)?;
-    let project = find(store, id.project().as_str())?;
     follow(store, git, backend, &project, (&item, commit))
 }
 
@@ -95,20 +110,27 @@ pub fn merged_elsewhere<
 /// when it couldn't move `item`'s review off it, unless a new item has
 /// taken its name since.
 pub(super) fn tidy_parent<S: ProjectStore + ItemStore>(
-    store: &S,
+    store: &impl Shared<S>,
     backend: &dyn MergeBackend,
     item: &Item,
 ) -> Result<(), MergeError> {
-    let parent = match &item.parent {
-        Some(parent) => store.item(parent)?,
-        None => None,
-    };
-    if let Some(parent) = parent.filter(|p| p.state == ItemState::Merged)
-        && store
+    let tidy = store.with(|store| -> Result<_, MergeError> {
+        let parent = match &item.parent {
+            Some(parent) => store.item(parent)?,
+            None => None,
+        };
+        let Some(parent) = parent.filter(|p| p.state == ItemState::Merged) else {
+            return Ok(None);
+        };
+        if store
             .open_item(item.id.project(), &parent.branch)?
-            .is_none()
-    {
-        let project = find(store, item.id.project().as_str())?;
+            .is_some()
+        {
+            return Ok(None);
+        }
+        Ok(Some((find(store, item.id.project().as_str())?, parent)))
+    })?;
+    if let Some((project, parent)) = tidy {
         backend.tidy(&project, &parent);
     }
     Ok(())

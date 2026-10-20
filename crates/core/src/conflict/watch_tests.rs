@@ -109,7 +109,7 @@ fn a_target_that_moves_into_a_conflict_hands_the_item_back_once() {
     let item = store.item(&id).unwrap().unwrap();
     assert_eq!(item.state, ItemState::ChangesRequested);
     assert_eq!(
-        blocked(&store, &item).unwrap(),
+        blocked(&store, &item, false).unwrap(),
         Some(Blocked::Conflict {
             target_commit: commit(5),
             paths: vec!["src/login.rs".into()],

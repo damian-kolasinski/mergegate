@@ -10,6 +10,7 @@ use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
 use mergegate_core::item::{self, Abandon, ItemId, ItemStore};
+use mergegate_core::store::Shared;
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -33,14 +34,17 @@ async fn abandon(
         source: feedback::source_from_api(request.source),
         reason: request.reason,
     };
+    // Not while a merge is landing, which may move what's stacked on it.
     let (item, child) = state
-        .blocking_github(move |store, git, github| {
-            let item = item::abandon(store, git, github, request)?;
-            branches::drop(store, git, &item.id);
-            // Handed back to its agent; failing to read it mustn't fail the
-            // abandon, which happened.
-            let child = store.child(&item.id).ok().flatten().map(|c| c.id);
-            Ok((item, child))
+        .stepwise(move |steps, git, github| {
+            steps.with(|store| {
+                let item = item::abandon(store, git, github, request)?;
+                branches::drop(store, git, &item.id);
+                // Handed back to its agent; failing to read it mustn't fail
+                // the abandon, which happened.
+                let child = store.child(&item.id).ok().flatten().map(|c| c.id);
+                Ok((item, child))
+            })
         })
         .await
         .map_err(items::failure)?;

@@ -16,11 +16,11 @@ use mergegate_core::item::{Item, ItemId, ItemState, ItemStore};
 use mergegate_core::merge::{
     self, Approve, Blocked, Carried, GithubBackend, Landing, Merge, MergeError,
 };
-use mergegate_core::store::StoreError;
+use mergegate_core::store::{Shared, StoreError};
 use store_sqlite::Store;
 
 use crate::reply::Failure;
-use crate::server::AppState;
+use crate::server::{AppState, Steps};
 use crate::{branches, items, projects, reviews};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
@@ -42,19 +42,22 @@ async fn approve(
         revision: request.revision,
         summary: request.summary,
     };
-    let merge = state
-        .blocking_github(move |store, git, github| {
-            let github = GithubBackend::new(git, github);
-            // The hub's git is the local backend.
-            let merge = merge::approve(store, git, &[git, &github], request);
-            dropped(store, git, merge)
-        })
-        .await;
-    changed(&state, &id);
-    let merge = merge.map_err(failure)?;
-    let stacked: Vec<_> = merge.stacked.iter().map(|i| i.id.clone()).collect();
-    stacked_changed(&state, &stacked);
-    Ok(Json(to_api(merge)))
+    AppState::detached(async move {
+        let merge = state
+            .stepwise(move |store, git, github| {
+                let github = GithubBackend::new(git, github);
+                // The hub's git is the local backend.
+                let merge = merge::approve(store, git, &[git, &github], request);
+                dropped(store, git, merge)
+            })
+            .await;
+        changed(&state, &id);
+        let merge = merge.map_err(failure)?;
+        let stacked: Vec<_> = merge.stacked.iter().map(|i| i.id.clone()).collect();
+        stacked_changed(&state, &stacked);
+        Ok(Json(to_api(merge)))
+    })
+    .await
 }
 
 async fn retry(
@@ -64,18 +67,21 @@ async fn retry(
     let Path(id) = id?;
     let id = parse(&id)?;
     let merging = id.clone();
-    let merge = state
-        .blocking_github(move |store, git, github| {
-            let github = GithubBackend::new(git, github);
-            let merge = merge::retry(store, git, &[git, &github], &merging);
-            dropped(store, git, merge)
-        })
-        .await;
-    changed(&state, &id);
-    let merge = merge.map_err(failure)?;
-    let stacked: Vec<_> = merge.stacked.iter().map(|i| i.id.clone()).collect();
-    stacked_changed(&state, &stacked);
-    Ok(Json(to_api(merge)))
+    AppState::detached(async move {
+        let merge = state
+            .stepwise(move |store, git, github| {
+                let github = GithubBackend::new(git, github);
+                let merge = merge::retry(store, git, &[git, &github], &merging);
+                dropped(store, git, merge)
+            })
+            .await;
+        changed(&state, &id);
+        let merge = merge.map_err(failure)?;
+        let stacked: Vec<_> = merge.stacked.iter().map(|i| i.id.clone()).collect();
+        stacked_changed(&state, &stacked);
+        Ok(Json(to_api(merge)))
+    })
+    .await
 }
 
 async fn cancel(
@@ -84,8 +90,9 @@ async fn cancel(
 ) -> Result<Json<api::item::Item>, Failure> {
     let Path(id) = id?;
     let id = parse(&id)?;
+    // Not while the merge is landing: it waits until that's done.
     let item = state
-        .blocking(move |store, _| merge::cancel(store, &id))
+        .stepwise(move |steps, _, _| steps.with(|store| merge::cancel(store, &id)))
         .await
         .map_err(failure)?;
     changed(&state, &item.id);
@@ -101,9 +108,9 @@ pub(crate) struct Carry {
 }
 
 /// Lands a new revision of `id` on the operator's standing approval when
-/// it changes nothing since the approved one.
+/// it changes nothing since the approved one. Under [`AppState::landing`].
 pub(crate) fn carry(
-    store: &mut Store,
+    store: &Steps<'_>,
     git: &HubGit,
     github: &GithubClient,
     id: &ItemId,
@@ -143,7 +150,7 @@ pub(crate) fn carry(
 /// Drops the branches of a merged item and of what merged right after it
 /// from staging.
 fn dropped(
-    store: &Store,
+    store: &Steps<'_>,
     git: &HubGit,
     merge: Result<Merge, MergeError>,
 ) -> Result<Merge, MergeError> {
@@ -153,10 +160,12 @@ fn dropped(
         stacked,
     }) = &merge
     {
-        branches::drop(store, git, &item.id);
-        for child in stacked.iter().filter(|c| c.state == ItemState::Merged) {
-            branches::drop(store, git, &child.id);
-        }
+        store.with(|store: &mut Store| {
+            branches::drop(store, git, &item.id);
+            for child in stacked.iter().filter(|c| c.state == ItemState::Merged) {
+                branches::drop(store, git, &child.id);
+            }
+        });
     }
     merge
 }
@@ -190,12 +199,14 @@ pub(crate) fn stacked_changed(state: &AppState, stacked: &[ItemId]) {
     }
 }
 
-/// Why `item`'s merge is stuck, for the inbox and the review screen.
+/// Why `item`'s merge is stuck, for the inbox and the review screen;
+/// `landing` is [`AppState::landing_now`], asked after reading `item`.
 pub(crate) fn blocked(
     store: &(impl FeedbackStore + ItemStore),
     item: &Item,
+    landing: bool,
 ) -> Result<Option<api::merge::Blocked>, StoreError> {
-    merge::blocked(store, item)?
+    merge::blocked(store, item, landing)?
         .map(|blocked| -> Result<_, StoreError> {
             Ok(match blocked {
                 Blocked::Held { reason } => api::merge::Blocked::Held { reason },

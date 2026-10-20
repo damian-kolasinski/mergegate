@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::*;
 use crate::fake::{FakeBackend, FakeGit, FakeGithub, FakeStore, commit};
 use crate::feedback::EventKind;
@@ -22,7 +24,13 @@ fn held_item(backend: &FakeBackend) -> FakeStore {
         revision: 1,
         summary: String::new(),
     };
-    approve(&mut store, &FakeGit::default(), &[backend], request).unwrap();
+    approve(
+        &RefCell::new(&mut store),
+        &FakeGit::default(),
+        &[backend],
+        request,
+    )
+    .unwrap();
     store
 }
 
@@ -37,7 +45,13 @@ fn last_notice(store: &FakeStore) -> NoticeKind {
 fn retry_lands_a_held_merge() {
     let backend = FakeBackend::new(Backend::Local).then(held());
     let mut store = held_item(&backend);
-    let merge = retry(&mut store, &FakeGit::default(), &[&backend], &id("app#1")).unwrap();
+    let merge = retry(
+        &RefCell::new(&mut store),
+        &FakeGit::default(),
+        &[&backend],
+        &id("app#1"),
+    )
+    .unwrap();
     assert_eq!(merge.item.state, ItemState::Merged);
     assert_eq!(backend.landed().len(), 2);
     assert_eq!(
@@ -50,7 +64,13 @@ fn retry_lands_a_held_merge() {
 fn retry_can_hold_again() {
     let backend = FakeBackend::new(Backend::Local).then(held()).then(held());
     let mut store = held_item(&backend);
-    let merge = retry(&mut store, &FakeGit::default(), &[&backend], &id("app#1")).unwrap();
+    let merge = retry(
+        &RefCell::new(&mut store),
+        &FakeGit::default(),
+        &[&backend],
+        &id("app#1"),
+    )
+    .unwrap();
     assert_eq!(merge.item.state, ItemState::Merging);
     assert!(matches!(last_notice(&store), NoticeKind::MergeHeld { .. }));
 }
@@ -70,13 +90,13 @@ fn only_a_merging_item_retries_or_cancels() {
     let mut store = FakeStore::with_item(1);
     let git = FakeGit::default();
     let backend = FakeBackend::new(Backend::Local);
-    let error = retry(&mut store, &git, &[&backend], &id("app#1")).unwrap_err();
+    let error = retry(&RefCell::new(&mut store), &git, &[&backend], &id("app#1")).unwrap_err();
     assert!(matches!(error, MergeError::NotMerging(_)), "{error:?}");
     let error = cancel(&mut store, &id("app#1")).unwrap_err();
     assert!(matches!(error, MergeError::NotMerging(_)), "{error:?}");
 
     store.set_state(&id("app#1"), ItemState::Merged);
-    let error = retry(&mut store, &git, &[&backend], &id("app#1")).unwrap_err();
+    let error = retry(&RefCell::new(&mut store), &git, &[&backend], &id("app#1")).unwrap_err();
     assert!(matches!(error, MergeError::Closed(_)), "{error:?}");
     let error = cancel(&mut store, &id("app#9")).unwrap_err();
     assert!(matches!(error, MergeError::NoItem(_)), "{error:?}");

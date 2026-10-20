@@ -8,6 +8,12 @@ use super::server::{Request, Response};
 use super::{Pull, PullState, Shared, State, reactions};
 
 pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response {
+    // Without the state locked, so the test can let it through.
+    if request.method == "PUT" && path.ends_with("/merge") {
+        while shared.state().holding_merges {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
     let mut state = shared.state();
     let expected = format!("Bearer {}", state.token);
     if state.token.is_empty() || request.header("authorization") != Some(expected.as_str()) {
@@ -308,6 +314,17 @@ pub(super) fn open_elsewhere(shared: &Shared, request: &Request) -> Response {
         .opened_elsewhere
         .entry(repo.into())
         .or_default() += count;
+    Response::empty(204)
+}
+
+/// `POST /_fake/merges` with `{holding}`, for a process that can't call
+/// [`FakeGithub::hold_merges`](super::FakeGithub::hold_merges).
+pub(super) fn hold_merges(shared: &Shared, request: &Request) -> Response {
+    let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+    let Some(holding) = body["holding"].as_bool() else {
+        return Response::empty(400);
+    };
+    shared.state().holding_merges = holding;
     Response::empty(204)
 }
 

@@ -52,6 +52,8 @@ struct State {
     /// the numbers of the hub's come after.
     opened_elsewhere: BTreeMap<String, u64>,
     refusal: Option<String>,
+    /// Merges wait until this is cleared.
+    holding_merges: bool,
     requests: Vec<String>,
     comments: Vec<Comment>,
     last_comment: u64,
@@ -74,6 +76,7 @@ impl Default for State {
             pulls: Vec::new(),
             opened_elsewhere: BTreeMap::new(),
             refusal: None,
+            holding_merges: false,
             requests: Vec::new(),
             comments: Vec::new(),
             last_comment: 0,
@@ -228,6 +231,12 @@ impl FakeGithub {
     /// lets them through again.
     pub fn refuse_merges(&self, reason: Option<&str>) {
         self.state().refusal = reason.map(Into::into);
+    }
+
+    /// Merges wait at GitHub, as a slow one does, until `false` lets them
+    /// through. One waiting is in [`Self::requests`] already.
+    pub fn hold_merges(&self, holding: bool) {
+        self.state().holding_merges = holding;
     }
 
     /// Takes the next `count` numbers of `repo`'s pull requests, as ones

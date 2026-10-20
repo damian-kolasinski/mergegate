@@ -16,7 +16,7 @@ use mergegate_core::item::{
 };
 use mergegate_core::project::{ProjectName, ProjectStore};
 use mergegate_core::review::Waiting;
-use mergegate_core::store::StoreError;
+use mergegate_core::store::{Shared, StoreError};
 
 use crate::guard::Caller;
 use crate::reply::Failure;
@@ -80,57 +80,62 @@ async fn submit(
         on,
     };
     let app = state.clone();
+    // A new revision moves the item, and carrying an approval merges it.
     let (moved, submitted, carried, (stacked, parent)) = state
-        .blocking_github(move |store, git, github| {
-            // So a rule the operator just wrote applies to this revision
-            // without waiting for the next poll.
-            let moved = match ProjectName::parse(&request.project) {
-                Ok(project) if store.project(&project)?.is_some() => {
-                    app.rules.sync(store, &project)?
-                }
-                _ => rules::Changes::default(),
-            };
-            // The moves stand even when the submit fails, so the UI hears
-            // of them either way.
-            let mut submitted = item::submit(store, git, github, request);
+        .stepwise(move |steps, git, github| {
+            let (moved, mut submitted) = steps.with(|store| {
+                // So a rule the operator just wrote applies to this revision
+                // without waiting for the next poll.
+                let moved = match ProjectName::parse(&request.project) {
+                    Ok(project) if store.project(&project)?.is_some() => {
+                        app.rules.sync(store, &project)?
+                    }
+                    _ => rules::Changes::default(),
+                };
+                // The moves stand even when the submit fails, so the UI hears
+                // of them either way.
+                Ok::<_, ItemError>((moved, item::submit(store, git, github, request)))
+            })?;
             let mut carried = false;
             let mut stacked = Vec::new();
             // The operator approved the diff, not a title it would land under.
             if let Ok(done) = &mut submitted
                 && done.new_revision
                 && !done.retitled
-                && let Some(carry) = merge::carry(store, git, github, &done.item.id)
+                && let Some(carry) = merge::carry(steps, git, github, &done.item.id)
             {
                 carried = true;
                 done.warnings.push(carry.warning);
                 stacked = carry.stacked;
                 // The merge happened: failing to re-read it mustn't fail the
                 // submit, whose item then shows the state before it.
-                if let Ok(Some(item)) = store.item(&done.item.id) {
+                if let Ok(Some(item)) = steps.with(|store| store.item(&done.item.id)) {
                     done.item = item;
                 }
             }
-            // A new revision told the item stacked on it to rebase. The
-            // submit is recorded, so failing to read that mustn't fail it.
-            if let Ok(done) = &submitted
-                && done.new_revision
-                && let Ok(Some(child)) = store.child(&done.item.id)
-            {
-                stacked.push(child.id);
-            }
-            // Its parent's stack trail now lists it.
-            if let Ok(done) = &submitted
-                && let Some(parent) = &done.item.parent
-            {
-                stacked.push(parent.clone());
-            }
-            // The submit is recorded, so a failed read leaves the parent's ID.
-            let parent = submitted
-                .as_ref()
-                .ok()
-                .and_then(|done| done.item.parent.as_ref())
-                .map(|parent| name_of(store, parent).unwrap_or_else(|_| parent.to_string()));
-            Ok::<_, ItemError>((moved, submitted, carried, (stacked, parent)))
+            steps.with(|store| {
+                // A new revision told the item stacked on it to rebase. The
+                // submit is recorded, so failing to read that mustn't fail it.
+                if let Ok(done) = &submitted
+                    && done.new_revision
+                    && let Ok(Some(child)) = store.child(&done.item.id)
+                {
+                    stacked.push(child.id);
+                }
+                // Its parent's stack trail now lists it.
+                if let Ok(done) = &submitted
+                    && let Some(parent) = &done.item.parent
+                {
+                    stacked.push(parent.clone());
+                }
+                // The submit is recorded, so a failed read leaves the parent's ID.
+                let parent = submitted
+                    .as_ref()
+                    .ok()
+                    .and_then(|done| done.item.parent.as_ref())
+                    .map(|parent| name_of(store, parent).unwrap_or_else(|_| parent.to_string()));
+                Ok::<_, ItemError>((moved, submitted, carried, (stacked, parent)))
+            })
         })
         .await
         .map_err(failure)?;
@@ -172,14 +177,16 @@ async fn submit(
 }
 
 async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inbox>, Failure> {
+    let known = Arc::clone(&state);
     let inbox = state
-        .blocking(|store, _| {
+        .blocking(move |store, _| {
             let inbox = item::inbox(store)?;
+            let landing = known.landing_now();
             let entries = |items: &[Item]| -> Result<Vec<_>, StoreError> {
                 items
                     .iter()
                     .map(|item| {
-                        let blocked = merge::blocked(store, item)?;
+                        let blocked = merge::blocked(store, item, landing)?;
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
                         let waiting = inbox.waiting.get(&item.id).copied().unwrap_or_default();
