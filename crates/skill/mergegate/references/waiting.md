@@ -4,13 +4,27 @@ No model is involved while mergegate waits: `mg wait` is one blocking command, a
 
 | If you can… | Do this | Tokens while waiting |
 |---|---|---|
-| run a command in the background and be told when it exits | run `mg wait app#3 --timeout 0` in the background | none |
+| run a command in the background and be told when it exits, as Claude Code can (see Claude Code below) | run `mg wait app#3 --timeout 0` in the background | none |
 | be resumed by a shell command, as Codex is (see Codex below) | `mg submit --wake "<command that resumes you>"`, then end your turn | none |
 | neither | loop `mg wait app#3 --timeout N`, N just under your tool-call time limit | one short turn per timeout |
 
 `mg wait` returns once the item has events you haven't read, prints them and marks them delivered. It exits 75 when the timeout passes with none; run it again. `--for operator` ends the wait only on an event from the operator, still returning everything new with it; without it, comments from GitHub end the wait too.
 
 A merge or an abandon ends the wait too. Events still exit 0, even when one of them closed the item, so read them all: an `approved` review and the `item.merged` with its cleanup can come in one wait. Only once nothing new is left does a wait on a closed item exit 3, printing that it is merged or abandoned. `mg feedback` exits the same way.
+
+## When a wait ends early
+
+Hosts end commands that run too long: a tool call's timeout, a cap on background commands, or a session that stopped tracking one. Stopped by SIGTERM, SIGINT or SIGHUP, `mg wait` prints one line and exits 143, 130 or 129:
+
+```text
+mg wait: SIGTERM stopped the wait on app#3 before it had events; nothing was marked delivered, so resume with: mg wait app#3
+```
+
+Nothing is lost, since a wait marks events delivered only once it has printed them: run the command the line names, in the background again if that's how you wait. With `--json` the line comes as an object with `stopped`, `item`, `cursor` and `resume`. A wait that ends without that line, as one killed with SIGKILL (exit 137) or whose output the host dropped, may have printed nothing: run `mg feedback app#3`, which prints what's new without waiting, act on it, then wait as before.
+
+A hub that restarts, as on an upgrade, doesn't end a wait: it prints why on stderr, as in `reconnecting in 1s`, and connects again, until its timeout or, without one, for two minutes. If the hub is still down by then, the wait exits 69 with a hint naming the command that resumes it once the hub is back.
+
+A wait you no longer watch, left running by a session that ended or a host that lost track of it, keeps the hub from running your wake. End it before you rely on a wake: `pkill -f "mg wait app#3( |$)"`.
 
 ## Cursors
 
@@ -31,6 +45,18 @@ The command should start a session that runs `mg wait {item}` or `mg feedback {i
 On the hub's machine the hub runs the command. On a machine `mg connect` points at another hub, that machine's `mg wakes run` does: the hub hands it the commands left from there, and it runs them as the hub would. `mg connect` installs it as a service, so it already runs; when `mg submit --wake` warns that no `mg wakes run` polls from the machine, the wake waits until one does, so ask the operator to run `mg connect HUB` there again, and wait with `mg wait` meanwhile. A submit from another machine than the last one removes the wake the last one left, since it would start a session in a worktree the item's agent left.
 
 The latest submit that passes `--wake` sets it; `--wake ""` removes it. Read what's new with `mg feedback` before you set it from a live session, or the hub wakes you for it at once. When you pick up an item with `mg resume`, it shows the wake an earlier session left: replace it with yours or remove it, or it keeps starting that session.
+
+## Claude Code
+
+Run `mg wait app#3 --timeout 0` with the Bash tool's `run_in_background`: Claude Code tells the session when the command exits, and the turn that follows reads its output. Claude Code ends a background command that runs past its cap, so a long wait can end with the line above (exit 143); run the command it names in the background again.
+
+To be woken after your turn ends with no wait running, leave a wake that resumes your session headless:
+
+```
+mg submit --wake "claude -p --resume $CLAUDE_CODE_SESSION_ID 'Run mg feedback {item} and act on what it returns.'"
+```
+
+The shell expands `$CLAUDE_CODE_SESSION_ID`, your session's ID, as you submit. When the item has events, the hub runs a turn of that session in the worktree; the desktop app or `claude --resume` shows it once the session is opened again. The headless turn can't ask for permission, so a tool call that would ask fails: the commands the loop needs (`mg`, `git`, the project's build) have to be allowed in the project's settings.
 
 ## Codex
 

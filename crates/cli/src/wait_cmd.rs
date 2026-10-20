@@ -1,16 +1,21 @@
 //! `mg wait`: blocks until an item has events for its agent, except in a
-//! Codex session.
+//! Codex session. It outlasts a hub that restarts under it, and a signal
+//! that stops it says how to resume.
+
+mod stop;
 
 use std::time::{Duration, Instant};
 
 use clap::ValueEnum;
 
 use api::feedback::{Event, Feedback, Source};
+use hub::Home;
 
 use crate::client::Client;
 use crate::feedback_cmd::{closed, read, report};
 use crate::item_name;
 use crate::output::{CliError, Outcome, exit};
+use stop::Stopped;
 
 /// Which events end the wait.
 #[derive(Clone, Copy, ValueEnum)]
@@ -28,10 +33,35 @@ impl Wake {
             Self::Operator => events.iter().any(|e| e.source == Source::Operator),
         }
     }
+
+    /// The words of the command that waits on as this one does.
+    fn command(self) -> &'static [&'static str] {
+        match self {
+            Self::Any => &["wait"],
+            Self::Operator => &["wait", "--for", "operator"],
+        }
+    }
 }
+
+/// How long a wait lasts unless told otherwise.
+pub const TIMEOUT: u64 = 540;
 
 /// The longest one request waits; a longer wait asks again.
 const REQUEST: u64 = 3600;
+
+/// How much longer than the wait it asked for the hub may take to answer.
+/// Past it the hub is lost, as one is that went away across a tailnet
+/// without closing the connection.
+const ANSWER: Duration = Duration::from_secs(60);
+
+/// How long a wait without a timeout keeps reconnecting to a hub it lost.
+/// A restart, as on an upgrade, takes seconds; past this the hub is down.
+const RECONNECT: Duration = Duration::from_secs(120);
+
+/// The first pause before reconnecting, doubled after each failure up to
+/// [`BACKOFF_MAX`].
+const BACKOFF: Duration = Duration::from_secs(1);
+const BACKOFF_MAX: Duration = Duration::from_secs(15);
 
 /// Set in the commands a Codex session runs. Codex checks on a running
 /// command with a model turn, so a blocking wait there spends tokens until it
@@ -42,10 +72,29 @@ pub fn run(
     item: String,
     wake: Wake,
     timeout: u64,
+    since: Option<u64>,
+    json: bool,
+) -> Result<Outcome, CliError> {
+    // First, before anything starts a thread.
+    let watch = stop::watch(json, stopped(&item, wake, timeout, since));
+    let waited = wait(&watch, item, wake, timeout, since);
+    // An error prints as an outcome does, and a signal mustn't print over it.
+    watch.done();
+    waited
+}
+
+fn wait(
+    watch: &stop::Watch,
+    item: String,
+    wake: Wake,
+    timeout: u64,
     mut since: Option<u64>,
 ) -> Result<Outcome, CliError> {
-    let client = Client::connect(&crate::home()?)?;
-    let item = item_name::find(&client, &item)?.id;
+    let at = |name: &str, since| stopped(name, wake, timeout, since);
+    let home = crate::home()?;
+    let mut client = connect(&home)?;
+    let found = item_name::find(&client, &item)?;
+    let (item, name) = (found.id, found.name);
     let query = match wake {
         Wake::Any => "any",
         Wake::Operator => "operator",
@@ -59,7 +108,9 @@ pub fn run(
             .then(|| Instant::now().checked_add(Duration::from_secs(timeout)))
             .flatten()
     };
+    let mut retry = None;
     loop {
+        watch.waiting(at(&name, since));
         let wait = match deadline {
             None => REQUEST,
             Some(deadline) => deadline
@@ -67,16 +118,23 @@ pub fn run(
                 .as_secs_f64()
                 .ceil() as u64,
         };
-        let feedback = read(&client, &item, since, Some((wait.min(REQUEST), query)))?;
+        let feedback = match read(&client, &item, since, Some((wait.min(REQUEST), query))) {
+            Ok(feedback) => {
+                retry = None;
+                feedback
+            }
+            Err(e) if lost(&e) => {
+                let retry = retry.get_or_insert_with(|| Retry::new(deadline));
+                client = reconnect(&home, e, retry, &at(&name, since))?;
+                continue;
+            }
+            Err(e) => return Err(resumable(e, &at(&name, since))),
+        };
         // Closing an item logs an event, so the agent reads who closed it
         // and why with whatever came before. The hub also answers at its
         // deadline, with events that may not be the ones this waits for.
         if closed(feedback.state).is_some() || wake.by(&feedback.events) {
-            let command: &[&str] = match wake {
-                Wake::Any => &["wait"],
-                Wake::Operator => &["wait", "--for", "operator"],
-            };
-            return Ok(report(client, &feedback, since, command));
+            return Ok(report(client, &feedback, since, wake.command()));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             let text = if codex {
@@ -91,6 +149,99 @@ pub fn run(
             return Ok(Outcome::done(&feedback, text).exit(exit::TIMEOUT));
         }
         since = next_since(since, &feedback);
+    }
+}
+
+fn connect(home: &Home) -> Result<Client, CliError> {
+    Ok(Client::connect(home)?.time_limit(Duration::from_secs(REQUEST) + ANSWER))
+}
+
+/// The hub went away or answered as one does while it restarts, rather
+/// than refusing the wait.
+fn lost(e: &CliError) -> bool {
+    matches!(
+        e.body.code.as_str(),
+        "hub_unavailable" | "unexpected_reply" | "tailscale_unavailable" | "store_failed"
+    )
+}
+
+/// Reconnecting to a lost hub. It lasts until a read succeeds, not a
+/// connect: a hub that answers its health but fails every read still runs
+/// out of time, and its pauses still grow.
+struct Retry {
+    give_up: Instant,
+    pause: Duration,
+}
+
+impl Retry {
+    /// Until the wait's deadline, or for [`RECONNECT`] without one.
+    fn new(deadline: Option<Instant>) -> Self {
+        Self {
+            give_up: deadline.unwrap_or_else(|| Instant::now() + RECONNECT),
+            pause: BACKOFF,
+        }
+    }
+}
+
+/// Connects to the hub again after `e`, pausing longer after each failure.
+/// Each failure is printed, so a wait that ends on one has said why.
+fn reconnect(
+    home: &Home,
+    mut e: CliError,
+    retry: &mut Retry,
+    stopped: &Stopped,
+) -> Result<Client, CliError> {
+    loop {
+        let left = retry.give_up.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(resumable(e, stopped));
+        }
+        let pause = retry.pause.min(left);
+        eprintln!(
+            "mg wait: {}; reconnecting in {}s",
+            e.body.message,
+            pause.as_secs_f64().ceil()
+        );
+        std::thread::sleep(pause);
+        retry.pause = (retry.pause * 2).min(BACKOFF_MAX);
+        match connect(home) {
+            Ok(client) => return Ok(client),
+            Err(next) if lost(&next) => e = next,
+            Err(next) => return Err(resumable(next, stopped)),
+        }
+    }
+}
+
+/// `e`, with how to wait on from where this wait ended.
+fn resumable(mut e: CliError, stopped: &Stopped) -> CliError {
+    let resume = format!("once that's fixed, resume with: {}", stopped.resume);
+    e.body.hint = Some(match e.body.hint.take() {
+        Some(hint) => format!("{hint}; {resume}"),
+        None => resume,
+    });
+    e
+}
+
+/// What a signal prints while the wait reads after `since`. Without it the
+/// wait reads after the delivered cursor, which the hub keeps, so the same
+/// command resumes it. A timeout other than the default carries over, so a
+/// wait run with `--timeout 0` resumes without one.
+fn stopped(name: &str, wake: Wake, timeout: u64, since: Option<u64>) -> Stopped {
+    let mut resume = format!("mg {} {name}", wake.command()[0]);
+    for option in &wake.command()[1..] {
+        resume.push_str(&format!(" {option}"));
+    }
+    if timeout != TIMEOUT {
+        resume.push_str(&format!(" --timeout {timeout}"));
+    }
+    if let Some(since) = since {
+        resume.push_str(&format!(" --since {since}"));
+    }
+    Stopped {
+        stopped: "",
+        item: name.to_owned(),
+        cursor: since,
+        resume,
     }
 }
 

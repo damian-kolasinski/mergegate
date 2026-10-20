@@ -2,6 +2,7 @@ use super::*;
 use crate::external::{Vote, held_keys};
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::github::{PullCommentKind, PullLines};
+use crate::review::{Comment, NewReply, ReplyStatus};
 
 fn id() -> ItemId {
     ItemId::parse("app#1").unwrap()
@@ -388,4 +389,69 @@ fn the_operator_s_own_and_empty_comments_are_not_fetched() {
     let repo = GithubRepo::parse("o/app").unwrap();
     let fetched = fetch(&github, &repo, 1, false).unwrap();
     assert_eq!(fetched, [issue(1, "alice", "Hi")]);
+}
+
+/// Brings `first` in, hands it to the agent and, when `answer`, has the
+/// agent reply to it; then brings in `edited`, the same comment edited, and
+/// returns it as the hub has it.
+fn edited_after_the_agent_got_it(first: PullComment, edited: &str, answer: bool) -> Comment {
+    let mut store = FakeStore::with_item(1);
+    let git = FakeGit::default();
+    let none = BTreeSet::new();
+    ingest(&mut store, &git, &id(), vec![first.clone()], &none, 1_000).unwrap();
+    send_all(&mut store);
+    let comment = store.comments(&id()).unwrap()[0].id;
+    if answer {
+        let reply = NewReply {
+            comment,
+            item: id(),
+            author: Author::Agent,
+            status: Some(ReplyStatus::Addressed),
+            body: String::new(),
+            revision: 1,
+        };
+        store.insert_reply(reply).unwrap();
+    }
+    let edit = PullComment {
+        body: edited.into(),
+        dated: 2,
+        ..first
+    };
+    let ingested = ingest(&mut store, &git, &id(), vec![edit], &none, 2_000).unwrap();
+    assert_eq!(ingested.edited, 1);
+    store.comments(&id()).unwrap().remove(0)
+}
+
+#[test]
+fn a_bots_edit_to_a_comment_the_agent_answered_stays_with_the_agent() {
+    let bot = issue(1, "coderabbitai[bot]", "Typo here.");
+    let comment =
+        edited_after_the_agent_got_it(bot, "Typo here.\n\n✅ Addressed in commit abc123", true);
+    assert_eq!(comment.body, "Typo here.\n\n✅ Addressed in commit abc123");
+    let external = comment.external.unwrap();
+    assert!(!external.pending, "redelivered");
+    assert_eq!(external.vote, Some(Vote::Up));
+}
+
+#[test]
+fn a_bots_edit_to_a_comment_the_agent_left_unanswered_is_held_again() {
+    let bot = issue(1, "coderabbitai[bot]", "Typo here.");
+    let comment = edited_after_the_agent_got_it(bot, "Typo here, and there.", false);
+    assert!(comment.external.unwrap().awaiting_vote());
+}
+
+#[test]
+fn a_persons_edit_to_a_comment_the_agent_answered_is_held_again() {
+    // It can ask for more than the agent answered.
+    let person = issue(1, "alice", "Rename it.");
+    let comment = edited_after_the_agent_got_it(person, "Rename it, and the test.", true);
+    assert!(comment.external.unwrap().awaiting_vote());
+}
+
+#[test]
+fn a_bots_placeholder_the_agent_got_that_became_its_summary_stays_with_the_agent() {
+    let placeholder = issue(1, "coderabbitai[bot]", "Currently processing new changes.");
+    let comment = edited_after_the_agent_got_it(placeholder, WALKTHROUGH, false);
+    let external = comment.external.unwrap();
+    assert!(!external.pending && !external.summary);
 }

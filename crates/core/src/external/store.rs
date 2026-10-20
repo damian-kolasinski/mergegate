@@ -27,6 +27,17 @@ pub trait ExternalStore {
         now: u64,
     ) -> Result<(), StoreError>;
 
+    /// Replaces an external comment's body, which GitHub dates `dated`,
+    /// leaving where it stands as it is: one no batch holds stays unheld,
+    /// and its vote stays. For an edit that tells the agent nothing new.
+    fn amend_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError>;
+
     /// Withdraws held comment `id`, which GitHub no longer has. One no batch
     /// carried and no one answered is deleted, with the operator's draft
     /// replies on it, so it never reaches the agent; any other stops waiting

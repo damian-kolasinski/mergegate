@@ -295,18 +295,80 @@ fn f7_a_cursor_past_the_items_events_reads_from_its_newest() {
 }
 
 #[test]
-fn f3_stopping_the_hub_ends_a_pending_wait() {
+fn f3_a_hub_that_stays_stopped_ends_a_wait_by_its_timeout() {
     let (env, _repo) = submitted();
     let started = Instant::now();
     let run = std::thread::scope(|scope| {
-        let waiting = scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--timeout", "30"]));
+        let waiting = scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--timeout", "3"]));
         std::thread::sleep(Duration::from_millis(500));
         env.mg(&["hub", "stop"]).assert_code(0);
         waiting.join().unwrap()
     });
     let run = run.assert_code(69);
-    assert_eq!(run.json()["error"]["code"], "hub_unavailable", "{run:?}");
+    let error = &run.json()["error"];
+    assert_eq!(error["code"], "hub_unavailable", "{run:?}");
+    assert!(
+        error["hint"]
+            .as_str()
+            .unwrap()
+            .ends_with("resume with: mg wait app#1 --timeout 3"),
+        "{run:?}"
+    );
+    // Each attempt to reconnect says why it had to.
+    assert!(run.stderr.contains("reconnecting in"), "{run:?}");
     assert!(started.elapsed() < Duration::from_secs(10));
+}
+
+#[test]
+fn f3_a_wait_outlasts_a_hub_restart() {
+    let (env, _repo) = submitted();
+    let run = std::thread::scope(|scope| {
+        let waiting = scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--timeout", "30"]));
+        std::thread::sleep(Duration::from_millis(500));
+        env.mg(&["hub", "stop"]).assert_code(0);
+        // On another port, which the wait finds as a new command would.
+        env.start_hub();
+        review(&env, "changes_requested", "Still here.");
+        waiting.join().unwrap()
+    });
+    let feedback = run.assert_code(0).json();
+    assert_eq!(feedback["events"][0]["summary"], "Still here.");
+}
+
+#[test]
+fn f3_sigterm_ends_a_wait_with_the_command_that_resumes_it() {
+    let (env, _repo) = submitted();
+    review(&env, "comment", "First look.");
+    for (args, resume) in [
+        (
+            vec!["wait", "app#1", "--timeout", "0"],
+            "mg wait app#1 --timeout 0",
+        ),
+        (
+            vec!["wait", "app#1", "--since", "1", "--timeout", "0"],
+            "mg wait app#1 --timeout 0 --since 1",
+        ),
+    ] {
+        // The plain wait would return the review, so it gets delivered first.
+        env.mg(&["feedback", "app#1"]).assert_code(0);
+        let waiting = env.spawn(&args);
+        std::thread::sleep(Duration::from_millis(500));
+        let killed = std::process::Command::new("kill")
+            .args(["-TERM", &waiting.id().to_string()])
+            .status()
+            .unwrap();
+        assert!(killed.success());
+        let output = waiting.wait_with_output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(143), "{stdout}");
+        assert!(
+            stdout.starts_with("mg wait: SIGTERM stopped the wait on app#1")
+                && stdout
+                    .trim_end()
+                    .ends_with(&format!("resume with: {resume}")),
+            "{stdout}"
+        );
+    }
 }
 
 #[test]

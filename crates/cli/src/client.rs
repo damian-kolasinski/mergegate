@@ -63,15 +63,7 @@ impl Client {
 
     pub fn to(hub: &Hub) -> Result<Self, CliError> {
         if !hub.compatible() {
-            let message = format!(
-                "the hub speaks API {:08x}, this mg speaks {:08x}",
-                hub.health.api_version,
-                api::API_VERSION
-            );
-            let hint = match hub.connected {
-                true => "run the same mg here as on the hub's machine",
-                false => "mg hub stop && mg hub start",
-            };
+            let (message, hint) = incompatible(hub, env!("MG_VERSION"));
             return Err(CliError::new("hub_incompatible", message)
                 .hint(hint)
                 .exit(exit::UNAVAILABLE));
@@ -222,6 +214,30 @@ impl Client {
     }
 }
 
+/// Why `mg` `ours` can't use `hub`, and the fix: the `mg` on one side has to
+/// be the other's.
+fn incompatible(hub: &Hub, ours: &str) -> (String, String) {
+    let theirs = &hub.health.version;
+    let message = format!(
+        "the hub runs mg {theirs}, which speaks API {:08x}; this is mg {ours}, which speaks {:08x}",
+        hub.health.api_version,
+        api::API_VERSION
+    );
+    let hint = if !hub.connected {
+        "mg hub stop && mg hub start".to_owned()
+    } else if upgrade::newer(ours, theirs) {
+        format!(
+            "upgrade mg on the hub's machine to {ours}, then restart the hub there: mg hub stop && mg hub start"
+        )
+    } else if theirs == ours {
+        // Two builds of one release, as from source.
+        "run the same build of mg here as on the hub's machine".to_owned()
+    } else {
+        format!("install mg {theirs} here, the hub's mg")
+    };
+    (message, hint)
+}
+
 /// The hub `mg connect` named, or else the one `home` runs, if it answers.
 pub(crate) fn running(home: &Home) -> Result<Hub, CliError> {
     if let Some(connection) = home.read_connection() {
@@ -253,7 +269,11 @@ pub(crate) fn reach(url: &str) -> Result<Hub, CliError> {
             "hub_unavailable",
             format!("can't reach the hub at {url}: {why}"),
         )
-        .hint("check Tailscale on both machines, or use this machine's hub: mg connect --local")
+        .hint(
+            "check Tailscale on both machines; if both are up, run mg doctor on the hub's \
+             machine, whose macOS firewall blocks an upgraded mg until it's allowed again; \
+             or use this machine's hub: mg connect --local",
+        )
         .exit(exit::UNAVAILABLE)
     };
     // A refusal is the hub's to explain: which device it refused and how the

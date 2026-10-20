@@ -47,6 +47,21 @@ pub(super) async fn check() -> Option<Check> {
     .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
 }
 
+/// Logs what keeps the tailnet out, for a hub that just started listening
+/// there. That is when an upgraded mg finds no rule of its own, and the log
+/// is where an operator looks when another machine can't connect.
+pub(crate) async fn warn() {
+    let Some(check) = check().await else {
+        return;
+    };
+    if check.status != CheckStatus::Ok {
+        match check.fix {
+            Some(fix) => tracing::warn!("{}; fix: {fix}", check.message),
+            None => tracing::warn!("{}", check.message),
+        }
+    }
+}
+
 impl Firewall {
     fn read() -> Option<Self> {
         let ask = |flag: &str| {

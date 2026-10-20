@@ -57,6 +57,8 @@ The operator's rules sort each file of a revision into review or trusted: truste
 
 A `review.submitted` event carries the verdict (`approved`, `changes_requested` or `comment`), the operator's summary, and the comments. Each comment has an ID (`c_17`), the file and lines it is on, the lines it quotes, and its body. `replies` holds the operator's answers to your replies on earlier comments.
 
+The summary, the review's body, can ask for changes of its own, and a `changes_requested` review may have nothing else. It has no ID, so `mg reply` can't answer it: the next `mg submit` does, with a revision that makes the changes it asks for, and the operator reads that revision's diff against the summary. Don't put an answer to it in the guide, which describes the change as a whole. When you won't do something it asks, or can't until the operator answers, say so to the operator in your session, as `mg` has no way to send it.
+
 ## Replying
 
 Answer every comment, once you know what you're doing about it:
@@ -73,8 +75,9 @@ On an item with a GitHub pull request, the hub reads the pull request's comments
 
 - Each comment has an ID like the operator's (`c_23`) and names its author. One on lines no revision's diff shows, or on no file, is about the whole item.
 - Answer them with `mg reply` as you would the operator's. Your replies stay in mergegate; nothing is posted to GitHub, and the operator sees them.
-- A comment edited on GitHub comes back in a later batch marked edited.
+- A comment edited on GitHub comes back in a later batch marked edited, unless a bot edited one you already replied to, as when it marks its finding addressed: that edit stays with the operator.
 - The operator can agree with a rejection, or override it with `comment.override`: then make the change.
+- A review can answer a comment from GitHub that hadn't reached you: the comment comes in an `external.comments` event logged right after the review, so read both before acting on the reply.
 - `mg feedback app#3` hands over the held comments at once along with anything else new. `mg sync app#3` reads the pull request now and hands over everything held but the comments still waiting for the operator's vote; use it when you know a comment is there that never arrived.
 
 The pull request can also end on GitHub, without the operator. Merged there, the item merges with it: `item.merged` says it was merged on GitHub and as which commit. Closed there unmerged, the item is abandoned: `item.abandoned` says GitHub abandoned it. Either way the item is closed; there's nothing left to submit.

@@ -15,7 +15,7 @@ use crate::server::AppState;
 use crate::tailnet::Listening;
 use crate::ui;
 
-mod firewall;
+pub(crate) mod firewall;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new().route("/api/doctor", get(doctor))

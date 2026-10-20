@@ -1,7 +1,8 @@
 //! Bringing a pull request's comments in: a new one is placed on a revision
 //! and held for the next batch, an edited one held again, and a held one
 //! GitHub deleted withdrawn. A bot's summary is kept for the operator to
-//! read and never held.
+//! read and never held, and neither is a bot's edit to a comment the agent
+//! already answered.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,7 +10,7 @@ use super::{ExternalError, ExternalStore, GithubKey, NewExternal, summary};
 use crate::diff::{Content, DiffGit, DiffStore};
 use crate::github::{Github, GithubError, GithubRepo, PullComment, PullLines};
 use crate::item::{Item, ItemBackend, ItemId, ItemState, ItemStore, Revision};
-use crate::review::{Anchor, CommentId, ReviewError, ReviewStore, Side, quote, shown};
+use crate::review::{Anchor, Author, CommentId, ReviewError, ReviewStore, Side, quote, shown};
 
 /// What an ingest changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -75,16 +76,24 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
     if matches!(item.state, ItemState::Merged | ItemState::Abandoned) {
         return Ok(Ingested::default());
     }
+    let answered: BTreeSet<CommentId> = store
+        .replies(id)?
+        .into_iter()
+        .filter(|r| r.author == Author::Agent)
+        .map(|r| r.comment)
+        .collect();
     let known: BTreeMap<GithubKey, Known> = store
         .comments(id)?
         .into_iter()
         .filter_map(|c| {
             let external = c.external?;
             let known = Known {
+                answered: answered.contains(&c.id),
                 id: c.id,
                 body: c.body,
                 pending: external.pending,
                 summary: external.summary,
+                bot: external.bot,
             };
             Some(((external.kind, external.github_id), known))
         })
@@ -97,9 +106,24 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
         let known = known.get(&(comment.kind, comment.id));
         // One a batch carried stays the agent's, summary or not: its thread
         // and the agent's replies on it are already there.
-        let summary = summary(&comment) && known.is_none_or(|k| k.pending || k.summary);
+        let reads_as_summary = summary(&comment);
+        let summary = reads_as_summary && known.is_none_or(|k| k.pending || k.summary);
         match known {
             Some(known) if known.body == comment.body && known.summary == summary => {}
+            // Bots edit what they posted to say where it stands, as "Addressed
+            // in abc123" under a finding the agent answered, or turn a
+            // placeholder into their summary. Held again, the edit would come
+            // back to the agent as a comment to act on, and the operator would
+            // vote on it again. A person's edit can ask for more, so it's held.
+            Some(known)
+                if known.bot
+                    && !known.pending
+                    && !known.summary
+                    && (known.answered || reads_as_summary) =>
+            {
+                store.amend_external(known.id, &comment.body, comment.dated, now)?;
+                ingested.edited += 1;
+            }
             // Unedited, it's one the hub held before it told summaries apart:
             // counted as edited, as the operator should see it change.
             Some(known) => {
@@ -145,6 +169,9 @@ struct Known {
     body: String,
     pending: bool,
     summary: bool,
+    bot: bool,
+    /// The agent replied to it.
+    answered: bool,
 }
 
 /// The revision an inline comment was written on and its lines there, where

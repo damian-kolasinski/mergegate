@@ -258,6 +258,26 @@ fn a_release_logs_one_batch_that_keeps_its_bodies() {
 }
 
 #[test]
+fn an_amend_changes_the_body_and_leaves_the_comment_where_it_stands() {
+    let (_dir, mut store) = store();
+    let sent = store
+        .insert_external(external(1, "codex[bot]", "Leaks", false), 100)
+        .unwrap();
+    store.set_vote(sent.id, Vote::Up, 100).unwrap();
+    store.release(&app(), 1).unwrap();
+    store
+        .amend_external(sent.id, "Leaks\n\nAddressed in abc123", 0, 200)
+        .unwrap();
+    let amended = store.comment(sent.id).unwrap().unwrap();
+    assert_eq!(amended.body, "Leaks\n\nAddressed in abc123");
+    let external = amended.external.unwrap();
+    assert!(!external.pending);
+    assert_eq!(external.vote, Some(Vote::Up));
+    assert_eq!(store.held(&app()).unwrap(), None);
+    assert_eq!(store.release(&app(), 1).unwrap(), None);
+}
+
+#[test]
 fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
     let (_dir, mut store) = store();
     let sent = store

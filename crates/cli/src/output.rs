@@ -25,11 +25,15 @@ pub mod exit {
     pub const UNAVAILABLE: u8 = 69;
     /// A wait timed out with nothing to report; call it again (`EX_TEMPFAIL`).
     pub const TIMEOUT: u8 = 75;
+    // A wait stopped by a signal exits 128 plus its number, as a shell
+    // reports a killed command: 129 SIGHUP, 130 SIGINT, 143 SIGTERM. It
+    // prints the command that resumes it first.
 }
 
 pub const EXIT_CODES_HELP: &str = "\
 Exit codes: 0 ok · 1 error · 2 needs a decision (re-run with the named flag) · \
-3 item closed · 64 usage · 69 hub unavailable · 75 timed out (call again)";
+3 item closed · 64 usage · 69 hub unavailable · 75 timed out (call again) · \
+129, 130, 143 a wait stopped by SIGHUP, SIGINT or SIGTERM (resume as it printed)";
 
 pub enum Outcome {
     /// A result, printed on stdout even when `exit` reports a failure, as
