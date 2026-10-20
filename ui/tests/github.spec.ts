@@ -90,6 +90,41 @@ test("f8 approving merges the pull request", async ({ page, github }) => {
   await expect(page.getByText(/^Merged as [0-9a-f]{7}$/)).toBeVisible();
 });
 
+test("f8 the inbox answers while GitHub merges", async ({ page, github }) => {
+  const { hub } = github;
+  const app = hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await github.github.holdMerges(true);
+  await page.goto(`${hub.url}#/items/app%231`);
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+  await page
+    .getByRole("group", { name: "Confirm merge" })
+    .getByRole("button", { name: "Merge" })
+    .click();
+
+  // Asked with a short timeout: a hub that waits on GitHub doesn't answer.
+  const merging = async () => {
+    const response = await fetch(`${hub.url}api/inbox`, {
+      signal: AbortSignal.timeout(1000),
+    });
+    const inbox = (await response.json()) as { merging: { id: string }[] };
+    return inbox.merging.map((item) => item.id);
+  };
+  await expect.poll(merging).toEqual(["app#1"]);
+  // Leaving the review screen drops its approve request; the merge goes on.
+  await page.goto(hub.url);
+  const section = page.getByRole("region", { name: "Merging" });
+  const row = section.getByRole("listitem");
+  await expect(row).toContainText("Add login");
+  // Still landing, not a merge the hub gave up on.
+  await expect(row.getByText("Merge held")).toHaveCount(0);
+
+  // No reload: the merge finishes without the request that started it.
+  await github.github.holdMerges(false);
+  await expect(section).toHaveCount(0);
+  await expect(page.getByText("Closed today (1)")).toBeVisible();
+});
+
 test("a pull request merged on GitHub merges the item on screen", async ({
   page,
   github,

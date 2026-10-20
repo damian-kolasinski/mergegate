@@ -91,10 +91,15 @@ test("f8 a held merge waits for a retry or a cancel", async ({ page, hub }) => {
   await expect(screen.getByText("Merging", { exact: true })).toBeVisible();
   await expect(page.getByRole("form", { name: "Review" })).toHaveCount(0);
 
-  // Still in the way, so it holds again.
+  // Still in the way, so it holds again. A read delivers each event once,
+  // and one can land mid-merge, so count across them.
+  let holds = events(hub).filter((e) => e.type === "merge.held").length;
   await held.getByRole("button", { name: "Retry merge" }).click();
   await expect
-    .poll(() => events(hub).filter((e) => e.type === "merge.held").length)
+    .poll(
+      () =>
+        (holds += events(hub).filter((e) => e.type === "merge.held").length),
+    )
     .toBe(2);
   await expect(held).toContainText("refused main");
 

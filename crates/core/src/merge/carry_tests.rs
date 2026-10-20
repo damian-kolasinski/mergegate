@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::*;
 use crate::fake::{FakeBackend, FakeGit, FakeGithub, FakeStore, commit};
 use crate::feedback::Source;
@@ -123,7 +125,7 @@ fn approve_held(store: &mut FakeStore, git: &FakeGit, backend: &FakeBackend) {
         revision: 1,
         summary: "Ship it.".into(),
     };
-    let merge = approve(store, git, &[backend], request).unwrap();
+    let merge = approve(&RefCell::new(store), git, &[backend], request).unwrap();
     assert_eq!(merge.item.state, ItemState::Merging);
 }
 
@@ -136,7 +138,7 @@ fn a_held_approval_carries_to_the_same_diff_on_a_new_base() {
     assert_eq!(item.state, ItemState::NeedsReview);
     assert_eq!(unchanged_since_approval(&store, &item).unwrap(), Some(1));
 
-    let carried = carry(&mut store, &git, &[&backend], &id())
+    let carried = carry(&RefCell::new(&mut store), &git, &[&backend], &id())
         .unwrap()
         .unwrap();
     assert_eq!(carried.from, 1);
@@ -162,7 +164,10 @@ fn a_changed_file_needs_the_operator_again() {
     let item = send(&mut store, &git, 5);
     assert_eq!(standing_approval(&store, &id()).unwrap(), Some(1));
     assert_eq!(unchanged_since_approval(&store, &item).unwrap(), None);
-    assert_eq!(carry(&mut store, &git, &[&backend], &id()).unwrap(), None);
+    assert_eq!(
+        carry(&RefCell::new(&mut store), &git, &[&backend], &id()).unwrap(),
+        None
+    );
     assert_eq!(backend.landed().len(), 1);
     assert_eq!(
         store.item(&id()).unwrap().unwrap().state,
@@ -178,7 +183,10 @@ fn a_cancelled_merge_takes_the_approval_back() {
     cancel(&mut store, &id()).unwrap();
     assert_eq!(standing_approval(&store, &id()).unwrap(), None);
     send(&mut store, &git, 4);
-    assert_eq!(carry(&mut store, &git, &[&backend], &id()).unwrap(), None);
+    assert_eq!(
+        carry(&RefCell::new(&mut store), &git, &[&backend], &id()).unwrap(),
+        None
+    );
     assert_eq!(backend.landed().len(), 1);
 }
 
@@ -217,7 +225,10 @@ fn a_draft_keeps_the_item_for_the_operator() {
         body: "Why?".into(),
     };
     write_draft(&mut store, &git, draft).unwrap();
-    assert_eq!(carry(&mut store, &git, &[&backend], &id()).unwrap(), None);
+    assert_eq!(
+        carry(&RefCell::new(&mut store), &git, &[&backend], &id()).unwrap(),
+        None
+    );
     assert_eq!(
         store.item(&id()).unwrap().unwrap().state,
         ItemState::NeedsReview
@@ -229,7 +240,10 @@ fn a_held_item_isnt_carried_until_a_new_revision_comes() {
     let (mut store, git) = login();
     let backend = FakeBackend::new(Backend::Local).then(held());
     approve_held(&mut store, &git, &backend);
-    assert_eq!(carry(&mut store, &git, &[&backend], &id()).unwrap(), None);
+    assert_eq!(
+        carry(&RefCell::new(&mut store), &git, &[&backend], &id()).unwrap(),
+        None
+    );
     assert_eq!(backend.landed().len(), 1);
 }
 
@@ -245,7 +259,10 @@ fn a_file_the_rebase_conflicted_on_needs_the_operator_again() {
     let db = files.iter().find(|f| f.stat.file.path == "src/db.rs");
     assert_eq!(db.map(|f| f.change), Some(Change::Unseparated));
     assert_eq!(unchanged_since_approval(&store, &item).unwrap(), None);
-    assert_eq!(carry(&mut store, &git, &[&backend], &id()).unwrap(), None);
+    assert_eq!(
+        carry(&RefCell::new(&mut store), &git, &[&backend], &id()).unwrap(),
+        None
+    );
     assert_eq!(backend.landed().len(), 1);
 }
 
@@ -264,7 +281,10 @@ fn a_conflicted_file_the_new_revision_leaves_to_main_needs_the_operator_again() 
         .collect();
     assert_eq!(changes, [("src/login.rs", Change::Unchanged)]);
     assert_eq!(unchanged_since_approval(&store, &item).unwrap(), None);
-    assert_eq!(carry(&mut store, &git, &[&backend], &id()).unwrap(), None);
+    assert_eq!(
+        carry(&RefCell::new(&mut store), &git, &[&backend], &id()).unwrap(),
+        None
+    );
 }
 
 #[test]

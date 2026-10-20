@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::*;
 use crate::fake::{FakeBackend, FakeGit, FakeStore, commit};
 use crate::git::GitError;
@@ -18,13 +20,19 @@ fn approved(landing: Result<Landing, GitError>) -> FakeStore {
         revision: 1,
         summary: String::new(),
     };
-    approve(&mut store, &FakeGit::default(), &[&backend], request).unwrap();
+    approve(
+        &RefCell::new(&mut store),
+        &FakeGit::default(),
+        &[&backend],
+        request,
+    )
+    .unwrap();
     store
 }
 
 fn blocked_now(store: &FakeStore) -> Option<Blocked> {
     let item = store.item(&id("app#1")).unwrap().unwrap();
-    blocked(store, &item).unwrap()
+    blocked(store, &item, false).unwrap()
 }
 
 fn conflict() -> Landing {
@@ -77,7 +85,13 @@ fn a_conflict_blocks_through_later_comments_but_not_a_later_approval() {
         revision: 1,
         summary: String::new(),
     };
-    approve(&mut store, &FakeGit::default(), &[&backend], request).unwrap();
+    approve(
+        &RefCell::new(&mut store),
+        &FakeGit::default(),
+        &[&backend],
+        request,
+    )
+    .unwrap();
     assert_eq!(blocked_now(&store), None);
 }
 
@@ -100,4 +114,20 @@ fn a_merge_cut_short_before_it_logged_anything_is_held() {
     };
     store.insert_review(review, ItemState::Merging).unwrap();
     assert!(matches!(blocked_now(&store), Some(Blocked::Held { .. })));
+}
+
+#[test]
+fn a_merge_seen_while_one_lands_is_not_held() {
+    // What a merge between its steps leaves, with the store let go.
+    let mut store = FakeStore::with_item(1);
+    let review = NewReview {
+        item: id("app#1"),
+        revision: 1,
+        verdict: Verdict::Approved,
+        summary: String::new(),
+        moved: Vec::new(),
+    };
+    store.insert_review(review, ItemState::Merging).unwrap();
+    let item = store.item(&id("app#1")).unwrap().unwrap();
+    assert_eq!(blocked(&store, &item, true).unwrap(), None);
 }

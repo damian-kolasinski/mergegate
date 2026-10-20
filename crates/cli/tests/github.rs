@@ -4,6 +4,8 @@
 //! project switches backends under open items.
 
 use std::path::Path;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use serde_json::{Value, json};
 use testkit::{Env, FakeGithub, GithubPull, GithubPullState, Reply, TestRepo, http_reply};
@@ -429,6 +431,36 @@ fn f8_a_merge_github_refuses_is_held_until_retried() {
         pull(&github).state,
         GithubPullState::Merged { .. }
     ));
+}
+
+#[test]
+fn f8_the_inbox_answers_while_github_merges() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github);
+    github.hold_merges(true);
+
+    std::thread::scope(|scope| {
+        let approved = scope.spawn(|| approve(&env, 1));
+        let merging = |r: &String| r.starts_with("PUT ") && r.ends_with("/merge");
+        while !github.requests().iter().any(merging) {
+            assert!(!approved.is_finished(), "the merge never reached GitHub");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let (sent, inbox) = mpsc::channel();
+        let addr = env.hub_addr();
+        scope.spawn(move || {
+            let request =
+                format!("GET /api/inbox HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+            let _ = sent.send(json_of(&http_reply(&addr, &request)));
+        });
+        let inbox = inbox.recv_timeout(Duration::from_secs(10));
+        // Let through before failing, so the scope's threads can end.
+        github.hold_merges(false);
+        let inbox = inbox.expect("the inbox waited for GitHub to merge");
+        // The approval is recorded before the item lands.
+        assert_eq!(inbox["merging"][0]["id"], "app#1", "{inbox}");
+        assert_eq!(approved.join().unwrap()["outcome"]["kind"], "merged");
+    });
 }
 
 #[test]

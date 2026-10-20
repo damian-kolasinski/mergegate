@@ -48,8 +48,15 @@ async fn serve(
     let fetching = method == Method::GET
         && path == "/info/refs"
         && query.split('&').any(|p| p == "service=git-upload-pack");
+    // That fetch writes staging's target, as a landing does.
+    let landing = if fetching {
+        Some(state.landing().await)
+    } else {
+        None
+    };
     let command = state
         .blocking_github(move |store, git, github| {
+            let _landing = landing;
             let name = ProjectName::parse(&name).map_err(|_| ProjectError::NotFound(name))?;
             let project = store
                 .project(&name)?

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::*;
 use crate::fake::{FakeBackend, FakeGit, FakeStore, commit, remapped};
 use crate::feedback::{EventKind, Notice, NoticeKind, Source};
@@ -36,7 +38,7 @@ fn records_the_approval_then_closes_the_item_as_merged() {
     let mut store = FakeStore::with_item(1);
     let backend = FakeBackend::new(Backend::Local);
     let merge = approve(
-        &mut store,
+        &RefCell::new(&mut store),
         &FakeGit::default(),
         &[&backend],
         approving(1, " Ship it.\n"),
@@ -73,7 +75,7 @@ fn the_commit_says_what_the_guide_says_the_change_is_for() {
     store.set_guide(&id("app#1"), 1, Some(guide)).unwrap();
     let backend = FakeBackend::new(Backend::Local);
     approve(
-        &mut store,
+        &RefCell::new(&mut store),
         &FakeGit::default(),
         &[&backend],
         approving(1, ""),
@@ -96,7 +98,13 @@ fn a_merged_item_keeps_only_its_newest_revision_pinned() {
     git.pin(&project, "refs/mergegate/items/1/r1", &commit(2))
         .unwrap();
     let backend = FakeBackend::new(Backend::Local);
-    approve(&mut store, &git, &[&backend], approving(2, "")).unwrap();
+    approve(
+        &RefCell::new(&mut store),
+        &git,
+        &[&backend],
+        approving(2, ""),
+    )
+    .unwrap();
     assert_eq!(
         git.pins().into_iter().collect::<Vec<_>>(),
         [("refs/mergegate/items/1/r2".to_owned(), commit(3))]
@@ -112,7 +120,7 @@ fn a_conflict_hands_the_item_back_to_its_agent() {
     };
     let backend = FakeBackend::new(Backend::Local).then(Ok(conflict.clone()));
     let merge = approve(
-        &mut store,
+        &RefCell::new(&mut store),
         &FakeGit::default(),
         &[&backend],
         approving(1, ""),
@@ -134,7 +142,7 @@ fn a_failure_to_land_holds_the_item_in_merging_with_gits_reason() {
     let failure = GitError::Failed("the checkout of main has changes".into());
     let backend = FakeBackend::new(Backend::Local).then(Err(failure));
     let merge = approve(
-        &mut store,
+        &RefCell::new(&mut store),
         &FakeGit::default(),
         &[&backend],
         approving(1, ""),
@@ -160,7 +168,13 @@ fn only_the_newest_revision_of_an_open_item_merges() {
     let mut store = FakeStore::with_item(2);
     let git = FakeGit::default();
     let backend = FakeBackend::new(Backend::Local);
-    let stale = approve(&mut store, &git, &[&backend], approving(1, "")).unwrap_err();
+    let stale = approve(
+        &RefCell::new(&mut store),
+        &git,
+        &[&backend],
+        approving(1, ""),
+    )
+    .unwrap_err();
     assert!(
         matches!(
             stale,
@@ -173,7 +187,13 @@ fn only_the_newest_revision_of_an_open_item_merges() {
         "{stale:?}"
     );
     for missing in [0, 3] {
-        let error = approve(&mut store, &git, &[&backend], approving(missing, "")).unwrap_err();
+        let error = approve(
+            &RefCell::new(&mut store),
+            &git,
+            &[&backend],
+            approving(missing, ""),
+        )
+        .unwrap_err();
         assert!(
             matches!(error, MergeError::NoRevision { revision, .. } if revision == missing),
             "{error:?}"
@@ -181,18 +201,30 @@ fn only_the_newest_revision_of_an_open_item_merges() {
     }
 
     store.set_state(&id("app#1"), ItemState::Merging);
-    let merging = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();
+    let merging = approve(
+        &RefCell::new(&mut store),
+        &git,
+        &[&backend],
+        approving(2, ""),
+    )
+    .unwrap_err();
     assert!(matches!(merging, MergeError::Merging(_)), "{merging:?}");
 
     store.set_state(&id("app#1"), ItemState::Abandoned);
-    let closed = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();
+    let closed = approve(
+        &RefCell::new(&mut store),
+        &git,
+        &[&backend],
+        approving(2, ""),
+    )
+    .unwrap_err();
     assert!(matches!(closed, MergeError::Closed(_)), "{closed:?}");
 
     let missing = Approve {
         id: id("app#9"),
         ..approving(1, "")
     };
-    let none = approve(&mut store, &git, &[&backend], missing).unwrap_err();
+    let none = approve(&RefCell::new(&mut store), &git, &[&backend], missing).unwrap_err();
     assert!(matches!(none, MergeError::NoItem(_)), "{none:?}");
     assert!(backend.landed().is_empty());
     assert!(store.reviews().is_empty());
@@ -212,7 +244,13 @@ fn a_draft_that_cant_move_holds_the_approval() {
     };
     let draft = write_draft(&mut store, &git, draft).unwrap();
     let backend = FakeBackend::new(Backend::Local);
-    let held = approve(&mut store, &git, &[&backend], approving(2, "")).unwrap_err();
+    let held = approve(
+        &RefCell::new(&mut store),
+        &git,
+        &[&backend],
+        approving(2, ""),
+    )
+    .unwrap_err();
     let MergeError::Review(ReviewError::Unplaced { drafts, .. }) = held else {
         panic!("{held:?}");
     };
@@ -230,7 +268,7 @@ fn another_backends_item_is_refused_before_anything_is_recorded() {
     let mut store = FakeStore::with_item(1);
     let backend = FakeBackend::new(Backend::Github);
     let error = approve(
-        &mut store,
+        &RefCell::new(&mut store),
         &FakeGit::default(),
         &[&backend],
         approving(1, ""),

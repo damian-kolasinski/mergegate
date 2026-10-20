@@ -12,3 +12,17 @@ impl StoreError {
         Self(source.into())
     }
 }
+
+/// A store other work goes on in while a task works through it: the task
+/// takes it for one step at a time, so what it does between steps, as a
+/// merge's calls to GitHub, holds up no one.
+pub trait Shared<S> {
+    fn with<T>(&self, step: impl FnOnce(&mut S) -> T) -> T;
+}
+
+/// A store nothing else uses, as in tests: every step has it to itself.
+impl<S> Shared<S> for std::cell::RefCell<&mut S> {
+    fn with<T>(&self, step: impl FnOnce(&mut S) -> T) -> T {
+        step(&mut self.borrow_mut())
+    }
+}

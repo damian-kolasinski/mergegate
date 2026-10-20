@@ -2,6 +2,12 @@
 //! A merge that can't land yet holds the item in
 //! Merging until the operator retries or cancels it; one that conflicts hands
 //! the item back to its agent.
+//!
+//! A merge takes the store a step at a time ([`Shared`](crate::store::Shared))
+//! and lands through its backend between steps, so a slow GitHub holds up
+//! no one reading. Whoever runs one keeps everything else that moves an item
+//! (another merge, a submit, an abandon) waiting until it's done: what one
+//! step read about the item and its stack still holds in the next.
 
 mod approve;
 mod backend;

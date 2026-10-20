@@ -9,6 +9,7 @@ use std::time::Duration;
 use api::event::UiEvent;
 use mergegate_core::conflict::{Seen, Watch};
 use mergegate_core::project::{ProjectName, ProjectStore};
+use mergegate_core::store::Shared;
 
 use crate::server::AppState;
 
@@ -80,8 +81,10 @@ async fn pass(
             .map(ToString::to_string)
             .collect();
         let next_seen = std::mem::take(&mut merges.seen);
+        // Under landing: it moves staging's target and hands items back,
+        // which a merge does too.
         let handed_back = state
-            .blocking(move |store, git| merges.hand_back(store, git))
+            .stepwise(move |steps, git, _| steps.with(|store| merges.hand_back(store, git)))
             .await;
         // A hand-back that failed partway may have notified some items, so
         // the clients refresh anyway, and the next pass tries every item.

@@ -9,15 +9,16 @@ use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::highlight::HighlightStore;
 use crate::item::{Item, ItemGit, ItemId, ItemState, ItemStore};
 use crate::project::ProjectStore;
+use crate::store::Shared;
 
 /// Lands the item again, as approve would have.
 pub fn retry<S: ProjectStore + ItemStore + DiffStore + HighlightStore + FeedbackStore>(
-    store: &mut S,
+    store: &impl Shared<S>,
     git: &impl ItemGit,
     backends: &[&dyn MergeBackend],
     id: &ItemId,
 ) -> Result<Merge, MergeError> {
-    let item = merging(store, id)?;
+    let item = store.with(|store| merging(store, id))?;
     let backend = through(&item, backends)?;
     let merge = land(store, git, backend, &item)?;
     if matches!(merge.landing, Landing::Merged { .. }) {

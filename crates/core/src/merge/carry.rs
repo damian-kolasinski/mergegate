@@ -14,7 +14,7 @@ use crate::interdiff::{Change, InterdiffStore};
 use crate::item::{Item, ItemGit, ItemId, ItemState, ItemStore};
 use crate::project::ProjectStore;
 use crate::review::{NewReview, ReviewStore, Verdict};
-use crate::store::StoreError;
+use crate::store::{Shared, StoreError};
 
 /// The revision of `id` whose approval still stands: the operator approved
 /// it and hasn't reviewed since, cancelled its merge or seen the item or
@@ -95,38 +95,45 @@ pub fn carry<
         + HighlightStore
         + FeedbackStore,
 >(
-    store: &mut S,
+    store: &impl Shared<S>,
     git: &impl ItemGit,
     backends: &[&dyn MergeBackend],
     id: &ItemId,
 ) -> Result<Option<Carried>, MergeError> {
-    let item = store
-        .item(id)?
-        .ok_or_else(|| MergeError::NoItem(id.clone()))?;
-    if item.state != ItemState::NeedsReview {
-        return Ok(None);
-    }
-    let Some(from) = unchanged_since_approval(store, &item)? else {
+    // One step, as approve's, so nothing approves it in between.
+    let approved = store.with(|store| -> Result<_, MergeError> {
+        let item = store
+            .item(id)?
+            .ok_or_else(|| MergeError::NoItem(id.clone()))?;
+        if item.state != ItemState::NeedsReview {
+            return Ok(None);
+        }
+        let Some(from) = unchanged_since_approval(store, &item)? else {
+            return Ok(None);
+        };
+        // A review sends every draft, and the operator hasn't finished these.
+        let drafting = store.comments(id)?.iter().any(|c| c.is_draft())
+            || store.replies(id)?.iter().any(|r| r.is_draft());
+        if drafting {
+            return Ok(None);
+        }
+        let backend = through(&item, backends)?;
+        let review = NewReview {
+            item: id.clone(),
+            revision: item.revision.number,
+            verdict: Verdict::Approved,
+            summary: format!("Approved again: the diff is unchanged since r{from}."),
+            moved: Vec::new(),
+        };
+        store.insert_review(review, ItemState::Merging)?;
+        let item = store
+            .item(id)?
+            .ok_or_else(|| MergeError::NoItem(id.clone()))?;
+        Ok(Some((from, item, backend)))
+    })?;
+    let Some((from, item, backend)) = approved else {
         return Ok(None);
     };
-    // A review sends every draft, and the operator hasn't finished these.
-    let drafting = store.comments(id)?.iter().any(|c| c.is_draft())
-        || store.replies(id)?.iter().any(|r| r.is_draft());
-    if drafting {
-        return Ok(None);
-    }
-    let backend = through(&item, backends)?;
-    let review = NewReview {
-        item: id.clone(),
-        revision: item.revision.number,
-        verdict: Verdict::Approved,
-        summary: format!("Approved again: the diff is unchanged since r{from}."),
-        moved: Vec::new(),
-    };
-    store.insert_review(review, ItemState::Merging)?;
-    let item = store
-        .item(id)?
-        .ok_or_else(|| MergeError::NoItem(id.clone()))?;
     let merge = land(store, git, backend, &item)?;
     Ok(Some(Carried { from, merge }))
 }

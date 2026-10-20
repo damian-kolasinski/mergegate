@@ -15,6 +15,7 @@ use highlight::Languages;
 use lang_release::Releases;
 use mergegate_core::highlight::Pack;
 use mergegate_core::settings::Listen;
+use mergegate_core::store::Shared;
 use rules_toml::RulesToml;
 use store_sqlite::Store;
 
@@ -40,6 +41,12 @@ pub(crate) struct AppState {
     /// storing what it said, so a slower poll can't store older bodies over
     /// what a `mg sync` just brought in.
     pub pulling: tokio::sync::Mutex<()>,
+    /// Held across a merge, which lets go of the store while it lands, and
+    /// by everything else that moves an item (a submit, an abandon, a close
+    /// followed from GitHub) or syncs staging's target, so none moves one or
+    /// races its fetch under a landing. Taken before the store, never while
+    /// holding it, and only through [`Self::landing`].
+    landing: Arc<tokio::sync::Mutex<()>>,
     pub languages: Arc<Languages>,
     /// The packs mg can name for a file no installed pack highlights.
     pub known_packs: Vec<Pack>,
@@ -61,7 +68,9 @@ pub(crate) struct AppState {
     pub rules: rules::RulesFiles,
     pub tailnet: tailnet::Tailnet,
     /// Held for a whole request, which also keeps two requests from syncing
-    /// the same staging repo at once.
+    /// the same staging repo at once. A merge holds it a step at a time and
+    /// syncs staging between steps, under [`Self::landing`] instead, as is
+    /// every other sync of staging's target.
     store: Mutex<Store>,
     git: HubGit,
     github: GithubClient,
@@ -91,6 +100,47 @@ impl AppState {
         })
         .await
         .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
+
+    /// [`Self::blocking_github`], but `f` takes the store a step at a time,
+    /// so requests go on between its steps, as while a merge calls GitHub.
+    /// Under [`Self::landing`] throughout.
+    pub(crate) async fn stepwise<T: Send + 'static>(
+        self: &Arc<Self>,
+        f: impl FnOnce(&Steps<'_>, &HubGit, &GithubClient) -> T + Send + 'static,
+    ) -> T {
+        let landing = self.landing().await;
+        let state = Arc::clone(self);
+        tokio::task::spawn_blocking(move || {
+            let _landing = landing;
+            f(&Steps(&state.store), &state.git, &state.github)
+        })
+        .await
+        .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
+
+    /// Takes [`Self::landing`]. Owned, so the blocking work it guards holds
+    /// it: a client gone mid-request drops the request's future, and a guard
+    /// held there would let another landing start under the one still running.
+    pub(crate) async fn landing(&self) -> tokio::sync::OwnedMutexGuard<()> {
+        Arc::clone(&self.landing).lock_owned().await
+    }
+
+    /// Whether something holds [`Self::landing`], as a merge does between
+    /// its steps. Asked after reading the store: an item seen in Merging is
+    /// then either still landing or, if it finished since, about to say so.
+    pub(crate) fn landing_now(&self) -> bool {
+        self.landing.try_lock().is_err()
+    }
+
+    /// Runs `f` to the end even if the client goes: a merge's events, sent
+    /// once it lands, would otherwise go with the request.
+    pub(crate) async fn detached<T: Send + 'static>(
+        f: impl Future<Output = T> + Send + 'static,
+    ) -> T {
+        tokio::spawn(f)
+            .await
+            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
 
     /// Calls GitHub off the async workers, with the store unlocked.
@@ -126,6 +176,16 @@ impl AppState {
         tokio::task::spawn_blocking(move || f(&state.git, &state.github))
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
+}
+
+/// The store as [`AppState::stepwise`] hands it out: locked for each step.
+pub(crate) struct Steps<'a>(&'a Mutex<Store>);
+
+impl Shared<Store> for Steps<'_> {
+    fn with<T>(&self, step: impl FnOnce(&mut Store) -> T) -> T {
+        // As in `blocking_github`: a panicked step left nothing half-applied.
+        step(&mut self.0.lock().unwrap_or_else(|e| e.into_inner()))
     }
 }
 
@@ -172,6 +232,7 @@ pub(crate) async fn serve(
         wake_logs: home.wake_logs(),
         wake_bin: home.wake_bin(),
         pulling: tokio::sync::Mutex::new(()),
+        landing: Arc::default(),
         languages: Arc::new(languages),
         known_packs: highlight::known(),
         releases: Arc::new(releases),

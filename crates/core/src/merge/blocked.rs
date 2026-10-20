@@ -26,12 +26,14 @@ pub enum Blocked {
 /// still where that event put it: a new revision, a cancel or another
 /// approval moves on from it. Reviews in between don't.
 ///
-/// An item in Merging is always held: approve and retry hold the store until
-/// they finish, so one seen in Merging with no hold logged is a merge that a
-/// stopped hub or a failed write cut short, and only the operator moves it on.
+/// An item seen in Merging with no hold logged is a merge still landing
+/// while `landing` says one may be, as it may when read after the store;
+/// otherwise a stopped hub or a failed write cut it short, and only the
+/// operator moves it on.
 pub fn blocked(
     store: &(impl FeedbackStore + ItemStore),
     item: &Item,
+    landing: bool,
 ) -> Result<Option<Blocked>, StoreError> {
     if item.state == ItemState::Merging
         && let Some(parent) = &item.parent
@@ -63,6 +65,7 @@ pub fn blocked(
             }),
             ItemState::Merging,
         ) => Some(Blocked::Behind { parent }),
+        (_, ItemState::Merging) if landing => None,
         (_, ItemState::Merging) => Some(Blocked::Held {
             reason: "the merge stopped before it finished".into(),
         }),

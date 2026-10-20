@@ -8,6 +8,7 @@ use mergegate_core::external;
 use mergegate_core::github::{Github, PullStatus};
 use mergegate_core::item::{self, ItemError, ItemId, ItemState, ItemStore};
 use mergegate_core::merge::{GithubBackend, merged_elsewhere};
+use mergegate_core::store::Shared;
 
 use crate::server::AppState;
 use crate::{branches, merge};
@@ -42,29 +43,38 @@ pub(super) async fn follow(state: &Arc<AppState>, id: &ItemId) -> Result<bool, I
     };
     let closed = {
         let id = id.clone();
+        // Closing moves the item, and what's stacked on it may land.
         state
-            .blocking_github(move |store, git, github| {
-                let Some(closed) = item::follow_pull(store, git, &id, number, status)? else {
+            .stepwise(move |steps, git, github| {
+                let closed = steps.with(|store| {
+                    let closed = item::follow_pull(store, git, &id, number, status)?;
+                    if closed.is_some() {
+                        branches::drop(store, git, &id);
+                    }
+                    Ok::<_, ItemError>(closed)
+                })?;
+                let Some(closed) = closed else {
                     return Ok::<_, ItemError>(None);
                 };
-                branches::drop(store, git, &id);
                 // As after the hub's own merge, what's stacked on it follows,
                 // and a branch left behind only clutters GitHub. A closed one
                 // stays: whoever closed it may reopen it there.
                 let mut stacked = Vec::new();
                 if let (ItemState::Merged, Some(commit)) = (closed.state, &merged_as) {
                     let github = GithubBackend::new(git, github);
-                    match merged_elsewhere(store, git, &[git, &github], &id, commit) {
+                    match merged_elsewhere(steps, git, &[git, &github], &id, commit) {
                         Ok(moved) => stacked = moved,
                         Err(e) => tracing::warn!("following {id}'s merge on GitHub: {e}"),
                     }
-                } else if let Some(child) = store.child(&id)? {
+                } else if let Some(child) = steps.with(|store| store.child(&id))? {
                     // Told by `follow_pull` that its parent was abandoned.
                     stacked.push(child);
                 }
-                for child in stacked.iter().filter(|c| c.state == ItemState::Merged) {
-                    branches::drop(store, git, &child.id);
-                }
+                steps.with(|store| {
+                    for child in stacked.iter().filter(|c| c.state == ItemState::Merged) {
+                        branches::drop(store, git, &child.id);
+                    }
+                });
                 Ok(Some((closed, stacked)))
             })
             .await?

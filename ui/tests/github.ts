@@ -88,6 +88,16 @@ export class FakeGithub {
       throw new Error(`fake-github answered ${response.status}`);
   }
 
+  /** Merges wait at GitHub, as a slow one does, until `false` lets them through. */
+  async holdMerges(holding: boolean) {
+    const response = await fetch(`${this.web}/_fake/merges`, {
+      method: "POST",
+      body: JSON.stringify({ holding }),
+    });
+    if (!response.ok)
+      throw new Error(`fake-github answered ${response.status}`);
+  }
+
   /**
    * Takes the next `count` numbers of `repo`'s pull requests, as ones opened
    * without the hub would, so its items' pull requests and IDs part ways.
