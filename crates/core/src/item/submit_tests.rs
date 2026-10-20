@@ -58,6 +58,7 @@ fn request(project: &str, branch: &str, head: u8) -> Submit {
         title: None,
         worktree: None,
         wake: None,
+        device: None,
         guide: None,
         priority: None,
         note: None,
@@ -249,6 +250,7 @@ fn records_the_agents_worktree_and_wake_even_at_the_same_head() {
     let agent = |worktree: &str, wake: Option<&str>| Agent {
         worktree: Some(worktree.into()),
         wake: wake.map(Into::into),
+        device: None,
     };
     assert_eq!(store.agent(&id).unwrap(), agent("/work/login", None));
     // Waking needs no new commits: the agent submits again with --wake.

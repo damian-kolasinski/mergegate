@@ -1,12 +1,15 @@
 use std::path::{Path, PathBuf};
 
-use super::super::Spec;
+use super::super::{Role, Spec};
 use super::{exe, path, render};
 
 fn spec(exe: &str) -> Spec {
     Spec {
+        role: Role::Hub,
         exe: PathBuf::from(exe),
-        port: 7777,
+        args: ["--json", "hub", "start", "--foreground", "--port", "7777"]
+            .map(String::from)
+            .to_vec(),
         home: PathBuf::from("/Users/op/.mergegate"),
         outcome: PathBuf::from("/Users/op/.mergegate/hub.outcome"),
         log: PathBuf::from("/Users/op/.mergegate/hub.log"),
@@ -17,7 +20,7 @@ fn spec(exe: &str) -> Spec {
 #[test]
 fn the_agent_lives_in_the_users_launch_agents() {
     assert_eq!(
-        path(Path::new("/Users/op")),
+        path(Role::Hub, Path::new("/Users/op")),
         Path::new("/Users/op/Library/LaunchAgents/dev.mergegate.hub.plist")
     );
 }

@@ -10,9 +10,12 @@ use crate::store::StoreError;
 pub struct Agent {
     /// The absolute path of the worktree the newest submit came from.
     pub worktree: Option<String>,
-    /// A shell command the hub runs when the item has events from the
-    /// operator its agent hasn't read.
+    /// A shell command run when the item has events from the operator its
+    /// agent hasn't read.
     pub wake: Option<String>,
+    /// The tailnet device the newest submit came from, whose `mg wakes`
+    /// runner runs the wake; none for the hub's machine, where the hub does.
+    pub device: Option<String>,
 }
 
 /// An item whose agent is to be woken: it has a wake command and an event
@@ -26,6 +29,8 @@ pub struct DueWake {
     pub name: ItemId,
     pub command: String,
     pub worktree: Option<String>,
+    /// As in [`Agent::device`].
+    pub device: Option<String>,
     /// The item's newest event from the operator.
     pub cursor: u64,
 }
@@ -43,18 +48,25 @@ pub trait AgentStore {
     fn set_woken(&mut self, id: &ItemId, cursor: u64) -> Result<(), StoreError>;
 }
 
-/// Records what a submit carried. A submit without a worktree or wake keeps
-/// the item's; an empty wake removes it.
+/// Records what a submit from `device` carried. A submit without a worktree
+/// or wake keeps the item's; an empty wake removes it.
 pub(crate) fn record<S: AgentStore>(
     store: &mut S,
     id: &ItemId,
     worktree: Option<String>,
     wake: Option<String>,
+    device: Option<String>,
 ) -> Result<(), StoreError> {
-    if worktree.is_none() && wake.is_none() {
+    let mut agent = store.agent(id)?;
+    if worktree.is_none() && wake.is_none() && agent.device == device {
         return Ok(());
     }
-    let mut agent = store.agent(id)?;
+    // The item moved to another machine, where the wake left on the old
+    // one would start a session in a worktree its agent isn't in.
+    if agent.device != device {
+        agent.device = device;
+        agent.wake = None;
+    }
     if worktree.is_some() {
         agent.worktree = worktree;
     }

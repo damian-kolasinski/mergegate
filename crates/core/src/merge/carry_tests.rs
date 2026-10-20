@@ -105,6 +105,7 @@ fn send(store: &mut FakeStore, git: &FakeGit, head: u8) -> Item {
         title: None,
         worktree: None,
         wake: None,
+        device: None,
         guide: None,
         priority: None,
         note: None,

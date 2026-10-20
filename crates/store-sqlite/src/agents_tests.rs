@@ -67,6 +67,7 @@ fn waking(command: &str) -> Agent {
     Agent {
         worktree: Some("/work".into()),
         wake: Some(command.into()),
+        device: None,
     }
 }
 
@@ -86,7 +87,8 @@ fn keeps_one_agent_per_item() {
     store.set_agent(&id("app#1"), &waking("a")).unwrap();
     let moved = Agent {
         worktree: Some("/elsewhere".into()),
-        wake: None,
+        wake: Some("b".into()),
+        device: Some("devbox".into()),
     };
     store.set_agent(&id("app#1"), &moved).unwrap();
     assert_eq!(store.agent(&id("app#1")).unwrap(), moved);
@@ -103,6 +105,7 @@ fn a_wake_is_due_for_events_its_agent_has_neither_read_nor_been_woken_for() {
             &Agent {
                 worktree: Some("/work".into()),
                 wake: None,
+                device: None,
             },
         )
         .unwrap();

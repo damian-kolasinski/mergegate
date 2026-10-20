@@ -76,20 +76,19 @@ impl Client {
                 .hint(hint)
                 .exit(exit::UNAVAILABLE));
         }
-        let agent = ureq::Agent::config_builder()
-            .timeout_connect(Some(Duration::from_secs(2)))
-            // Registering a project fetches the whole repo into staging, which
-            // takes as long as it takes; only a hub that stopped answering
-            // ends a request.
-            .proxy(None)
-            .http_status_as_error(false)
-            .build()
-            .into();
         Ok(Self {
             url: hub.url.clone(),
-            agent,
+            agent: agent(None),
             connected: hub.connected,
         })
+    }
+
+    /// Gives up on a request after `limit`, for one whose answer is known
+    /// to come sooner: across a tailnet, a hub that went away without
+    /// closing the connection would otherwise leave it waiting for good.
+    pub fn time_limit(mut self, limit: Duration) -> Self {
+        self.agent = agent(Some(limit));
+        self
     }
 
     /// The hub is on another machine.
@@ -293,6 +292,19 @@ pub(crate) fn reach(url: &str) -> Result<Hub, CliError> {
 }
 
 /// For requests that never answer with a decision.
+fn agent(limit: Option<Duration>) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(2)))
+        // Registering a project fetches the whole repo into staging, which
+        // takes as long as it takes; only a hub that stopped answering ends
+        // a request.
+        .timeout_global(limit)
+        .proxy(None)
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
 fn done<T>(reply: Result<Reply<T>, CliError>) -> Result<T, CliError> {
     match reply? {
         Reply::Done(value) => Ok(value),

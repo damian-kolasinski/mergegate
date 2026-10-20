@@ -1,27 +1,17 @@
 use std::path::PathBuf;
 
-use super::Spec;
+use super::{Role, Spec};
 
 #[test]
-fn a_unit_runs_this_mg_as_the_foreground_hub_on_the_given_port() {
+fn a_unit_runs_this_mg_with_its_arguments() {
     let spec = Spec {
+        role: Role::Hub,
         exe: PathBuf::from("/opt/mg"),
-        port: 0,
+        args: vec!["--json".into(), "hub".into(), "start".into()],
         home: PathBuf::from("/h"),
         outcome: PathBuf::from("/h/hub.outcome"),
         log: PathBuf::from("/h/hub.log"),
         path_env: String::new(),
     };
-    assert_eq!(
-        spec.args(),
-        [
-            "/opt/mg",
-            "--json",
-            "hub",
-            "start",
-            "--foreground",
-            "--port",
-            "0"
-        ]
-    );
+    assert_eq!(spec.command(), ["/opt/mg", "--json", "hub", "start"]);
 }

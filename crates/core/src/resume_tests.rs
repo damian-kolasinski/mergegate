@@ -38,6 +38,7 @@ fn holds_the_newest_review_and_the_open_comments() {
     let agent = Agent {
         worktree: Some("/work/login".into()),
         wake: Some("harness resume".into()),
+        device: None,
     };
     store.set_agent(&id(), &agent).unwrap();
     review(&mut store, "First pass", &["Rename it", "Why?"]);

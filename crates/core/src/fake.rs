@@ -842,6 +842,7 @@ impl FakeStore {
                 title: None,
                 worktree: None,
                 wake: None,
+                device: None,
                 guide: None,
                 priority: None,
                 note: None,
@@ -2268,6 +2269,7 @@ impl AgentStore for FakeStore {
                         .map_or_else(|| id.clone(), |item| item.name()),
                     command: command.clone(),
                     worktree: agent.worktree.clone(),
+                    device: agent.device.clone(),
                     cursor,
                 });
             }
@@ -2861,6 +2863,7 @@ pub(crate) fn remapped(rebase: bool) -> (FakeStore, FakeGit) {
             title: None,
             worktree: None,
             wake: None,
+            device: None,
             guide: None,
             priority: None,
             note: None,
@@ -2885,6 +2888,7 @@ pub(crate) fn submit_login(store: &mut FakeStore, git: &FakeGit, head: u8) -> It
         title: None,
         worktree: None,
         wake: None,
+        device: None,
         guide: None,
         priority: None,
         note: None,

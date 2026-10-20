@@ -3,17 +3,15 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::Spec;
-
-const UNIT: &str = "mergegate-hub.service";
+use super::{Role, Spec};
 
 /// `$XDG_CONFIG_HOME/systemd/user/`, or `~/.config/systemd/user/`.
-pub(super) fn path(user_home: &Path) -> PathBuf {
+pub(super) fn path(role: Role, user_home: &Path) -> PathBuf {
     let config = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|dir| dir.is_absolute())
         .unwrap_or_else(|| user_home.join(".config"));
-    config.join("systemd/user").join(UNIT)
+    config.join("systemd/user").join(role.unit())
 }
 
 /// Whether this session has a user manager to talk to; containers and WSL
@@ -24,15 +22,22 @@ pub(super) fn usable() -> bool {
 
 pub(super) fn render(spec: &Spec) -> String {
     let exec: Vec<String> = spec
-        .args()
+        .command()
         .iter()
         .map(|arg| quote(arg).replace('$', "$$"))
         .collect();
+    // A woken session outlives the runner that started it, as on macOS:
+    // stopping the runner leaves the rest of its cgroup running.
+    let kill_mode = match spec.role {
+        Role::Wakes => "KillMode=process\n",
+        Role::Hub => "",
+    };
     // `on-failure`: a hub stopped through its API or SIGTERM exits 0 and
-    // stays stopped; a crash or failed start is retried.
+    // stays stopped, as does a wake runner with no hub to connect to; a
+    // crash or failed start is retried.
     format!(
         "[Unit]
-Description=mergegate hub
+Description={description}
 
 [Service]
 ExecStart={exec}
@@ -42,10 +47,11 @@ StandardOutput=append:{outcome}
 StandardError=append:{log}
 Restart=on-failure
 RestartSec=2
-
+{kill_mode}
 [Install]
 WantedBy=default.target
 ",
+        description = spec.role.description(),
         exec = exec.join(" "),
         path = quote(&format!("PATH={}", spec.path_env)),
         home = specifiers(&spec.home.display().to_string()),
@@ -73,22 +79,24 @@ pub(super) fn exe(unit: &str) -> Option<PathBuf> {
 
 /// Enables and starts the service. Reloading picks up a changed unit, and
 /// resetting a failed one lets it start again after its restart limit.
-pub(super) fn load(_unit: &Path, _changed: bool) -> Result<(), String> {
+pub(super) fn load(role: Role, _unit: &Path, changed: bool) -> Result<(), String> {
+    let unit = role.unit();
     systemctl(&["daemon-reload"])?;
-    let _ = systemctl(&["reset-failed", UNIT]);
-    systemctl(&["enable", UNIT])?;
-    systemctl(&["start", UNIT])
+    let _ = systemctl(&["reset-failed", unit]);
+    systemctl(&["enable", unit])?;
+    // A running service started from an older unit runs on until restarted.
+    systemctl(&[if changed { "restart" } else { "start" }, unit])
 }
 
 /// Disables and stops the service. Not loaded is fine.
-pub(super) fn unload() -> Result<(), String> {
-    let _ = systemctl(&["disable", "--now", UNIT]);
+pub(super) fn unload(role: Role) -> Result<(), String> {
+    let _ = systemctl(&["disable", "--now", role.unit()]);
     Ok(())
 }
 
 /// Stops the service, leaving it enabled for the next login.
-pub(super) fn stop() {
-    let _ = systemctl(&["stop", UNIT]);
+pub(super) fn stop(role: Role) {
+    let _ = systemctl(&["stop", role.unit()]);
 }
 
 /// Forgets a removed unit file.

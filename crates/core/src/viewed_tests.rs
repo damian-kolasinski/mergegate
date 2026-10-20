@@ -40,6 +40,7 @@ fn revised() -> FakeStore {
             title: None,
             worktree: None,
             wake: None,
+            device: None,
             guide: None,
             priority: None,
             note: None,

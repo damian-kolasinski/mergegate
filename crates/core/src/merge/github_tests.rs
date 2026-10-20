@@ -47,6 +47,7 @@ fn submitted(branches: &[(&str, u8, Option<&str>)]) -> (Project, Vec<Item>, Fake
             title: None,
             worktree: None,
             wake: None,
+            device: None,
             guide: None,
             priority: None,
             note: None,

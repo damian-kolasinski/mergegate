@@ -5,32 +5,32 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::Spec;
+use super::{Role, Spec};
 
-const LABEL: &str = "dev.mergegate.hub";
 const LAUNCHCTL: &str = "/bin/launchctl";
 
-pub(super) fn path(user_home: &Path) -> PathBuf {
+pub(super) fn path(role: Role, user_home: &Path) -> PathBuf {
     user_home
         .join("Library/LaunchAgents")
-        .join(format!("{LABEL}.plist"))
+        .join(format!("{}.plist", role.label()))
 }
 
 pub(super) fn render(spec: &Spec) -> String {
     let args: String = spec
-        .args()
+        .command()
         .iter()
         .map(|arg| format!("\t\t<string>{}</string>\n", escape(arg)))
         .collect();
     // `SuccessfulExit` false: a hub stopped through its API or SIGTERM exits
-    // 0 and stays stopped; a crash or failed start is retried.
+    // 0 and stays stopped, as does a wake runner with no hub to connect to;
+    // a crash or failed start is retried.
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>{LABEL}</string>
+	<string>{label}</string>
 	<key>ProgramArguments</key>
 	<array>
 {args}	</array>
@@ -55,6 +55,7 @@ pub(super) fn render(spec: &Spec) -> String {
 </dict>
 </plist>
 "#,
+        label = spec.role.label(),
         path = escape(&spec.path_env),
         home = escape(&spec.home.display().to_string()),
         outcome = escape(&spec.outcome.display().to_string()),
@@ -70,10 +71,10 @@ pub(super) fn exe(plist: &str) -> Option<PathBuf> {
     Some(PathBuf::from(unescape(exe)))
 }
 
-/// Loads the agent, which starts the hub. One loaded from an unchanged plist
+/// Loads the agent, which starts its program. One loaded from an unchanged plist
 /// is only started: unloading would stop a hub it is still starting.
-pub(super) fn load(plist: &Path, changed: bool) -> Result<(), String> {
-    let target = target();
+pub(super) fn load(role: Role, plist: &Path, changed: bool) -> Result<(), String> {
+    let target = target(role);
     let loaded = launchctl(&["print", &target]).is_ok();
     if loaded && !changed {
         return launchctl(&["kickstart", &target]);
@@ -95,9 +96,9 @@ fn gone(target: &str) {
     }
 }
 
-/// Unloads the agent, stopping a hub it runs. Not loaded is fine.
-pub(super) fn unload() -> Result<(), String> {
-    let target = target();
+/// Unloads the agent, stopping what it runs. Not loaded is fine.
+pub(super) fn unload(role: Role) -> Result<(), String> {
+    let target = target(role);
     if launchctl(&["print", &target]).is_err() {
         return Ok(());
     }
@@ -111,8 +112,8 @@ fn domain() -> String {
     format!("gui/{uid}")
 }
 
-fn target() -> String {
-    format!("{}/{LABEL}", domain())
+fn target(role: Role) -> String {
+    format!("{}/{}", domain(), role.label())
 }
 
 fn launchctl(args: &[&str]) -> Result<(), String> {

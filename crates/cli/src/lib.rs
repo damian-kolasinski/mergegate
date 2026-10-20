@@ -25,6 +25,7 @@ mod skill_cmd;
 mod submit_cmd;
 mod sync_cmd;
 mod wait_cmd;
+mod wakes_cmd;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -94,9 +95,10 @@ enum Command {
         /// Item title [default: the first commit's subject]
         #[arg(long)]
         title: Option<String>,
-        /// Shell command the hub runs in this worktree when the item has
-        /// events from the operator you haven't read; `{item}` becomes its
-        /// name, "" removes it; only on the hub's machine
+        /// Shell command run in this worktree when the item has events from
+        /// the operator you haven't read; `{item}` becomes its name, "" removes
+        /// it. The hub runs it, or on a machine connected to another hub its
+        /// `mg wakes run` service
         #[arg(long, value_name = "CMD")]
         wake: Option<String>,
         /// Screenshot or recording of the change for the operator: PNG,
@@ -214,6 +216,10 @@ enum Command {
     /// The agent skill matching this mg
     #[command(subcommand)]
     Skill(skill_cmd::SkillCommand),
+    /// On a machine connected to another hub, the runner of its wake
+    /// commands, which mg connect installs as a service
+    #[command(subcommand)]
+    Wakes(wakes_cmd::WakesCommand),
 }
 
 pub fn main() -> ExitCode {
@@ -236,6 +242,7 @@ fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
     match command {
         Command::Hub(command) => hub_cmd::run(command),
         Command::Connect { hub, local } => connect_cmd::run(hub, local),
+        Command::Wakes(command) => wakes_cmd::run(command),
         Command::Project(command) => project_cmd::run(command),
         Command::Lang(command) => lang_cmd::run(command),
         Command::Rules(command) => rules_cmd::run(command),

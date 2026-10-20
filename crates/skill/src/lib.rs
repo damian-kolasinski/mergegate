@@ -23,16 +23,21 @@ pub const FILES: &[(&str, &str)] = &[
         "references/operator.md",
         include_str!("../mergegate/references/operator.md"),
     ),
+    (
+        "scripts/codex_wake.py",
+        include_str!("../mergegate/scripts/codex_wake.py"),
+    ),
 ];
 
-/// `SKILL.md` without its frontmatter, then each of the files it links that
-/// `paths` names, under a `--- path ---` line, for prompts that inline the
-/// skill. A last line names the files left out, which its links still point
-/// at.
+/// `SKILL.md` without its frontmatter, then each of the references it links
+/// that `paths` names, under a `--- path ---` line, for prompts that inline
+/// the skill. A last line names the references left out, which its links
+/// still point at.
 pub fn inlined(paths: &[&str]) -> String {
     let mut out = body().trim_end().to_owned();
     let mut left = Vec::new();
-    for (path, text) in &FILES[1..] {
+    let references = FILES[1..].iter().filter(|(path, _)| path.ends_with(".md"));
+    for (path, text) in references {
         if paths.contains(path) {
             out.push_str(&format!("\n\n--- {path} ---\n\n{}", text.trim_end()));
         } else {
