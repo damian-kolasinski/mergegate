@@ -40,3 +40,7 @@ It sets both at once, so leaving out `--note` clears the old note. The operator 
 If the hub stops, the stream ends with an error and a non-zero exit: start it again with `--since` the last cursor you read, so nothing in between is missed.
 
 It marks nothing delivered, so each item's agent still gets its own events. Don't act on another agent's item: tell the operator, or start the work they asked for.
+
+## Review time
+
+When the operator asks you to record how long their reviews take, read it from `item.merged` and `item.abandoned`: with `--json`, each carries `stats`. `review_ms` is how long the operator was active on the item's review screen, meaning the page in front of them with their inputs no more than two minutes apart. `revisions` splits it per revision, with each one's `submitted_at`. `opened_at` and `closed_at` bound the item's life. The totals are final once the item closes, so reading the event again, from `mg feedback` or `mg events --since`, gives the same numbers. An event from a hub older than this has no `stats`.

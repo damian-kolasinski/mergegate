@@ -22,7 +22,7 @@ use tokio::time::Instant;
 use crate::guard::{self, Caller};
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{comments, external, items, presence, replies, reviews};
+use crate::{comments, external, items, presence, replies, review_time, reviews};
 
 /// The longest one request waits; `mg wait` asks again to wait longer.
 const MAX_WAIT: Duration = Duration::from_secs(3600);
@@ -67,13 +67,13 @@ async fn read(
     let mut since = query.since;
     loop {
         log.mark_unchanged();
-        let (read, parents) = {
+        let (read, related) = {
             let id = id.clone();
             state
                 .blocking(move |store, _| {
                     let read = feedback::feedback(store, &id, since)?;
-                    let parents = parent_names(store, &read.events)?;
-                    Ok::<_, FeedbackError>((read, parents))
+                    let related = relate(store, read.events.iter().map(|e| (&read.item, e)))?;
+                    Ok::<_, FeedbackError>((read, related))
                 })
                 .await
                 .map_err(failure)?
@@ -88,15 +88,16 @@ async fn read(
             // A wait's answer at its deadline can hold events its `mg wait`
             // isn't waiting for, and skips.
             if !(query.wait == 0 || woke) || read.events.is_empty() {
-                return Ok(Json(to_api(&id, read, &parents)));
+                return Ok(Json(to_api(&id, read, &related)));
             }
-            let ((read, released), parents) = {
+            let ((read, released), related) = {
                 let id = id.clone();
                 state
                     .blocking(move |store, _| {
                         let handed = handing(store, &id, since, read)?;
-                        let parents = parent_names(store, &handed.0.events)?;
-                        Ok::<_, FeedbackError>((handed, parents))
+                        let (read, _) = &handed;
+                        let related = relate(store, read.events.iter().map(|e| (&read.item, e)))?;
+                        Ok::<_, FeedbackError>((handed, related))
                     })
                     .await
                     .map_err(failure)?
@@ -105,7 +106,7 @@ async fn read(
                 external::released(&state, &id);
             }
             state.wakes.handed(&id, read.cursor);
-            return Ok(Json(to_api(&id, read, &parents)));
+            return Ok(Json(to_api(&id, read, &related)));
         }
         // The store stays unlocked while this waits.
         let mut readmit = false;
@@ -161,11 +162,7 @@ fn parse(id: &str) -> Result<ItemId, Failure> {
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
 }
 
-fn to_api(
-    id: &ItemId,
-    read: Feedback,
-    parents: &HashMap<ItemId, String>,
-) -> api::feedback::Feedback {
+fn to_api(id: &ItemId, read: Feedback, related: &Related) -> api::feedback::Feedback {
     api::feedback::Feedback {
         item: id.to_string(),
         name: read.item.name().to_string(),
@@ -173,15 +170,34 @@ fn to_api(
         events: read
             .events
             .into_iter()
-            .map(|e| event_to_api(id, &read.item, e, parents))
+            .map(|e| event_to_api(id, &read.item, e, related))
             .collect(),
         cursor: read.cursor,
     }
 }
 
-/// The names of the parents `events` speak of, which the store keeps by ID
-/// and agents know by name.
-pub(crate) fn parent_names<'a>(
+/// What events say beyond their own rows, which [`event_to_api`] reads.
+pub(crate) struct Related {
+    /// The names of the parents they speak of, which the store keeps by ID
+    /// and agents know by name.
+    parents: HashMap<ItemId, String>,
+    /// The stats of the items they close.
+    stats: HashMap<ItemId, api::review_time::ReviewStats>,
+}
+
+/// What `events`, each with its item, need of [`Related`].
+pub(crate) fn relate<'a>(
+    store: &Store,
+    events: impl IntoIterator<Item = (&'a Item, &'a Event)>,
+) -> Result<Related, StoreError> {
+    let events: Vec<_> = events.into_iter().collect();
+    Ok(Related {
+        parents: parent_names(store, events.iter().map(|(_, e)| *e))?,
+        stats: review_time::of_closes(store, events)?,
+    })
+}
+
+fn parent_names<'a>(
     store: &impl ItemStore,
     events: impl IntoIterator<Item = &'a Event>,
 ) -> Result<HashMap<ItemId, String>, StoreError> {
@@ -198,15 +214,16 @@ pub(crate) fn parent_names<'a>(
     Ok(names)
 }
 
-/// `parents` names the parents `event` may speak of, as [`parent_names`].
+/// `related` is what `event` speaks of, as [`relate`] found it.
 pub(crate) fn event_to_api(
     id: &ItemId,
     item: &Item,
     event: Event,
-    parents: &HashMap<ItemId, String>,
+    related: &Related,
 ) -> api::feedback::Event {
     let name = |parent: &ItemId| {
-        parents
+        related
+            .parents
             .get(parent)
             .cloned()
             .unwrap_or_else(|| parent.to_string())
@@ -222,7 +239,10 @@ pub(crate) fn event_to_api(
             replies: review.replies.iter().map(replies::sent).collect(),
         },
         EventKind::Notice(notice) => match notice.kind {
-            NoticeKind::Abandoned { reason } => api::feedback::EventBody::ItemAbandoned { reason },
+            NoticeKind::Abandoned { reason } => api::feedback::EventBody::ItemAbandoned {
+                reason,
+                stats: related.stats.get(id).cloned(),
+            },
             NoticeKind::MergeHeld { reason } => api::feedback::EventBody::MergeHeld { reason },
             NoticeKind::MergeCancelled => api::feedback::EventBody::MergeCancelled {},
             NoticeKind::MergeConflict {
@@ -250,6 +270,7 @@ pub(crate) fn event_to_api(
                     format!("git switch --detach mergegate/{target}"),
                     format!("git branch -D {}", item.branch),
                 ],
+                stats: related.stats.get(id).cloned(),
             },
             // `--onto` keeps the parent's old commits out: once it merged,
             // they're on the target squashed into one, which a plain rebase

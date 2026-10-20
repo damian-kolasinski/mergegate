@@ -16,6 +16,7 @@ mod migrate;
 mod modes;
 mod projects;
 mod replies;
+mod review_time;
 mod reviews;
 mod rules;
 mod settings;

@@ -34,6 +34,7 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0023_agent_device.sql"),
     include_str!("../migrations/0024_file_modules.sql"),
     include_str!("../migrations/0025_external_lapsed.sql"),
+    include_str!("../migrations/0026_review_time.sql"),
 ];
 
 /// The schema version this build migrates databases to.

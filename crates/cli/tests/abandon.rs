@@ -148,8 +148,15 @@ fn f14_the_operator_abandons_an_item_and_its_agent_hears_why() {
     assert_eq!(json_of(&reply)["state"], "abandoned");
 
     let wait = env.mg(&["--json", "wait", "app#1"]).assert_code(0);
-    let feedback = wait.json();
+    let mut feedback = wait.json();
     assert_eq!(feedback["state"], "abandoned");
+    // Timestamped, so checked apart; review_time.rs covers the rest of them.
+    let stats = feedback["events"][0]["stats"].take();
+    assert_eq!(stats["review_ms"], 0, "{stats}");
+    feedback["events"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("stats");
     assert_eq!(
         feedback["events"],
         json!([{
