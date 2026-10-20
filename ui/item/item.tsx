@@ -20,6 +20,7 @@ import { useKeys } from "../app/keys";
 import { learnName } from "../app/names";
 import { go, inboxHref, itemHref } from "../app/router";
 import { useTitle } from "../app/title";
+import { reloadingOntoUpgrade, useReloadHold } from "../app/version";
 import {
   DiffView,
   type DiffViewControl,
@@ -465,10 +466,13 @@ function Review(props: {
     (abandoning() && Boolean(props.reason.trim())) ||
     comments.editor.holding();
   const onUnload = (event: BeforeUnloadEvent) => {
-    if (dirty()) event.preventDefault();
+    if (dirty() && !reloadingOntoUpgrade()) event.preventDefault();
   };
   window.addEventListener("beforeunload", onUnload);
   onCleanup(() => window.removeEventListener("beforeunload", onUnload));
+  // An upgraded hub's reload keeps the summary and reason, so only an open
+  // comment holds it off.
+  useReloadHold(() => comments.editor.holding());
 
   // The address says which file and line are on screen, so a reload or a
   // link pasted to another tab opens there.
