@@ -228,6 +228,35 @@ fn f3_wait_times_out_with_75() {
 }
 
 #[test]
+fn f3_wait_in_codex_returns_at_once_and_points_at_the_wake() {
+    let (env, _repo) = submitted();
+    let started = Instant::now();
+    let run = env
+        .mg_with_env(
+            &["wait", "app#1", "--timeout", "0"],
+            &[("CODEX_THREAD_ID", "t-1")],
+        )
+        .assert_code(75);
+    assert!(started.elapsed() < Duration::from_secs(5));
+    assert!(
+        run.stdout.contains("mg wait doesn't wait in Codex"),
+        "{run:?}"
+    );
+    assert!(run.stdout.contains("mg submit --wake"), "{run:?}");
+}
+
+#[test]
+fn f3_wait_in_codex_returns_what_is_new() {
+    let (env, _repo) = submitted();
+    review(&env, "changes_requested", "Fix it.");
+    let feedback = env
+        .mg_with_env(&["--json", "wait", "app#1"], &[("CODEX_THREAD_ID", "t-1")])
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["events"][0]["summary"], "Fix it.");
+}
+
+#[test]
 fn f3_wait_wakes_when_the_operator_submits() {
     let (env, _repo) = submitted();
     let started = Instant::now();
