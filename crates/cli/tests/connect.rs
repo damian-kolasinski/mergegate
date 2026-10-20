@@ -209,6 +209,62 @@ fn f2_an_unknown_address_is_refused() {
 fn f2_a_worker_submits_and_waits_over_the_tailnet() {
     let mut net = Tailnet::new();
     let repo = TestRepo::new("app");
+    let clone = worker_branch(&mut net, &repo);
+
+    let submitted = net
+        .worker
+        .mg_at(&clone, &["--json", "submit"])
+        .assert_code(0)
+        .json();
+    assert_eq!(submitted["item"]["id"], "app#1");
+    let inbox = net.hub.mg(&["--json", "inbox"]).assert_code(0).json();
+    assert!(inbox.to_string().contains("\"app#1\""), "{inbox}");
+
+    let wait = wait(&net.worker, &clone);
+    std::thread::sleep(Duration::from_millis(500));
+    review(&net.hub, "Looks good from here.");
+    let output = wait.wait_with_output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Looks good from here."));
+}
+
+#[test]
+fn f2_a_workers_wake_runs_on_the_worker() {
+    let mut net = Tailnet::new();
+    let repo = TestRepo::new("app");
+    let clone = worker_branch(&mut net, &repo);
+    let log = repo.sibling("woken.log");
+    let wake = format!("echo \"$MG_ITEM $(pwd)\" >> {}", log.display());
+
+    let submitted = net
+        .worker
+        .mg_at(&clone, &["--json", "submit", "--wake", &wake])
+        .assert_code(0)
+        .json();
+    assert!(
+        submitted["warnings"]
+            .to_string()
+            .contains("no `mg wakes run` polls from laptop"),
+        "{submitted}"
+    );
+
+    let mut runner = net.worker.spawn(&["wakes", "run"]);
+    std::thread::sleep(Duration::from_millis(500));
+    review(&net.hub, "Wake up over there.");
+    let started = std::time::Instant::now();
+    while !log.exists() && started.elapsed() < Duration::from_secs(15) {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    runner.kill().unwrap();
+    runner.wait().unwrap();
+    let woken = std::fs::read_to_string(&log).expect("the wake ran on the worker");
+    let clone = clone.canonicalize().unwrap();
+    assert_eq!(woken, format!("app#1 {}\n", clone.display()));
+}
+
+/// A clone of `repo` on the worker, connected to the hub as the owner's
+/// laptop, with a commit on a `feature` branch to submit.
+fn worker_branch(net: &mut Tailnet, repo: &TestRepo) -> PathBuf {
     repo.commit_files("Base", &[("README", "title\n")]);
     net.hub
         .mg_at(repo.root(), &["--json", "project", "add"])
@@ -234,28 +290,7 @@ fn f2_a_worker_submits_and_waits_over_the_tailnet() {
     assert_eq!(init["url"], format!("{}/git/app", net.url).as_str());
     testkit::git(&clone, ["switch", "--quiet", "-c", "feature"]);
     testkit::commit_files(&clone, "Add login", &[("src/login.rs", "fn login() {}\n")]);
-
-    // A wake command would run on the hub's machine, not this one.
-    let refused = net
-        .worker
-        .mg_at(&clone, &["--json", "submit", "--wake", "true"]);
-    assert_eq!(error(&refused)["code"], "wake_remote", "{refused:?}");
-
-    let submitted = net
-        .worker
-        .mg_at(&clone, &["--json", "submit"])
-        .assert_code(0)
-        .json();
-    assert_eq!(submitted["item"]["id"], "app#1");
-    let inbox = net.hub.mg(&["--json", "inbox"]).assert_code(0).json();
-    assert!(inbox.to_string().contains("\"app#1\""), "{inbox}");
-
-    let wait = wait(&net.worker, &clone);
-    std::thread::sleep(Duration::from_millis(500));
-    review(&net.hub, "Looks good from here.");
-    let output = wait.wait_with_output().unwrap();
-    assert!(output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("Looks good from here."));
+    clone
 }
 
 #[test]
@@ -309,7 +344,7 @@ fn f2_a_clone_from_the_hub_finds_its_project() {
 }
 
 #[test]
-fn f2_the_hub_refuses_a_remote_wake_and_clears_a_local_one() {
+fn f2_a_submit_from_another_machine_clears_the_wake_left_on_the_hub() {
     let mut net = Tailnet::new();
     let repo = TestRepo::new("app");
     repo.commit_files("Base", &[("README", "title\n")]);
@@ -329,19 +364,10 @@ fn f2_the_hub_refuses_a_remote_wake_and_clears_a_local_one() {
     let head = repo.rev("HEAD");
 
     net.tailscale.call_from("laptop", HUB_OWNER);
-    let submit = |wake: Option<&str>| {
-        let mut body = json!({ "project": "app", "branch": "feature", "head": head });
-        if let Some(wake) = wake {
-            body["wake"] = wake.into();
-        }
-        net.request("POST", "/api/items", net.addr(), &body)
-    };
-    let refused = submit(Some("true"));
-    assert_eq!(refused.status, 403, "{}", refused.body);
-    assert!(refused.body.contains("wake_remote"), "{}", refused.body);
-
-    // The item moved to a machine its wake can't reach, so no wake is left.
-    let moved = submit(None);
+    // The item moved to another machine, where the agent isn't in the
+    // worktree the wake runs in.
+    let body = json!({ "project": "app", "branch": "feature", "head": head });
+    let moved = net.request("POST", "/api/items", net.addr(), &body);
     assert!(moved.status < 300, "{}", moved.body);
     review(&net.hub, "Nobody to wake here.");
     std::thread::sleep(Duration::from_millis(500));

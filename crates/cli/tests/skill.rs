@@ -29,7 +29,8 @@ fn f3_install_writes_the_skill_under_the_home() {
             "references/setup.md",
             "references/authoring.md",
             "references/waiting.md",
-            "references/operator.md"
+            "references/operator.md",
+            "scripts/codex_wake.py",
         ]
     );
     for (file, contents) in skill::FILES {

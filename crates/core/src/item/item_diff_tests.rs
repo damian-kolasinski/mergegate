@@ -41,6 +41,7 @@ fn submitted_with_git() -> (FakeStore, FakeGit) {
         title: None,
         worktree: None,
         wake: None,
+        device: None,
         guide: None,
         priority: None,
         note: None,

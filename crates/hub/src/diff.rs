@@ -67,7 +67,7 @@ async fn show(
                     return Ok(None);
                 };
                 let blocked = merge::blocked(store, &diff.item)?;
-                let agent = presence::of(store, &known.presence, &diff.item)?;
+                let agent = presence::of(store, &known.presence, &known.wakes, &diff.item)?;
                 let spans = diff
                     .files
                     .iter()

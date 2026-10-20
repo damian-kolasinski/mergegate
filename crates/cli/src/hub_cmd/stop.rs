@@ -48,7 +48,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
 /// logins.
 fn stopped(home: &Home, stopped: bool) -> Result<Outcome, CliError> {
     let removed = if service::applies() {
-        service::remove()?
+        service::remove(service::Role::Hub)?
     } else {
         None
     };

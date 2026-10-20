@@ -12,6 +12,7 @@ fn agent(worktree: Option<&str>, wake: Option<&str>) -> Agent {
     Agent {
         worktree: worktree.map(Into::into),
         wake: wake.map(Into::into),
+        device: None,
     }
 }
 
@@ -72,9 +73,58 @@ fn a_submit_keeps_what_it_does_not_carry() {
             &id(),
             worktree.map(Into::into),
             wake.map(Into::into),
+            None,
         )
         .unwrap();
         assert_eq!(store.agent(&id()).unwrap(), after, "{stored:?} {sent:?}");
+    }
+}
+
+#[test]
+fn a_submit_from_another_machine_drops_the_wake_left_on_this_one() {
+    let on = |device: Option<&str>, wake: Option<&str>| Agent {
+        worktree: Some("/w".into()),
+        wake: wake.map(Into::into),
+        device: device.map(Into::into),
+    };
+    // (stored, wake sent, device submitting, stored after)
+    let cases = [
+        (
+            on(None, Some("old")),
+            None,
+            Some("devbox"),
+            on(Some("devbox"), None),
+        ),
+        (
+            on(None, Some("old")),
+            Some("new"),
+            Some("devbox"),
+            on(Some("devbox"), Some("new")),
+        ),
+        (on(Some("devbox"), Some("old")), None, None, on(None, None)),
+        (
+            on(Some("devbox"), Some("old")),
+            None,
+            Some("devbox"),
+            on(Some("devbox"), Some("old")),
+        ),
+    ];
+    for (stored, wake, device, after) in cases {
+        let mut store = FakeStore::with_item(1);
+        store.set_agent(&id(), &stored).unwrap();
+        record(
+            &mut store,
+            &id(),
+            Some("/w".into()),
+            wake.map(Into::into),
+            device.map(Into::into),
+        )
+        .unwrap();
+        assert_eq!(
+            store.agent(&id()).unwrap(),
+            after,
+            "{stored:?} {wake:?} {device:?}"
+        );
     }
 }
 

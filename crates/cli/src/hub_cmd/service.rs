@@ -1,7 +1,8 @@
 //! The default home's hub as a user service: launchd on macOS, systemd on
 //! Linux. It starts at login and comes back after a crash. A hub with
 //! `MERGEGATE_HOME` set (dev builds, tests) never gets one, so it can't take
-//! the place of the installed hub's.
+//! the place of the installed hub's. On a machine `mg connect` points at
+//! another hub, the `mg wakes` runner is one the same way.
 
 mod launchd;
 mod systemd;
@@ -23,6 +24,50 @@ pub(crate) enum Manager {
     Systemd,
 }
 
+/// What a service runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Role {
+    Hub,
+    /// `mg wakes run`, on a machine connected to another hub.
+    Wakes,
+}
+
+impl Role {
+    /// A launchd label.
+    fn label(self) -> &'static str {
+        match self {
+            Role::Hub => "dev.mergegate.hub",
+            Role::Wakes => "dev.mergegate.wakes",
+        }
+    }
+
+    /// A systemd unit.
+    fn unit(self) -> &'static str {
+        match self {
+            Role::Hub => "mergegate-hub.service",
+            Role::Wakes => "mergegate-wakes.service",
+        }
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            Role::Hub => "mergegate hub",
+            Role::Wakes => "mergegate wake runner",
+        }
+    }
+
+    /// Its stdout, and its stderr.
+    fn output(self, home: &Home) -> (PathBuf, PathBuf) {
+        match self {
+            Role::Hub => (home.root().join("hub.outcome"), home.log()),
+            Role::Wakes => (
+                home.root().join("wakes.outcome"),
+                home.root().join("wakes.log"),
+            ),
+        }
+    }
+}
+
 impl Manager {
     /// The service manager on this OS, whether or not it can run the hub.
     fn here() -> Option<Manager> {
@@ -42,10 +87,10 @@ impl Manager {
         }
     }
 
-    fn path(self, user_home: &Path) -> PathBuf {
+    fn path(self, role: Role, user_home: &Path) -> PathBuf {
         match self {
-            Manager::Launchd => launchd::path(user_home),
-            Manager::Systemd => systemd::path(user_home),
+            Manager::Launchd => launchd::path(role, user_home),
+            Manager::Systemd => systemd::path(role, user_home),
         }
     }
 
@@ -63,52 +108,54 @@ impl Manager {
         }
     }
 
-    fn load(self, unit: &Path, changed: bool) -> Result<(), String> {
+    fn load(self, role: Role, unit: &Path, changed: bool) -> Result<(), String> {
         match self {
-            Manager::Launchd => launchd::load(unit, changed),
-            Manager::Systemd => systemd::load(unit, changed),
+            Manager::Launchd => launchd::load(role, unit, changed),
+            Manager::Systemd => systemd::load(role, unit, changed),
         }
     }
 
-    fn unload(self) -> Result<(), String> {
+    fn unload(self, role: Role) -> Result<(), String> {
         match self {
-            Manager::Launchd => launchd::unload(),
-            Manager::Systemd => systemd::unload(),
+            Manager::Launchd => launchd::unload(role),
+            Manager::Systemd => systemd::unload(role),
         }
     }
 
-    /// Stops the hub without uninstalling: the next login starts it again.
-    fn halt(self) {
+    /// Stops the service without uninstalling: the next login starts it
+    /// again.
+    fn halt(self, role: Role) {
         match self {
             // A plist in LaunchAgents is loaded again at login.
             Manager::Launchd => {
-                let _ = launchd::unload();
+                let _ = launchd::unload(role);
             }
-            Manager::Systemd => systemd::stop(),
+            Manager::Systemd => systemd::stop(role),
         }
     }
 }
 
-/// What a unit runs: `mg hub start --foreground` for the default home.
+/// What a unit runs: `exe` with `args`, as `mg --json hub start
+/// --foreground` for the default home.
 pub(super) struct Spec {
+    pub role: Role,
     pub exe: PathBuf,
-    pub port: u16,
+    pub args: Vec<String>,
     /// The working directory.
     pub home: PathBuf,
-    /// The hub's `--json` outcome, read back when a start fails.
+    /// Its `--json` outcome, read back when a hub fails to start.
     pub outcome: PathBuf,
     pub log: PathBuf,
     /// The starting shell's: service managers start with a minimal one, and
-    /// the hub runs gh, a recent git and wake commands from it.
+    /// the hub runs gh, a recent git and wake commands from it, as the wake
+    /// runner does wake commands.
     pub path_env: String,
 }
 
 impl Spec {
-    pub fn args(&self) -> Vec<String> {
-        let start = ["--json", "hub", "start", "--foreground", "--port"];
+    pub fn command(&self) -> Vec<String> {
         std::iter::once(self.exe.display().to_string())
-            .chain(start.iter().map(|arg| (*arg).to_owned()))
-            .chain(std::iter::once(self.port.to_string()))
+            .chain(self.args.iter().cloned())
             .collect()
     }
 }
@@ -122,7 +169,8 @@ pub(crate) struct Installed {
     pub exe: Option<String>,
 }
 
-/// Whether the hub at the home `mg` uses runs as a service.
+/// Whether the hub at the home `mg` uses runs as a service, and the wake
+/// runner for it.
 pub(crate) fn applies() -> bool {
     std::env::var_os(hub::HOME_ENV).is_none_or(|v| v.is_empty())
 }
@@ -136,10 +184,10 @@ pub(crate) fn usable() -> bool {
     }
 }
 
-/// The unit installed for this user, if any.
-pub(crate) fn installed() -> Option<Installed> {
+/// `role`'s unit installed for this user, if any.
+pub(crate) fn installed(role: Role) -> Option<Installed> {
     let manager = Manager::here()?;
-    let path = manager.path(&user_home()?);
+    let path = manager.path(role, &user_home()?);
     let unit = fs::read_to_string(&path).ok()?;
     Some(Installed {
         manager,
@@ -148,9 +196,10 @@ pub(crate) fn installed() -> Option<Installed> {
     })
 }
 
-/// A service told to start the hub.
-pub(super) struct Loaded {
+/// A service told to start.
+pub(crate) struct Loaded {
     manager: Manager,
+    role: Role,
     outcome: PathBuf,
 }
 
@@ -164,28 +213,30 @@ impl Loaded {
     /// Stops the manager retrying a hub that fails to start. The unit stays,
     /// so the next login tries again.
     pub fn stop_retrying(&self) {
-        self.manager.halt();
+        self.manager.halt(self.role);
     }
 }
 
-/// Writes the unit for `mg hub start --port <port>` and has the manager
-/// start it, or says why it can't, leaving no unit behind.
-pub(super) fn load(home: &Home, port: u16) -> Result<Loaded, String> {
+/// Writes `role`'s unit, which runs this `mg` with `args`, and has the
+/// manager start it, or says why it can't, leaving no unit behind.
+pub(crate) fn load(home: &Home, role: Role, args: &[&str]) -> Result<Loaded, String> {
     let manager = Manager::here().ok_or("this OS has no service manager mg supports")?;
     if manager == Manager::Systemd && !systemd::usable() {
         return Err("systemd has no user session here".into());
     }
     let user_home = user_home().ok_or("HOME is not set")?;
     let exe = std::env::current_exe().map_err(|e| format!("locating the mg binary: {e}"))?;
+    let (outcome, log) = role.output(home);
     let spec = Spec {
+        role,
         exe,
-        port,
+        args: args.iter().map(|arg| (*arg).to_owned()).collect(),
         home: home.root().to_owned(),
-        outcome: outcome(home),
-        log: home.log(),
+        outcome,
+        log,
         path_env: std::env::var("PATH").unwrap_or_default(),
     };
-    let path = manager.path(&user_home);
+    let path = manager.path(role, &user_home);
     let unit = manager.render(&spec);
     let changed = fs::read_to_string(&path).ok().as_deref() != Some(unit.as_str());
     let write = || -> std::io::Result<()> {
@@ -200,8 +251,8 @@ pub(super) fn load(home: &Home, port: u16) -> Result<Loaded, String> {
         fs::write(&spec.outcome, "")
     };
     write().map_err(|e| format!("writing {}: {e}", path.display()))?;
-    if let Err(e) = manager.load(&path, changed) {
-        let _ = manager.unload();
+    if let Err(e) = manager.load(role, &path, changed) {
+        let _ = manager.unload(role);
         let _ = fs::remove_file(&path);
         if manager == Manager::Systemd {
             systemd::forget();
@@ -210,17 +261,18 @@ pub(super) fn load(home: &Home, port: u16) -> Result<Loaded, String> {
     }
     Ok(Loaded {
         manager,
+        role,
         outcome: spec.outcome,
     })
 }
 
-/// Unloads and deletes the installed unit, so a stopped hub stays stopped
-/// across logins. Answers with what it removed.
-pub(super) fn remove() -> Result<Option<Installed>, CliError> {
-    let Some(installed) = installed() else {
+/// Unloads and deletes `role`'s installed unit, so a stopped service stays
+/// stopped across logins. Answers with what it removed.
+pub(crate) fn remove(role: Role) -> Result<Option<Installed>, CliError> {
+    let Some(installed) = installed(role) else {
         return Ok(None);
     };
-    installed.manager.unload().map_err(|e| {
+    installed.manager.unload(role).map_err(|e| {
         CliError::new("service_failed", e).hint(format!("remove {}", installed.unit))
     })?;
     fs::remove_file(&installed.unit).map_err(|e| io_error("removing the service unit", e))?;
@@ -228,10 +280,6 @@ pub(super) fn remove() -> Result<Option<Installed>, CliError> {
         systemd::forget();
     }
     Ok(Some(installed))
-}
-
-fn outcome(home: &Home) -> PathBuf {
-    home.root().join("hub.outcome")
 }
 
 fn user_home() -> Option<PathBuf> {

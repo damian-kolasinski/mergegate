@@ -28,6 +28,7 @@ mod names;
 mod presence;
 mod priority;
 mod projects;
+mod remote_wakes;
 mod replies;
 mod reply;
 mod resume;
@@ -94,6 +95,13 @@ pub fn run(home: Home, port: u16, version: &str) -> Result<(), HubError> {
 
 /// How long a stopping hub waits for work off the runtime to finish.
 const SHUTDOWN: Duration = Duration::from_secs(10);
+
+/// The PATH a wake command runs with: this one behind `home`'s `bin`, which
+/// holds only a link to the running `mg`, so `mg` in the command is this
+/// one.
+pub fn wake_path(home: &Home) -> Option<std::ffi::OsString> {
+    wake::path_env(&home.wake_bin())
+}
 
 /// Logs to stderr, which a backgrounded hub sends to its `hub.log`.
 pub fn init_logging() {

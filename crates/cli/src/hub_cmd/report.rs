@@ -51,7 +51,9 @@ impl HubStatus {
     pub fn new(home: &Home) -> Self {
         Self {
             home: home.root().display().to_string(),
-            service: service::applies().then(service::installed).flatten(),
+            service: service::applies()
+                .then(|| service::installed(service::Role::Hub))
+                .flatten(),
             ..Self::default()
         }
     }

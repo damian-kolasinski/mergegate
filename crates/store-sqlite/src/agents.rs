@@ -16,12 +16,13 @@ impl AgentStore for Store {
         let found = self
             .conn
             .query_row(
-                &format!("SELECT worktree, wake FROM item_agents WHERE item_id = ({ITEM})"),
+                &format!("SELECT worktree, wake, device FROM item_agents WHERE item_id = ({ITEM})"),
                 params![id.project().as_str(), id.number() as i64],
                 |row| {
                     Ok(Agent {
                         worktree: row.get(0)?,
                         wake: row.get(1)?,
+                        device: row.get(2)?,
                     })
                 },
             )
@@ -34,15 +35,18 @@ impl AgentStore for Store {
         self.conn
             .execute(
                 &format!(
-                    "INSERT INTO item_agents (item_id, worktree, wake) VALUES (({ITEM}), ?3, ?4)
+                    "INSERT INTO item_agents (item_id, worktree, wake, device)
+                     VALUES (({ITEM}), ?3, ?4, ?5)
                      ON CONFLICT (item_id) DO UPDATE
-                     SET worktree = excluded.worktree, wake = excluded.wake"
+                     SET worktree = excluded.worktree, wake = excluded.wake,
+                         device = excluded.device"
                 ),
                 params![
                     id.project().as_str(),
                     id.number() as i64,
                     agent.worktree,
-                    agent.wake
+                    agent.wake,
+                    agent.device
                 ],
             )
             .map_err(StoreError::new)?;
@@ -54,7 +58,7 @@ impl AgentStore for Store {
             .conn
             .prepare_cached(
                 "SELECT p.name, i.number, a.wake, a.worktree, e.cursor,
-                        coalesce(i.pull_number, i.number)
+                        coalesce(i.pull_number, i.number), a.device
                  FROM item_agents a
                  JOIN items i ON i.id = a.item_id
                  JOIN projects p ON p.id = i.project_id
@@ -74,11 +78,12 @@ impl AgentStore for Store {
                     row.get::<_, Option<String>>(3)?,
                     row.get::<_, i64>(4)?,
                     row.get::<_, i64>(5)?,
+                    row.get::<_, Option<String>>(6)?,
                 ))
             })
             .map_err(StoreError::new)?;
         rows.map(|row| {
-            let (project, number, command, worktree, cursor, name) =
+            let (project, number, command, worktree, cursor, name, device) =
                 row.map_err(StoreError::new)?;
             let project = ProjectName::parse(&project).map_err(StoreError::new)?;
             Ok(DueWake {
@@ -87,6 +92,7 @@ impl AgentStore for Store {
                 item: ItemId::new(project, number as u64),
                 command,
                 worktree,
+                device,
                 cursor: cursor as u64,
             })
         })

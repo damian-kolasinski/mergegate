@@ -1,5 +1,7 @@
 //! Runs an item's wake command when it has events from the operator its agent
-//! hasn't read, so a harness whose session ended can start one.
+//! hasn't read, so a harness whose session ended can start one. The hub runs
+//! the commands left from its own machine; another device's `mg wakes`
+//! runner takes its own from [`crate::remote_wakes`] and runs them there.
 //!
 //! Each event wakes at most once, even across restarts: the store keeps the
 //! newest cursor a command ran for. A command doesn't run while a read of
@@ -17,17 +19,33 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use mergegate_core::agent::{self, AgentStore, DueWake};
 use mergegate_core::item::ItemId;
 use tokio::process::Command;
-use tokio::sync::Notify;
+use tokio::sync::watch;
+use tokio::time::{Duration, Instant};
 
 use crate::HOME_ENV;
 use crate::server::AppState;
 
-#[derive(Default)]
+/// How long a device's runner counts as there after its last poll ended: it
+/// polls again at once, unless it is restarting.
+const GRACE: Duration = Duration::from_secs(60);
+
 pub(crate) struct Wakes {
     inner: Mutex<Inner>,
-    changed: Notify,
+    /// Bumped by [`Wakes::recheck`]; every runner, the hub's and the
+    /// devices' polls, looks again when it changes.
+    changed: watch::Sender<u64>,
     /// The commands' PATH, set up by the first command this hub runs.
     path: OnceLock<Option<OsString>>,
+}
+
+impl Default for Wakes {
+    fn default() -> Self {
+        Self {
+            inner: Mutex::default(),
+            changed: watch::Sender::new(0),
+            path: OnceLock::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -35,7 +53,18 @@ struct Inner {
     reading: HashMap<ItemId, usize>,
     /// The newest cursor a read returned to the item's agent.
     handed: HashMap<ItemId, u64>,
-    running: HashSet<ItemId>,
+    /// Each item whose command is running, with the device running it; none
+    /// for the hub.
+    running: HashMap<ItemId, Option<String>>,
+    /// The devices' runners, by device name.
+    runners: HashMap<String, Runner>,
+}
+
+#[derive(Default)]
+struct Runner {
+    polls: usize,
+    /// When the last poll ended, while none is open.
+    ended: Option<Instant>,
 }
 
 /// Held for the length of a read of an item's feedback.
@@ -59,6 +88,24 @@ impl Drop for Reading<'_> {
     }
 }
 
+/// Held for the length of a device runner's poll.
+pub(crate) struct Polling<'a> {
+    wakes: &'a Wakes,
+    device: String,
+}
+
+impl Drop for Polling<'_> {
+    fn drop(&mut self) {
+        let mut inner = self.wakes.lock();
+        if let Some(runner) = inner.runners.get_mut(&self.device) {
+            runner.polls = runner.polls.saturating_sub(1);
+            if runner.polls == 0 {
+                runner.ended = Some(Instant::now());
+            }
+        }
+    }
+}
+
 impl Wakes {
     pub(crate) fn reading(&self, item: &ItemId) -> Reading<'_> {
         *self.lock().reading.entry(item.clone()).or_default() += 1;
@@ -75,9 +122,46 @@ impl Wakes {
         *handed = (*handed).max(cursor);
     }
 
-    /// Makes the runner look for due wakes, now or after its current look.
+    /// Makes the runners look for due wakes, now or after their current look.
     pub(crate) fn recheck(&self) {
-        self.changed.notify_one();
+        self.changed.send_modify(|n| *n = n.wrapping_add(1));
+    }
+
+    pub(crate) fn changes(&self) -> watch::Receiver<u64> {
+        self.changed.subscribe()
+    }
+
+    /// A poll from `device`'s runner began, which still runs the commands
+    /// for `running`: the rest it was handed have exited. A hub that
+    /// restarted since it handed them over learns them again here.
+    pub(crate) fn polling(&self, device: &str, running: &HashSet<ItemId>) -> Polling<'_> {
+        let mut inner = self.lock();
+        inner
+            .running
+            .retain(|item, runner| runner.as_deref() != Some(device) || running.contains(item));
+        for item in running {
+            inner
+                .running
+                .entry(item.clone())
+                .or_insert_with(|| Some(device.to_owned()));
+        }
+        let runner = inner.runners.entry(device.to_owned()).or_default();
+        runner.polls += 1;
+        runner.ended = None;
+        drop(inner);
+        // An item it let go of may have a wake waiting on it.
+        self.recheck();
+        Polling {
+            wakes: self,
+            device: device.to_owned(),
+        }
+    }
+
+    /// Whether `device` has a runner polling, or one that polled moments ago.
+    pub(crate) fn runs(&self, device: &str) -> bool {
+        self.lock().runners.get(device).is_some_and(|runner| {
+            runner.polls > 0 || runner.ended.is_some_and(|ended| ended.elapsed() < GRACE)
+        })
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -90,14 +174,16 @@ impl Wakes {
 /// [`Wakes::recheck`], until the hub stops.
 pub(crate) async fn run(state: Arc<AppState>) {
     let mut log = state.events.log();
+    let mut changes = state.wakes.changes();
     let mut stopping = state.events.stopping();
     loop {
         log.mark_unchanged();
+        changes.mark_unchanged();
         let starts = {
             let state = Arc::clone(&state);
             state
                 .clone()
-                .blocking(move |store, _| take(store, &state.wakes))
+                .blocking(move |store, _| take(store, &state.wakes, None))
                 .await
         };
         match starts {
@@ -110,35 +196,49 @@ pub(crate) async fn run(state: Arc<AppState>) {
         }
         tokio::select! {
             changed = log.changed() => if changed.is_err() { return },
-            () = state.wakes.changed.notified() => {}
+            _ = changes.changed() => {}
             _ = stopping.wait_for(|stopping| *stopping) => return,
         }
     }
 }
 
-/// The wakes to start now, each marked running and recorded as woken. Runs
-/// under the store's lock, which is taken before the wakes' and never while
-/// holding them. A read registers before it looks at the store and hands its
-/// events over before it unregisters, so none slips between two checks.
-fn take(
+/// The wakes `device`'s runner is to start now, the hub's own for none, each
+/// marked running and recorded as woken. Runs under the store's lock, which
+/// is taken before the wakes' and never while holding them. A read registers
+/// before it looks at the store and hands its events over before it
+/// unregisters, so none slips between two checks.
+pub(crate) fn take(
     store: &mut impl AgentStore,
     wakes: &Wakes,
+    device: Option<&str>,
 ) -> Result<Vec<DueWake>, mergegate_core::store::StoreError> {
     let due = store.due_wakes()?;
     let mut inner = wakes.lock();
     let mut starts = Vec::new();
     for wake in due {
-        if inner.reading.contains_key(&wake.item) || inner.running.contains(&wake.item) {
+        // A command another machine runs doesn't hold the item back: its
+        // agent moved here, and that machine's runner may never poll again
+        // to let go of it.
+        if wake.device.as_deref() != device
+            || inner.reading.contains_key(&wake.item)
+            || inner
+                .running
+                .get(&wake.item)
+                .is_some_and(|runner| runner.as_deref() == device)
+        {
             continue;
         }
         let read = inner
             .handed
             .get(&wake.item)
             .is_some_and(|&h| h >= wake.cursor);
-        let runnable = !read && worktree(&wake).is_some();
+        // Only the device's runner can see its worktree.
+        let runnable = !read && (device.is_some() || worktree(&wake).is_some());
         store.set_woken(&wake.item, wake.cursor)?;
         if runnable {
-            inner.running.insert(wake.item.clone());
+            inner
+                .running
+                .insert(wake.item.clone(), device.map(str::to_owned));
             starts.push(wake);
         }
     }
@@ -162,7 +262,11 @@ fn worktree(wake: &DueWake) -> Option<&Path> {
 
 async fn start(state: Arc<AppState>, wake: DueWake) {
     run_command(&state, &wake).await;
-    state.wakes.lock().running.remove(&wake.item);
+    let mut inner = state.wakes.lock();
+    if inner.running.get(&wake.item) == Some(&None) {
+        inner.running.remove(&wake.item);
+    }
+    drop(inner);
     state.wakes.recheck();
 }
 
@@ -225,7 +329,7 @@ async fn run_command(state: &AppState, wake: &DueWake) {
 /// this hub. `mg` in a command is then this hub's whatever PATH the hub
 /// started with (a service manager's, or one where macOS's `/usr/bin/mg`
 /// editor comes first), and every other command resolves as it would have.
-fn path_env(bin: &Path) -> Option<OsString> {
+pub(crate) fn path_env(bin: &Path) -> Option<OsString> {
     let linked = std::env::current_exe()
         .and_then(fs::canonicalize)
         .and_then(|exe| link_mg(bin, &exe));

@@ -22,8 +22,8 @@ use crate::{
     Home, HubError, HubInfo, abandon, attachments, branches, comments, conflicts, conversation,
     demo_zip, devices, diff, doctor, draft_replies, event_log, events, external, feedback,
     git_http, guard, highlights, io, items, judge, languages, lifecycle, merge, names, presence,
-    priority, projects, replies, reply, resume, reviews, rules, settings, tailnet, ui, viewed,
-    wake,
+    priority, projects, remote_wakes, replies, reply, resume, reviews, rules, settings, tailnet,
+    ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -211,6 +211,7 @@ pub(crate) async fn serve(
         .merge(replies::routes())
         .merge(draft_replies::routes())
         .merge(feedback::routes())
+        .merge(remote_wakes::routes())
         .merge(event_log::routes())
         .merge(external::routes())
         .merge(resume::routes())

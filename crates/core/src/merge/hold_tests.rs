@@ -99,6 +99,7 @@ fn a_new_revision_takes_a_held_item_back_to_needs_review() {
         title: None,
         worktree: None,
         wake: None,
+        device: None,
         guide: None,
         priority: None,
         note: None,

@@ -8,12 +8,16 @@ use hub::Connection;
 use serde::Serialize;
 
 use crate::client::{self, Client};
+use crate::hub_cmd::service::{self, Role};
 use crate::output::{CliError, Outcome};
 
 #[derive(Serialize)]
 struct Connected {
     url: String,
     device: Caller,
+    /// Whether `mg wakes run` runs as a service, starting the wake commands
+    /// agents on this machine leave.
+    wakes_service: bool,
 }
 
 #[derive(Serialize)]
@@ -25,6 +29,10 @@ struct Disconnected {
 pub fn run(hub: Option<String>, local: bool) -> Result<Outcome, CliError> {
     let home = crate::home()?;
     let Some(hub) = hub.filter(|_| !local) else {
+        // The hub on this machine runs its wakes itself.
+        if service::applies() {
+            service::remove(Role::Wakes)?;
+        }
         let disconnected = home
             .remove_connection()
             .map_err(|e| CliError::new("io_error", format!("removing connect.json: {e}")))?;
@@ -55,8 +63,25 @@ pub fn run(hub: Option<String>, local: bool) -> Result<Outcome, CliError> {
         Trust::Owner => "the hub owner's device",
         Trust::Allowed => "allowed by the operator",
     };
-    let text = format!("connected to the hub at {url} as {} ({trust})", device.name);
-    Ok(Outcome::done(&Connected { url, device }, text))
+    let mut text = format!("connected to the hub at {url} as {} ({trust})", device.name);
+    // A data directory of its own is a test or a second mg, which runs its
+    // wakes however it runs its hub.
+    let wakes_service = service::applies()
+        && match service::load(&home, Role::Wakes, &["--json", "wakes", "run"]) {
+            Ok(_) => true,
+            Err(why) => {
+                text.push_str(&format!(
+                    "\nwake commands left here don't run until `mg wakes run` does: {why}"
+                ));
+                false
+            }
+        };
+    let connected = Connected {
+        url,
+        device,
+        wakes_service,
+    };
+    Ok(Outcome::done(&connected, text))
 }
 
 /// `mac-mini`, `mac-mini:7801`, `100.64.0.1` or `http://mac-mini:7800/` as

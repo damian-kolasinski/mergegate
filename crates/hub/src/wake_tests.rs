@@ -8,6 +8,7 @@ use super::*;
 /// One item, `app#1`, whose newest event is `cursor`.
 struct Store {
     worktree: String,
+    device: Option<String>,
     cursor: u64,
     woken: BTreeMap<ItemId, u64>,
 }
@@ -18,6 +19,7 @@ impl Store {
         let worktree = dir.path().display().to_string();
         let store = Self {
             worktree,
+            device: None,
             cursor,
             woken: BTreeMap::new(),
         };
@@ -43,6 +45,7 @@ impl AgentStore for Store {
                 item,
                 command: "resume".into(),
                 worktree: Some(self.worktree.clone()),
+                device: self.device.clone(),
                 cursor: self.cursor,
             })
             .into_iter()
@@ -60,7 +63,11 @@ fn id() -> ItemId {
 }
 
 fn started(store: &mut Store, wakes: &Wakes) -> Vec<u64> {
-    take(store, wakes)
+    started_on(store, wakes, None)
+}
+
+fn started_on(store: &mut Store, wakes: &Wakes, device: Option<&str>) -> Vec<u64> {
+    take(store, wakes, device)
         .unwrap()
         .into_iter()
         .map(|w| w.cursor)
@@ -118,6 +125,86 @@ fn a_gone_worktree_is_skipped_for_good() {
     assert_eq!(started(&mut store, &wakes), [] as [u64; 0]);
     assert_eq!(store.woken.get(&id()), Some(&3));
     assert!(wakes.lock().running.is_empty());
+}
+
+#[test]
+fn a_devices_wake_goes_to_its_runner_only() {
+    let (dir, mut store) = Store::new(3);
+    store.device = Some("devbox".into());
+    // The worktree is on the device, where the hub can't look.
+    drop(dir);
+    let wakes = Wakes::default();
+    assert_eq!(started(&mut store, &wakes), [] as [u64; 0]);
+    assert_eq!(
+        started_on(&mut store, &wakes, Some("laptop")),
+        [] as [u64; 0]
+    );
+    assert_eq!(store.woken.get(&id()), None, "it waits for its runner");
+    assert_eq!(started_on(&mut store, &wakes, Some("devbox")), [3]);
+    assert_eq!(store.woken.get(&id()), Some(&3));
+}
+
+#[test]
+fn a_runners_poll_lets_go_of_the_commands_it_no_longer_runs() {
+    let (_dir, mut store) = Store::new(3);
+    store.device = Some("devbox".into());
+    let wakes = Wakes::default();
+    assert_eq!(started_on(&mut store, &wakes, Some("devbox")), [3]);
+    store.cursor = 4;
+    let still = HashSet::from([id()]);
+    drop(wakes.polling("devbox", &still));
+    assert_eq!(
+        started_on(&mut store, &wakes, Some("devbox")),
+        [] as [u64; 0]
+    );
+    // Another device's poll doesn't speak for this one's commands.
+    drop(wakes.polling("laptop", &HashSet::new()));
+    assert_eq!(
+        started_on(&mut store, &wakes, Some("devbox")),
+        [] as [u64; 0]
+    );
+    drop(wakes.polling("devbox", &HashSet::new()));
+    assert_eq!(started_on(&mut store, &wakes, Some("devbox")), [4]);
+}
+
+#[test]
+fn a_restarted_hub_learns_from_a_poll_what_its_runner_still_runs() {
+    let (_dir, mut store) = Store::new(3);
+    store.device = Some("devbox".into());
+    let wakes = Wakes::default();
+    drop(wakes.polling("devbox", &HashSet::from([id()])));
+    assert_eq!(
+        started_on(&mut store, &wakes, Some("devbox")),
+        [] as [u64; 0]
+    );
+    drop(wakes.polling("devbox", &HashSet::new()));
+    assert_eq!(started_on(&mut store, &wakes, Some("devbox")), [3]);
+}
+
+#[test]
+fn a_command_another_machine_runs_doesnt_hold_the_item_back() {
+    let (_dir, mut store) = Store::new(3);
+    store.device = Some("laptop".into());
+    let wakes = Wakes::default();
+    assert_eq!(started_on(&mut store, &wakes, Some("laptop")), [3]);
+    // The agent moved on to the devbox, and the laptop never polls again.
+    store.device = Some("devbox".into());
+    store.cursor = 4;
+    assert_eq!(started_on(&mut store, &wakes, Some("devbox")), [4]);
+}
+
+#[test]
+fn a_runner_is_there_while_it_polls_and_moments_after() {
+    let wakes = Wakes::default();
+    assert!(!wakes.runs("devbox"));
+    let polling = wakes.polling("devbox", &HashSet::new());
+    assert!(wakes.runs("devbox"));
+    drop(polling);
+    assert!(wakes.runs("devbox"));
+    wakes.lock().runners.get_mut("devbox").unwrap().ended =
+        Some(Instant::now() - GRACE - Duration::from_secs(1));
+    assert!(!wakes.runs("devbox"));
+    assert!(!wakes.runs("laptop"));
 }
 
 #[test]

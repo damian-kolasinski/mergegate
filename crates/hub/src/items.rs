@@ -34,25 +34,27 @@ async fn submit(
     Extension(caller): Extension<Caller>,
     request: Result<Json<api::item::Submit>, JsonRejection>,
 ) -> Result<(StatusCode, Json<api::item::Submitted>), Failure> {
-    let Json(mut request) = request?;
-    // A wake command runs on the hub's machine, in the submitting worktree,
-    // so only an agent on that machine may leave one.
-    if let Caller::Device(device, ..) = &caller {
-        if request.wake.is_some() {
-            return Err(Failure::new(
-                StatusCode::FORBIDDEN,
-                "wake_remote",
-                format!(
-                    "{} submits over the tailnet, and a wake command runs on the hub's machine",
-                    device.name
-                ),
-                Some("submit without --wake and run: mg wait".into()),
-            ));
-        }
-        // The item may have moved here from a local agent; its wake would
-        // run in a worktree this agent isn't in.
-        request.wake = Some(String::new());
-    }
+    let Json(request) = request?;
+    // A wake left from a device runs there, by its `mg wakes` runner.
+    let device = match &caller {
+        Caller::Local => None,
+        Caller::Device(device, ..) => Some(device.name.clone()),
+    };
+    let unrun = device
+        .as_ref()
+        .filter(|device| {
+            request
+                .wake
+                .as_deref()
+                .is_some_and(|wake| !wake.trim().is_empty())
+                && !state.wakes.runs(device)
+        })
+        .map(|device| {
+            format!(
+                "no `mg wakes run` polls from {device}, so the wake waits until one does; \
+                 `mg connect` on {device} installs one as a service"
+            )
+        });
     let on = match (&request.on, ProjectName::parse(&request.project)) {
         (Some(on), Ok(project)) => Some(On::parse(on, &project).map_err(|e| {
             Failure::new(
@@ -71,6 +73,7 @@ async fn submit(
         title: request.title,
         worktree: request.worktree,
         wake: request.wake,
+        device,
         guide: request.guide,
         priority: request.priority.map(priority::from_api),
         note: request.note,
@@ -132,7 +135,8 @@ async fn submit(
         .await
         .map_err(failure)?;
     rules::changed(&state, &moved);
-    let submitted = submitted.map_err(failure)?;
+    let mut submitted = submitted.map_err(failure)?;
+    submitted.warnings.extend(unrun);
     if carried {
         merge::changed(&state, &submitted.item.id);
     }

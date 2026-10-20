@@ -57,6 +57,7 @@ fn keeps_a_branch_an_open_item_holds() {
         title: None,
         worktree: None,
         wake: None,
+        device: None,
         guide: None,
         priority: None,
         note: None,

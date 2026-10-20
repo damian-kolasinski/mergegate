@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
-use super::super::Spec;
+use super::super::{Role, Spec};
 use super::{exe, render};
 
 fn spec(exe: &str) -> Spec {
     Spec {
+        role: Role::Hub,
         exe: PathBuf::from(exe),
-        port: 7777,
+        args: ["--json", "hub", "start", "--foreground", "--port", "7777"]
+            .map(String::from)
+            .to_vec(),
         home: PathBuf::from("/home/op/.mergegate"),
         outcome: PathBuf::from("/home/op/.mergegate/hub.outcome"),
         log: PathBuf::from("/home/op/.mergegate/hub.log"),
@@ -28,6 +31,16 @@ fn the_unit_runs_the_hub_in_the_foreground_and_restarts_only_a_failed_one() {
     ] {
         assert!(unit.contains(line), "missing {line:?} in:\n{unit}");
     }
+}
+
+#[test]
+fn stopping_the_wake_runner_leaves_the_sessions_it_woke_running() {
+    let wakes = Spec {
+        role: Role::Wakes,
+        ..spec("/home/op/.cargo/bin/mg")
+    };
+    assert!(render(&wakes).contains("KillMode=process\n"));
+    assert!(!render(&spec("/home/op/.cargo/bin/mg")).contains("KillMode"));
 }
 
 #[test]

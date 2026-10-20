@@ -20,6 +20,7 @@ use mergegate_core::store::StoreError;
 use tokio::time::Instant;
 
 use crate::server::AppState;
+use crate::wake::Wakes;
 
 /// How long an agent stays there after its last read ends.
 const GRACE: Duration = Duration::from_secs(60);
@@ -132,17 +133,21 @@ fn changed(state: &AppState, item: &ItemId) {
 pub(crate) fn of<S: FeedbackStore + AgentStore>(
     store: &S,
     readers: &Readers,
+    runners: &Wakes,
     item: &Item,
 ) -> Result<Option<AgentPresence>, StoreError> {
     let reading = readers.there(&item.id, Instant::now());
-    // As the wake runner sees it: a command runs only in a worktree that is
-    // still there.
     let left = store.agent(&item.id)?;
     let wakes = left.wake.is_some()
-        && left
-            .worktree
-            .as_deref()
-            .is_some_and(|worktree| Path::new(worktree).is_dir());
+        && match &left.device {
+            // As the hub's runner sees it: a command runs only in a worktree
+            // that is still there.
+            None => left
+                .worktree
+                .as_deref()
+                .is_some_and(|worktree| Path::new(worktree).is_dir()),
+            Some(device) => runners.runs(device),
+        };
     Ok(agent::presence(store, item, reading, wakes)?.map(to_api))
 }
 

@@ -4,7 +4,7 @@ use hub::{Home, HubError, StoreError};
 
 use super::probe::{Running, probe};
 use super::report::{HubStatus, unresponsive};
-use super::service::{self, Loaded};
+use super::service::{self, Loaded, Role};
 use super::spawn::Spawned;
 use super::{POLL, io_error};
 use crate::output::{CliError, Outcome, exit};
@@ -29,7 +29,7 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
         if !running.compatible() {
             return Err(incompatible(&running));
         }
-        if use_service && service::installed().is_none() {
+        if use_service && service::installed(Role::Hub).is_none() {
             warnings.push(
                 "the hub runs without a service, so it won't start at login; \
                  mg hub stop && mg hub start installs one"
@@ -46,7 +46,9 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
         // start ours once the lock is free.
         if launched.is_none() && !home.is_locked() {
             if use_service {
-                match service::load(&home, port) {
+                let port = port.to_string();
+                let start = ["--json", "hub", "start", "--foreground", "--port", &port];
+                match service::load(&home, Role::Hub, &start) {
                     Ok(loaded) => launched = Some(Launched::Service(loaded)),
                     Err(why) => {
                         use_service = false;

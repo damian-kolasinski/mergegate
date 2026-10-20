@@ -31,6 +31,8 @@ pub struct Submit {
     /// The command that wakes the item's agent; empty removes it. Kept when
     /// none is sent.
     pub wake: Option<String>,
+    /// The tailnet device that submits; none for the hub's machine.
+    pub device: Option<String>,
     /// The agent's review guide; blank removes it. The last one is
     /// kept when none is sent.
     pub guide: Option<String>,
@@ -90,6 +92,7 @@ pub fn submit<
         title,
         worktree,
         wake,
+        device,
         guide,
         priority,
         note,
@@ -151,7 +154,7 @@ pub fn submit<
             store.set_title(&item.id, title)?;
             item.title = title.to_owned();
         }
-        agent::record(store, &item.id, worktree, wake)?;
+        agent::record(store, &item.id, worktree, wake, device)?;
         let guide = match guide {
             Some(guide) => {
                 store.set_guide(&item.id, number, guide.as_deref())?;
@@ -325,7 +328,7 @@ pub fn submit<
         })?,
     };
     git.pin(&project.name, &item.pin_ref(), &item.revision.head)?;
-    agent::record(store, &item.id, worktree, wake)?;
+    agent::record(store, &item.id, worktree, wake, device)?;
     stack::updated(store, &item)?;
     Ok(Submitted {
         item,

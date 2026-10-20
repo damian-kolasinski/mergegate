@@ -12,7 +12,7 @@ pub(super) fn check(hub_running: bool) -> Option<Check> {
     if !service::applies() {
         return None;
     }
-    let installed = service::installed();
+    let installed = service::installed(service::Role::Hub);
     if installed.is_none() && !service::usable() {
         return None;
     }
