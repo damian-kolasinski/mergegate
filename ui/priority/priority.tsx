@@ -4,6 +4,7 @@ import type { Prioritize } from "../api/Prioritize";
 import type { Priority } from "../api/Priority";
 import { type Failure, failureOf, postJson } from "../app/hub";
 import { useModalKeys } from "../app/keys";
+import { useReloadHold } from "../app/version";
 import {
   Badge,
   Button,
@@ -72,6 +73,8 @@ export function PriorityPicker(props: {
   const [note, setNote] = createSignal(props.note ?? "");
   const [sending, setSending] = createSignal(false);
   const [failure, setFailure] = createSignal<Failure>();
+  // What's picked here isn't kept anywhere until it's saved.
+  useReloadHold(() => true);
 
   const save = () => {
     if (sending()) return;
