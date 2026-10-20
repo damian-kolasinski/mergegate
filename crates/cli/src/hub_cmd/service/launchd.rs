@@ -1,4 +1,5 @@
-//! A LaunchAgent in the user's GUI session.
+//! A LaunchAgent in the user's GUI session, or in their background session
+//! on a Mac they only reach over SSH, which has no GUI domain to load into.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -15,12 +16,45 @@ pub(super) fn path(role: Role, user_home: &Path) -> PathBuf {
         .join(format!("{}.plist", role.label()))
 }
 
-pub(super) fn render(spec: &Spec) -> String {
+/// The launchd session an agent loads into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Session {
+    Gui,
+    Background,
+}
+
+impl Session {
+    pub(super) fn here() -> Session {
+        if launchctl(&["print", &format!("gui/{}", uid())]).is_ok() {
+            Session::Gui
+        } else {
+            Session::Background
+        }
+    }
+
+    fn domain(self) -> String {
+        match self {
+            Session::Gui => format!("gui/{}", uid()),
+            Session::Background => format!("user/{}", uid()),
+        }
+    }
+}
+
+pub(super) fn render(spec: &Spec, session: Session) -> String {
     let args: String = spec
         .command()
         .iter()
         .map(|arg| format!("\t\t<string>{}</string>\n", escape(arg)))
         .collect();
+    // The user domain refuses an agent that doesn't limit itself to the
+    // background session. The GUI one keeps the default: an agent naming both
+    // would load twice at a GUI login.
+    let session_type = match session {
+        Session::Gui => "",
+        Session::Background => {
+            "\t<key>LimitLoadToSessionType</key>\n\t<string>Background</string>\n"
+        }
+    };
     // `SuccessfulExit` false: a hub stopped through its API or SIGTERM exits
     // 0 and stays stopped, as does a wake runner with no hub to connect to;
     // a crash or failed start is retried.
@@ -31,7 +65,7 @@ pub(super) fn render(spec: &Spec) -> String {
 <dict>
 	<key>Label</key>
 	<string>{label}</string>
-	<key>ProgramArguments</key>
+{session_type}	<key>ProgramArguments</key>
 	<array>
 {args}	</array>
 	<key>EnvironmentVariables</key>
@@ -74,7 +108,8 @@ pub(super) fn exe(plist: &str) -> Option<PathBuf> {
 /// Loads the agent, which starts its program. One loaded from an unchanged plist
 /// is only started: unloading would stop a hub it is still starting.
 pub(super) fn load(role: Role, plist: &Path, changed: bool) -> Result<(), String> {
-    let target = target(role);
+    let domain = Session::here().domain();
+    let target = format!("{domain}/{}", role.label());
     let loaded = launchctl(&["print", &target]).is_ok();
     if loaded && !changed {
         return launchctl(&["kickstart", &target]);
@@ -83,7 +118,7 @@ pub(super) fn load(role: Role, plist: &Path, changed: bool) -> Result<(), String
         launchctl(&["bootout", &target])?;
         gone(&target);
     }
-    launchctl(&["bootstrap", &domain(), &plist.display().to_string()])
+    launchctl(&["bootstrap", &domain, &plist.display().to_string()])
 }
 
 /// Waits for launchd to drop a job `bootout` asked to go: `bootout` returns
@@ -98,7 +133,7 @@ fn gone(target: &str) {
 
 /// Unloads the agent, stopping what it runs. Not loaded is fine.
 pub(super) fn unload(role: Role) -> Result<(), String> {
-    let target = target(role);
+    let target = format!("{}/{}", Session::here().domain(), role.label());
     if launchctl(&["print", &target]).is_err() {
         return Ok(());
     }
@@ -106,14 +141,9 @@ pub(super) fn unload(role: Role) -> Result<(), String> {
 }
 
 #[allow(unsafe_code)]
-fn domain() -> String {
+fn uid() -> u32 {
     // SAFETY: getuid has no preconditions and can't fail.
-    let uid = unsafe { libc::getuid() };
-    format!("gui/{uid}")
-}
-
-fn target(role: Role) -> String {
-    format!("{}/{}", domain(), role.label())
+    unsafe { libc::getuid() }
 }
 
 fn launchctl(args: &[&str]) -> Result<(), String> {

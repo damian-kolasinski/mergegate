@@ -96,7 +96,7 @@ impl Manager {
 
     fn render(self, spec: &Spec) -> String {
         match self {
-            Manager::Launchd => launchd::render(spec),
+            Manager::Launchd => launchd::render(spec, launchd::Session::here()),
             Manager::Systemd => systemd::render(spec),
         }
     }
