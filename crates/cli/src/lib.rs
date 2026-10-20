@@ -132,7 +132,7 @@ enum Command {
         files: Vec<PathBuf>,
     },
     /// Wait until the item has feedback for its agent, print it and mark it
-    /// delivered
+    /// delivered; in a Codex session, read once without waiting
     Wait {
         /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,

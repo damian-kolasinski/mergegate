@@ -38,7 +38,7 @@ def message():
     cursor = os.environ.get("MG_CURSOR")
     after = f" (newest cursor {cursor})" if cursor else ""
     return (f"mergegate: {item} has events you haven't read{after}. "
-            f"Run `mg wait {item}` and act on what it returns; the wake stays set, so end "
+            f"Run `mg feedback {item}` and act on what it returns; the wake stays set, so end "
             "your turn when you're done instead of waiting.")
 
 
@@ -136,9 +136,12 @@ def resume(binary, thread):
         answer = socket.until(30, lambda m: turn(m) or m.get("id") == rid)
         if not answer:
             raise RuntimeError("the daemon didn't answer thread/resume")
-        # A thread that was already loaded may start the turn before the
-        # resume's answer; one that wasn't starts it after.
-        started = turn(answer) or socket.until(STARTED_WITHIN, turn)
+        # A thread the daemon already had loaded starts the queued turn as
+        # `codex queue` runs, before this connects to hear it: the resume
+        # finds it running. One that wasn't loaded starts it after.
+        status = answer.get("result", {}).get("thread", {}).get("status", {})
+        started = (turn(answer) or status.get("type") == "active"
+                   or socket.until(STARTED_WITHIN, turn))
         if not started:
             print(f"codex_wake: {thread} loaded, but no turn started within {STARTED_WITHIN}s; "
                   "the message stays queued", file=sys.stderr)

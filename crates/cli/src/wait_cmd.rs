@@ -1,4 +1,5 @@
-//! `mg wait`: blocks until an item has events for its agent.
+//! `mg wait`: blocks until an item has events for its agent, except in a
+//! Codex session.
 
 use std::time::{Duration, Instant};
 
@@ -32,6 +33,11 @@ impl Wake {
 /// The longest one request waits; a longer wait asks again.
 const REQUEST: u64 = 3600;
 
+/// Set in the commands a Codex session runs. Codex checks on a running
+/// command with a model turn, so a blocking wait there spends tokens until it
+/// returns; there it reads once instead.
+const CODEX_THREAD: &str = "CODEX_THREAD_ID";
+
 pub fn run(
     item: String,
     wake: Wake,
@@ -44,10 +50,15 @@ pub fn run(
         Wake::Any => "any",
         Wake::Operator => "operator",
     };
+    let codex = std::env::var_os(CODEX_THREAD).is_some_and(|id| !id.is_empty());
     // A timeout too long to add is as good as none.
-    let deadline = (timeout > 0)
-        .then(|| Instant::now().checked_add(Duration::from_secs(timeout)))
-        .flatten();
+    let deadline = if codex {
+        Some(Instant::now())
+    } else {
+        (timeout > 0)
+            .then(|| Instant::now().checked_add(Duration::from_secs(timeout)))
+            .flatten()
+    };
     loop {
         let wait = match deadline {
             None => REQUEST,
@@ -68,7 +79,15 @@ pub fn run(
             return Ok(report(client, &feedback, since, command));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            let text = format!("no feedback on {} yet; call mg wait again", feedback.name);
+            let text = if codex {
+                format!(
+                    "no feedback on {} yet; mg wait doesn't wait in Codex: leave a wake with \
+                     mg submit --wake and end your turn (the mergegate skill's waiting.md, Codex)",
+                    feedback.name
+                )
+            } else {
+                format!("no feedback on {} yet; call mg wait again", feedback.name)
+            };
             return Ok(Outcome::done(&feedback, text).exit(exit::TIMEOUT));
         }
         since = next_since(since, &feedback);

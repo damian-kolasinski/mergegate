@@ -106,6 +106,8 @@ impl Env {
             .env_remove("MG_UI_DIR")
             .env_remove("MG_LANGUAGES_INDEX")
             .env_remove("MG_LANGUAGES_URL")
+            // `mg wait` doesn't block in a Codex session, which may run these.
+            .env_remove("CODEX_THREAD_ID")
             .envs(self.vars.iter().map(|(k, v)| (k, v)))
             .env("PATH", self.path());
         cmd
