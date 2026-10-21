@@ -13,7 +13,11 @@ export function Row(props: {
 }) {
   let row: HTMLLIElement | undefined;
   createEffect(() => {
-    if (props.selected) row?.scrollIntoView({ block: "nearest" });
+    if (!props.selected) return;
+    // Once the update that selected it has settled, as it may also lay out
+    // what the row is scrolled clear of, such as the file list's stuck
+    // headers over a group it unfolded. Still before the next paint.
+    queueMicrotask(() => row?.scrollIntoView({ block: "nearest" }));
   });
   return (
     <li
