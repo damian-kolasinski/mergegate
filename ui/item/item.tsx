@@ -84,13 +84,14 @@ export function ItemScreen(props: { id: string }) {
   // The item as the hub last gave it, for what changes without a new diff:
   // its state, priority and note.
   const [latest, setLatest] = createSignal<Item>();
-  // Time on a closed item is no longer review, and the hub refuses it.
+  // Only time in review counts, and the hub refuses the rest: time on a
+  // merging item would start a turn after the approval that ended the last.
   useReviewTime(
     id,
     createMemo(() => {
       const shown = diff();
       const item = latest();
-      if (!shown || !item || closed(item.state)) return undefined;
+      if (!shown || !item || !reviewable(item.state)) return undefined;
       return shown.item.revision.number;
     }),
   );

@@ -8,10 +8,12 @@
 //! differ: an agent's rebase adds a revision nobody reviewed, and a review
 //! answered with replies alone starts a turn on the same revision.
 //!
-//! Time is recorded only while the item is open. A closed item's totals
-//! never change, so its closing event reads the same every time it's read.
+//! Time is recorded only while the item is in review, waiting on the
+//! operator or its agent. Time on a merging item would start a turn after
+//! the approval that ended the last, and a closed item's totals never
+//! change, so its closing event reads the same every time it's read.
 
-use crate::item::{Item, ItemId, ItemStore};
+use crate::item::{Item, ItemId, ItemState, ItemStore};
 use crate::review::Verdict;
 use crate::store::StoreError;
 
@@ -62,6 +64,8 @@ pub enum ReviewTimeError {
     NoItem(ItemId),
     #[error("{0} is closed")]
     Closed(ItemId),
+    #[error("{0} is merging")]
+    Merging(ItemId),
     #[error("{id} has no revision {revision}")]
     NoRevision { id: ItemId, revision: u32 },
     #[error("{ms} ms is more than one report may carry ({MAX_REPORT_MS} ms)")]
@@ -81,8 +85,10 @@ pub fn record<S: ItemStore + ReviewTimeStore>(
     let item = store
         .item(&id)?
         .ok_or_else(|| ReviewTimeError::NoItem(id.clone()))?;
-    if !item.state.is_open() {
-        return Err(ReviewTimeError::Closed(id));
+    match item.state {
+        ItemState::NeedsReview | ItemState::ChangesRequested => {}
+        ItemState::Merging => return Err(ReviewTimeError::Merging(id)),
+        ItemState::Merged | ItemState::Abandoned => return Err(ReviewTimeError::Closed(id)),
     }
     if revision == 0 || revision > item.revision.number {
         return Err(ReviewTimeError::NoRevision { id, revision });
@@ -133,8 +139,17 @@ pub struct RevisionStats {
     pub review_ms: u64,
 }
 
-pub fn stats<S: ItemStore + ReviewTimeStore>(store: &S, item: &Item) -> Result<Stats, StoreError> {
+/// None when no review time was logged on `item`: it closed before the hub
+/// measured any, or nobody opened it in the UI. Totals of zero would pass
+/// for a review that took no time.
+pub fn stats<S: ItemStore + ReviewTimeStore>(
+    store: &S,
+    item: &Item,
+) -> Result<Option<Stats>, StoreError> {
     let logged = store.review_time(&item.id)?;
+    if logged.is_empty() {
+        return Ok(None);
+    }
     let sum = |of: &dyn Fn(&Logged) -> bool| -> u64 {
         logged.iter().filter(|l| of(l)).map(|l| l.ms).sum()
     };
@@ -174,13 +189,13 @@ pub fn stats<S: ItemStore + ReviewTimeStore>(store: &S, item: &Item) -> Result<S
             submitted_at: revision.submitted_at,
         })
         .collect();
-    Ok(Stats {
+    Ok(Some(Stats {
         opened_at: item.created_at.clone(),
         closed_at: item.closed_at.clone(),
         review_ms: sum(&|_| true),
         turns,
         revisions,
-    })
+    }))
 }
 
 #[cfg(test)]

@@ -74,7 +74,8 @@ pub enum EventBody {
     ItemAbandoned {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
-        /// For the agent's telemetry; a hub older than it sends none.
+        /// For the agent's telemetry; missing without review time logged,
+        /// and from a hub older than it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         stats: Option<ReviewStats>,
     },
@@ -113,7 +114,7 @@ pub enum EventBody {
     /// `commands` is the default cleanup, for an agent that agreed no other
     /// with the operator: it leaves the worktree on the updated target. A
     /// hub older than it sends none. `stats` is for the agent's telemetry,
-    /// and is missing from an older hub too.
+    /// and is missing without review time logged and from an older hub.
     #[serde(rename = "item.merged")]
     ItemMerged {
         commit: String,

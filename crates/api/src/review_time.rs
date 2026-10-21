@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::review::Verdict;
 
 /// `POST /api/items/{id}/review-time`: time the operator was active on the
-/// item's review screen since the UI's last report. Refused once the item
-/// closed, so its stats stay as its closing event first reported them.
+/// item's review screen since the UI's last report. Taken only while the
+/// item is in review, so its stats stay as its closing event first reported
+/// them.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReviewTime {
@@ -17,7 +18,9 @@ pub struct ReviewTime {
 }
 
 /// On `item.merged` and `item.abandoned`: how the item's review went.
-/// Timestamps are UTC, RFC 3339.
+/// Missing when no review time was logged: the item closed before the hub
+/// measured any, or nobody opened it in the UI. Timestamps are UTC,
+/// RFC 3339.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReviewStats {
     /// When the first revision was submitted.

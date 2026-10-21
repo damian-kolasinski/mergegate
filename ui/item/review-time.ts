@@ -26,8 +26,9 @@ let settleShown: (() => Promise<void>) | undefined;
 /**
  * Reports the review time measured so far on the item on screen, before a
  * review or an abandon goes out. The hub counts the time it gets before a
- * review toward the turn that review ends. It refuses time on a closed item,
- * so the item's closing event reports the same totals every time it's read.
+ * review toward the turn that review ends. It refuses time once the item
+ * leaves review, so the item's closing event reports the same totals every
+ * time it's read.
  */
 export function settleReviewTime(): Promise<void> {
   return settleShown?.() ?? Promise.resolve();
@@ -36,13 +37,14 @@ export function settleReviewTime(): Promise<void> {
 /**
  * Measures how long the operator is active on `item`'s review screen and
  * reports it to the hub with the revision on screen; the hub adds it up per
- * revision and per turn for the item's closing event. Active is the page visible and focused, with the
- * operator's inputs no more than `IDLE_MS` apart: a gap between two counts
- * whole when it's shorter, and not at all when it's longer. Only one window
- * has focus, so an item open in two counts once.
+ * revision and per turn for the item's closing event. Active is the page
+ * visible and focused, with the operator's inputs no more than `IDLE_MS`
+ * apart: a gap between two counts whole when it's shorter, and not at all
+ * when it's longer. Only one window has focus, so an item open in two
+ * counts once.
  *
  * `revision` is the revision on screen; undefined while there's none, or
- * the item is closed.
+ * the item isn't in review.
  */
 export function useReviewTime(
   item: string,

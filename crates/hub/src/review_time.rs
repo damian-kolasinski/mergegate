@@ -57,8 +57,9 @@ pub(crate) fn of_closes<'a, S: ItemStore + ReviewTimeStore>(
                 NoticeKind::Merged { .. } | NoticeKind::Abandoned { .. }
             )
             && !stats.contains_key(&item.id)
+            && let Some(of_item) = review_time::stats(store, item)?
         {
-            stats.insert(item.id.clone(), to_api(review_time::stats(store, item)?));
+            stats.insert(item.id.clone(), to_api(of_item));
         }
     }
     Ok(stats)
@@ -98,6 +99,7 @@ fn failure(e: ReviewTimeError) -> Failure {
     let (status, code, hint) = match &e {
         E::NoItem(_) => (S::NOT_FOUND, "item_not_found", Some("mg inbox".to_owned())),
         E::Closed(_) => (S::CONFLICT, "item_closed", None),
+        E::Merging(_) => (S::CONFLICT, "item_merging", None),
         E::NoRevision { .. } => (S::NOT_FOUND, "revision_not_found", None),
         E::TooLong { .. } => (S::BAD_REQUEST, "invalid_review_time", None),
         E::Store(_) => (S::INTERNAL_SERVER_ERROR, "store_failed", None),
