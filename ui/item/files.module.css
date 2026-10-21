@@ -1,4 +1,7 @@
+/* Isolated, so the stuck headers' stacking stays inside the list rather
+   than rising over the page's menus and overlays. */
 .files {
+  isolation: isolate;
   overflow-y: auto;
   border-right: 1px solid var(--border-container);
 }
@@ -9,8 +12,19 @@
   list-style: none;
 }
 
-/* A module or folder: what's in it is indented under it. */
+/* Brought into view clear of the headers stuck above it. */
+.files li {
+  scroll-margin-top: var(--stuck, 0px);
+}
+
+/* A module or folder: what's in it is indented under it. Stuck at the top
+   while the list is inside its group, below its ancestors' headers and
+   over its descendants', which slide under it as their groups end. */
 .head {
+  position: sticky;
+  top: var(--stuck);
+  z-index: calc(20 - var(--depth));
+  scroll-margin-top: var(--stuck);
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
@@ -19,7 +33,8 @@
   padding-left: calc(var(--space-4) + var(--depth) * 14px);
   border: 0;
   border-bottom: 1px solid var(--border-inactive);
-  background: none;
+  /* Opaque, as rows pass under it. */
+  background: var(--background-page);
   color: var(--text-secondary);
   font: var(--type-p4);
   text-align: left;
@@ -313,7 +328,11 @@ li[aria-current="true"] .info,
   color: var(--text-tint-brand);
 }
 
+/* Stuck over the trusted files' own headers while the list is in them. */
 .trusted {
+  position: sticky;
+  top: 0;
+  z-index: 21;
   display: flex;
   align-items: baseline;
   border-bottom: 1px solid var(--border-inactive);

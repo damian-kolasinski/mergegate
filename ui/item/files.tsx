@@ -4,6 +4,7 @@ import {
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
 } from "solid-js";
 import { Portal } from "solid-js/web";
@@ -22,11 +23,13 @@ import { describe, importance } from "./why";
  * by where they live: each module, its folders, then its files, so a file
  * reads as part of what it changes. Those to review come first, then the
  * trusted ones folded into a group of their own. Why a file is where it is
- * waits behind its ⓘ, or `i` for the current one. Files are marked viewed
- * from their headers in the diff, which the list follows. Since an earlier
- * revision, the ones unchanged since then follow, folded away: they have
- * no header, so they're marked here. One holding a thread that waits on
- * the operator is in the diff instead, labelled unchanged.
+ * waits behind its ⓘ, or `i` for the current one. Scrolled, the list keeps
+ * the headers of the groups it's in stacked at its top, so it says where
+ * it is. Files are marked viewed from their headers in the diff, which the
+ * list follows. Since an earlier revision, the ones unchanged since then
+ * follow, folded away: they have no header, so they're marked here. One
+ * holding a thread that waits on the operator is in the diff instead,
+ * labelled unchanged.
  */
 export function FileList(props: {
   /** Whose rules sorted the files, linked from the trusted group. */
@@ -48,6 +51,8 @@ export function FileList(props: {
    * has focus. */
   writing: boolean;
 }) {
+  const [bar, setBar] = createSignal<HTMLElement>();
+  const barHeight = useHeight(bar);
   const review = createMemo(() => tree(props.files, "r:"));
   const trusted = createMemo(() => tree(props.trusted, "t:"));
   // By key, so a group stays folded as the files reload.
@@ -110,8 +115,14 @@ export function FileList(props: {
     </Row>
   );
   // Files run in lists between their groups, so the list items are the
-  // files alone, in the tree's order.
-  const branch = (nodes: Node[], depth: number): JSX.Element => (
+  // files alone, in the tree's order. `top` is how far down the headers
+  // stuck above them reach; an accessor, so a header resized doesn't
+  // render what's under it anew.
+  const branch = (
+    nodes: Node[],
+    depth: number,
+    top: () => number,
+  ): JSX.Element => (
     <For each={runs(nodes)}>
       {(run) => (
         <Show
@@ -122,17 +133,18 @@ export function FileList(props: {
                 <GroupRow
                   group={group()}
                   depth={depth}
+                  top={top()}
                   open={!folded().has(group().key)}
                   onFold={() => fold(group().key)}
                 >
-                  {branch(group().nodes, depth + 1)}
+                  {(under) => branch(group().nodes, depth + 1, under)}
                 </GroupRow>
               )}
             </Show>
           }
         >
           {(leaves) => (
-            <ul>
+            <ul style={{ "--stuck": `${top()}px` }}>
               <For each={leaves()}>
                 {(leaf) => (
                   <>
@@ -151,31 +163,36 @@ export function FileList(props: {
   );
   return (
     <nav class={styles.files} aria-label="Files">
-      {branch(review(), 0)}
+      {branch(review(), 0, () => 0)}
       <Show when={props.trusted.length}>
-        <div class={styles.trusted}>
-          <button
-            type="button"
-            class={styles.toggle}
-            aria-expanded={props.expanded}
-            onClick={(event) => {
-              props.onExpand(!props.expanded);
-              // A focused button would take Enter from the shortcuts.
-              event.currentTarget.blur();
-            }}
-          >
-            <span class={styles.chevron} aria-hidden="true" />
-            Trusted ({props.trusted.length})
-          </button>
-          <a class={styles.rules} href={rulesHref(props.project)}>
-            {props.project} rules
-          </a>
-        </div>
-        <Show when={props.expanded}>
-          <div role="group" aria-label="Trusted files">
-            {branch(trusted(), 0)}
+        {/* Wrapped, so its bar stays up only while its files do. */}
+        <div>
+          <div ref={setBar} class={styles.trusted}>
+            <button
+              type="button"
+              class={styles.toggle}
+              aria-expanded={props.expanded}
+              onClick={(event) => {
+                props.onExpand(!props.expanded);
+                // A focused button would take Enter from the shortcuts.
+                event.currentTarget.blur();
+                // Folded while stuck, as a group's header.
+                bar()?.scrollIntoView({ block: "nearest" });
+              }}
+            >
+              <span class={styles.chevron} aria-hidden="true" />
+              Trusted ({props.trusted.length})
+            </button>
+            <a class={styles.rules} href={rulesHref(props.project)}>
+              {props.project} rules
+            </a>
           </div>
-        </Show>
+          <Show when={props.expanded}>
+            <div role="group" aria-label="Trusted files">
+              {branch(trusted(), 0, barHeight)}
+            </div>
+          </Show>
+        </div>
       </Show>
       <Show when={props.unchanged.length}>
         <details class={styles.unchanged}>
@@ -226,14 +243,41 @@ function groups(node: Node): Group[] {
   return node.kind === "file" ? [] : [node, ...node.nodes.flatMap(groups)];
 }
 
-/** A module or folder, which folds away what's in it. */
+/** How tall `el` is drawn, following it as it wraps or resizes. */
+function useHeight(el: () => HTMLElement | undefined): () => number {
+  const [value, setValue] = createSignal(0);
+  createEffect(() => {
+    const target = el();
+    if (!target) return;
+    // Now rather than once the observer reports, which is after a row just
+    // unfolded under it has been scrolled into view clear of the headers.
+    setValue(target.getBoundingClientRect().height);
+    const observer = new ResizeObserver(() =>
+      setValue(target.getBoundingClientRect().height),
+    );
+    observer.observe(target);
+    onCleanup(() => observer.disconnect());
+  });
+  return value;
+}
+
+/**
+ * A module or folder, which folds away what's in it. Its header sticks
+ * below its ancestors' while the list scrolls through it, and goes with
+ * the group's end, so the next group at its level takes its place.
+ */
 function GroupRow(props: {
   group: Group;
   depth: number;
+  /** Where its header sticks: below the headers of the groups it's in. */
+  top: number;
   open: boolean;
   onFold: () => void;
-  children: JSX.Element;
+  /** What's in it, given where its own header ends. */
+  children: (top: () => number) => JSX.Element;
 }) {
+  const [head, setHead] = createSignal<HTMLButtonElement>();
+  const headHeight = useHeight(head);
   return (
     <div
       role="group"
@@ -242,14 +286,18 @@ function GroupRow(props: {
       data-kind={props.group.kind}
     >
       <button
+        ref={setHead}
         type="button"
         class={styles.head}
-        style={{ "--depth": props.depth }}
+        style={{ "--depth": props.depth, "--stuck": `${props.top}px` }}
         aria-expanded={props.open}
         onClick={(event) => {
           props.onFold();
           // A focused button would take Enter from the shortcuts.
           event.currentTarget.blur();
+          // Folded while stuck, the group shrinks to its header, which can
+          // then be above the list's top: bring it back.
+          head()?.scrollIntoView({ block: "nearest" });
         }}
       >
         <span class={styles.chevron} aria-hidden="true" />
@@ -288,7 +336,9 @@ function GroupRow(props: {
           )}
         </Show>
       </button>
-      <Show when={props.open}>{props.children}</Show>
+      <Show when={props.open}>
+        {props.children(() => props.top + headHeight())}
+      </Show>
     </div>
   );
 }

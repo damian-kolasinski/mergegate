@@ -4,6 +4,7 @@
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Locator } from "@playwright/test";
 import { expect, test } from "./hub";
 
 const GUIDE = `Lets a group be renamed.
@@ -205,4 +206,108 @@ test("f11 a test hangs under the file of its own kind, and the diff follows", as
       "Viewed web/button.test.ts",
       "Viewed web/button.css",
     ]);
+});
+
+test("f11 the headers of the groups the list is scrolled into stay at its top", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({
+    "Cargo.toml": "[workspace]\n",
+    "crates/core/Cargo.toml": "[package]\n",
+    "crates/hub/Cargo.toml": "[package]\n",
+  });
+  const many = (folder: string) =>
+    Object.fromEntries(
+      Array.from({ length: 10 }, (_, i) => [
+        `${folder}/part${i}.rs`,
+        `pub fn part${i}() {}\n`,
+      ]),
+    );
+  app.submit("big", "Touch a lot", {
+    ...many("crates/core/src/session"),
+    ...many("crates/core/src/store"),
+    ...many("crates/hub/src/routes"),
+  });
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.goto(`${hub.url}#/items/app%231`);
+
+  const files = page.getByRole("navigation", { name: "Files" });
+  const core = files.getByRole("group", { name: "core" });
+  const coreHead = core.getByRole("button", { name: /^core/ });
+  const sessionHead = core.getByRole("button", { name: /^session/ });
+  const storeHead = core.getByRole("button", { name: /^store/ });
+  const hubHead = files
+    .getByRole("group", { name: "hub" })
+    .getByRole("button", { name: /^hub/ });
+  const row = (group: string, i: number) =>
+    files
+      .getByRole("group", { name: group })
+      .getByRole("listitem")
+      .filter({ hasText: `part${i}.rs` });
+  // How far below the list's top a row or header is drawn.
+  const below = async (locator: Locator) => {
+    const list = await files.boundingBox();
+    const box = await locator.boundingBox();
+    return (box?.y ?? Number.NaN) - (list?.y ?? 0);
+  };
+  const bottom = async (locator: Locator) =>
+    (await below(locator)) + ((await locator.boundingBox())?.height ?? 0);
+  // Scrolled so `target` is the first row clear of the stuck headers.
+  const scrollTo = (target: Locator) =>
+    target.evaluate((li) => li.scrollIntoView({ block: "start" }));
+  await expect(coreHead).toBeVisible();
+
+  // Stuck or not, a header stays under the page's menus: a click on it
+  // past an open one closes the menu rather than folding the crate.
+  const more = page.getByRole("button", { name: "More actions" });
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  const head = await coreHead.boundingBox();
+  await page.mouse.click((head?.x ?? 0) + 40, (head?.y ?? 0) + 10);
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await expect(coreHead).toHaveAttribute("aria-expanded", "true");
+
+  // Into `session/`: the crate's header, then the folder's, stay up, and
+  // the row is clear of them.
+  await scrollTo(row("session", 6));
+  expect(await files.evaluate((nav) => nav.scrollTop)).toBeGreaterThan(0);
+  expect(await below(coreHead)).toBeCloseTo(0, 0);
+  expect(await below(sessionHead)).toBeCloseTo(await bottom(coreHead), 0);
+  expect(await below(row("session", 6))).toBeCloseTo(
+    await bottom(sessionHead),
+    0,
+  );
+
+  // Into `store/`: it takes `session/`'s place below the crate's header,
+  // which stays.
+  await scrollTo(row("store", 4));
+  expect(await below(coreHead)).toBeCloseTo(0, 0);
+  expect(await below(storeHead)).toBeCloseTo(await bottom(coreHead), 0);
+  expect(await bottom(sessionHead)).toBeLessThanOrEqual(await bottom(coreHead));
+  expect(await below(row("store", 4))).toBeCloseTo(await bottom(storeHead), 0);
+
+  // Into the next crate: its header takes the top, and `core`'s goes.
+  await scrollTo(row("hub", 3));
+  expect(await below(hubHead)).toBeCloseTo(0, 0);
+  expect(await bottom(coreHead)).toBeLessThanOrEqual(0);
+
+  // `p` up to a row under the headers brings it out from under them.
+  await scrollTo(row("store", 2));
+  await row("store", 2).click();
+  await page.keyboard.press("p");
+  await expect(row("store", 1)).toHaveAttribute("aria-current", "true");
+  expect(await below(row("store", 1))).toBeCloseTo(await bottom(storeHead), 0);
+
+  // So does `p` up into a folded crate, which unfolds it, its headers new.
+  await coreHead.click();
+  await expect(coreHead).toHaveAttribute("aria-expanded", "false");
+  await scrollTo(row("hub", 0));
+  await row("hub", 0).click();
+  await page.keyboard.press("p");
+  await expect(row("store", 9)).toHaveAttribute("aria-current", "true");
+  expect(await below(row("store", 9))).toBeGreaterThanOrEqual(
+    (await bottom(storeHead)) - 0.5,
+  );
 });
