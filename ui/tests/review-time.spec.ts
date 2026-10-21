@@ -3,7 +3,7 @@
 // the turns the operator's reviews end.
 
 import type { Page } from "@playwright/test";
-import { expect, type Hub, test } from "./hub";
+import { expect, Hub, test } from "./hub";
 
 type Stats = {
   review_ms: number;
@@ -301,4 +301,61 @@ test("time goes to the revision on screen, not the newest", async ({
   expect(stats?.turns).toEqual([
     expect.objectContaining({ turn: 1, verdict: "approved" }),
   ]);
+});
+
+test("time while a merge runs counts for nothing, even when it conflicts", async ({
+  page,
+}) => {
+  // Only the merge finds the conflict.
+  const hub = new Hub({ MG_TARGET_WATCH: "off" });
+  try {
+    const app = hub.project("app");
+    app.seed({ README: "hello\n" });
+    app.submit("readme", "Greet", { README: "hello, login\n" });
+    let merge = () => {};
+    const merging = new Promise<void>((go) => {
+      merge = go;
+    });
+    await page.route("**/approve", async (route) => {
+      await merging;
+      await route.continue();
+    });
+    await page.clock.install();
+    await page.goto(`${hub.url}#/items/app%231`);
+    const screen = page.getByRole("region", { name: "app#1" });
+    await expect(screen.getByText("Needs review")).toBeVisible();
+
+    await page.mouse.move(10, 10);
+    await page.clock.fastForward(10_000);
+    await page.mouse.move(20, 20);
+    app.seed({ README: "hi there\n" });
+    await page.getByRole("button", { name: "Approve & merge" }).click();
+    await page.getByRole("button", { name: "Merge", exact: true }).click();
+    // The merge takes a minute, with the operator moving about.
+    for (const at of [30, 40, 50]) {
+      await page.mouse.move(at, at);
+      await page.clock.fastForward(20_000);
+    }
+    merge();
+    await expect(screen.getByText("Changes requested")).toBeVisible();
+    await page.mouse.move(60, 60);
+    await page.clock.fastForward(5_000);
+    await page.mouse.move(70, 70);
+    await page
+      .getByRole("textbox", { name: "Review summary" })
+      .fill("Rebase it.");
+    await page.getByRole("button", { name: "Request changes" }).click();
+    await expect(screen.getByText("Sent to the agent on r1")).toBeVisible();
+    hub.mg(["abandon", "app#1"]);
+
+    const [approved, after] = closing(hub, "item.abandoned")?.turns ?? [];
+    expect(approved?.verdict).toBe("approved");
+    expect(approved?.review_ms).toBeGreaterThanOrEqual(10_000);
+    expect(approved?.review_ms).toBeLessThan(20_000);
+    expect(after?.verdict).toBe("changes_requested");
+    expect(after?.review_ms).toBeGreaterThanOrEqual(5_000);
+    expect(after?.review_ms).toBeLessThan(15_000);
+  } finally {
+    hub.stop();
+  }
 });

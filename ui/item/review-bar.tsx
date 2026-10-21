@@ -11,7 +11,7 @@ import { type Failure, failureOf, HubError, postJson } from "../app/hub";
 import { isEditable, isSubmitKey, useKeys } from "../app/keys";
 import { Button, ErrorNote, Meta, Mono, TextArea } from "../design-system";
 import { NextItem } from "./next";
-import { settleReviewTime } from "./review-time";
+import { leaveReview, settleReviewTime } from "./review-time";
 import styles from "./review-bar.module.css";
 
 /**
@@ -142,14 +142,9 @@ export function ReviewBar(props: {
     setSending("merge");
     setFailure(undefined);
     setSent(undefined);
-    // The time up to the merge counts, and the hub takes none after it.
-    settleReviewTime()
-      .then(() =>
-        postJson<Merge>(
-          `/api/items/${encodeURIComponent(props.item)}/approve`,
-          body,
-        ),
-      )
+    const url = `/api/items/${encodeURIComponent(props.item)}/approve`;
+    // The time up to the merge counts, and none while it runs.
+    leaveReview(() => postJson<Merge>(url, body))
       .then((merge) => {
         setSummary("");
         props.onMerged(merge);

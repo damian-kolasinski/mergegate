@@ -25,16 +25,34 @@ let settleShown: (() => Promise<void>) | undefined;
 // Reports on their way, from every screen: one a closed screen sent as it
 // went still has to land before a review sent from the next.
 const sending = new Set<Promise<void>>();
+// Approves and abandons on their way.
+let leaving = 0;
 
 /**
  * Reports the review time measured so far on the item on screen, before a
- * review or an abandon goes out. The hub counts the time it gets before a
- * review toward the turn that review ends. It refuses time once the item
- * leaves review, so the item's closing event reports the same totals every
- * time it's read.
+ * review goes out. The hub counts the time it gets before a review toward
+ * the turn that review ends.
  */
 export function settleReviewTime(): Promise<void> {
   return settleShown?.() ?? Promise.resolve();
+}
+
+/**
+ * Settles the review time, then sends what takes the item out of review:
+ * an approve or an abandon. The hub refuses time once the item is out, so
+ * its closing event reports the same totals every time it's read. Nothing
+ * counts while the request is on its way either: a merge can take a while,
+ * and one that conflicts puts the item back in review on the same revision.
+ * Measuring starts again with the operator's next input.
+ */
+export async function leaveReview<T>(send: () => Promise<T>): Promise<T> {
+  leaving += 1;
+  try {
+    await settleReviewTime();
+    return await send();
+  } finally {
+    leaving -= 1;
+  }
 }
 
 /**
@@ -80,6 +98,10 @@ export function useReviewTime(
     return sent;
   };
   const input = () => {
+    if (leaving > 0) {
+      last = undefined;
+      return;
+    }
     if (shown === undefined || !engaged()) return;
     const now = performance.now();
     credit(now);
@@ -92,12 +114,15 @@ export function useReviewTime(
   };
   const visibility = () =>
     document.visibilityState === "visible" ? input() : away();
-  // What closes the item is an input itself, so the time up to it counts.
+  // What sends the review is an input itself, so the time up to it counts.
   // A report landing after the review would count toward the next turn, or
   // be refused, so the settle waits for every one on its way, including
   // those a blur or the timer sends while it waits.
   const settle = async () => {
-    input();
+    if (leaving > 0) {
+      credit(performance.now());
+      last = undefined;
+    } else input();
     void report();
     while (sending.size > 0) await Promise.all(sending);
   };
@@ -110,7 +135,10 @@ export function useReviewTime(
         void report();
       }
       shown = next;
-      last = next !== undefined && engaged() ? performance.now() : undefined;
+      last =
+        next !== undefined && leaving === 0 && engaged()
+          ? performance.now()
+          : undefined;
     }),
   );
 

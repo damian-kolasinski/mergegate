@@ -4,7 +4,7 @@ import type { Item } from "../api/Item";
 import { type Failure, failureOf, postJson } from "../app/hub";
 import { Button, ErrorNote, Meta, Mono, TextArea } from "../design-system";
 import styles from "./abandon.module.css";
-import { settleReviewTime } from "./review-time";
+import { leaveReview } from "./review-time";
 
 /**
  * The confirm step the menu's Abandon opens: closing an item drops its
@@ -33,14 +33,9 @@ export function Abandon(props: {
     };
     setSending(true);
     setFailure(undefined);
+    const url = `/api/items/${encodeURIComponent(props.item)}/abandon`;
     // The time up to the abandon counts, and the hub takes none after it.
-    settleReviewTime()
-      .then(() =>
-        postJson<Item>(
-          `/api/items/${encodeURIComponent(props.item)}/abandon`,
-          body,
-        ),
-      )
+    leaveReview(() => postJson<Item>(url, body))
       .then(props.onAbandoned, (error: unknown) => setFailure(failureOf(error)))
       .finally(() => setSending(false));
   };
