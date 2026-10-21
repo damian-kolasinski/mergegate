@@ -953,6 +953,7 @@ fn warns_when_the_guides_intent_names_the_review() {
         verdict: Verdict::ChangesRequested,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store
         .insert_review(review, ItemState::ChangesRequested)

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::item::ItemState;
 use crate::review::{Comment, Reply, Verdict};
+use crate::review_time::ReviewStats;
 
 /// `GET /api/items/{id}/feedback`: the events after `since`, or after the
 /// item's delivered cursor. With `wait` (seconds), the hub holds the request
@@ -73,6 +74,10 @@ pub enum EventBody {
     ItemAbandoned {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+        /// For the agent's telemetry; missing without review time logged,
+        /// and from a hub older than it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stats: Option<ReviewStats>,
     },
     /// The approved revision didn't land; the item waits in Merging for the
     /// operator to retry or cancel. `reason` is git's.
@@ -108,13 +113,16 @@ pub enum EventBody {
     /// leaves `branch` unmerged to git, so deleting it takes `git branch -D`.
     /// `commands` is the default cleanup, for an agent that agreed no other
     /// with the operator: it leaves the worktree on the updated target. A
-    /// hub older than it sends none.
+    /// hub older than it sends none. `stats` is for the agent's telemetry,
+    /// and is missing without review time logged and from an older hub.
     #[serde(rename = "item.merged")]
     ItemMerged {
         commit: String,
         branch: String,
         #[serde(default)]
         commands: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stats: Option<ReviewStats>,
     },
     /// The item's parent has a new revision, or merged: the agent runs
     /// `commands` to move its commits after `upstream`, the parent revision

@@ -2,7 +2,6 @@
 //! streams to the operator agent. Unlike an item's feedback it hands nothing
 //! over: no cursor moves, no held comments go out, and no wake is settled.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,12 +10,11 @@ use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Extension, Json, Router};
 use mergegate_core::feedback::{self, Log};
-use mergegate_core::item::ItemId;
 use mergegate_core::store::StoreError;
 use serde::Deserialize;
 use tokio::time::Instant;
 
-use crate::feedback::{event_to_api, failure, parent_names};
+use crate::feedback::{Related, event_to_api, failure, relate};
 use crate::guard::{self, Caller};
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -49,16 +47,16 @@ async fn read(
     let mut last = query.wait == 0 || query.since.is_none();
     loop {
         logged.mark_unchanged();
-        let (read, parents) = state
+        let (read, related) = state
             .blocking(move |store, _| {
                 let read = feedback::log(store, query.since)?;
-                let parents = parent_names(store, read.events.iter().map(|(_, e)| e))?;
-                Ok::<_, StoreError>((read, parents))
+                let related = relate(store, read.events.iter().map(|(item, e)| (item, e)))?;
+                Ok::<_, StoreError>((read, related))
             })
             .await
             .map_err(|e| failure(e.into()))?;
         if last || !read.events.is_empty() {
-            return Ok(Json(to_api(read, &parents)));
+            return Ok(Json(to_api(read, &related)));
         }
         // The store stays unlocked while this waits.
         let mut readmit = false;
@@ -75,12 +73,12 @@ async fn read(
     }
 }
 
-fn to_api(read: Log, parents: &HashMap<ItemId, String>) -> api::feedback::Log {
+fn to_api(read: Log, related: &Related) -> api::feedback::Log {
     api::feedback::Log {
         events: read
             .events
             .into_iter()
-            .map(|(item, event)| event_to_api(&item.id, &item, event, parents))
+            .map(|(item, event)| event_to_api(&item.id, &item, event, related))
             .collect(),
         cursor: read.cursor,
     }

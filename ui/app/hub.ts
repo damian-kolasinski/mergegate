@@ -52,6 +52,23 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   })) as T;
 }
 
+/**
+ * `POST`s `body` to a hub endpoint and, unlike `postJson`, keeps the request
+ * going when the page closes or reloads: for what the page reports as it's
+ * left.
+ */
+export async function postOutliving(
+  path: string,
+  body: unknown,
+): Promise<void> {
+  await send(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", [clientHeader]: "ui" },
+    body: JSON.stringify(body),
+    keepalive: true,
+  });
+}
+
 /** `DELETE`s a hub resource. */
 export async function deleteJson(path: string): Promise<void> {
   await send(path, { method: "DELETE", headers: { [clientHeader]: "ui" } });

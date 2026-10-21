@@ -24,6 +24,7 @@ pub mod project;
 pub mod remap;
 pub mod resume;
 pub mod review;
+pub mod review_time;
 pub mod settings;
 pub mod store;
 pub mod triage;

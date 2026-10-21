@@ -25,14 +25,16 @@ impl ReviewStore for Store {
         let (id, submitted_at): (i64, String) = tx
             .query_row(
                 &format!(
-                    "INSERT INTO reviews (item_id, revision, verdict, summary, submitted_at)
-                     VALUES (?1, ?2, ?3, ?4, {NOW}) RETURNING id, submitted_at"
+                    "INSERT INTO reviews
+                         (item_id, revision, verdict, summary, carried_from, submitted_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, {NOW}) RETURNING id, submitted_at"
                 ),
                 params![
                     item_id,
                     review.revision,
                     review.verdict.as_str(),
-                    review.summary
+                    review.summary,
+                    review.carried_from
                 ],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )

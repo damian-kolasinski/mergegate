@@ -317,3 +317,57 @@ fn a_file_recorded_changed_since_a_revision_without_it_reads_as_added() {
         ]
     );
 }
+
+#[test]
+fn an_approval_carried_before_it_was_marked_ends_no_turn() {
+    use mergegate_core::item::ItemId;
+    use mergegate_core::review_time::ReviewTimeStore;
+
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("hub.db");
+    drop(open_with(&db, &MIGRATIONS[..25]).unwrap());
+    let (base, at) = ("0".repeat(40), "2026-01-01T00:00:00.000Z");
+    let revisions = (1..=13)
+        .map(|n| format!("(1, {n}, '{n:040}', '{base}', 0, 0, 0, '{at}')"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Connection::open(&db)
+        .unwrap()
+        .execute_batch(&format!(
+            "INSERT INTO projects (id, name, backend, target, upstream)
+                 VALUES (1, 'app', 'local', 'main', '/src/app');
+             INSERT INTO items (id, project_id, number, branch, title, state, backend, target,
+                                created_at)
+                 VALUES (1, 1, 1, 'work', 'Work', 'merging', 'local', 'main', '{at}');
+             INSERT INTO revisions (item_id, number, head, base, files, additions, deletions,
+                                    submitted_at)
+                 VALUES {revisions};
+             INSERT INTO reviews (item_id, revision, verdict, summary, submitted_at)
+                 VALUES (1, 1, 'approved', 'Ship it.', '{at}'),
+                        (1, 2, 'approved', 'Approved again: the diff is unchanged since r1.',
+                         '{at}'),
+                        (1, 12, 'approved', 'Ship it again.', '{at}'),
+                        (1, 13, 'approved', 'Approved again: the diff is unchanged since r12.',
+                         '{at}');"
+        ))
+        .unwrap();
+
+    let store = Store::open(&db).unwrap();
+
+    let sent = store
+        .sent_reviews(&ItemId::parse("app#1").unwrap())
+        .unwrap();
+    let sent: Vec<_> = sent.iter().map(|r| r.revision).collect();
+    assert_eq!(sent, [1, 12]);
+    let from = |revision: u32| -> Option<u32> {
+        store
+            .conn
+            .query_row(
+                "SELECT carried_from FROM reviews WHERE revision = ?1",
+                [revision],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!((from(2), from(13)), (Some(1), Some(12)));
+}

@@ -59,6 +59,7 @@ fn review(store: &mut Store, item: &str) {
         verdict: Verdict::Comment,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store.insert_review(review, ItemState::NeedsReview).unwrap();
 }

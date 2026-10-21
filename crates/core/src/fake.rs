@@ -34,6 +34,7 @@ use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
     Anchor, Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
 };
+use crate::review_time::{Logged, ReviewTimeStore, SentReview};
 use crate::settings::SettingsStore;
 use crate::store::StoreError;
 use crate::triage::{
@@ -802,7 +803,10 @@ pub(crate) struct FakeStore {
     /// By blob, grammar and version.
     highlights: BTreeMap<(String, String, String), Highlights>,
     viewed: BTreeSet<(ItemId, u32, String)>,
+    review_time: BTreeMap<(ItemId, u32, u32), u64>,
     reviews: Vec<Review>,
+    /// The reviews the hub carried, not the operator, by ID.
+    carried: BTreeSet<u64>,
     /// Every item's, oldest first.
     comments: Vec<Comment>,
     /// Comment IDs aren't reused, as the store's aren't.
@@ -1725,6 +1729,42 @@ impl ViewedStore for FakeStore {
     }
 }
 
+impl ReviewTimeStore for FakeStore {
+    fn review_time(&self, id: &ItemId) -> Result<Vec<Logged>, StoreError> {
+        Ok(self
+            .review_time
+            .iter()
+            .filter(|((i, _, _), _)| i == id)
+            .map(|((_, turn, revision), ms)| Logged {
+                turn: *turn,
+                revision: *revision,
+                ms: *ms,
+            })
+            .collect())
+    }
+
+    fn add_review_time(&mut self, id: &ItemId, logged: Logged) -> Result<(), StoreError> {
+        *self
+            .review_time
+            .entry((id.clone(), logged.turn, logged.revision))
+            .or_default() += logged.ms;
+        Ok(())
+    }
+
+    fn sent_reviews(&self, id: &ItemId) -> Result<Vec<SentReview>, StoreError> {
+        Ok(self
+            .reviews
+            .iter()
+            .filter(|r| &r.item == id && !self.carried.contains(&r.id))
+            .map(|r| SentReview {
+                revision: r.revision,
+                verdict: r.verdict,
+                submitted_at: r.submitted_at.clone(),
+            })
+            .collect())
+    }
+}
+
 impl AttachmentStore for FakeStore {
     fn attachments(&self, id: &ItemId) -> Result<Vec<Attachment>, StoreError> {
         let mut attachments: Vec<Attachment> = self
@@ -1862,6 +1902,9 @@ impl SettingsStore for FakeStore {
 impl ReviewStore for FakeStore {
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError> {
         let id = self.reviews.len() as u64 + 1;
+        if review.carried_from.is_some() {
+            self.carried.insert(id);
+        }
         let mut comments = Vec::new();
         for comment in &mut self.comments {
             if comment.item == review.item && comment.is_draft() {

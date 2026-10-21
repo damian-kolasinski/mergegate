@@ -11,6 +11,7 @@ fn merged(commands: &[&str]) -> Event {
             commit: "abc".into(),
             branch: "feature".into(),
             commands: commands.iter().map(|c| (*c).to_owned()).collect(),
+            stats: None,
         },
     }
 }

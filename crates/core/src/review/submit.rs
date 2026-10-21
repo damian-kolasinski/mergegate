@@ -89,6 +89,7 @@ pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
         verdict,
         summary,
         moved,
+        carried_from: None,
     };
     let review = store.insert_review(review, state)?;
     Ok(Reviewed { review, state })

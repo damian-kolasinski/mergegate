@@ -153,7 +153,7 @@ pub(crate) fn event(event: &Event) -> String {
             }
             out
         }
-        EventBody::ItemAbandoned { reason } => {
+        EventBody::ItemAbandoned { reason, .. } => {
             let who = match event.source {
                 Source::Operator => "the operator",
                 Source::Agent => "its agent",
@@ -215,6 +215,7 @@ pub(crate) fn event(event: &Event) -> String {
             commit,
             branch,
             commands,
+            ..
         } => {
             let how = match event.source {
                 Source::External => "it was merged on GitHub",

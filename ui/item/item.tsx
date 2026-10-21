@@ -49,6 +49,7 @@ import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
 import { SyncGithub } from "./sync-github";
 import { treeOrder } from "./tree";
+import { useReviewTime } from "./review-time";
 import { useViewed } from "./viewed";
 import { describe } from "./why";
 
@@ -83,6 +84,17 @@ export function ItemScreen(props: { id: string }) {
   // The item as the hub last gave it, for what changes without a new diff:
   // its state, priority and note.
   const [latest, setLatest] = createSignal<Item>();
+  // Only time in review counts, and the hub refuses the rest: time on a
+  // merging item would start a turn after the approval that ended the last.
+  useReviewTime(
+    id,
+    createMemo(() => {
+      const shown = diff();
+      const item = latest();
+      if (!shown || !item || !reviewable(item.state)) return undefined;
+      return shown.item.revision.number;
+    }),
+  );
   // Why the revision on screen can't merge, kept apart from the diff so the
   // conflict watch handing it back shows without re-rendering the diff.
   const [blocked, setBlocked] = createSignal<Blocked | null>(null, {
