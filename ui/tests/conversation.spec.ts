@@ -112,12 +112,22 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const list = page.getByRole("complementary", { name: "Conversation" });
-  const sent = list.getByRole("listitem", { name: "c_1" });
+  // The draft waits on the operator, so it comes first; what waits on the
+  // agent is folded under it.
+  const needs = list.getByRole("region", { name: "Needs you" });
+  const rest = list.getByRole("region", { name: "Everything else" });
+  await expect(needs.getByRole("listitem")).toHaveCount(1);
+  const fold = rest.getByRole("button", { name: /Everything else/ });
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(rest.getByRole("listitem")).toHaveCount(0);
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  const sent = rest.getByRole("listitem", { name: "c_1" });
   await expect(sent).toContainText("login.rs:1 @r1");
   await expect(sent.getByText("Addressed in r2")).toBeVisible();
   // The diff holds the thread; the list sums it up.
   await expect(sent).toContainText("3 replies");
-  const draft = list.getByRole("listitem", { name: "c_2" });
+  const draft = needs.getByRole("listitem", { name: "c_2" });
   await expect(draft).toContainText("login.rs:2 @r1");
   await expect(draft.getByText("Draft")).toBeVisible();
 
@@ -134,9 +144,12 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
   await expect(
     review.getByText("Sent to the agent on r2 with 1 comment"),
   ).toBeVisible();
+  // With nothing left waiting on the operator, the rest opens by itself.
   await toggle.click();
-  await expect(draft.getByText("Sent")).toBeVisible();
-  await expect(draft).toContainText("login.rs:3 @r2");
+  await expect(needs).toContainText("Nothing waits on you.");
+  const sentDraft = rest.getByRole("listitem", { name: "c_2" });
+  await expect(sentDraft.getByText("Sent")).toBeVisible();
+  await expect(sentDraft).toContainText("login.rs:3 @r2");
   const third = hub.mg(["wait", "app#1"]) as Wait;
   expect(third.events).toMatchObject([
     {

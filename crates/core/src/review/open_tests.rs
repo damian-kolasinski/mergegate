@@ -138,6 +138,7 @@ fn held_external_comments_and_summaries_are_not_threads() {
             summary,
             agreed_reply: None,
             vote: None,
+            lapsed: false,
         });
         comment
     };

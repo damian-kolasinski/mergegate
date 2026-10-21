@@ -15,7 +15,8 @@ use crate::store::StoreError;
 /// A comment as GitHub tells it apart: by kind, then ID.
 pub type GithubKey = (PullCommentKind, u64);
 
-/// `id`'s comments waiting for a batch.
+/// `id`'s comments waiting for a batch, or for a vote that lapsed: either
+/// may still reach the agent.
 pub fn held_keys<S: ReviewStore>(
     store: &S,
     id: &ItemId,
@@ -24,7 +25,7 @@ pub fn held_keys<S: ReviewStore>(
         .comments(id)?
         .into_iter()
         .filter_map(|c| c.external)
-        .filter(|external| external.pending)
+        .filter(|external| external.pending || external.lapsed)
         .map(|external| (external.kind, external.github_id))
         .collect())
 }

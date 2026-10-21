@@ -23,6 +23,74 @@
   align-self: center;
 }
 
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.group + .group {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-container);
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font: var(--type-h5);
+  letter-spacing: var(--tracking-heading);
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.count {
+  font: var(--type-p4);
+  color: var(--text-subtle);
+}
+
+/* The folded group's heading, its chevron pointing right while folded and
+   down while open, as a thread's does. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: calc(-1 * var(--space-1));
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.toggle:hover:enabled {
+  background: var(--background-hover);
+  color: var(--text-primary);
+}
+
+.toggle:disabled {
+  cursor: default;
+}
+
+.toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--motion-fast);
+}
+
+.toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -50,7 +118,31 @@
 }
 
 .excerpt {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A folded comment's line, its reply count kept whole after it; clicking it
+   opens the comment. */
+.line {
+  display: flex;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.line:hover {
+  color: var(--text-primary);
+}
+
+.body {
+  overflow-wrap: anywhere;
 }

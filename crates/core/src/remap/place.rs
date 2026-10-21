@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::lines::{Mapped, map};
 use crate::diff::{Content, DiffGit, DiffStore, Hunk, compute};
+use crate::external::ExternalError;
 use crate::git::GitError;
 use crate::interdiff::InterdiffStore;
 use crate::item::{ChangedFile, ItemError, ItemId, ItemStore};
@@ -44,6 +45,15 @@ pub enum PlaceError {
 }
 
 impl From<PlaceError> for ItemError {
+    fn from(error: PlaceError) -> Self {
+        match error {
+            PlaceError::Git(error) => error.into(),
+            PlaceError::Store(error) => error.into(),
+        }
+    }
+}
+
+impl From<PlaceError> for ExternalError {
     fn from(error: PlaceError) -> Self {
         match error {
             PlaceError::Git(error) => error.into(),

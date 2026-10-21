@@ -14,7 +14,7 @@ pub trait ExternalStore {
     fn insert_external(&mut self, comment: NewExternal, now: u64) -> Result<Comment, StoreError>;
 
     /// Replaces an external comment's body, which GitHub dates `dated`, and
-    /// has it wait for the next batch again. A vote up was on the old body,
+    /// has it wait for the next batch again, lapsed or not. A vote up was on the old body,
     /// so it's cleared; a comment voted down stays down and doesn't wait.
     /// One that is a `summary` now, with this body, waits for nothing and
     /// loses its vote.
@@ -53,8 +53,12 @@ pub trait ExternalStore {
     /// stay held. None when none may go.
     fn release(&mut self, id: &ItemId, revision: u32) -> Result<Option<Event>, StoreError>;
 
+    /// Stops holding comment `id`, which awaits the operator's vote, as
+    /// lapsed: it no longer holds the batch, and a vote up holds it again.
+    fn lapse_external(&mut self, id: CommentId) -> Result<(), StoreError>;
+
     /// Records the operator's vote on external comment `id`: up holds it for the
-    /// next batch, down stops holding it.
+    /// next batch, down stops holding it. Either way it's no longer lapsed.
     fn set_vote(&mut self, id: CommentId, vote: Vote, now: u64) -> Result<(), StoreError>;
 
     fn set_agreed(&mut self, id: CommentId, reply: u64) -> Result<(), StoreError>;

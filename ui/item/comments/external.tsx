@@ -60,13 +60,16 @@ export function useExternal(options: {
   const fail = (comment: Comment) => (error: unknown) =>
     setFailure({ id: comment.id, ...failureOf(error) });
   return {
-    /** A comment from GitHub no batch has carried, while the item is open. */
+    /**
+     * A comment from GitHub no batch has carried, while the item is open: a
+     * lapsed one too, which the operator may still send.
+     */
     canVote: (comment: Comment) => {
       const external = comment.external;
       return (
         options.reviewable() &&
         external !== undefined &&
-        (external.pending || external.vote === "down")
+        (external.pending || external.lapsed || external.vote === "down")
       );
     },
     voting,
@@ -147,6 +150,11 @@ export function ExternalStatus(props: { external: ExternalComment }) {
       </Match>
       <Match when={props.external.vote === "down"}>
         <Badge title="You kept it from the agent">Dismissed</Badge>
+      </Match>
+      <Match when={props.external.lapsed}>
+        <Badge title="A later revision outdated its lines before you voted, so it stopped waiting: the agent gets it only if you send it">
+          Lapsed
+        </Badge>
       </Match>
       <Match when={awaitingVote(props.external)}>
         <Badge

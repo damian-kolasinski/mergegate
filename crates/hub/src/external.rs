@@ -170,7 +170,15 @@ async fn pull(state: &Arc<AppState>, id: &ItemId, fresh: bool) -> Result<Ingeste
         .await?;
     let id = id.clone();
     state
-        .blocking(move |store, git| external::ingest(store, git, &id, found, &gone, now()))
+        .blocking(move |store, git| {
+            let mut ingested = external::ingest(store, git, &id, found, &gone, now())?;
+            // What came in counts, and is told to the UI, though lapsing failed.
+            match external::lapse(store, git, &id) {
+                Ok(lapsed) => ingested.lapsed = lapsed,
+                Err(e) => tracing::warn!("lapsing {id}'s outdated comments: {e}"),
+            }
+            Ok(ingested)
+        })
         .await
 }
 
@@ -217,6 +225,7 @@ pub(crate) fn to_api(comment: &Comment) -> Option<api::review::ExternalComment> 
             Vote::Up => api::review::Vote::Up,
             Vote::Down => api::review::Vote::Down,
         }),
+        lapsed: external.lapsed,
         agreed_reply: external.agreed_reply,
     })
 }

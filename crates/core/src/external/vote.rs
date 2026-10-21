@@ -9,7 +9,8 @@ use crate::item::ItemStore;
 use crate::review::{Comment, CommentId, ReviewError, ReviewStore, reviewable};
 
 /// Records the operator's `vote` on external `comment`. They can change it
-/// until a batch carries the comment, and vote up one they voted down.
+/// until a batch carries the comment, and vote up one they voted down or
+/// that lapsed.
 pub fn vote<S: ItemStore + ReviewStore + ExternalStore>(
     store: &mut S,
     comment: CommentId,
@@ -26,7 +27,7 @@ pub fn vote<S: ItemStore + ReviewStore + ExternalStore>(
     if external.summary {
         return Err(ExternalError::Summary(comment));
     }
-    if !external.pending && !external.dismissed() {
+    if !external.pending && !external.dismissed() && !external.lapsed {
         return Err(ExternalError::AlreadySent(comment));
     }
     let item = store

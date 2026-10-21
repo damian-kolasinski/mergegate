@@ -207,6 +207,11 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   await expect(list.getByRole("button", { name: "Show in diff" })).toHaveCount(
     0,
   );
+  // Settled, it's a line that opens to the thread.
+  await expect(list.getByRole("listitem", { name: "c_1" })).toContainText(
+    "Addressed in r2",
+  );
+  await list.getByRole("button", { name: "Open comment c_1" }).click();
   await expect(
     list.getByRole("article", { name: "Comment c_1" }),
   ).toContainText("Addressed in r2");
