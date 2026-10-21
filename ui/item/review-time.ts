@@ -61,8 +61,10 @@ export async function leaveReview<T>(send: () => Promise<T>): Promise<T> {
  * revision and per turn for the item's closing event. Active is the page
  * visible and focused, with the operator's inputs no more than `IDLE_MS`
  * apart: a gap between two counts whole when it's shorter, and not at all
- * when it's longer. Only one window has focus, so an item open in two
- * counts once.
+ * when it's longer. A demo video playing counts as input too, until it has
+ * played its length since the operator's last input: watching one takes no
+ * input, but one left looping counts no further. Only one window has focus,
+ * so an item open in two counts once.
  *
  * `revision` is the revision on screen; undefined while there's none, or
  * the item isn't in review.
@@ -74,8 +76,11 @@ export function useReviewTime(
   let shown: number | undefined;
   // Measured and not yet reported, in milliseconds.
   let pending = 0;
-  // The operator's last input, while the page is engaged.
+  // The operator's last activity, while the page is engaged: an input, or a
+  // tick of a video playing.
   let last: number | undefined;
+  // The operator's last input itself, not a video playing on.
+  let touched: number | undefined;
 
   const engaged = () =>
     document.visibilityState === "visible" && document.hasFocus();
@@ -97,7 +102,7 @@ export function useReviewTime(
     void sent.then(() => sending.delete(sent));
     return sent;
   };
-  const input = () => {
+  const active = () => {
     if (leaving > 0) {
       last = undefined;
       return;
@@ -106,6 +111,24 @@ export function useReviewTime(
     const now = performance.now();
     credit(now);
     last = now;
+  };
+  const input = () => {
+    touched = performance.now();
+    active();
+  };
+  // Media events don't bubble, but the window's capture still sees them. A
+  // video of no known length, as a WebM recorded without one, counts nothing.
+  const playing = (event: Event) => {
+    const video = event.target;
+    if (!(video instanceof HTMLVideoElement) || video.paused) return;
+    const length = (video.duration * 1000) / video.playbackRate;
+    if (
+      touched !== undefined &&
+      Number.isFinite(length) &&
+      performance.now() - touched <= length
+    ) {
+      active();
+    }
   };
   const away = () => {
     credit(performance.now());
@@ -144,6 +167,7 @@ export function useReviewTime(
 
   const options = { capture: true, passive: true };
   for (const type of inputs) window.addEventListener(type, input, options);
+  window.addEventListener("timeupdate", playing, options);
   window.addEventListener("focus", input);
   window.addEventListener("blur", away);
   window.addEventListener("pagehide", away);
@@ -155,6 +179,7 @@ export function useReviewTime(
     for (const type of inputs) {
       window.removeEventListener(type, input, options);
     }
+    window.removeEventListener("timeupdate", playing, options);
     window.removeEventListener("focus", input);
     window.removeEventListener("blur", away);
     window.removeEventListener("pagehide", away);

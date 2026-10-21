@@ -2,8 +2,11 @@
 // it, and the merge reports the total for the agent's telemetry, split by
 // the turns the operator's reviews end.
 
+import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, Hub, test } from "./hub";
+
+const flow = fileURLToPath(new URL("fixtures/flow.webm", import.meta.url));
 
 type Stats = {
   review_ms: number;
@@ -37,6 +40,26 @@ async function gate(page: Page, hold: (n: number) => boolean) {
       held.delete(n);
     },
   };
+}
+
+/**
+ * Plays the demo video on screen for `ms` with nothing touched: the real one
+ * is paused and stands in as `length` long, ticking as a playing one does.
+ */
+async function watch(page: Page, length: number, ms: number) {
+  await page.evaluate((length) => {
+    const video = document.querySelector("video");
+    if (!video) throw new Error("no video on screen");
+    video.pause();
+    Object.defineProperty(video, "paused", { get: () => false });
+    Object.defineProperty(video, "duration", { get: () => length / 1000 });
+  }, length);
+  for (let at = 0; at < ms; at += 10_000) {
+    await page.clock.fastForward(10_000);
+    await page.evaluate(() =>
+      document.querySelector("video")?.dispatchEvent(new Event("timeupdate")),
+    );
+  }
 }
 
 /** The stats on app#1's `type` event, as the hub's event log has them. */
@@ -358,4 +381,55 @@ test("time while a merge runs counts for nothing, even when it conflicts", async
   } finally {
     hub.stop();
   }
+});
+
+test("watching a demo counts, though nothing is touched", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" }, [
+    flow,
+  ]);
+  await page.clock.install();
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Demo \(/ }).click();
+  await expect(page.getByRole("dialog").locator("video")).toBeVisible();
+  // Four minutes of a five-minute demo, longer than any pause between inputs.
+  await watch(page, 5 * 60_000, 4 * 60_000);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+  await page.getByRole("button", { name: "Merge", exact: true }).click();
+  await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
+
+  const turn = closing(hub, "item.merged")?.turns[0];
+  expect(turn?.review_ms).toBeGreaterThanOrEqual(4 * 60_000);
+  expect(turn?.review_ms).toBeLessThan(4 * 60_000 + 10_000);
+});
+
+test("a demo left looping counts only its length", async ({ page, hub }) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" }, [
+    flow,
+  ]);
+  await page.clock.install();
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Demo \(/ }).click();
+  await expect(page.getByRole("dialog").locator("video")).toBeVisible();
+  // A 45-second demo loops for five minutes: they may have left.
+  await watch(page, 45_000, 5 * 60_000);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+  await page.getByRole("button", { name: "Merge", exact: true }).click();
+  await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
+
+  const turn = closing(hub, "item.merged")?.turns[0];
+  expect(turn?.review_ms).toBeGreaterThanOrEqual(30_000);
+  expect(turn?.review_ms).toBeLessThan(50_000);
 });
