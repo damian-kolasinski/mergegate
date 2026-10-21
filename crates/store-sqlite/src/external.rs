@@ -102,6 +102,29 @@ impl ExternalStore for Store {
         tx.commit().map_err(StoreError::new)
     }
 
+    fn amend_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        let tx = self.conn.transaction().map_err(StoreError::new)?;
+        tx.execute(
+            "UPDATE comments SET body = ?2 WHERE id = ?1 AND source = 'external'",
+            params![id.0 as i64, body],
+        )
+        .map_err(StoreError::new)?;
+        tx.execute(
+            "UPDATE external_comments
+             SET seen_at = ?2, dated_at = max(dated_at, ?3)
+             WHERE comment_id = ?1",
+            params![id.0 as i64, now as i64, dated as i64],
+        )
+        .map_err(StoreError::new)?;
+        tx.commit().map_err(StoreError::new)
+    }
+
     fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
         let tx = self.conn.transaction().map_err(StoreError::new)?;
         let id = id.0 as i64;

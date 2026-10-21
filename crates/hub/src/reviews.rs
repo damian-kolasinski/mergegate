@@ -9,6 +9,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
+use mergegate_core::external::send_answered;
 use mergegate_core::item::ItemId;
 use mergegate_core::review::{self, ReviewError, Reviewed, SubmitReview, Verdict};
 
@@ -39,10 +40,28 @@ async fn submit(
         },
         summary: request.summary,
     };
-    let reviewed = state
-        .blocking(move |store, git| review::submit(store, git, request))
+    let (reviewed, released) = state
+        .blocking(move |store, git| {
+            let reviewed = review::submit(store, git, request)?;
+            let review = &reviewed.review;
+            // The review went; a reply's comment left behind still reaches
+            // the agent through `mg sync` once voted up.
+            let released =
+                send_answered(store, &review.item, &review.replies, crate::external::now())
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(
+                            "sending the comments {}'s review answers: {e}",
+                            review.item
+                        );
+                        None
+                    });
+            Ok::<_, ReviewError>((reviewed, released))
+        })
         .await
         .map_err(failure)?;
+    if released.is_some() {
+        crate::external::released(&state, &reviewed.review.item);
+    }
     state.events.logged();
     state.events.send(UiEvent::InboxChanged);
     Ok((StatusCode::CREATED, Json(to_api(&reviewed))))

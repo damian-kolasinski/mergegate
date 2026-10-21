@@ -2142,6 +2142,21 @@ impl ExternalStore for FakeStore {
         Ok(())
     }
 
+    fn amend_external(
+        &mut self,
+        id: CommentId,
+        body: &str,
+        dated: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        let known = self.dated.get_mut(&id).unwrap();
+        *known = (*known).max(dated);
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        comment.body = body.into();
+        self.external.get_mut(&id).unwrap().0 = now;
+        Ok(())
+    }
+
     fn withdraw_external(&mut self, id: CommentId) -> Result<(), StoreError> {
         let answered = self
             .replies

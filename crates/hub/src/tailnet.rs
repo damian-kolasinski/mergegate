@@ -248,6 +248,11 @@ async fn bind(state: &Arc<AppState>, tasks: &mut Tasks) -> Result<(), String> {
         }
     });
     tracing::info!("hub listening on the tailnet at {}", bound.url);
+    // Only a listener on the tailnet's address takes connections the
+    // firewall filters, as `mg doctor` checks.
+    if bound.ip.is_some() {
+        tokio::spawn(crate::doctor::firewall::warn());
+    }
     tasks.serve = Some(stop);
     tailnet.set(Listening::Bound(bound));
     Ok(())

@@ -5,6 +5,7 @@
 //! sent after every nit a reviewer raises; the operator can agree with the
 //! agent's rejection of one or override it.
 
+mod answered;
 mod due;
 mod error;
 mod gone;
@@ -15,6 +16,7 @@ mod store;
 mod summary;
 mod vote;
 
+pub use answered::send_answered;
 pub use due::{Timing, due, release, release_due};
 pub use error::ExternalError;
 pub use gone::{GithubKey, confirm_gone, held_keys};

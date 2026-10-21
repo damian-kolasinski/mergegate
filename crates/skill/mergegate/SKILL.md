@@ -13,6 +13,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 - Reach the hub only through `mg`. Never open its UI or call its HTTP API, not even to read: the UI is the operator's, and the hub can't tell your requests from theirs, so one could approve your own work.
 - Wait for feedback the cheapest way your environment allows: see [references/waiting.md](references/waiting.md).
 - Answer every comment with `mg reply`: `addressed` once your next revision has the change, `rejected` with a `--body` saying why, or `question` with a `--body` that asks.
+- A review's summary, its body, has no ID and takes no reply: your next `mg submit` answers it, so make the changes it asks for in that revision. Anything in it you won't do or have to ask about, put to the operator in your session.
 - Weigh each comment before acting on it. Reject one that would make the code worse, and say why.
 - When a command exits 2 with `needs_decision`, put its question and options to the operator and run the command again with the flag they choose. Don't choose for them.
 - After `item.merged`, clean up the way you agreed with the operator (below).
@@ -26,7 +27,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 | Event | What to do |
 |---|---|
-| `review.submitted` | Change what the comments ask, `mg reply` to each one, then `mg submit`. A verdict of `approved` needs nothing; wait for the merge. A review with no new comments, only replies to yours, needs nothing either unless a reply asks for something; keep waiting. |
+| `review.submitted` | Change what the summary and the comments ask, `mg reply` to each comment, then `mg submit`. A verdict of `approved` needs nothing; wait for the merge. A review with no new comments, only replies to yours, needs nothing either unless its summary or a reply asks for something; keep waiting. |
 | `external.comments` | Reviewers commented on the item's GitHub pull request. Treat them like the operator's comments: change, `mg reply` to each one, `mg submit`. See [references/authoring.md](references/authoring.md), "Comments from GitHub". |
 | `comment.override` | The operator overrides your rejection of a comment: make the change, `mg reply` with `addressed`, `mg submit`. |
 | `merge.conflict` | The target moved under the item, before or after review. Run the commands it lists, resolve the conflicts, `mg submit`. |
@@ -37,7 +38,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `item.merged` | The work landed. Clean up as agreed, then stop. |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |
 
-`mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. `mg feedback app#3` does the same without waiting, and `--since CURSOR` reads the events after any cursor, delivered ones too.
+`mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. Stopped by a signal, it exits 143, 130 or 129 after a line that names the command resuming it; see [references/waiting.md](references/waiting.md), "When a wait ends early". `mg feedback app#3` does the same without waiting, and `--since CURSOR` reads the events after any cursor, delivered ones too.
 
 [references/authoring.md](references/authoring.md) covers titles, revisions, stacking work too big for one review, replies and abandoning in more detail. When the operator asks you to show or hide some files in review, to rank their queue, or to watch the hub for events, see [references/operator.md](references/operator.md).
 

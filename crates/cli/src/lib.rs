@@ -141,7 +141,7 @@ enum Command {
         wake: wait_cmd::Wake,
         /// Seconds to wait before exiting with 75; 0 waits until there is
         /// feedback
-        #[arg(long, default_value_t = 540)]
+        #[arg(long, default_value_t = wait_cmd::TIMEOUT)]
         timeout: u64,
         /// Read the events after this cursor, even delivered ones; they are
         /// marked delivered unless one up to the cursor still waits
@@ -263,7 +263,7 @@ fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
             wake,
             timeout,
             since,
-        } => wait_cmd::run(item, wake, timeout, since),
+        } => wait_cmd::run(item, wake, timeout, since, json),
         Command::Feedback { item, since } => feedback_cmd::run(item, since),
         Command::Reply {
             comment,

@@ -4,12 +4,20 @@ use clap::CommandFactory;
 
 use super::*;
 
-/// Every `mg ...` the skill names in code, split into words, with the text
-/// it came from.
-fn invocations() -> Vec<(Vec<String>, String)> {
+/// One `mg ...` the skill names in code.
+struct Invocation {
+    words: Vec<String>,
+    /// In inline code, where it can name a command group in prose, rather
+    /// than on a line of a fenced block, which runs.
+    inline: bool,
+    /// The text it came from.
+    source: String,
+}
+
+fn invocations() -> Vec<Invocation> {
     let mut found = Vec::new();
     for (file, text) in skill::FILES {
-        for code in code_spans(text) {
+        for (code, inline) in code_spans(text) {
             // Shell lines can hold more than one command.
             for part in code.split(['|', ';', '&']) {
                 let words: Vec<&str> = part.split_whitespace().collect();
@@ -17,10 +25,11 @@ fn invocations() -> Vec<(Vec<String>, String)> {
                     // A bare `mg` names the binary, not a command.
                     if *word == "mg" && at + 1 < words.len() {
                         let rest = words[at + 1..].iter().take_while(|w| **w != "mg");
-                        found.push((
-                            rest.map(|w| (*w).to_owned()).collect(),
-                            format!("{file}: {code}"),
-                        ));
+                        found.push(Invocation {
+                            words: rest.map(|w| (*w).to_owned()).collect(),
+                            inline,
+                            source: format!("{file}: {code}"),
+                        });
                     }
                 }
             }
@@ -29,17 +38,24 @@ fn invocations() -> Vec<(Vec<String>, String)> {
     found
 }
 
-/// Inline code and the lines of fenced blocks.
-fn code_spans(text: &str) -> Vec<String> {
+/// Inline code and the lines of fenced blocks, each with whether it is
+/// inline. A `text` block holds what `mg` prints, not commands.
+fn code_spans(text: &str) -> Vec<(String, bool)> {
     let mut spans = Vec::new();
-    let mut fenced = false;
+    let mut fenced = None;
     for line in text.lines() {
-        if line.starts_with("```") {
-            fenced = !fenced;
-        } else if fenced {
-            spans.push(line.to_owned());
+        if let Some(info) = line.strip_prefix("```") {
+            fenced = match fenced {
+                None => Some(info.trim() == "text"),
+                Some(_) => None,
+            };
+        } else if let Some(output) = fenced {
+            if !output {
+                spans.push((line.to_owned(), false));
+            }
         } else {
-            spans.extend(line.split('`').skip(1).step_by(2).map(str::to_owned));
+            let inline = line.split('`').skip(1).step_by(2);
+            spans.extend(inline.map(|code| (code.to_owned(), true)));
         }
     }
     spans
@@ -61,6 +77,58 @@ fn resolve(words: &[String]) -> (clap::Command, Vec<String>, &[String]) {
     (command, path, rest)
 }
 
+/// The words outside quoted arguments, whose flags, as in
+/// `--wake "claude --resume ID"`, are another command's.
+fn unquoted(words: &[String]) -> Vec<&String> {
+    let mut outside = Vec::new();
+    let mut quote = None;
+    for word in words {
+        match quote {
+            None => match word.chars().next().filter(|c| matches!(c, '"' | '\'')) {
+                // A word that opens and closes its quote is one argument.
+                Some(q) if !(word.len() > 1 && word.ends_with(q)) => quote = Some(q),
+                Some(_) => {}
+                None => outside.push(word),
+            },
+            Some(q) if word.ends_with(q) => quote = None,
+            Some(_) => {}
+        }
+    }
+    outside
+}
+
+/// Whether the words after `command` make a command `mg` runs. Inline code
+/// that ends at a group, as in "the `mg wakes` commands", names the group.
+fn runs(command: &clap::Command, rest: &[String], inline: bool) -> bool {
+    !command.has_subcommands() || (inline && rest.is_empty())
+}
+
+#[test]
+fn a_group_named_in_prose_is_no_invocation() {
+    let words = |text: &str| {
+        text.split_whitespace()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let group = words("wakes");
+    let (command, _, rest) = resolve(&group);
+    assert!(runs(&command, rest, true));
+    assert!(!runs(&command, rest, false), "a fenced line runs");
+    let flagged = words("wakes --json");
+    let (command, _, rest) = resolve(&flagged);
+    assert!(!runs(&command, rest, true));
+}
+
+#[test]
+fn flags_in_a_quoted_argument_are_not_mgs() {
+    let words: Vec<String> = r#"--wake "claude -p --resume ID 'Run it.'" --title "x" --on 3"#
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
+    let outside: Vec<&str> = unquoted(&words).into_iter().map(String::as_str).collect();
+    assert_eq!(outside, ["--wake", "--title", "--on", "3"]);
+}
+
 #[test]
 fn every_command_and_flag_the_skill_names_exists() {
     let global: Vec<String> = Cli::command()
@@ -69,15 +137,20 @@ fn every_command_and_flag_the_skill_names_exists() {
         .collect();
     let invocations = invocations();
     assert!(!invocations.is_empty());
-    for (words, source) in invocations {
+    for Invocation {
+        words,
+        inline,
+        source,
+    } in invocations
+    {
         let (command, path, rest) = resolve(&words);
         assert!(!path.is_empty(), "no such command in {source}");
         assert!(
-            !command.has_subcommands(),
+            runs(&command, rest, inline),
             "`mg {}` needs a subcommand in {source}",
             path.join(" ")
         );
-        for word in rest {
+        for word in unquoted(rest) {
             let Some(flag) = word.strip_prefix("--") else {
                 continue;
             };
@@ -97,7 +170,7 @@ fn every_command_and_flag_the_skill_names_exists() {
 fn the_skill_names_every_command() {
     let named: BTreeSet<String> = invocations()
         .into_iter()
-        .map(|(words, _)| resolve(&words).1.join(" "))
+        .map(|i| resolve(&i.words).1.join(" "))
         .collect();
     let mut missing = Vec::new();
     let mut stack = vec![(Cli::command(), String::new())];

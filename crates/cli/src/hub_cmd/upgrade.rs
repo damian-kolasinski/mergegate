@@ -3,6 +3,8 @@
 //! whatever the upgrade changed, or refuses every command when its API did,
 //! and its service starts the old `mg` again at login.
 
+mod firewall;
+
 use std::fs::File;
 use std::time::Duration;
 
@@ -46,6 +48,9 @@ pub(crate) fn onto_this_mg(home: &Home, running: Running) -> Result<Option<Runni
         "restarted the hub, which ran mg {theirs}, on this mg {}",
         env!("MG_VERSION")
     );
+    if let Some(restarted) = &restarted {
+        firewall::warn(restarted);
+    }
     Ok(restarted)
 }
 
@@ -61,7 +66,7 @@ fn due(running: &Running) -> bool {
 /// `ours` is a release later than `theirs`. A build between releases, as in
 /// `0.4.0+0123456789ab`, never takes over a hub, while a hub running one is
 /// as old as the release it builds on.
-fn newer(ours: &str, theirs: &str) -> bool {
+pub(crate) fn newer(ours: &str, theirs: &str) -> bool {
     let release = |version: &str| {
         let mut parts = version.split('.').map(|p| p.parse::<u64>().ok());
         let parsed = (parts.next()??, parts.next()??, parts.next()??);
