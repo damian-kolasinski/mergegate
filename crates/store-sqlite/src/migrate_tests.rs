@@ -327,7 +327,10 @@ fn an_approval_carried_before_it_was_marked_ends_no_turn() {
     let db = dir.path().join("hub.db");
     drop(open_with(&db, &MIGRATIONS[..25]).unwrap());
     let (base, at) = ("0".repeat(40), "2026-01-01T00:00:00.000Z");
-    let (r1, r2) = ("a".repeat(40), "b".repeat(40));
+    let revisions = (1..=13)
+        .map(|n| format!("(1, {n}, '{n:040}', '{base}', 0, 0, 0, '{at}')"))
+        .collect::<Vec<_>>()
+        .join(", ");
     Connection::open(&db)
         .unwrap()
         .execute_batch(&format!(
@@ -338,11 +341,13 @@ fn an_approval_carried_before_it_was_marked_ends_no_turn() {
                  VALUES (1, 1, 1, 'work', 'Work', 'merging', 'local', 'main', '{at}');
              INSERT INTO revisions (item_id, number, head, base, files, additions, deletions,
                                     submitted_at)
-                 VALUES (1, 1, '{r1}', '{base}', 0, 0, 0, '{at}'),
-                        (1, 2, '{r2}', '{base}', 0, 0, 0, '{at}');
+                 VALUES {revisions};
              INSERT INTO reviews (item_id, revision, verdict, summary, submitted_at)
                  VALUES (1, 1, 'approved', 'Ship it.', '{at}'),
                         (1, 2, 'approved', 'Approved again: the diff is unchanged since r1.',
+                         '{at}'),
+                        (1, 12, 'approved', 'Ship it again.', '{at}'),
+                        (1, 13, 'approved', 'Approved again: the diff is unchanged since r12.',
                          '{at}');"
         ))
         .unwrap();
@@ -352,15 +357,17 @@ fn an_approval_carried_before_it_was_marked_ends_no_turn() {
     let sent = store
         .sent_reviews(&ItemId::parse("app#1").unwrap())
         .unwrap();
-    assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0].revision, 1);
-    let from: Option<u32> = store
-        .conn
-        .query_row(
-            "SELECT carried_from FROM reviews WHERE revision = 2",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(from, Some(1));
+    let sent: Vec<_> = sent.iter().map(|r| r.revision).collect();
+    assert_eq!(sent, [1, 12]);
+    let from = |revision: u32| -> Option<u32> {
+        store
+            .conn
+            .query_row(
+                "SELECT carried_from FROM reviews WHERE revision = ?1",
+                [revision],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!((from(2), from(13)), (Some(1), Some(12)));
 }

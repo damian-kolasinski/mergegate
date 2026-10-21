@@ -2,6 +2,7 @@
 // it, and the merge reports the total for the agent's telemetry, split by
 // the turns the operator's reviews end.
 
+import type { Page } from "@playwright/test";
 import { expect, type Hub, test } from "./hub";
 
 type Stats = {
@@ -9,6 +10,34 @@ type Stats = {
   turns: { turn: number; verdict: string | null; review_ms: number }[];
   revisions: { revision: number; review_ms: number }[];
 };
+
+/**
+ * Holds the time reports `hold` picks, counting from 1, until released, and
+ * notes which were still held as each review reached the hub: a review must
+ * never overtake one.
+ */
+async function gate(page: Page, hold: (n: number) => boolean) {
+  let sent = 0;
+  const held = new Map<number, () => void>();
+  const reviews: number[][] = [];
+  await page.route("**/review-time", async (route) => {
+    const n = ++sent;
+    if (hold(n)) await new Promise<void>((go) => held.set(n, go));
+    await route.continue();
+  });
+  await page.route("**/reviews", async (route) => {
+    if (route.request().method() === "POST") reviews.push([...held.keys()]);
+    await route.continue();
+  });
+  return {
+    reviews,
+    count: () => sent,
+    release(n: number) {
+      held.get(n)?.();
+      held.delete(n);
+    },
+  };
+}
 
 /** The stats on app#1's `type` event, as the hub's event log has them. */
 function closing(hub: Hub, type: string): Stats | undefined {
@@ -74,15 +103,7 @@ test("a review waits for the time reports still on their way", async ({
 }) => {
   const app = hub.project("app");
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
-  // The first report reaches the hub only after the review would have.
-  let held = false;
-  await page.route("**/review-time", async (route) => {
-    if (!held) {
-      held = true;
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
-    }
-    await route.continue();
-  });
+  const reports = await gate(page, (n) => n === 1);
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
@@ -93,18 +114,89 @@ test("a review waits for the time reports still on their way", async ({
   await page.mouse.move(20, 20);
   // The half-minute report sends the twenty seconds, and is held.
   await page.clock.fastForward(10_000);
+  await expect.poll(reports.count).toBe(1);
   await page
     .getByRole("textbox", { name: "Review summary" })
     .fill("Looks close.");
   await page.getByRole("button", { name: "Send comments" }).click();
+  await page.waitForTimeout(500);
+  expect(reports.reviews).toEqual([]);
+  reports.release(1);
   await expect(screen.getByText("Sent to the agent on r1")).toBeVisible();
+  expect(reports.reviews).toEqual([[]]);
   await page.getByRole("button", { name: "Approve & merge" }).click();
   await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const stats = closing(hub, "item.merged");
-  expect(held).toBe(true);
   expect(stats?.turns[0]?.review_ms).toBeGreaterThanOrEqual(20_000);
+});
+
+test("a review waits for a report sent while it waits", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  const reports = await gate(page, () => true);
+  await page.clock.install();
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  await page.mouse.move(10, 10);
+  await page.clock.fastForward(20_000);
+  await page
+    .getByRole("textbox", { name: "Review summary" })
+    .fill("Looks close.");
+  await page.getByRole("button", { name: "Send comments" }).click();
+  await expect.poll(reports.count).toBe(1);
+  // The operator moves to another window while the review waits.
+  await page.clock.fastForward(5_000);
+  await page.evaluate(() => {
+    document.hasFocus = () => false;
+    window.dispatchEvent(new Event("blur"));
+  });
+  await expect.poll(reports.count).toBe(2);
+  reports.release(1);
+  await page.waitForTimeout(500);
+  expect(reports.reviews).toEqual([]);
+  reports.release(2);
+  await expect(screen.getByText("Sent to the agent on r1")).toBeVisible();
+  expect(reports.reviews).toEqual([[]]);
+});
+
+test("a review waits for the reports of an earlier visit", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  const reports = await gate(page, (n) => n === 1);
+  await page.clock.install();
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  await page.mouse.move(10, 10);
+  await page.clock.fastForward(10_000);
+  await page.mouse.move(20, 20);
+  // Leaving the item sends its time, and that report is held.
+  await page.goto(`${hub.url}#/`);
+  await expect.poll(reports.count).toBe(1);
+  await page.goto(`${hub.url}#/items/app%231`);
+  await expect(screen.getByText("Needs review")).toBeVisible();
+  await page.mouse.move(30, 30);
+  await page.clock.fastForward(5_000);
+  await page
+    .getByRole("textbox", { name: "Review summary" })
+    .fill("Looks close.");
+  await page.getByRole("button", { name: "Send comments" }).click();
+  await page.waitForTimeout(500);
+  expect(reports.reviews).toEqual([]);
+  reports.release(1);
+  await expect(screen.getByText("Sent to the agent on r1")).toBeVisible();
+  expect(reports.reviews).toEqual([[]]);
 });
 
 test("time while the window has no focus counts for nothing", async ({

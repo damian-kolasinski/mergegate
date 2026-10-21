@@ -431,8 +431,8 @@ fn an_abandon_mid_turn_reports_the_turn_under_way_and_stays_put() {
     );
 }
 
-#[test]
-fn a_merge_on_github_mid_turn_reports_the_turn_under_way() {
+/// `app#1` on a GitHub project, with one revision.
+fn on_github() -> (FakeGithub, Env) {
     let github = FakeGithub::start();
     let env = Env::new(env!("CARGO_BIN_EXE_mg")).with_vars(github.env());
     env.start_hub();
@@ -449,7 +449,12 @@ fn a_merge_on_github_mid_turn_reports_the_turn_under_way() {
     repo.git(["switch", "--quiet", "-c", "login"]);
     repo.commit_files("Add login", &[("src/login.rs", "fn login() {}\n")]);
     env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    (github, env)
+}
 
+#[test]
+fn a_merge_on_github_mid_turn_reports_the_turn_under_way() {
+    let (github, env) = on_github();
     spent(&env, "app#1", 1, 9_000);
     review(&env, "app#1", 1, "changes_requested");
     spent(&env, "app#1", 1, 4_000);
@@ -468,8 +473,8 @@ fn a_merge_on_github_mid_turn_reports_the_turn_under_way() {
     );
 }
 
-#[test]
-fn a_stacked_item_waiting_on_its_parent_takes_no_time() {
+/// `app#2` on `profile`, stacked on `app#1` on `login`.
+fn stacked() -> (Env, TestRepo) {
     let env = env();
     let repo = project(&env);
     repo.git(["switch", "--quiet", "-c", "login"]);
@@ -479,7 +484,12 @@ fn a_stacked_item_waiting_on_its_parent_takes_no_time() {
     repo.commit_files("Add profile", &[("src/profile.rs", "fn profile() {}\n")]);
     env.mg_at(repo.root(), &["--json", "submit", "--on", "1"])
         .assert_code(0);
+    (env, repo)
+}
 
+#[test]
+fn a_stacked_item_waiting_on_its_parent_takes_no_time() {
+    let (env, _repo) = stacked();
     spent(&env, "app#2", 1, 2_000);
     assert_eq!(approve(&env, "app#2", 1)["kind"], "waiting");
     refused(&env, "app#2", 1, "item_merging");
@@ -498,6 +508,127 @@ fn a_stacked_item_waiting_on_its_parent_takes_no_time() {
         [turn(1, 1, Some("approved"), 2_000)],
         "{child}"
     );
+}
+
+#[test]
+fn an_abandoned_parent_reopens_its_waiting_child_for_another_turn() {
+    let (env, repo) = stacked();
+    spent(&env, "app#2", 1, 2_000);
+    assert_eq!(approve(&env, "app#2", 1)["kind"], "waiting");
+    spent(&env, "app#1", 1, 1_000);
+    env.mg(&["abandon", "app#1"]).assert_code(0);
+
+    // Its approval no longer stands, so it's back in review on r1, then on
+    // the r2 that moves it onto the target.
+    spent(&env, "app#2", 1, 1_500);
+    let notice = env.mg(&["--json", "feedback", "app#2"]).json()["events"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert_eq!(notice["type"], "parent.abandoned", "{notice}");
+    for command in notice["commands"].as_array().unwrap() {
+        let args: Vec<_> = command.as_str().unwrap().split(' ').collect();
+        repo.git(&args[1..]);
+    }
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    spent(&env, "app#2", 2, 1_500);
+    assert_eq!(approve(&env, "app#2", 2)["kind"], "merged");
+
+    let parent = closing(&env, "app#1", "item.abandoned");
+    assert_eq!(turns(&parent), [turn(1, 1, None, 1_000)], "{parent}");
+    let child = closing(&env, "app#2", "item.merged");
+    assert_eq!(
+        turns(&child),
+        [
+            turn(1, 1, Some("approved"), 2_000),
+            turn(2, 2, Some("approved"), 3_000),
+        ],
+        "{child}"
+    );
+    assert_eq!(
+        revisions(&child),
+        [revision(1, 3_500), revision(2, 1_500)],
+        "{child}"
+    );
+}
+
+#[test]
+fn a_conflict_after_the_approval_reopens_review_for_another_turn() {
+    let (env, repo) = submitted();
+    repo.checkout("main");
+    repo.commit_files("Login too", &[("src/login.rs", "fn login(x: u8) {}\n")]);
+    repo.checkout("feature");
+    spent(&env, "app#1", 1, 5_000);
+    assert_eq!(approve(&env, "app#1", 1)["kind"], "conflict");
+
+    // Back with the agent: the operator's time now goes to the next turn.
+    spent(&env, "app#1", 1, 2_000);
+    repo.git(["fetch", "--quiet", "mergegate"]);
+    repo.git(["rebase", "--quiet", "-X", "theirs", "mergegate/main"]);
+    let resubmitted = env
+        .mg_at(repo.root(), &["--json", "submit"])
+        .assert_code(0)
+        .json();
+    assert_eq!(
+        resubmitted["item"]["state"], "needs_review",
+        "{resubmitted}"
+    );
+    spent(&env, "app#1", 2, 3_000);
+    assert_eq!(approve(&env, "app#1", 2)["kind"], "merged");
+
+    let stats = closing(&env, "app#1", "item.merged");
+    assert_eq!(
+        turns(&stats),
+        [
+            turn(1, 1, Some("approved"), 5_000),
+            turn(2, 2, Some("approved"), 5_000),
+        ],
+        "{stats}"
+    );
+    assert_eq!(
+        revisions(&stats),
+        [revision(1, 7_000), revision(2, 3_000)],
+        "{stats}"
+    );
+}
+
+#[test]
+fn a_pull_request_closed_on_github_reports_the_turn_under_way() {
+    let (github, env) = on_github();
+    spent(&env, "app#1", 1, 4_000);
+    github.close_on_github("acme/app", 1);
+    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+
+    refused(&env, "app#1", 1, "item_closed");
+    let stats = closing(&env, "app#1", "item.abandoned");
+    assert_eq!(turns(&stats), [turn(1, 1, None, 4_000)], "{stats}");
+}
+
+#[test]
+fn an_abandoned_held_merge_ends_on_its_approval() {
+    let (env, repo) = submitted();
+    spent(&env, "app#1", 1, 5_000);
+    hold_merges(&repo);
+    assert_eq!(approve(&env, "app#1", 1)["kind"], "held");
+    env.mg(&["abandon", "app#1"]).assert_code(0);
+
+    let stats = closing(&env, "app#1", "item.abandoned");
+    assert_eq!(
+        turns(&stats),
+        [turn(1, 1, Some("approved"), 5_000)],
+        "{stats}"
+    );
+}
+
+#[test]
+fn an_abandon_with_no_review_time_carries_no_stats() {
+    let (env, _repo) = submitted();
+    env.mg(&["abandon", "app#1"]).assert_code(0);
+
+    let event = closing_event(&env, "app#1", "item.abandoned");
+    assert_eq!(event.get("stats"), None, "{event}");
 }
 
 #[test]

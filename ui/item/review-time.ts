@@ -22,6 +22,9 @@ const inputs = [
 
 // The item screen on view; there's one at a time.
 let settleShown: (() => Promise<void>) | undefined;
+// Reports on their way, from every screen: one a closed screen sent as it
+// went still has to land before a review sent from the next.
+const sending = new Set<Promise<void>>();
 
 /**
  * Reports the review time measured so far on the item on screen, before a
@@ -55,9 +58,6 @@ export function useReviewTime(
   let pending = 0;
   // The operator's last input, while the page is engaged.
   let last: number | undefined;
-  // Reports on their way. A settle waits for them too: one landing after
-  // the review would count toward the next turn, or be refused.
-  const sending = new Set<Promise<void>>();
 
   const engaged = () =>
     document.visibilityState === "visible" && document.hasFocus();
@@ -93,10 +93,13 @@ export function useReviewTime(
   const visibility = () =>
     document.visibilityState === "visible" ? input() : away();
   // What closes the item is an input itself, so the time up to it counts.
+  // A report landing after the review would count toward the next turn, or
+  // be refused, so the settle waits for every one on its way, including
+  // those a blur or the timer sends while it waits.
   const settle = async () => {
     input();
     void report();
-    await Promise.all(sending);
+    while (sending.size > 0) await Promise.all(sending);
   };
 
   createEffect(
