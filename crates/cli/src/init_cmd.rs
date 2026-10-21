@@ -38,6 +38,7 @@ pub fn run(project: Option<String>) -> Result<Outcome, CliError> {
             &["remote", "add", REMOTE, &url],
         )?,
     }
+    repo::bound_stalls(&url);
     let text = format!("remote {REMOTE} -> {url} (project {})", project.name);
     Ok(Outcome::done(
         &Initialized {

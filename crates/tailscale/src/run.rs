@@ -15,11 +15,19 @@ const MAC_APP: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
 /// would otherwise hold a request, a change of listener or the hub's start
 /// for good, so it is killed after `timeout`.
 pub(crate) fn tailscale(args: &[&str], timeout: Duration) -> Result<Vec<u8>, TailnetError> {
-    let output = match spawn("tailscale", args, timeout) {
-        Err(e) if e.kind() == ErrorKind::NotFound => spawn(MAC_APP, args, timeout),
-        output => output,
-    }
-    .map_err(|e| {
+    answer(args, run(args, timeout))
+}
+
+/// [`tailscale`], run once more if it timed out: now and then the Mac app's
+/// CLI misses the timeout on a busy machine and answers at once when run
+/// again. For a request, which can wait for that; not for the hub's start,
+/// which `mg hub start` gives up on in 10 seconds.
+pub(crate) fn tailscale_retried(args: &[&str], timeout: Duration) -> Result<Vec<u8>, TailnetError> {
+    answer(args, retried(|| run(args, timeout)))
+}
+
+fn answer(args: &[&str], output: std::io::Result<Output>) -> Result<Vec<u8>, TailnetError> {
+    let output = output.map_err(|e| {
         let why = match e.kind() {
             ErrorKind::NotFound => "Tailscale isn't installed: no tailscale on PATH".to_owned(),
             _ => format!("can't run tailscale: {e}"),
@@ -38,6 +46,22 @@ pub(crate) fn tailscale(args: &[&str], timeout: Duration) -> Result<Vec<u8>, Tai
         "tailscale {} failed: {why}",
         args[0]
     )))
+}
+
+/// `attempt`, made once more if it timed out.
+fn retried(mut attempt: impl FnMut() -> std::io::Result<Output>) -> std::io::Result<Output> {
+    match attempt() {
+        Err(e) if e.kind() == ErrorKind::TimedOut => attempt(),
+        output => output,
+    }
+}
+
+/// The CLI on `PATH`, or else the Mac app's.
+fn run(args: &[&str], timeout: Duration) -> std::io::Result<Output> {
+    match spawn("tailscale", args, timeout) {
+        Err(e) if e.kind() == ErrorKind::NotFound => spawn(MAC_APP, args, timeout),
+        output => output,
+    }
 }
 
 /// Runs `program`, and kills it if it hasn't exited within `timeout`.

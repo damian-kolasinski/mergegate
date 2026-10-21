@@ -20,10 +20,10 @@ const STARTING: Duration = Duration::from_secs(3);
 
 /// How long a connected `mg` waits for the hub on another machine to answer.
 /// Before it answers a device it hasn't seen in a minute, the hub asks the
-/// `tailscale` CLI who it is and gives the CLI 5 seconds; a first request
-/// also waits on MagicDNS and the WireGuard handshake. Shorter than that,
-/// a working hub reads as unreachable.
-const REACH: Duration = Duration::from_secs(10);
+/// `tailscale` CLI who it is and gives the CLI 5 seconds, twice when the
+/// first try hangs; a first request also waits on MagicDNS and the WireGuard
+/// handshake. Shorter than that, a working hub reads as unreachable.
+const REACH: Duration = Duration::from_secs(15);
 
 /// How long a connected `mg` waits to connect, within `REACH`. A hub machine
 /// that is off the tailnet never refuses, so this is how soon it is reported.
@@ -223,7 +223,9 @@ fn incompatible(hub: &Hub, ours: &str) -> (String, String) {
         hub.health.api_version,
         api::API_VERSION
     );
-    let hint = if !hub.connected {
+    let hint = if !hub.connected && upgrade::newer(theirs, ours) {
+        upgrade::older_mg(theirs)
+    } else if !hub.connected {
         "mg hub stop && mg hub start".to_owned()
     } else if upgrade::newer(ours, theirs) {
         format!(

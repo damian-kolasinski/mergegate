@@ -39,6 +39,22 @@ pub(crate) fn run(doing: &str, args: &[&str]) -> Result<(), CliError> {
     ))
 }
 
+/// Has the clone's git give up on a transfer with the hub at `url` that
+/// stalls, as one does when the hub's machine leaves the tailnet or its
+/// firewall drops the hub, instead of waiting on it for good: `mg submit`'s
+/// push, and the `git fetch mergegate` before it. Two minutes, since a fetch
+/// is answered only once the hub has landed any item it is landing and
+/// fetched the target from upstream. Limits the operator set for the hub, or
+/// for every host, stay. Best effort: a clone whose config can't be written
+/// pushes all the same, unbounded.
+pub(crate) fn bound_stalls(url: &str) {
+    for (name, value) in [("lowSpeedLimit", "1"), ("lowSpeedTime", "120")] {
+        if let Ok(None) = read(&["config", "--get-urlmatch", &format!("http.{name}"), url]) {
+            let _ = output(&["config", "--local", &format!("http.{url}.{name}"), value]);
+        }
+    }
+}
+
 /// Fails unless the current directory is in a git repo.
 pub(crate) fn require() -> Result<(), CliError> {
     match read(&["rev-parse", "--git-dir"])? {

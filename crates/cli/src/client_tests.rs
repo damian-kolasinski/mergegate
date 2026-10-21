@@ -45,3 +45,9 @@ fn a_hub_on_this_machine_restarts_on_this_mg() {
     let (_, hint) = incompatible(&hub("0.6.2", false), "0.7.0");
     assert_eq!(hint, "mg hub stop && mg hub start");
 }
+
+#[test]
+fn a_newer_hub_on_this_machine_is_left_to_its_mg() {
+    let (_, hint) = incompatible(&hub("0.8.0", false), "0.7.0");
+    assert!(hint.starts_with("run mg 0.8.0, the hub's:"), "{hint}");
+}

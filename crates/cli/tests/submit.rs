@@ -232,6 +232,29 @@ fn f4_works_from_a_clone_that_fetches_from_the_hub() {
 }
 
 #[test]
+fn f4_gives_up_on_stalled_transfers_with_the_hub() {
+    let (env, repo) = hub_with_app();
+    let url = format!("http://{}/git/app", env.hub_addr());
+    let key = |name: &str| format!("http.{url}.{name}");
+    // What git uses for the hub, from whichever key sets it.
+    let limits = || {
+        let get = |name| repo.git(["config", "--get-urlmatch", name, url.as_str()]);
+        (get("http.lowSpeedLimit"), get("http.lowSpeedTime"))
+    };
+    assert_eq!(limits(), ("1\n".into(), "120\n".into()));
+
+    // A clone set up before `mg init` set them gets them on submit, and a
+    // limit the operator set for every host stays.
+    repo.git(["config", "--unset", key("lowSpeedLimit").as_str()]);
+    repo.git(["config", "--unset", key("lowSpeedTime").as_str()]);
+    repo.git(["config", "http.lowSpeedTime", "300"]);
+    repo.git(["switch", "--quiet", "-c", "feature"]);
+    repo.commit_files("Work", &[("work.txt", "a\n")]);
+    env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
+    assert_eq!(limits(), ("1\n".into(), "300\n".into()));
+}
+
+#[test]
 fn f4_pushes_large_files() {
     let (env, repo) = hub_with_app();
     repo.git(["switch", "--quiet", "-c", "assets"]);

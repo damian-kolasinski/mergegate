@@ -5,7 +5,7 @@ use hub::Home;
 use super::POLL;
 use super::probe::{agent, settle};
 use super::report::HubStatus;
-use super::service;
+use super::{service, upgrade};
 use crate::output::{CliError, Outcome, exit};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -14,6 +14,20 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
     let Some(running) = settle(home, TIMEOUT)? else {
         return stopped(home, false);
     };
+    // Stopping removes the service, and this mg can't start the hub again on
+    // the store a later release migrated: nothing would run until someone
+    // found the hub's mg.
+    if running.health.schema_version > hub::SCHEMA_VERSION {
+        let theirs = &running.health.version;
+        return Err(CliError::new(
+            "hub_newer",
+            format!(
+                "the hub runs mg {theirs}, whose store this mg {} can't open",
+                env!("MG_VERSION")
+            ),
+        )
+        .hint(upgrade::older_mg(theirs)));
+    }
 
     let kill_hint = format!("kill {}", running.health.pid);
     // The hub exits 0, which its service doesn't restart.
