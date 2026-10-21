@@ -67,7 +67,8 @@ fn an_inline_comment_sits_on_the_revision_it_was_written_on() {
         Ingested {
             new: 1,
             edited: 0,
-            withdrawn: 0
+            withdrawn: 0,
+            lapsed: 0
         }
     );
 
@@ -187,7 +188,8 @@ fn an_edit_is_held_again_and_the_rest_is_known() {
         Ingested {
             new: 0,
             edited: 1,
-            withdrawn: 0
+            withdrawn: 0,
+            lapsed: 0
         }
     );
     let comments = store.comments(&id()).unwrap();
@@ -225,7 +227,8 @@ fn a_held_comment_github_deleted_is_withdrawn() {
         Ingested {
             new: 0,
             edited: 0,
-            withdrawn: 2
+            withdrawn: 2,
+            lapsed: 0
         }
     );
     // The one no batch carried is gone; the others read as the agent got

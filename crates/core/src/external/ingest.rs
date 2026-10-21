@@ -19,11 +19,14 @@ pub struct Ingested {
     pub edited: usize,
     /// Held ones GitHub no longer has.
     pub withdrawn: usize,
+    /// Bots' ones awaiting a vote on lines the newest revision outdated, as
+    /// [`lapse`](super::lapse), run after it, counts them.
+    pub lapsed: usize,
 }
 
 impl Ingested {
     pub fn changed(self) -> bool {
-        self.new + self.edited + self.withdrawn > 0
+        self.new + self.edited + self.withdrawn + self.lapsed > 0
     }
 }
 
@@ -91,7 +94,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
                 answered: answered.contains(&c.id),
                 id: c.id,
                 body: c.body,
-                pending: external.pending,
+                held: external.pending || external.lapsed,
                 summary: external.summary,
                 bot: external.bot,
             };
@@ -107,7 +110,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
         // One a batch carried stays the agent's, summary or not: its thread
         // and the agent's replies on it are already there.
         let reads_as_summary = summary(&comment);
-        let summary = reads_as_summary && known.is_none_or(|k| k.pending || k.summary);
+        let summary = reads_as_summary && known.is_none_or(|k| k.held || k.summary);
         match known {
             Some(known) if known.body == comment.body && known.summary == summary => {}
             // Bots edit what they posted to say where it stands, as "Addressed
@@ -117,7 +120,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
             // vote on it again. A person's edit can ask for more, so it's held.
             Some(known)
                 if known.bot
-                    && !known.pending
+                    && !known.held
                     && !known.summary
                     && (known.answered || reads_as_summary) =>
             {
@@ -155,7 +158,7 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
         }
     }
     for (key, known) in known {
-        if known.pending && gone.contains(&key) && !found.contains(&key) {
+        if known.held && gone.contains(&key) && !found.contains(&key) {
             store.withdraw_external(known.id)?;
             ingested.withdrawn += 1;
         }
@@ -167,7 +170,8 @@ pub fn ingest<S: ItemStore + DiffStore + ReviewStore + ExternalStore>(
 struct Known {
     id: CommentId,
     body: String,
-    pending: bool,
+    /// Waiting for a batch, or for a vote that lapsed.
+    held: bool,
     summary: bool,
     bot: bool,
     /// The agent replied to it.

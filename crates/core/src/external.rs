@@ -10,6 +10,7 @@ mod due;
 mod error;
 mod gone;
 mod ingest;
+mod lapse;
 mod on_read;
 mod rejection;
 mod store;
@@ -21,6 +22,7 @@ pub use due::{Timing, due, release, release_due};
 pub use error::ExternalError;
 pub use gone::{GithubKey, confirm_gone, held_keys};
 pub use ingest::{Ingested, fetch, ingest, pull_of};
+pub use lapse::lapse;
 pub use on_read::release_on_read;
 pub use rejection::{agree, override_rejection};
 pub use store::{ExternalStore, Held, NewExternal};
@@ -51,6 +53,10 @@ pub struct External {
     /// The operator's vote, none until they cast it. Only a comment voted up
     /// reaches the agent.
     pub vote: Option<Vote>,
+    /// A bot's, it stopped waiting for the operator's vote once a later
+    /// revision's diff no longer showed its lines ([`lapse`]); it reaches the
+    /// agent only if they vote it up.
+    pub lapsed: bool,
     /// The agent's rejection the operator agreed with. It stops counting once
     /// the thread has a later reply.
     pub agreed_reply: Option<u64>,

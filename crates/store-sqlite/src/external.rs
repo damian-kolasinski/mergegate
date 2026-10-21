@@ -91,7 +91,7 @@ impl ExternalStore for Store {
         // SET reads the row as it was, so `vote` is the vote before the edit.
         tx.execute(
             "UPDATE external_comments
-             SET seen_at = ?2, dated_at = max(dated_at, ?3), summary = ?4,
+             SET seen_at = ?2, dated_at = max(dated_at, ?3), summary = ?4, lapsed = 0,
                  pending_at = CASE WHEN ?4 OR vote = 'down' THEN NULL
                                    ELSE coalesce(pending_at, ?2) END,
                  vote = CASE WHEN NOT ?4 AND vote = 'down' THEN 'down' END
@@ -150,7 +150,7 @@ impl ExternalStore for Store {
             )
             .map_err(StoreError::new)?;
             tx.execute(
-                "UPDATE external_comments SET pending_at = NULL WHERE comment_id = ?1",
+                "UPDATE external_comments SET pending_at = NULL, lapsed = 0 WHERE comment_id = ?1",
                 params![id],
             )
             .map_err(StoreError::new)?;
@@ -274,11 +274,22 @@ impl ExternalStore for Store {
         }))
     }
 
+    fn lapse_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                "UPDATE external_comments SET pending_at = NULL, lapsed = 1
+                 WHERE comment_id = ?1 AND pending_at IS NOT NULL AND vote IS NULL",
+                params![id.0 as i64],
+            )
+            .map_err(StoreError::new)?;
+        Ok(())
+    }
+
     fn set_vote(&mut self, id: CommentId, vote: Vote, now: u64) -> Result<(), StoreError> {
         self.conn
             .execute(
                 "UPDATE external_comments
-                 SET vote = ?2,
+                 SET vote = ?2, lapsed = 0,
                      pending_at = CASE ?2 WHEN 'up' THEN coalesce(pending_at, ?3) END
                  WHERE comment_id = ?1",
                 params![id.0 as i64, vote.as_str(), now as i64],

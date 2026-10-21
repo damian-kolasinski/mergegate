@@ -112,6 +112,11 @@ pub struct ExternalComment {
     /// reaches the agent.
     #[serde(default)]
     pub vote: Option<Vote>,
+    /// A bot's that waited for the operator's vote until a later revision's
+    /// diff no longer showed its lines: it no longer waits, and reaches the
+    /// agent only if they vote it up.
+    #[serde(default)]
+    pub lapsed: bool,
     /// The agent's rejection the operator agreed with.
     pub agreed_reply: Option<u64>,
 }

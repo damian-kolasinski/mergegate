@@ -2100,6 +2100,7 @@ impl ExternalStore for FakeStore {
                 pending: !summary,
                 summary,
                 vote: None,
+                lapsed: false,
                 agreed_reply: None,
             }),
             created_at: self.now(),
@@ -2126,6 +2127,7 @@ impl ExternalStore for FakeStore {
         let external = comment.external.as_mut().unwrap();
         let times = self.external.get_mut(&id).unwrap();
         external.summary = summary;
+        external.lapsed = false;
         if summary {
             external.pending = false;
             external.vote = None;
@@ -2185,7 +2187,9 @@ impl ExternalStore for FakeStore {
         if let Some(body) = sent {
             comment.body = body;
         }
-        comment.external.as_mut().unwrap().pending = false;
+        let external = comment.external.as_mut().unwrap();
+        external.pending = false;
+        external.lapsed = false;
         self.external.get_mut(&id).unwrap().1 = None;
         Ok(())
     }
@@ -2250,11 +2254,24 @@ impl ExternalStore for FakeStore {
         ))
     }
 
+    fn lapse_external(&mut self, id: CommentId) -> Result<(), StoreError> {
+        let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
+        let external = comment.external.as_mut().unwrap();
+        if !external.awaiting_vote() {
+            return Ok(());
+        }
+        external.pending = false;
+        external.lapsed = true;
+        self.external.get_mut(&id).unwrap().1 = None;
+        Ok(())
+    }
+
     fn set_vote(&mut self, id: CommentId, vote: Vote, now: u64) -> Result<(), StoreError> {
         let comment = self.comments.iter_mut().find(|c| c.id == id).unwrap();
         let external = comment.external.as_mut().unwrap();
         let times = self.external.get_mut(&id).unwrap();
         external.vote = Some(vote);
+        external.lapsed = false;
         external.pending = vote == Vote::Up;
         times.1 = match vote {
             Vote::Up => Some(times.1.unwrap_or(now)),

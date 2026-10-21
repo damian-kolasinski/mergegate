@@ -115,6 +115,14 @@ test("a comment from GitHub reaches the agent only once the operator votes it up
   const needsTest = page.getByRole("article", { name: "Comment c_3" });
   await needsTest.getByRole("button", { name: "Send to agent" }).click();
   await expect(conversation).not.toContainText("to vote on");
+  // What was voted on stays first while the list is open; the summary,
+  // which waits on no one, is folded under it.
+  const list = page.getByRole("complementary", { name: "Conversation" });
+  await expect(
+    list.getByRole("region", { name: "Needs you" }).getByRole("listitem"),
+  ).toHaveCount(2);
+  await list.getByRole("button", { name: /Everything else/ }).click();
+  await list.getByRole("button", { name: "Open comment c_4" }).click();
   const walkthrough = page.getByRole("article", { name: "Comment c_4" });
   await expect(walkthrough).toContainText("Adds a login.");
   await expect(walkthrough.getByText("Summary", { exact: true })).toBeVisible();
@@ -202,6 +210,62 @@ test("the operator agrees with a rejection or overrides it", async ({
   };
   expect(feedback.events.map((e) => e.type)).toEqual(["comment.override"]);
   expect(feedback.events[0]?.reply.body).toBe("The old name misleads.");
+});
+
+test("a bot's comment a later revision outdated stops waiting for a vote", async ({
+  page,
+  github,
+}) => {
+  const { hub } = github;
+  const app = hub.githubProject("app", github.github);
+  app.submit("login", "Add login", {
+    "src/login.rs": "fn login() {\n    check();\n}\n",
+  });
+  await github.github.comment(1, {
+    login: "codex[bot]",
+    body: "Check the password's length too.",
+    path: "src/login.rs",
+    line: 2,
+  });
+  await github.github.comment(1, { login: "alice", body: "Needs a test." });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const conversation = screen.getByRole("button", { name: /^Conversation/ });
+  await expect(conversation).toContainText("2 to vote on");
+
+  // The agent drops the line the bot commented on before the operator
+  // voted; the bot will say it again if it still holds.
+  app.revise("Drop the check", { "src/login.rs": "fn login() {\n}\n" });
+  await page.reload();
+  await screen.getByRole("button", { name: "More actions" }).click();
+  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
+  await expect(conversation).toContainText("1 to vote on");
+  await page.keyboard.press("Escape");
+
+  // The person's comment still waits, first and open; the lapsed one is
+  // folded with the rest.
+  await conversation.click();
+  const list = page.getByRole("complementary", { name: "Conversation" });
+  const needs = list.getByRole("region", { name: "Needs you" });
+  await expect(needs.getByRole("listitem")).toHaveCount(1);
+  await expect(
+    needs.getByRole("article", { name: "Comment c_2" }),
+  ).toContainText("Needs a test.");
+  const fold = list.getByRole("button", { name: /Everything else/ });
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await fold.click();
+  const lapsed = list.getByRole("listitem", { name: "c_1" });
+  await expect(lapsed.getByText("Lapsed", { exact: true })).toBeVisible();
+
+  // It still reaches the agent if the operator sends it.
+  await lapsed.getByRole("button", { name: "Open comment c_1" }).click();
+  await expect(lapsed.getByText("Outdated", { exact: true })).toBeVisible();
+  await lapsed.getByRole("button", { name: "Send to agent" }).click();
+  await expect(lapsed.getByText("Not sent yet", { exact: true })).toBeVisible();
+  // It stays open, so the vote can be taken back.
+  await expect(
+    lapsed.getByRole("button", { name: "Send to agent" }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("a comment from GitHub renders its Markdown, and nothing that runs", async ({

@@ -143,8 +143,11 @@ test("f13 comments follow their lines to the next revision", async ({
   const toggle = screen.getByRole("button", { name: "Conversation 6" });
   await toggle.click();
   const list = page.getByRole("complementary", { name: "Conversation" });
+  // The sent one waits on the agent, so it's folded under the drafts.
+  await list.getByRole("button", { name: /Everything else/ }).click();
   const gone = list.getByRole("listitem", { name: "c_2" });
   await expect(gone).toContainText("login.rs:4 @r1");
+  await gone.getByRole("button", { name: "Open comment c_2" }).click();
   await expect(gone.getByText("Outdated")).toBeVisible();
   await expect(gone.getByRole("button", { name: "Show in diff" })).toHaveCount(
     0,

@@ -309,6 +309,8 @@ fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
         ))
         .unwrap();
 
+    // A lapsed one is still held for a vote up, until it's withdrawn.
+    store.lapse_external(answered.id).unwrap();
     for comment in [&sent, &drafted, &answered] {
         store.withdraw_external(comment.id).unwrap();
     }
@@ -317,7 +319,10 @@ fn a_withdrawn_comment_is_deleted_unless_it_reached_someone() {
         .comments(&app())
         .unwrap()
         .into_iter()
-        .map(|c| (c.id, c.body, c.external.unwrap().pending))
+        .map(|c| {
+            let external = c.external.unwrap();
+            (c.id, c.body, external.pending || external.lapsed)
+        })
         .collect();
     assert_eq!(
         left,
@@ -486,6 +491,42 @@ fn a_comment_goes_out_only_once_voted_up() {
         params![person.0 as i64],
     );
     assert!(forced.is_err());
+}
+
+#[test]
+fn a_lapsed_comment_stops_holding_the_batch_until_voted_or_edited() {
+    let (_dir, mut store) = store();
+    let external_of = |store: &Store, id| store.comment(id).unwrap().unwrap().external.unwrap();
+    let mut insert = |github_id, body| {
+        store
+            .insert_external(external(github_id, "codex[bot]", body, false), 100)
+            .unwrap()
+            .id
+    };
+    let voted = insert(1, "Leaks");
+    let outdated = insert(2, "Rename");
+    let edited = insert(3, "Why?");
+    store.set_vote(voted, Vote::Up, 200).unwrap();
+
+    // One voted on already isn't the operator's to vote on, so it doesn't
+    // lapse.
+    for id in [voted, outdated, edited] {
+        store.lapse_external(id).unwrap();
+    }
+    let lapsed = external_of(&store, outdated);
+    assert!(lapsed.lapsed && !lapsed.pending && lapsed.vote.is_none());
+    let kept = external_of(&store, voted);
+    assert!(!kept.lapsed && kept.pending);
+    assert!(!store.held(&app()).unwrap().unwrap().awaiting);
+
+    store.set_vote(outdated, Vote::Up, 300).unwrap();
+    let up = external_of(&store, outdated);
+    assert!(!up.lapsed && up.pending);
+    store
+        .edit_external(edited, "Why not?", 0, false, 300)
+        .unwrap();
+    let edited = external_of(&store, edited);
+    assert!(edited.awaiting_vote() && !edited.lapsed);
 }
 
 #[test]
