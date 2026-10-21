@@ -1,22 +1,47 @@
 //! Review time: how long the operator was active on an item's review screen,
-//! per revision, as the UI measures it, and the stats a closed item's
-//! `item.merged` or `item.abandoned` carries for its agent's telemetry.
+//! as the UI measures it, and the stats a closed item's `item.merged` or
+//! `item.abandoned` carries for its agent's telemetry.
+//!
+//! Time is split by turn and by revision. A turn is one round of the
+//! operator's review: each review they send ends one, the approval included,
+//! and the time measured until then is that turn's. Revisions and turns
+//! differ: an agent's rebase adds a revision nobody reviewed, and a review
+//! answered with replies alone starts a turn on the same revision.
 //!
 //! Time is recorded only while the item is open. A closed item's totals
 //! never change, so its closing event reads the same every time it's read.
 
-use std::collections::BTreeMap;
-
 use crate::item::{Item, ItemId, ItemStore};
+use crate::review::Verdict;
 use crate::store::StoreError;
 
 pub trait ReviewTimeStore {
-    /// `id`'s review time per revision, in milliseconds; a revision no time
-    /// was recorded on is absent.
-    fn review_time(&self, id: &ItemId) -> Result<BTreeMap<u32, u64>, StoreError>;
+    /// What was logged on `id`, one entry per turn and revision with time.
+    fn review_time(&self, id: &ItemId) -> Result<Vec<Logged>, StoreError>;
 
-    /// Adds `ms` to `revision`'s review time.
-    fn add_review_time(&mut self, id: &ItemId, revision: u32, ms: u64) -> Result<(), StoreError>;
+    /// Adds `logged.ms` to its turn's time on its revision.
+    fn add_review_time(&mut self, id: &ItemId, logged: Logged) -> Result<(), StoreError>;
+
+    /// The reviews the operator sent on `id`, oldest first: the ends of its
+    /// turns.
+    fn sent_reviews(&self, id: &ItemId) -> Result<Vec<SentReview>, StoreError>;
+}
+
+/// Review time in one turn on one revision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Logged {
+    /// From 1.
+    pub turn: u32,
+    pub revision: u32,
+    pub ms: u64,
+}
+
+/// A review the operator sent, which ended a turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SentReview {
+    pub revision: u32,
+    pub verdict: Verdict,
+    pub submitted_at: String,
 }
 
 /// The longest one report may carry. The UI reports every half minute, so
@@ -63,7 +88,10 @@ pub fn record<S: ItemStore + ReviewTimeStore>(
         return Err(ReviewTimeError::NoRevision { id, revision });
     }
     if ms > 0 {
-        store.add_review_time(&id, revision, ms)?;
+        // The UI reports what it measured before a review goes out, so time
+        // logged after one is the next turn's.
+        let turn = store.sent_reviews(&id)?.len() as u32 + 1;
+        store.add_review_time(&id, Logged { turn, revision, ms })?;
     }
     Ok(())
 }
@@ -75,10 +103,27 @@ pub struct Stats {
     pub opened_at: String,
     /// None while it's open, and for an item closed before the hub kept it.
     pub closed_at: Option<String>,
-    /// The revisions' review time, summed.
+    /// All of the item's review time.
     pub review_ms: u64,
+    /// Every turn a review ended, oldest first, then the one under way when
+    /// the item closed if it had any time.
+    pub turns: Vec<TurnStats>,
     /// Every revision, oldest first.
     pub revisions: Vec<RevisionStats>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnStats {
+    /// From 1.
+    pub number: u32,
+    /// The revision the turn's review was sent on; for the turn under way,
+    /// the newest it had time on.
+    pub revision: u32,
+    /// None for the turn under way: the item closed without the operator's
+    /// review, abandoned or merged on GitHub.
+    pub verdict: Option<Verdict>,
+    pub sent_at: Option<String>,
+    pub review_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,12 +134,42 @@ pub struct RevisionStats {
 }
 
 pub fn stats<S: ItemStore + ReviewTimeStore>(store: &S, item: &Item) -> Result<Stats, StoreError> {
-    let time = store.review_time(&item.id)?;
-    let revisions: Vec<_> = store
+    let logged = store.review_time(&item.id)?;
+    let sum = |of: &dyn Fn(&Logged) -> bool| -> u64 {
+        logged.iter().filter(|l| of(l)).map(|l| l.ms).sum()
+    };
+    let mut turns: Vec<_> = store
+        .sent_reviews(&item.id)?
+        .into_iter()
+        .zip(1..)
+        .map(|(review, number)| TurnStats {
+            number,
+            revision: review.revision,
+            verdict: Some(review.verdict),
+            sent_at: Some(review.submitted_at),
+            review_ms: sum(&|l| l.turn == number),
+        })
+        .collect();
+    let under_way = turns.len() as u32 + 1;
+    let newest = logged
+        .iter()
+        .filter(|l| l.turn == under_way)
+        .map(|l| l.revision)
+        .max();
+    if let Some(revision) = newest {
+        turns.push(TurnStats {
+            number: under_way,
+            revision,
+            verdict: None,
+            sent_at: None,
+            review_ms: sum(&|l| l.turn == under_way),
+        });
+    }
+    let revisions = store
         .revisions(&item.id)?
         .into_iter()
         .map(|revision| RevisionStats {
-            review_ms: time.get(&revision.number).copied().unwrap_or(0),
+            review_ms: sum(&|l| l.revision == revision.number),
             number: revision.number,
             submitted_at: revision.submitted_at,
         })
@@ -102,7 +177,8 @@ pub fn stats<S: ItemStore + ReviewTimeStore>(store: &S, item: &Item) -> Result<S
     Ok(Stats {
         opened_at: item.created_at.clone(),
         closed_at: item.closed_at.clone(),
-        review_ms: revisions.iter().map(|r| r.review_ms).sum(),
+        review_ms: sum(&|_| true),
+        turns,
         revisions,
     })
 }

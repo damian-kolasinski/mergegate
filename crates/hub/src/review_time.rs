@@ -16,6 +16,7 @@ use mergegate_core::review_time::{self, ReviewTimeError, ReviewTimeStore, Spent,
 use mergegate_core::store::StoreError;
 
 use crate::reply::Failure;
+use crate::reviews::verdict_to_api;
 use crate::server::AppState;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
@@ -68,6 +69,17 @@ fn to_api(stats: Stats) -> api::review_time::ReviewStats {
         opened_at: stats.opened_at,
         closed_at: stats.closed_at,
         review_ms: stats.review_ms,
+        turns: stats
+            .turns
+            .into_iter()
+            .map(|t| api::review_time::TurnStats {
+                turn: t.number,
+                revision: t.revision,
+                verdict: t.verdict.map(verdict_to_api),
+                sent_at: t.sent_at,
+                review_ms: t.review_ms,
+            })
+            .collect(),
         revisions: stats
             .revisions
             .into_iter()

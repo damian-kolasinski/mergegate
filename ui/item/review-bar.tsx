@@ -97,10 +97,14 @@ export function ReviewBar(props: {
     setSending("review");
     setFailure(undefined);
     setSent(undefined);
-    postJson<Review>(
-      `/api/items/${encodeURIComponent(props.item)}/reviews`,
-      body,
-    )
+    // A review ends the operator's turn, so the time up to it is that turn's.
+    settleReviewTime()
+      .then(() =>
+        postJson<Review>(
+          `/api/items/${encodeURIComponent(props.item)}/reviews`,
+          body,
+        ),
+      )
       .then((review) => {
         setSummary("");
         const parts = [

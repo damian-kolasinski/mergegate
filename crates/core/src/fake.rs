@@ -34,7 +34,7 @@ use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{
     Anchor, Comment, CommentId, NewComment, NewReply, NewReview, Reply, Review, ReviewStore,
 };
-use crate::review_time::ReviewTimeStore;
+use crate::review_time::{Logged, ReviewTimeStore, SentReview};
 use crate::settings::SettingsStore;
 use crate::store::StoreError;
 use crate::triage::{
@@ -803,7 +803,7 @@ pub(crate) struct FakeStore {
     /// By blob, grammar and version.
     highlights: BTreeMap<(String, String, String), Highlights>,
     viewed: BTreeSet<(ItemId, u32, String)>,
-    review_time: BTreeMap<(ItemId, u32), u64>,
+    review_time: BTreeMap<(ItemId, u32, u32), u64>,
     reviews: Vec<Review>,
     /// Every item's, oldest first.
     comments: Vec<Comment>,
@@ -1728,18 +1728,38 @@ impl ViewedStore for FakeStore {
 }
 
 impl ReviewTimeStore for FakeStore {
-    fn review_time(&self, id: &ItemId) -> Result<BTreeMap<u32, u64>, StoreError> {
+    fn review_time(&self, id: &ItemId) -> Result<Vec<Logged>, StoreError> {
         Ok(self
             .review_time
             .iter()
-            .filter(|((i, _), _)| i == id)
-            .map(|((_, revision), ms)| (*revision, *ms))
+            .filter(|((i, _, _), _)| i == id)
+            .map(|((_, turn, revision), ms)| Logged {
+                turn: *turn,
+                revision: *revision,
+                ms: *ms,
+            })
             .collect())
     }
 
-    fn add_review_time(&mut self, id: &ItemId, revision: u32, ms: u64) -> Result<(), StoreError> {
-        *self.review_time.entry((id.clone(), revision)).or_default() += ms;
+    fn add_review_time(&mut self, id: &ItemId, logged: Logged) -> Result<(), StoreError> {
+        *self
+            .review_time
+            .entry((id.clone(), logged.turn, logged.revision))
+            .or_default() += logged.ms;
         Ok(())
+    }
+
+    fn sent_reviews(&self, id: &ItemId) -> Result<Vec<SentReview>, StoreError> {
+        Ok(self
+            .reviews
+            .iter()
+            .filter(|r| &r.item == id)
+            .map(|r| SentReview {
+                revision: r.revision,
+                verdict: r.verdict,
+                submitted_at: r.submitted_at.clone(),
+            })
+            .collect())
     }
 }
 
