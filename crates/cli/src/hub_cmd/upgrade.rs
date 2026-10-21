@@ -78,6 +78,17 @@ pub(crate) fn newer(ours: &str, theirs: &str) -> bool {
     matches!((release(ours), release(theirs)), (Some(ours), Some(theirs)) if ours > theirs)
 }
 
+/// What to do when the hub on this machine runs `theirs`, a later release
+/// than this `mg`: run that one. This `mg` can't start the hub again on a
+/// store `theirs` migrated, and a shell opened before the upgrade can still
+/// find the old `mg` first on its `PATH`.
+pub(crate) fn older_mg(theirs: &str) -> String {
+    format!(
+        "run mg {theirs}, the hub's: which -a mg lists those on PATH, where a shell opened \
+         before the upgrade can still find the old one first"
+    )
+}
+
 #[cfg(test)]
 #[path = "upgrade_tests.rs"]
 mod tests;

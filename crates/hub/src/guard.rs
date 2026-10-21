@@ -149,7 +149,11 @@ async fn admit(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "tailscale_unavailable",
                 format!("the hub can't ask Tailscale who is calling: {e}"),
-                None,
+                Some(
+                    "run the command again; if this keeps happening, check Tailscale on the \
+                     hub's machine: tailscale status"
+                        .into(),
+                ),
             ));
         }
     };

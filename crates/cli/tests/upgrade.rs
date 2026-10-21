@@ -20,13 +20,18 @@ struct OldHub(PathBuf);
 
 impl OldHub {
     fn new(env: &Env, version: &str, api_version: u32) -> Self {
+        Self::on_schema(env, version, api_version, hub::SCHEMA_VERSION)
+    }
+
+    /// One whose store is at `schema_version`.
+    fn on_schema(env: &Env, version: &str, api_version: u32, schema_version: u32) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let pid = std::process::id();
         let health = json!({
             "version": version,
             "api_version": api_version,
-            "schema_version": hub::SCHEMA_VERSION,
+            "schema_version": schema_version,
             "pid": pid,
             "home": env.home(),
         })
@@ -69,6 +74,27 @@ fn a_hub_on_another_api_is_refused_until_restarted() {
 
     let status = env.mg(&["--json", "hub", "status"]).assert_code(0).json();
     assert_eq!(status["compatible"], false);
+}
+
+#[test]
+fn an_older_mg_leaves_a_newer_hub_running() {
+    let env = env();
+    let _hub = OldHub::on_schema(
+        &env,
+        "999.0.0",
+        api::API_VERSION.wrapping_add(1),
+        hub::SCHEMA_VERSION + 1,
+    );
+
+    let run = env.mg(&["--json", "inbox"]).assert_code(69);
+    let hint = run.json()["error"]["hint"].as_str().unwrap().to_owned();
+    assert!(hint.starts_with("run mg 999.0.0, the hub's:"), "{run:?}");
+
+    let run = env.mg(&["--json", "hub", "stop"]).assert_code(1);
+    let error = &run.json()["error"];
+    assert_eq!(error["code"], "hub_newer", "{run:?}");
+    assert_eq!(error["hint"], hint);
+    assert!(env.home().join("hub.json").exists());
 }
 
 #[test]

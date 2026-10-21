@@ -75,11 +75,21 @@ pub fn run(
     // The hub this mg talks to, even if it moved since `mg init`.
     let url = client.remote(&project.name);
     let refspec = format!("+HEAD:refs/heads/{branch}");
+    // Here too, for clones set up before `mg init` did it.
+    repo::bound_stalls(&url);
     repo::run(
         &format!("pushing {branch} to the hub"),
         &["push", "--quiet", &url, &refspec],
     )
-    .map_err(|e| nested(&branch, e))?;
+    .map_err(|e| match nested(&branch, e) {
+        // git's words for a hub it couldn't reach or gave up on, which name
+        // no next step themselves.
+        e if unreachable(&e.body.message) => e.hint(match client.connected() {
+            true => "mg doctor",
+            false => "mg hub status",
+        }),
+        e => e,
+    })?;
     let request = Submit {
         project: project.name,
         branch,
@@ -147,6 +157,13 @@ fn nested(branch: &str, error: CliError) -> CliError {
         .hint("git branch -m NAME"),
         None => error,
     }
+}
+
+/// git couldn't connect (`unable to access`) or its transfer failed
+/// (`RPC failed`), as when the hub is down or `bound_stalls` gave up on it,
+/// rather than the worker's hooks or the hub refusing the push.
+fn unreachable(message: &str) -> bool {
+    message.contains("unable to access") || message.contains("RPC failed")
 }
 
 fn read_guide(path: &Path) -> Result<String, CliError> {

@@ -63,13 +63,14 @@ impl Tailnet for TailscaleCli {
         // other caller's request. Failures aren't cached: a device that just
         // joined, or Tailscale that just came up, is let in on the next
         // request.
-        let device = match run::tailscale(&["whois", "--json", &ip.to_string()], self.timeout) {
-            Ok(json) => parse::whois(&json)?,
-            Err(TailnetError::Unavailable(why)) if why.contains("peer not found") => {
-                return Err(TailnetError::Unknown(ip));
-            }
-            Err(e) => return Err(e),
-        };
+        let device =
+            match run::tailscale_retried(&["whois", "--json", &ip.to_string()], self.timeout) {
+                Ok(json) => parse::whois(&json)?,
+                Err(TailnetError::Unavailable(why)) if why.contains("peer not found") => {
+                    return Err(TailnetError::Unknown(ip));
+                }
+                Err(e) => return Err(e),
+            };
         if !self.whois_ttl.is_zero() {
             let mut cache = cache();
             cache.retain(|_, (at, _)| at.elapsed() < self.whois_ttl);
