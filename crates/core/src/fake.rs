@@ -805,6 +805,8 @@ pub(crate) struct FakeStore {
     viewed: BTreeSet<(ItemId, u32, String)>,
     review_time: BTreeMap<(ItemId, u32, u32), u64>,
     reviews: Vec<Review>,
+    /// The reviews the hub carried, not the operator, by ID.
+    carried: BTreeSet<u64>,
     /// Every item's, oldest first.
     comments: Vec<Comment>,
     /// Comment IDs aren't reused, as the store's aren't.
@@ -1753,7 +1755,7 @@ impl ReviewTimeStore for FakeStore {
         Ok(self
             .reviews
             .iter()
-            .filter(|r| &r.item == id)
+            .filter(|r| &r.item == id && !self.carried.contains(&r.id))
             .map(|r| SentReview {
                 revision: r.revision,
                 verdict: r.verdict,
@@ -1900,6 +1902,9 @@ impl SettingsStore for FakeStore {
 impl ReviewStore for FakeStore {
     fn insert_review(&mut self, review: NewReview, state: ItemState) -> Result<Review, StoreError> {
         let id = self.reviews.len() as u64 + 1;
+        if review.carried_from.is_some() {
+            self.carried.insert(id);
+        }
         let mut comments = Vec::new();
         for comment in &mut self.comments {
             if comment.item == review.item && comment.is_draft() {

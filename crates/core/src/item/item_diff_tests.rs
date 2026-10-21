@@ -161,6 +161,7 @@ fn request_changes(store: &mut FakeStore, revision: u32) {
         verdict: crate::review::Verdict::ChangesRequested,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store
         .insert_review(review, ItemState::ChangesRequested)

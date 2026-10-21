@@ -124,6 +124,7 @@ pub fn carry<
             verdict: Verdict::Approved,
             summary: format!("Approved again: the diff is unchanged since r{from}."),
             moved: Vec::new(),
+            carried_from: Some(from),
         };
         store.insert_review(review, ItemState::Merging)?;
         let item = store

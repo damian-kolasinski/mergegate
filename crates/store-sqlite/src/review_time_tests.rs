@@ -93,6 +93,7 @@ fn keeps_items_apart() {
         verdict: Verdict::Comment,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store.insert_review(review, ItemState::NeedsReview).unwrap();
 
@@ -121,6 +122,7 @@ fn lists_the_reviews_sent_oldest_first() {
             verdict,
             summary: "Summary".into(),
             moved: Vec::new(),
+            carried_from: None,
         };
         store.insert_review(review, ItemState::NeedsReview).unwrap();
     }
@@ -133,4 +135,25 @@ fn lists_the_reviews_sent_oldest_first() {
         [(1, Verdict::ChangesRequested), (2, Verdict::Approved)]
     );
     assert!(sent.iter().all(|r| !r.submitted_at.is_empty()));
+}
+
+#[test]
+fn leaves_out_approvals_the_hub_carried() {
+    let (_dir, mut store) = store();
+    for (revision, carried_from) in [(1, None), (2, Some(1))] {
+        let review = NewReview {
+            item: id("app#1"),
+            revision,
+            verdict: Verdict::Approved,
+            summary: String::new(),
+            moved: Vec::new(),
+            carried_from,
+        };
+        store.insert_review(review, ItemState::Merging).unwrap();
+    }
+
+    let sent = store.sent_reviews(&id("app#1")).unwrap();
+
+    let got: Vec<_> = sent.iter().map(|r| r.revision).collect();
+    assert_eq!(got, [1]);
 }

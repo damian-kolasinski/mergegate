@@ -63,6 +63,9 @@ pub struct NewReview {
     /// Drafts from earlier revisions the review sends on its own, as it
     /// sends them.
     pub moved: Vec<MovedDraft>,
+    /// The revision whose approval the hub carried to this one, whose diff
+    /// is the same; None for a review the operator sent.
+    pub carried_from: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

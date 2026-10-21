@@ -55,6 +55,9 @@ export function useReviewTime(
   let pending = 0;
   // The operator's last input, while the page is engaged.
   let last: number | undefined;
+  // Reports on their way. A settle waits for them too: one landing after
+  // the review would count toward the next turn, or be refused.
+  const sending = new Set<Promise<void>>();
 
   const engaged = () =>
     document.visibilityState === "visible" && document.hasFocus();
@@ -68,10 +71,13 @@ export function useReviewTime(
     const body: ReviewTime = { revision: shown, ms };
     // Measuring never gets in the operator's way: a report the hub refuses
     // or never gets is dropped.
-    return postOutliving(
+    const sent = postOutliving(
       `/api/items/${encodeURIComponent(item)}/review-time`,
       body,
     ).catch(() => undefined);
+    sending.add(sent);
+    void sent.then(() => sending.delete(sent));
+    return sent;
   };
   const input = () => {
     if (shown === undefined || !engaged()) return;
@@ -87,9 +93,10 @@ export function useReviewTime(
   const visibility = () =>
     document.visibilityState === "visible" ? input() : away();
   // What closes the item is an input itself, so the time up to it counts.
-  const settle = () => {
+  const settle = async () => {
     input();
-    return report();
+    void report();
+    await Promise.all(sending);
   };
 
   createEffect(

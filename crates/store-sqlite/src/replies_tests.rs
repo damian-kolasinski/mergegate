@@ -61,6 +61,7 @@ fn store() -> (tempfile::TempDir, Store) {
             verdict: Verdict::ChangesRequested,
             summary: String::new(),
             moved: Vec::new(),
+            carried_from: None,
         };
         store
             .insert_review(review, ItemState::ChangesRequested)
@@ -177,6 +178,7 @@ fn the_next_review_sends_its_items_draft_replies() {
         verdict: Verdict::Comment,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     let sent = store.insert_review(review, ItemState::NeedsReview).unwrap();
     let draft = Reply {

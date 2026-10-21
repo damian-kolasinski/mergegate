@@ -111,6 +111,7 @@ fn a_merge_cut_short_before_it_logged_anything_is_held() {
         verdict: Verdict::Approved,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store.insert_review(review, ItemState::Merging).unwrap();
     assert!(matches!(blocked_now(&store), Some(Blocked::Held { .. })));
@@ -126,6 +127,7 @@ fn a_merge_seen_while_one_lands_is_not_held() {
         verdict: Verdict::Approved,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store.insert_review(review, ItemState::Merging).unwrap();
     let item = store.item(&id("app#1")).unwrap().unwrap();

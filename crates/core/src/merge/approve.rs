@@ -83,6 +83,7 @@ pub fn approve<
             verdict: Verdict::Approved,
             summary: summary.trim().to_owned(),
             moved,
+            carried_from: None,
         };
         store.insert_review(review, ItemState::Merging)?;
         let item = store.item(&id)?.ok_or(MergeError::NoItem(id))?;

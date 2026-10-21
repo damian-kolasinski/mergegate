@@ -148,12 +148,17 @@ fn refuses_a_report_longer_than_a_client_could_count() {
 }
 
 fn review(store: &mut FakeStore, revision: u32, verdict: Verdict) {
+    send(store, revision, verdict, None);
+}
+
+fn send(store: &mut FakeStore, revision: u32, verdict: Verdict, carried_from: Option<u32>) {
     let new = NewReview {
         item: id("app#1"),
         revision,
         verdict,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from,
     };
     store.insert_review(new, ItemState::NeedsReview).unwrap();
 }
@@ -255,4 +260,16 @@ fn a_turn_under_way_with_no_time_is_left_out() {
         turns(&store),
         [(1, 1, Some(Verdict::ChangesRequested), 8_000)]
     );
+}
+
+#[test]
+fn an_approval_the_hub_carried_ends_no_turn() {
+    let mut store = FakeStore::with_item(2);
+    record(&mut store, spent(1, 8_000)).unwrap();
+    review(&mut store, 1, Verdict::Approved);
+    // The merge was held, and the agent's rebase left the diff as it was.
+    send(&mut store, 2, Verdict::Approved, Some(1));
+    store.set_state(&id("app#1"), ItemState::Merged);
+
+    assert_eq!(turns(&store), [(1, 1, Some(Verdict::Approved), 8_000)]);
 }

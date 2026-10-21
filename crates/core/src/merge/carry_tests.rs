@@ -8,6 +8,7 @@ use crate::item::{Abandon, Submit, abandon, submit};
 use crate::merge::{Approve, Landing, approve, cancel};
 use crate::project::{Backend, Project, ProjectName, ProjectStore};
 use crate::review::{Side, WriteDraft, write_draft};
+use crate::review_time::ReviewTimeStore;
 
 fn id() -> ItemId {
     ItemId::parse("app#1").unwrap()
@@ -154,6 +155,9 @@ fn a_held_approval_carries_to_the_same_diff_on_a_new_base() {
         again.summary,
         "Approved again: the diff is unchanged since r1."
     );
+    // The operator approved once, so their review time has one turn.
+    let sent = store.sent_reviews(&id()).unwrap();
+    assert_eq!(sent.len(), 1, "{sent:?}");
 }
 
 #[test]
@@ -202,6 +206,7 @@ fn a_later_review_replaces_the_approval() {
         verdict: Verdict::ChangesRequested,
         summary: String::new(),
         moved: Vec::new(),
+        carried_from: None,
     };
     store
         .insert_review(review, ItemState::ChangesRequested)

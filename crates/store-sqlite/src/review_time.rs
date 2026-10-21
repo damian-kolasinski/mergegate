@@ -61,7 +61,7 @@ impl ReviewTimeStore for Store {
                 "SELECT r.revision, r.verdict, r.submitted_at FROM reviews r
                  JOIN items i ON i.id = r.item_id
                  JOIN projects p ON p.id = i.project_id
-                 WHERE p.name = ?1 AND i.number = ?2
+                 WHERE p.name = ?1 AND i.number = ?2 AND r.carried_from IS NULL
                  ORDER BY r.id",
             )
             .map_err(StoreError::new)?;
