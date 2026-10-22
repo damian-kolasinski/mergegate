@@ -39,13 +39,15 @@ Splits parsing out of main, so the CLI can reuse it.
 - `src/main.rs` — now only calls it
 ```
 
-The operator sees the whole guide as plain text above the diff, and the files to review in its order, each with its reason; files it leaves out follow in path order. A new revision submitted without `--guide` keeps the last guide, so send a new one when the change moves; `--guide /dev/null` removes it. `mg submit` prints a `warning:` line (`warnings` in `--json`) for each thing it can't place, such as a file the revision doesn't change or one the operator's rules trust: fix the guide and submit it again.
+The operator sees the whole guide as plain text above the diff, and the files to review in its order, each with its reason; files it leaves out follow in path order. A new revision submitted without `--guide` keeps the last guide, so send a new one when the change moves; `--guide /dev/null` removes it. `mg submit` prints a `warning:` line (`warnings` in `--json`) for each thing it can't place, such as a file the revision doesn't change or one the operator's rules trust: fix the guide and submit it again, without `--attach` (see "Showing the change").
 
 The guide outlives the review. Its intent, the text before `## Files`, becomes the body of the commit that lands when the item merges, and on GitHub the whole guide is the pull request's description. So write it about the change as a whole, for someone reading the history later: no revision numbers (`r2`), comment IDs (`c_17`) or "as asked". On a later revision, rewrite the guide for the whole change as it now stands. What the revision changed belongs in your replies to the comments it answers (see below), which the operator reads on each comment's thread next to the diff from the last revision. `mg submit` warns when the intent names one of the item's comments or revisions.
 
 ## Showing the change
 
 When the change has something to see, such as a screen, a flow or output, record it and attach the files, so the operator watches it before reading the diff. `mg submit --attach FILE` attaches a file to the revision it submits; repeat `--attach` for more. `mg attach <item> FILE...` adds files to the item's newest revision later. Each file must be a PNG, JPEG, GIF or WebP image, or an MP4 or WebM video, of at most 100 MB; `mg submit` checks them before it pushes, so a wrong file stops it with nothing submitted. If a submit pushed but an upload failed, it says so: rerun the upload with `mg attach`.
+
+A submit at the item's current head, as one that only fixes the guide, adds no revision, so its `--attach` files join the ones that revision already has, duplicates included, and nothing removes an attachment. Leave `--attach` off when you submit again only to fix the guide or the title.
 
 The review screen shows the newest revision's attachments, or the newest earlier revision's while it has none, so a small fix needn't be recorded again. They stay in mergegate, even for GitHub projects.
 
