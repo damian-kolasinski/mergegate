@@ -22,7 +22,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)). Start it from the target as the hub has it, `git fetch mergegate` then `git switch -c <branch> mergegate/<target>`: nothing keeps the clone's own `<target>` branch current.
 2. `mg submit --title "Short summary" --guide guide.md`, the guide saying what the change is for and which files to read first ([references/authoring.md](references/authoring.md)). It prints the item's name, as in `app#3`: on GitHub that's its pull request's number, as in `app#84`, and every command takes it. With `--json`, pass its `name` back, never its `id`, which can be another item's name. Running it again from the same branch adds a revision.
-3. Wait for the item's events as [references/waiting.md](references/waiting.md) describes: in the background, `mg wait app#3 --timeout 0`, which waits until there are some; in the foreground, `mg wait app#3 --timeout N` in a loop, N just under your tool-call time limit. Without `--timeout`, a wait gives up after 540 seconds.
+3. Wait for the item's events as [references/waiting.md](references/waiting.md) describes: in a background command whose completion resumes you, `mg wait app#3`, then run it again on exit 75; in the foreground, `mg wait app#3 --timeout N` in a loop, N just under your tool-call time limit. The default 540 seconds keeps a background wait below a host's ten-minute cap. In Codex, leave a wake and end your turn as the reference describes.
 4. Act on them (table below), then go back to 2 or 3.
 
 | Event | What to do |

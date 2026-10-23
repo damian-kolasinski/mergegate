@@ -86,13 +86,13 @@ impl Env {
         Self::run(cmd)
     }
 
-    /// Starts `mg` without waiting for it, its stdout piped, for a command
+    /// Starts `mg` without waiting for it, its stdout and stderr piped, for a command
     /// that runs until stopped such as `mg events --follow`. The caller
     /// kills it.
     pub fn spawn(&self, args: &[&str]) -> Child {
         self.command(args)
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .expect("start mg")
     }

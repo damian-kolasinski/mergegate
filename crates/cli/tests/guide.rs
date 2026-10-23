@@ -108,6 +108,60 @@ fn f11_the_guide_orders_the_files_and_is_kept() {
 }
 
 #[test]
+fn f11_a_guide_without_files_warns_and_can_be_fixed_at_the_same_head() {
+    let env = env();
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    env.mg_at(repo.root(), &["project", "add"]).assert_code(0);
+    env.mg_at(repo.root(), &["init"]).assert_code(0);
+    repo.git(["switch", "--quiet", "-c", "parser"]);
+    repo.commit_files(
+        "Add the parser",
+        &[
+            ("src/main.rs", "fn main() {}\n"),
+            ("src/parser.rs", "fn parse() {}\n"),
+        ],
+    );
+    let guide = repo.sibling("guide.md");
+    fs::write(&guide, "Splits parsing out of main.").unwrap();
+    let run = env
+        .mg_at(repo.root(), &["submit", "--guide", guide.to_str().unwrap()])
+        .assert_code(0);
+    assert!(
+        run.stdout
+            .contains("warning: the guide has no `## Files` list"),
+        "{run:?}"
+    );
+    assert!(
+        run.stdout
+            .contains("mg submit --guide FILE again without --attach"),
+        "{run:?}"
+    );
+    // The warning comes from the hub on both a new revision and a repeated head.
+    let run = env
+        .mg_at(repo.root(), &["--json", "submit"])
+        .assert_code(0)
+        .json();
+    assert_eq!(run["new_revision"], false);
+    assert!(run["warnings"][0].as_str().unwrap().contains("## Files"));
+    fs::write(
+        &guide,
+        "Splits parsing out of main.\n\n## Files\n\n- `src/parser.rs` — start here\n",
+    )
+    .unwrap();
+    let run = env
+        .mg_at(
+            repo.root(),
+            &["--json", "submit", "--guide", guide.to_str().unwrap()],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(run["new_revision"], false);
+    assert_eq!(run["warnings"], json!([]));
+    assert_eq!(order(&item(&env, "app#1"))[0].0, "src/parser.rs");
+}
+
+#[test]
 fn f11_an_unreadable_guide_stops_the_submit() {
     let env = env();
     env.start_hub();

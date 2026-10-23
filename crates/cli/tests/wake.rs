@@ -136,6 +136,7 @@ fn f3_reading_the_events_first_leaves_nothing_to_wake_for() {
     let wait = Command::new(env!("CARGO_BIN_EXE_mg"))
         .args(["wait", "app#1", "--timeout", "30"])
         .env("MERGEGATE_HOME", env.home())
+        .env_remove("CODEX_THREAD_ID")
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();

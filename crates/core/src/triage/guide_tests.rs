@@ -105,7 +105,11 @@ fn warns_when_there_is_no_list() {
     let text = "Just a summary.";
     assert_eq!(
         Guide::parse(text).warnings(text, &[]),
-        ["the guide has no `## Files` list, so the files stay in path order"]
+        [
+            "the guide has no `## Files` list, so the files stay in path order; \
+          add that heading with one bullet per file to review: - `path` — reason; \
+          then run mg submit --guide FILE again without --attach"
+        ]
     );
     assert!(Guide::parse("").warnings("", &[]).is_empty());
 }

@@ -325,6 +325,41 @@ fn f3_a_hub_that_stays_stopped_ends_a_wait_by_its_timeout() {
 }
 
 #[test]
+fn f3_a_wait_started_during_a_hub_restart_reconnects() {
+    let (env, _repo) = submitted();
+    env.mg(&["hub", "stop"]).assert_code(0);
+    let run = std::thread::scope(|scope| {
+        let waiting = scope.spawn(|| env.mg(&["--json", "wait", "app#1", "--timeout", "15"]));
+        std::thread::sleep(Duration::from_millis(500));
+        env.start_hub();
+        review(&env, "changes_requested", "Restart finished.");
+        waiting.join().unwrap()
+    });
+    let feedback = run.assert_code(0).json();
+    assert_eq!(feedback["events"][0]["summary"], "Restart finished.");
+}
+
+#[test]
+fn f3_a_wait_that_cannot_start_names_the_resume_command() {
+    let (env, _repo) = submitted();
+    env.mg(&["hub", "stop"]).assert_code(0);
+    let started = Instant::now();
+    let run = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "1", "--since", "0"])
+        .assert_code(69);
+    let error = &run.json()["error"];
+    assert_eq!(error["code"], "hub_unavailable");
+    assert!(
+        error["hint"]
+            .as_str()
+            .unwrap()
+            .ends_with("resume with: mg wait app#1 --timeout 1 --since 0")
+    );
+    assert!(run.stderr.contains("reconnecting in"), "{run:?}");
+    assert!(started.elapsed() < Duration::from_secs(10));
+}
+
+#[test]
 fn f3_a_wait_outlasts_a_hub_restart() {
     let (env, _repo) = submitted();
     let run = std::thread::scope(|scope| {
@@ -365,6 +400,12 @@ fn f3_sigterm_ends_a_wait_with_the_command_that_resumes_it() {
         assert!(killed.success());
         let output = waiting.wait_with_output().unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("waiting on app#1 without a timeout"),
+            "{stderr}"
+        );
+        assert!(stderr.contains("mg resume app#1"), "{stderr}");
         assert_eq!(output.status.code(), Some(143), "{stdout}");
         assert!(
             stdout.starts_with("mg wait: SIGTERM stopped the wait on app#1")
@@ -548,7 +589,10 @@ fn wait_names_the_fix_for_unknown_items_and_cursors() {
     let run = env.mg(&["--json", "wait", "app#9"]).assert_code(1);
     let error = &run.json()["error"];
     assert_eq!(error["code"], "item_not_found");
-    assert_eq!(error["hint"], "mg inbox");
+    assert_eq!(
+        error["hint"],
+        "mg inbox; once that's fixed, resume with: mg wait app#9"
+    );
 
     let reply = post(
         &env,

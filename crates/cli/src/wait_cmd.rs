@@ -91,14 +91,6 @@ fn wait(
     mut since: Option<u64>,
 ) -> Result<Outcome, CliError> {
     let at = |name: &str, since| stopped(name, wake, timeout, since);
-    let home = crate::home()?;
-    let mut client = connect(&home)?;
-    let found = item_name::find(&client, &item)?;
-    let (item, name) = (found.id, found.name);
-    let query = match wake {
-        Wake::Any => "any",
-        Wake::Operator => "operator",
-    };
     let codex = std::env::var_os(CODEX_THREAD).is_some_and(|id| !id.is_empty());
     // A timeout too long to add is as good as none.
     let deadline = if codex {
@@ -109,6 +101,38 @@ fn wait(
             .flatten()
     };
     let mut retry = None;
+    if timeout == 0 && !codex {
+        eprintln!(
+            "mg wait: waiting on {item} without a timeout; if the host loses this command, \
+             run mg feedback {item}, then mg resume {item} to recover any missed review"
+        );
+    }
+    let home = crate::home().map_err(|e| resumable(e, &at(&item, since)))?;
+    // A restart can be in progress before the first request, too. Keep its
+    // retry budget through resolving the item and reading its feedback.
+    let mut client = match connect(&home) {
+        Ok(client) => client,
+        Err(e) if lost(&e) && !codex => {
+            let retry = retry.get_or_insert_with(|| Retry::new(deadline));
+            reconnect(&home, e, retry, &at(&item, since))?
+        }
+        Err(e) => return Err(resumable(e, &at(&item, since))),
+    };
+    let found = loop {
+        match item_name::find(&client, &item) {
+            Ok(found) => break found,
+            Err(e) if lost(&e) && !codex => {
+                let retry = retry.get_or_insert_with(|| Retry::new(deadline));
+                client = reconnect(&home, e, retry, &at(&item, since))?;
+            }
+            Err(e) => return Err(resumable(e, &at(&item, since))),
+        }
+    };
+    let (item, name) = (found.id, found.name);
+    let query = match wake {
+        Wake::Any => "any",
+        Wake::Operator => "operator",
+    };
     loop {
         watch.waiting(at(&name, since));
         let wait = match deadline {
@@ -161,7 +185,11 @@ fn connect(home: &Home) -> Result<Client, CliError> {
 fn lost(e: &CliError) -> bool {
     matches!(
         e.body.code.as_str(),
-        "hub_unavailable" | "unexpected_reply" | "tailscale_unavailable" | "store_failed"
+        "hub_unavailable"
+            | "hub_unresponsive"
+            | "unexpected_reply"
+            | "tailscale_unavailable"
+            | "store_failed"
     )
 }
 
