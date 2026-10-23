@@ -4,17 +4,17 @@ No model is involved while mergegate waits: `mg wait` is one blocking command, a
 
 | If you can… | Do this | Tokens while waiting |
 |---|---|---|
-| run a command in the background and be told when it exits, as Claude Code can (see Claude Code below) | run `mg wait app#3 --timeout 0` in the background | none |
+| run a command in the background and be told when it exits, as Claude Code can (see Claude Code below) | run `mg wait app#3` in the background, then run it again on exit 75 | none |
 | be resumed by a shell command, as Codex is (see Codex below) | `mg submit --wake "<command that resumes you>"`, then end your turn | none |
 | neither | loop `mg wait app#3 --timeout N`, N just under your tool-call time limit | one short turn per timeout |
 
-`mg wait` returns once the item has events you haven't read, prints them and marks them delivered. It exits 75 when the timeout passes with none; run it again. `--for operator` ends the wait only on an event from the operator, still returning everything new with it; without it, comments from GitHub end the wait too.
+`mg wait` returns once the item has events you haven't read, prints them and marks them delivered. It exits 75 when the timeout passes with none; run it again. Its default timeout is 540 seconds, below a host's ten-minute cap; choose a shorter `--timeout N` if your host's cap is lower. `--timeout 0` waits indefinitely, so use it only where the host keeps tracking commands that long. `--for operator` ends the wait only on an event from the operator, still returning everything new with it; without it, comments from GitHub end the wait too.
 
 A merge or an abandon ends the wait too. Events still exit 0, even when one of them closed the item, so read them all: an `approved` review and the `item.merged` with its cleanup can come in one wait. Only once nothing new is left does a wait on a closed item exit 3, printing that it is merged or abandoned. `mg feedback` exits the same way.
 
 ## When a wait ends early
 
-Hosts end commands that run too long: a tool call's timeout, a cap on background commands, or a session that stopped tracking one. Stopped by SIGTERM, SIGINT or SIGHUP, `mg wait` prints one line and exits 143, 130 or 129:
+Hosts end commands that run too long: a tool call's timeout, a cap on background commands, or a session that stopped tracking one. An exit such as `-1` with no output is a host result, not an `mg` exit code: recover as below instead of treating it as a quiet wait. Stopped by SIGTERM, SIGINT or SIGHUP, `mg wait` prints one line and exits 143, 130 or 129:
 
 ```text
 mg wait: SIGTERM stopped the wait on app#3 before it had events; nothing was marked delivered, so resume with: mg wait app#3
@@ -22,7 +22,7 @@ mg wait: SIGTERM stopped the wait on app#3 before it had events; nothing was mar
 
 Nothing is lost, since a wait marks events delivered only once it has printed them: run the command the line names, in the background again if that's how you wait. With `--json` the line comes as an object with `stopped`, `item`, `cursor` and `resume`. A wait that ends without that line, as one killed with SIGKILL (exit 137) or whose output the host dropped, may have printed nothing, or printed events where you can't read them and marked them delivered: run `mg feedback app#3`, which prints what's new without waiting. When it says an earlier read took the item's events (with `--json`, no events and a `cursor` above 0) and you never saw them, run the `mg resume app#3` it names and act on the comments it lists as still waiting on you: replied ones aren't listed, so nothing gets done twice. For events that aren't comments, such as a merge conflict, `mg feedback app#3 --since 0` replays them all. Then wait as before.
 
-A hub that restarts, as on an upgrade, doesn't end a wait: it prints why on stderr, as in `reconnecting in 1s`, and connects again, until its timeout or, without one, for two minutes. If the hub is still down by then, the wait exits 69 with a hint naming the command that resumes it once the hub is back.
+A hub that restarts, as on an upgrade, doesn't end a wait, even one started while the hub is down: it prints why on stderr, as in `reconnecting in 1s`, and connects again, until its timeout or, without one, for two minutes. If the hub is still down by then, the wait exits 69 with a hint naming the command that resumes it once the hub is back. A refused device or incompatible API still ends it immediately with the fix and resume command.
 
 A wait you no longer watch, left running by a session that ended or a host that lost track of it, takes the item's next events: it prints them where nobody reads and marks them delivered, so your next wait never sees them. It also keeps the hub from running your wake. End it before you wait again or rely on a wake: `pkill -f "mg wait app#3( |$)"`.
 
@@ -48,7 +48,7 @@ The latest submit that passes `--wake` sets it; `--wake ""` removes it. Read wha
 
 ## Claude Code
 
-Run `mg wait app#3 --timeout 0` with the Bash tool's `run_in_background`: Claude Code tells the session when the command exits, and the turn that follows reads its output. Claude Code ends a background command that runs past its cap, so a long wait can end with the line above (exit 143); run the command it names in the background again.
+Run `mg wait app#3` with the Bash tool's `run_in_background`: Claude Code tells the session when the command exits, and the turn that follows reads its output. On exit 75, run it again in the background. Keep the default 540-second timeout below Claude Code's cap; an indefinite wait can be killed by the host with no usable output. If it still ends early, recover as above and start a bounded wait again.
 
 To be woken after your turn ends with no wait running, leave a wake that resumes your session headless:
 

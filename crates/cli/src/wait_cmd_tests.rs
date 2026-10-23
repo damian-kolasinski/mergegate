@@ -79,6 +79,7 @@ fn reconnecting_gives_up_by_the_deadline_however_often_it_connects() {
 #[test]
 fn a_lost_hub_is_waited_out_and_a_refusal_is_not() {
     assert!(lost(&CliError::new("hub_unavailable", "")));
+    assert!(lost(&CliError::new("hub_unresponsive", "")));
     assert!(lost(&CliError::new("tailscale_unavailable", "")));
     assert!(!lost(&CliError::new("hub_incompatible", "")));
     assert!(!lost(&CliError::new("device_denied", "")));

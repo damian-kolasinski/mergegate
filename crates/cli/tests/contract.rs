@@ -68,6 +68,35 @@ fn json_usage_errors_name_what_is_missing() {
 }
 
 #[test]
+fn submit_and_reply_usage_explain_which_identifier_they_take() {
+    let env = env();
+    for (args, hint) in [
+        (vec!["submit", "app#1"], "mg submit takes no item argument"),
+        (
+            vec!["reply", "app#1", "c_17", "--status", "addressed"],
+            "mg reply takes a comment ID, with no item argument",
+        ),
+    ] {
+        let run = env.mg(&args).assert_code(64);
+        assert!(run.stderr.contains(hint), "{run:?}");
+        let mut json_args = vec!["--json"];
+        json_args.extend(&args);
+        let run = env.mg(&json_args).assert_code(64);
+        assert!(
+            run.json()["error"]["hint"].as_str().unwrap().contains(hint),
+            "{run:?}"
+        );
+    }
+    let help = env.mg(&["submit", "--help"]).assert_code(0);
+    assert!(help.stdout.contains("## Files"), "{help:?}");
+    let help = env.mg(&["reply", "--help"]).assert_code(0);
+    assert!(
+        help.stdout.contains("mg reply c_17 --status addressed"),
+        "{help:?}"
+    );
+}
+
+#[test]
 fn help_and_version_exit_0() {
     let env = env();
     let help = env.mg(&["--help"]).assert_code(0);

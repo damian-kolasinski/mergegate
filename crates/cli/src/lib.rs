@@ -90,7 +90,10 @@ enum Command {
         project: Option<String>,
     },
     /// Push the current branch to the hub and submit it for review; again
-    /// from the same branch, add a revision
+    /// from the same branch, add a revision. Takes no item argument
+    #[command(
+        after_help = "Submit the current branch: mg submit --guide guide.md\n\nGuide format:\nDescribe the problem, result and validation.\n\n## Files\n\n- `src/file.rs` — why to read it first\n\nFix every warning and submit the corrected guide again, without --attach."
+    )]
     Submit {
         /// Item title [default: the first commit's subject]
         #[arg(long)]
@@ -157,7 +160,10 @@ enum Command {
         #[arg(long)]
         since: Option<u64>,
     },
-    /// Answer a comment from the operator's review or from GitHub
+    /// Answer a comment ID from mg feedback; takes no item argument
+    #[command(
+        after_help = "Example: mg reply c_17 --status addressed\nThen commit the fix and run mg submit from its branch.\nFor rejected or question, add --body explaining why."
+    )]
     Reply {
         /// The comment, as in c_17
         comment: String,
@@ -309,14 +315,27 @@ fn usage(e: clap::Error, json: bool, args: &[OsString]) -> ExitCode {
                 _ => error_line(&e.render().to_string()),
             };
             let err = CliError::new("usage", message)
-                .hint(format!("{} --help", command_path(args)))
+                .hint(usage_hint(args))
                 .exit(exit::USAGE);
             output::emit(true, Err(err))
         }
         _ => {
             let _ = e.print();
+            let path = command_path(args);
+            if matches!(path.as_str(), "mg submit" | "mg reply") {
+                eprintln!("hint: {}", usage_hint(args));
+            }
             ExitCode::from(exit::USAGE)
         }
+    }
+}
+
+fn usage_hint(args: &[OsString]) -> String {
+    let path = command_path(args);
+    match path.as_str() {
+        "mg submit" => "mg submit takes no item argument: it infers the item from the current branch; use mg submit --guide guide.md (mg submit --help)".into(),
+        "mg reply" => "mg reply takes a comment ID, with no item argument: mg reply c_17 --status addressed; find comment IDs with mg feedback ITEM (mg reply --help)".into(),
+        _ => format!("{path} --help"),
     }
 }
 
