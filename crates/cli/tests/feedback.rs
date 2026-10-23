@@ -121,7 +121,12 @@ fn f7_wait_returns_the_review_once() {
     let again = env.mg(&["--json", "feedback", "app#1"]).assert_code(0);
     assert_eq!(again.json()["events"], json!([]));
     let text = env.mg(&["feedback", "app#1"]).assert_code(0);
-    assert_eq!(text.stdout.trim(), "no new feedback on app#1");
+    assert_eq!(
+        text.stdout.trim(),
+        "no new feedback on app#1; an earlier read took all its events, through cursor 1. \
+         If this session never acted on them, `mg resume app#1` shows the last review and \
+         the comments still waiting on you"
+    );
 }
 
 #[test]

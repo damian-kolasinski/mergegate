@@ -20,11 +20,11 @@ Hosts end commands that run too long: a tool call's timeout, a cap on background
 mg wait: SIGTERM stopped the wait on app#3 before it had events; nothing was marked delivered, so resume with: mg wait app#3
 ```
 
-Nothing is lost, since a wait marks events delivered only once it has printed them: run the command the line names, in the background again if that's how you wait. With `--json` the line comes as an object with `stopped`, `item`, `cursor` and `resume`. A wait that ends without that line, as one killed with SIGKILL (exit 137) or whose output the host dropped, may have printed nothing: run `mg feedback app#3`, which prints what's new without waiting, act on it, then wait as before.
+Nothing is lost, since a wait marks events delivered only once it has printed them: run the command the line names, in the background again if that's how you wait. With `--json` the line comes as an object with `stopped`, `item`, `cursor` and `resume`. A wait that ends without that line, as one killed with SIGKILL (exit 137) or whose output the host dropped, may have printed nothing, or printed events where you can't read them and marked them delivered: run `mg feedback app#3`, which prints what's new without waiting. When it says an earlier read took the item's events (with `--json`, no events and a `cursor` above 0) and you never saw them, run the `mg resume app#3` it names and act on the comments it lists as still waiting on you: replied ones aren't listed, so nothing gets done twice. For events that aren't comments, such as a merge conflict, `mg feedback app#3 --since 0` replays them all. Then wait as before.
 
 A hub that restarts, as on an upgrade, doesn't end a wait: it prints why on stderr, as in `reconnecting in 1s`, and connects again, until its timeout or, without one, for two minutes. If the hub is still down by then, the wait exits 69 with a hint naming the command that resumes it once the hub is back.
 
-A wait you no longer watch, left running by a session that ended or a host that lost track of it, keeps the hub from running your wake. End it before you rely on a wake: `pkill -f "mg wait app#3( |$)"`.
+A wait you no longer watch, left running by a session that ended or a host that lost track of it, takes the item's next events: it prints them where nobody reads and marks them delivered, so your next wait never sees them. It also keeps the hub from running your wake. End it before you wait again or rely on a wake: `pkill -f "mg wait app#3( |$)"`.
 
 ## Cursors
 
