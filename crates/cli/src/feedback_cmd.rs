@@ -34,9 +34,7 @@ pub(crate) fn report(
     let closed = closed(feedback.state);
     match closed {
         Some(state) => text.push(format!("{} is {state}", feedback.name)),
-        None if feedback.events.is_empty() => {
-            text.push(format!("no new feedback on {}", feedback.name));
-        }
+        None if feedback.events.is_empty() => text.push(nothing_new(feedback, since)),
         None => {}
     }
     let outcome = deliver(client, feedback, since, text.join("\n\n"));
@@ -45,6 +43,26 @@ pub(crate) fn report(
     } else {
         outcome
     }
+}
+
+/// What a read that found nothing says. A read without `since` comes back
+/// at the delivered cursor, so one past 0 means an earlier read took events.
+/// That read may not have been this session's: a background `mg wait`
+/// outlives the session that started it, and once its events arrive it
+/// prints them where nobody reads and acknowledges them all the same. The
+/// line points at `mg resume` rather than a replay, as it shows only the
+/// comments nobody answered, which a session that lost track can't tell.
+fn nothing_new(feedback: &Feedback, since: Option<u64>) -> String {
+    let name = &feedback.name;
+    if since.is_some() || feedback.cursor == 0 {
+        return format!("no new feedback on {name}");
+    }
+    format!(
+        "no new feedback on {name}; an earlier read took all its events, through cursor {}. \
+         If this session never acted on them, `mg resume {name}` shows the last review and \
+         the comments still waiting on you",
+        feedback.cursor
+    )
 }
 
 /// The events after `since` (or after the delivered cursor) of the item with

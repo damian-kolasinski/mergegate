@@ -72,3 +72,31 @@ fn a_closed_item_has_nothing_to_read_on_from() {
         assert!(text.ends_with("\n\ncursor 9"), "{text}");
     }
 }
+
+fn empty(cursor: u64) -> Feedback {
+    Feedback {
+        events: Vec::new(),
+        cursor,
+        ..feedback(ItemState::NeedsReview)
+    }
+}
+
+#[test]
+fn nothing_new_on_an_item_never_read_says_only_that() {
+    assert_eq!(nothing_new(&empty(0), None), "no new feedback on app#1");
+}
+
+#[test]
+fn nothing_new_after_an_earlier_read_says_how_to_see_its_events() {
+    assert_eq!(
+        nothing_new(&empty(9), None),
+        "no new feedback on app#1; an earlier read took all its events, through cursor 9. \
+         If this session never acted on them, `mg resume app#1` shows the last review and \
+         the comments still waiting on you"
+    );
+}
+
+#[test]
+fn nothing_new_after_a_replay_says_only_that() {
+    assert_eq!(nothing_new(&empty(9), Some(9)), "no new feedback on app#1");
+}
