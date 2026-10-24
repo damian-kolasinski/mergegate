@@ -47,9 +47,11 @@ struct TriageTests {
         """.utf8))
         #expect(snapshot.projects == ["alpha", "beta"])
         let all = snapshot.groups(project: nil, filter: .all)
-        #expect(all.map(\.title) == ["Decisions & questions", "Ready for review", "In progress"])
+        #expect(all.map(\.title) == ["Decide next", "Review next", "In progress"])
         #expect(all[0].items.map(\.id) == ["beta#2", "alpha#3"])
         #expect(snapshot.groups(project: "alpha", filter: .needsYou).flatMap(\.items).map(\.id) == ["alpha#3", "alpha#1"])
+        #expect(snapshot.groups(project: nil, filter: .decisions).flatMap(\.items).map(\.id) == ["beta#2", "alpha#3"])
+        #expect(snapshot.groups(project: "alpha", filter: .review).flatMap(\.items).map(\.id) == ["alpha#1"])
         #expect(snapshot.groups(project: "alpha", filter: .working).isEmpty)
         #expect(snapshot.groups(project: nil, filter: .closed).isEmpty)
     }

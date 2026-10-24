@@ -2,6 +2,8 @@ import Foundation
 
 enum InboxFilter: String, CaseIterable, Identifiable {
     case all = "All states"
+    case decisions = "Decide"
+    case review = "Review"
     case needsYou = "Needs you"
     case working = "In progress"
     case merging = "Merging"
@@ -25,14 +27,14 @@ extension InboxSnapshot {
         }
         let needs = matching(needsYou)
         let groups: [(InboxFilter, String, [InboxItem])] = [
-            (.needsYou, "Decisions & questions", needs.filter(\.needsDecision)),
-            (.needsYou, "Ready for review", needs.filter { !$0.needsDecision }),
+            (.decisions, "Decide next", needs.filter(\.needsDecision)),
+            (.review, "Review next", needs.filter { !$0.needsDecision }),
             (.working, "In progress", matching(withAgents)),
             (.merging, "Merging", matching(merging)),
             (.closed, "Closed today", matching(closed)),
         ]
         return groups.compactMap { state, title, items in
-            guard (filter == .all || filter == state) && !items.isEmpty else { return nil }
+            guard (filter == .all || filter == state || (filter == .needsYou && (state == .decisions || state == .review))) && !items.isEmpty else { return nil }
             return InboxGroup(title: title, items: items)
         }
     }

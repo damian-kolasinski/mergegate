@@ -34,6 +34,15 @@ struct InboxTriage: Decodable, Sendable {
         let comment: String
         let response: String?
         let path: String?
+
+        var headline: String {
+            switch kind {
+            case "Question": "An answer unblocks the work"
+            case "Disagreement": "A rejection needs your call"
+            default: "Feedback needs your vote"
+            }
+        }
+        var preview: String { kind == "Question" ? response ?? comment : comment }
     }
 
     let item: Item
