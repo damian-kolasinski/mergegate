@@ -7,8 +7,6 @@ struct ReviewFileReader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(file.path).font(.system(.subheadline, design: .monospaced).weight(.semibold))
-                    .accessibilityLabel("Current file, \(file.path)").accessibilityIdentifier("reviewFilePath")
                 if let oldPath = file.oldPath {
                     Text("From \(oldPath)").appearanceText(Appearance.caption)
                 }
@@ -16,7 +14,7 @@ struct ReviewFileReader: View {
                 if let reason = file.rankingReason {
                     Text(reason).appearanceText(Appearance.body)
                 }
-            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(Appearance.surface)
+            }.padding(.horizontal, 20).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
             Divider()
             switch file.content {
             case .text(let hunks) where !hunks.isEmpty:

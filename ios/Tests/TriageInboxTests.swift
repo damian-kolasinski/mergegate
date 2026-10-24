@@ -76,7 +76,7 @@ final class TriageInboxTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].waitForExistence(timeout: 30))
         capture(app, "Reopened Decision desk")
         app.buttons["openReview-mobile-smoke#2"].tap()
-        XCTAssertTrue(app.staticTexts["reviewFilePath"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(app.buttons["reviewFiles"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("mobile-smoke#2"))
         app.buttons["reviewGuide"].tap()
         XCTAssertTrue(app.staticTexts["No review guide"].waitForExistence(timeout: 5))

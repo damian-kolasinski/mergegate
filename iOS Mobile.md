@@ -22,6 +22,7 @@ Agreed direction and delivery slices for implementing the client one feature at 
 
 - **Inbox: Decision desk.** Group by the next human action: decisions/questions first, then reviewable items. Show the actual question/disputed comment and item identity; keep working, merging, and closed items secondary.
 - **Diff: File reader.** Full-width, single-column unified diff; visible file/comparison scope and remaining work; importance-ordered files with reasons; expandable unchanged context. Change cards and before/after remain exploration alternatives, not required initial modes.
+- Keep the file reader compact: identity and guide in navigation, title above a scope/remaining-work row, then a full-width file picker with position and path. Put file reasons next to the code; avoid duplicate identity blocks or a separate row of large navigation buttons.
 - Use native sheets for comments and review completion. Keep marking viewed separate from submission. **Approve & merge** explicitly confirms the revision and target.
 - Use progressive disclosure: identity, revision/scope, required action, and progress remain visible; supporting details open on demand. Comment anchors use source coordinates, never wrapped display rows.
 

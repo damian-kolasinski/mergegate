@@ -36,33 +36,19 @@ struct ReviewScene: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(snapshot.item.title).appearanceText(Appearance.heading)
                             .accessibilityAddTraits(.isHeader)
-                        Text("\(snapshot.item.name) · r\(snapshot.item.revision.number) → \(snapshot.item.target)")
-                            .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                            .accessibilityIdentifier("reviewIdentity")
-                        HStack(alignment: .top) {
-                            Text("All changes · \(snapshot.remaining) review files remaining")
-                                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                        HStack(alignment: .top, spacing: 12) {
+                            Text("All changes → \(snapshot.item.target)")
                             Spacer(minLength: 0)
-                        }
-                        HStack(spacing: 12) {
-                            Button {
-                                sheet = .guide
-                            } label: {
-                                Label("Guide", systemImage: "text.alignleft").frame(minHeight: 44)
-                            }
-                            .accessibilityIdentifier("reviewGuide")
-                            Spacer()
-                            Button {
-                                sheet = .files
-                            } label: {
-                                Label("Files (\(snapshot.files.count))", systemImage: "list.bullet").frame(
-                                    minHeight: 44)
-                            }
-                            .accessibilityIdentifier("reviewFiles")
-                        }.buttonStyle(.glass).tint(Appearance.brand).frame(minHeight: 44)
-                    }.padding(16).id("reviewTop")
+                            Text("\(snapshot.remaining) files left")
+                        }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                    }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
                     Divider()
-                    if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
+                    if let index = snapshot.files.firstIndex(where: { $0.path == model.selectedPath }) {
+                        let file = snapshot.files[index]
+                        ReviewFilePicker(file: file, position: index + 1, count: snapshot.files.count) {
+                            sheet = .files
+                        }
+                        Divider()
                         ReviewFileReader(file: file).id(file.path)
                     } else {
                         ContentUnavailableView(
@@ -72,6 +58,23 @@ struct ReviewScene: View {
                 }
             }
             .onChange(of: model.selectedPath) { _, _ in proxy.scrollTo("reviewTop", anchor: .top) }
+        }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("\(snapshot.item.name) · r\(snapshot.item.revision.number)")
+                    .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary).lineLimit(1)
+                    .accessibilityLabel(
+                        "\(snapshot.item.name) · r\(snapshot.item.revision.number) → \(snapshot.item.target)"
+                    )
+                    .accessibilityIdentifier("reviewIdentity")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    sheet = .guide
+                } label: {
+                    Label("Review guide", systemImage: "book")
+                }.tint(Appearance.brand).accessibilityIdentifier("reviewGuide")
+            }
         }
         .sheet(item: $sheet) { selection in
             switch selection {
