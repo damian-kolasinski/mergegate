@@ -20,22 +20,42 @@ struct InboxScene: View {
                     }
                 }
                 if let snapshot = model.snapshot {
-                    if snapshot.isEmpty {
+                    Section {
+                        Picker("Project", selection: $model.project) {
+                            Text("All projects").tag(String?.none)
+                            ForEach(snapshot.projects, id: \.self) { project in
+                                Text(project).tag(Optional(project))
+                            }
+                        }.frame(minHeight: 44).accessibilityIdentifier("projectFilter")
+                        Picker("State", selection: $model.filter) {
+                            ForEach(InboxFilter.allCases) { filter in Text(filter.rawValue).tag(filter) }
+                        }.frame(minHeight: 44).accessibilityIdentifier("stateFilter")
+                    }.listRowBackground(Appearance.page)
+                    if model.groups.isEmpty {
                         ContentUnavailableView(
-                            "Inbox is clear", systemImage: "tray",
-                            description: Text("New work appears here after you refresh."))
+                            snapshot.isEmpty ? "Inbox is clear" : "No matching items", systemImage: "tray",
+                            description: Text("Choose another project or state, or pull to refresh."))
                     }
-                    items(snapshot.needsYou, heading: "Needs you")
-                    items(snapshot.withAgents, heading: "In progress")
-                    items(snapshot.merging, heading: "Merging")
-                    items(snapshot.closed, heading: "Closed today")
+                    ForEach(model.groups) { group in
+                        Section {
+                            Text("\(group.title) · \(group.items.count)")
+                                .appearanceText(Appearance.label)
+                                .listRowBackground(Appearance.page)
+                                .accessibilityAddTraits(.isHeader)
+                            ForEach(group.items) { item in
+                                InboxRow(item: item, triage: model.triage[item.id], error: model.triageErrors[item.id]) {
+                                    Task { await model.loadTriage(item) }
+                                }.task(id: model.generation) { await model.loadTriage(item) }
+                            }
+                        }
+                    }
                 } else if model.isLoading {
                     ProgressView("Loading inbox…").frame(maxWidth: .infinity)
                 }
             }
             .appearanceText(Appearance.body).foregroundStyle(Appearance.primary)
             .scrollContentBackground(.hidden).background(Appearance.page)
-            .navigationTitle("Inbox")
+            .navigationTitle("Decision desk")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -61,21 +81,6 @@ struct InboxScene: View {
                         .navigationTitle("Connected hub")
                         .toolbar { Button("Done") { showingHub = false } }
                 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func items(_ items: [InboxItem], heading: String) -> some View {
-        if !items.isEmpty {
-            Section {
-                Text(heading)
-                    .appearanceText(Appearance.label)
-                    .foregroundStyle(Appearance.primary)
-                    .listRowBackground(Appearance.page)
-                    .listRowSeparator(.hidden)
-                    .accessibilityAddTraits(.isHeader)
-                ForEach(items) { item in InboxRow(item: item) }
             }
         }
     }

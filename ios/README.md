@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first slice of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, show the hub's real inbox, and reopen the selected hub after terminating the app. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The first two slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, and triage its Decision desk across projects and item states. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -8,7 +8,7 @@ Install Xcode 26.2+ and Tuist (the version is pinned in `mise.toml`). With mise,
 
 On the hub machine run `mg hub set listen tailnet`. Enable the installed Tailscale app on the phone, then enter the URL the command prints. Short MagicDNS names, full `.ts.net` names, and Tailscale IPv4/IPv6 addresses are accepted. The hub must admit the caller through `/api/whoami`; the app cannot allow itself. Denied/unknown devices receive the hub's error and recovery hint. Only a successful connection is saved. Hub → Forget hub clears it.
 
-The inbox refreshes on entry, pull to refresh, retry, and returning to the foreground. A failed refresh leaves the last response visible with an error. Reopening a saved hub revalidates device trust before displaying its inbox. Persistent offline inbox caching, SSE, item navigation, review actions, and detailed triage belong to later slices.
+The inbox refreshes on entry, pull to refresh, retry, and returning to the foreground. A failed refresh leaves the last response visible with an error. Reopening a saved hub revalidates device trust before displaying its inbox. Project and state filters keep decisions/questions ahead of reviewable work; working, merging, and closed-today items follow. Visible open rows load the real pending question, disputed comment and rejection reason, or comment awaiting a vote, plus unviewed review-file counts (trusted files are excluded). Each detail response must match the inbox revision; a mismatch asks for an inbox refresh. Per-item failures have their own retry. Persistent offline caching, SSE, opening a review, and decision/review actions belong to later slices.
 
 ## Verification
 
@@ -32,12 +32,23 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-smoke
 
 Choose a fresh directory on each run. The fixture uses the installed `mg` (override with `MG_BIN`), an isolated `MERGEGATE_HOME`, the real Tailscale identity/trust checks, and a local git backend. It does not touch the operator's hub or create GitHub PRs. The UI test enters the URL, checks the submitted item, audits contrast/Dynamic Type/touch targets/accessibility labels, terminates and reopens the app, verifies the saved URL, then forgets it. Screenshots are kept in the xcresult for review. The simulator uses the Mac's installed Tailscale connection; a physical iPhone uses its own installed Tailscale app.
 
+For the triage UI flow, create a fresh smoke hub, seed its disposable repositories, and run:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-triage
+python3 ios/Scripts/triage-fixture.py /tmp/mergegate-ios-triage
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_TRIAGE=1 .claude/scripts/check.sh test ios
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-triage
+```
+
+The additional fixture uses real review routes on the isolated smoke hub to seed a sent question, one viewed file out of two, working/closed items, and a second project. It never contacts the operator hub. The UI test verifies project/state filtering, empty results, remaining-work counts, accessibility, and foreground/relaunch loading, and retains screenshots. Pending external disagreements/votes and answered/agreed threads are covered by Swift contract tests; the local git fixture has no GitHub comments.
+
 ## Module boundaries
 
 - `App` composes feature builders.
 - `HubConnection` owns URL validation, `/api/whoami`, connection presentation, and the selected URL in UserDefaults. `HubConnectionInterface` exposes only the established connection value needed by Inbox.
-- `Inbox` owns `/api/inbox`, its consumed wire DTOs, refresh policy, state, and rows.
+- `Inbox` owns `/api/inbox` and its consumed `/api/items/{id}` triage subset, project/state filtering, pending-decision interpretation, refresh policy, state, and rows.
 - `Networking` provides HTTP transport only: bounded URLSession requests, hub error decoding, and rejection of redirects. It owns no endpoint or feature refresh policy.
 - `Appearance/Appearance.swift` is generated from [shared tokens](../appearance/README.md) and compiled privately into features. DM Sans is registered by the app; semantic colors follow light/dark appearance and typography scales with Dynamic Type.
 
-The Rust files `crates/api/src/device.rs` and `crates/api/src/item.rs` remain the wire authority. Feature DTOs intentionally decode their consumed fields and ignore additional fields; the real-hub UI flow exercises the contract.
+The Rust files `crates/api/src/device.rs`, `item.rs`, `diff.rs`, and `review.rs` remain the wire authority. Feature DTOs intentionally decode their consumed fields and ignore additional fields; the real-hub UI flow exercises the contract.

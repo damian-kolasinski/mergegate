@@ -69,7 +69,8 @@ let project = Project(
             testAction: .targets(
                 ["HubConnectionTests", "InboxTests", "NetworkingTests", "MergegateUITests"],
                 arguments: .arguments(environmentVariables: [
-                    "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)"
+                    "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)",
+                    "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)"
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )
