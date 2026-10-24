@@ -135,7 +135,6 @@ fn outcome(home: &Home, running: &Running, started: bool, warnings: Vec<String>)
 }
 
 fn run_here(home: Home, port: u16) -> Result<Outcome, CliError> {
-    hub::init_logging();
     let status = HubStatus::stopped(&home, true);
     hub::run(home, port, env!("MG_VERSION")).map_err(hub_error)?;
     Ok(Outcome::done(&status, "hub stopped"))

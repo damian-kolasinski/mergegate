@@ -8,6 +8,7 @@
 
 mod comments;
 mod git_http;
+mod issues;
 mod page;
 mod reactions;
 mod rest;
@@ -25,6 +26,7 @@ use tempfile::TempDir;
 use crate::repo::git;
 
 pub use comments::{Comment, CommentKind, Inline, NewComment};
+pub use issues::Issue;
 
 pub struct FakeGithub {
     shared: Arc<Shared>,
@@ -48,6 +50,9 @@ struct State {
     /// By `owner/repo`: whether the signed-in account may push.
     repos: BTreeMap<String, bool>,
     pulls: Vec<Pull>,
+    issues: Vec<Issue>,
+    issues_hidden: bool,
+    issue_post_unauthorized: bool,
     /// By `owner/repo`: how many pull requests were opened elsewhere, which
     /// the numbers of the hub's come after.
     opened_elsewhere: BTreeMap<String, u64>,
@@ -74,6 +79,9 @@ impl Default for State {
             token: String::new(),
             repos: BTreeMap::new(),
             pulls: Vec::new(),
+            issues: Vec::new(),
+            issues_hidden: false,
+            issue_post_unauthorized: false,
             opened_elsewhere: BTreeMap::new(),
             refusal: None,
             holding_merges: false,
@@ -275,6 +283,18 @@ impl FakeGithub {
             "{}",
             String::from_utf8_lossy(&reply.body)
         );
+    }
+
+    pub fn reject_issue_auth(&self, reject: bool) {
+        self.state().issue_post_unauthorized = reject;
+    }
+
+    pub fn hide_issues(&self, hidden: bool) {
+        self.state().issues_hidden = hidden;
+    }
+
+    pub fn issues(&self) -> Vec<Issue> {
+        self.state().issues.clone()
     }
 
     pub fn pulls(&self) -> Vec<Pull> {

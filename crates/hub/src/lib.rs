@@ -8,6 +8,7 @@ mod conflicts;
 mod conversation;
 mod demo_zip;
 mod devices;
+pub mod diagnostics;
 mod diff;
 mod doctor;
 mod draft_replies;
@@ -38,11 +39,11 @@ mod rules;
 mod server;
 mod settings;
 mod tailnet;
+mod telemetry;
 mod ui;
 mod viewed;
 mod wake;
 
-use std::io::IsTerminal;
 use std::time::Duration;
 
 pub use home::{Connection, HOME_ENV, Home, HomeError, HubInfo};
@@ -79,7 +80,14 @@ pub fn run(home: Home, port: u16, version: &str) -> Result<(), HubError> {
         .acquire()
         .map_err(io("locking the data directory"))?
         .ok_or_else(|| HubError::Locked(home.root().display().to_string()))?;
-    let store = store_sqlite::Store::open(&home.db())?;
+    let _telemetry = telemetry::init(&home, version);
+    let store = store_sqlite::Store::open(&home.db()).inspect_err(|error| {
+        tracing::error!(
+            event_code = "hub_start_failed",
+            error_code = "store_open_failed",
+            "{error}"
+        );
+    })?;
     let schema_version = store.schema_version()?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -87,6 +95,9 @@ pub fn run(home: Home, port: u16, version: &str) -> Result<(), HubError> {
         .build()
         .map_err(io("starting the async runtime"))?;
     let served = runtime.block_on(server::serve(&home, port, version, schema_version, store));
+    if let Err(error) = &served {
+        tracing::error!(event_code = "hub_failed", "{error}");
+    }
     // Dropping the runtime would wait out every blocking task, a judge call
     // too, which can run for minutes; serve set `stopping` for those that
     // can stop.
@@ -102,13 +113,4 @@ const SHUTDOWN: Duration = Duration::from_secs(10);
 /// one.
 pub fn wake_path(home: &Home) -> Option<std::ffi::OsString> {
     wake::path_env(&home.wake_bin())
-}
-
-/// Logs to stderr, which a backgrounded hub sends to its `hub.log`.
-pub fn init_logging() {
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
-        .with_target(false)
-        .init();
 }

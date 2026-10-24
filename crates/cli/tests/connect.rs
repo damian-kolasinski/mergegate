@@ -573,3 +573,28 @@ fn wait(worker: &Env, dir: &PathBuf) -> std::process::Child {
         .spawn()
         .unwrap()
 }
+
+#[test]
+fn diagnostics_are_available_only_to_the_owner_and_never_fall_back_to_another_machine() {
+    let mut net = Tailnet::new();
+    net.tailscale.call_from("laptop", HUB_OWNER);
+    net.connect().assert_code(0);
+    let snapshot = net
+        .worker
+        .mg(&["--json", "diagnostics", "logs"])
+        .assert_code(0)
+        .json();
+    assert!(snapshot["hub_version"].is_string());
+    net.tailscale.call_from("ci", "robot@example.com");
+    net.hub.mg(&["hub", "allow", "ci"]).assert_code(0);
+    let refusal = net
+        .worker
+        .mg(&["--json", "diagnostics", "logs"])
+        .assert_code(1)
+        .json();
+    assert_eq!(refusal["error"]["code"], "diagnostics_forbidden");
+    net.hub.mg(&["hub", "stop"]).assert_code(0);
+    net.worker
+        .mg(&["--json", "diagnostics", "logs"])
+        .assert_code(69);
+}
