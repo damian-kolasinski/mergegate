@@ -1,43 +1,11 @@
 ---
 name: architecture
-description: Apply mergegate's architecture (crate layout, ports and adapters, dependency boundaries) when adding or changing code, crates, adapters, or dependencies. Use before deciding where code lives or what it may depend on.
+description: Apply mergegate's architecture (domain ownership, ports and adapters, dependency boundaries) when adding or changing code, crates, adapters, or dependencies. Use before deciding where code lives or what it may depend on.
 ---
 
 # Architecture
 
 mergegate is one Rust binary, `mg` (hub daemon and CLI), with a web UI embedded in it. `mergegate` is `mg` under a name nothing else takes, for PATHs where macOS's `/usr/bin/mg` editor comes first: a release ships it as a copy of `mg`, and a source build gets `crates/cli/src/bin/mergegate.rs`, which runs the `mg` beside it. Code is organized as ports and adapters, and the crate graph enforces the boundaries.
-
-## Layout
-
-```
-crates/
-  core/            domain logic and port traits; no I/O, no wire types
-  api/             wire types shared by CLI, hub and UI
-  <adapter>/       one crate per port implementation, e.g. backend-github, store-sqlite
-  hub/             composition root of the daemon; build.rs embeds the UI
-  cli/             composition root of mg
-  skill/           the agent skill folder, embedded in mg
-  testkit/         test harness: drives the real hub, git and mg binaries
-ui/                SolidJS bundled by esbuild; one pnpm package
-  app/             entry point, routing, hub client and keyboard map; wires
-                   features and owns none
-  design-system/   tokens and primitives; all styling goes through it
-  <feature>/       UI features
-  tests/           Playwright against the real hub; state comes from mg commands
-  api/             TypeScript generated from `api` by `pnpm gen`; gitignored
-ios/               Tuist native iOS client; App composes feature builders
-  HubConnection/   connection, device trust, and selected hub; Interface is the
-                   cross-feature contract
-  Inbox/           inbox wire subset, refresh policy, and presentation
-  Review/          review wire subset, guide, ordered files, and review loading
-  DiffDocument/    unified hunks and source coordinates; Interface is the
-                   rendering contract
-  DiffView/        UIKit/TextKit 2 unified diff layout
-  Networking/      transport primitives only; no feature endpoints or DTOs
-  Appearance/      generated values compiled privately into each feature
-appearance/        shared web/native semantic colors and typography, generator
-langs/             language pack builder: pinned grammars and queries, build.mjs
-```
 
 ## Rules
 
@@ -51,6 +19,7 @@ langs/             language pack builder: pinned grammars and queries, build.mjs
 - Adapters are chosen per project through config, optional ones sit behind cargo features, and third-party extensions run out of process (JSON over stdio).
 - Expensive work runs when data arrives and is cached; request paths only read.
 - Build a new slice the way existing slices are built.
+- Web features own their behavior; the application shell wires features without owning them. Styling uses the shared design system.
 - Native features own their wire subsets, services, refresh policy, and persistence; `crates/api` remains the wire authority. Cross-feature dependencies use `<Feature>Interface`, with the app composing implementations. Add native feature modules only as their delivery slice needs them; no shared API, store, cache, or design-system module.
 - Edit shared colors and typography in `appearance/tokens.json`, then run `python3 appearance/generate.py`; generated web and native values must stay in sync.
 
@@ -62,4 +31,4 @@ Choose for runtime speed and correctness, not human ergonomics. Before adding a 
 
 - The code lives in the slice that owns the behaviour.
 - `core` gained no I/O dependency and no `api` import; no adapter imports another adapter. `crates/testkit/tests/boundaries.rs` checks the crate graph.
-- This skill reflects any change to the layout or the rules above.
+- This skill reflects any change to the architectural rules above.
