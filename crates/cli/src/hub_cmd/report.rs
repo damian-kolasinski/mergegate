@@ -78,8 +78,15 @@ pub(super) fn exited(printed: &[u8], home: &Home) -> CliError {
             body: envelope.error,
         },
         _ => CliError::new("hub_start_failed", "the hub exited while starting")
-            .hint(format!("see {}", home.log().display())),
+            .hint(diagnostics_hint(home)),
     }
+}
+
+pub(super) fn diagnostics_hint(home: &Home) -> String {
+    format!(
+        "mg diagnostics logs --details; for failures before telemetry starts, see {}",
+        home.log().display()
+    )
 }
 
 pub(super) fn unresponsive(home: &Home) -> CliError {

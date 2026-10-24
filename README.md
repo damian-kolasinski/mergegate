@@ -150,7 +150,7 @@ Operational telemetry contains run and request IDs, timestamps, module/line loca
 request route templates, status codes, durations, stable error codes, and worker
 lifecycle events. Default exports exclude free-form messages, request/response
 bodies, repository content, credentials, and subprocess output. Private local
-records also retain bounded, sanitized warning/error text for debugging;
+records also retain bounded, sanitized warning/error and panic text for debugging;
 `mg diagnostics logs --details --json` explicitly includes it so relevant
 excerpts can be selected. Free-form redaction is heuristic. Failed CLI
 requests print a request ID that can be matched to the recorded events.

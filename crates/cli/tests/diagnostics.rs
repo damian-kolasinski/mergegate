@@ -311,3 +311,54 @@ fn post_stage_auth_rejection_allows_sending_the_same_draft_after_login() {
     env.mg(&retry).assert_code(0);
     assert_eq!(github.issues().len(), 1);
 }
+
+#[test]
+fn startup_panics_point_to_readable_sanitized_private_evidence() {
+    let env = env().with_vars(vec![(
+        "TOKIO_WORKER_THREADS".into(),
+        "GH_TOKEN=ghp_panicsecret".into(),
+    )]);
+    let failure = env
+        .mg(&["--json", "hub", "start", "--port", "0"])
+        .assert_code(1)
+        .json();
+    assert_eq!(failure["error"]["code"], "hub_start_failed");
+    assert!(
+        failure["error"]["hint"]
+            .as_str()
+            .unwrap()
+            .starts_with("mg diagnostics logs --details")
+    );
+    let snapshot = env
+        .mg(&["--json", "diagnostics", "logs", "--details"])
+        .assert_code(0)
+        .json();
+    let panic = snapshot["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["fields"]["event_code"] == "panic")
+        .expect("startup panic recorded before process exit");
+    let detail = panic["detail"].as_str().expect("actionable panic text");
+    assert!(detail.contains("TOKIO_WORKER_THREADS"), "{detail}");
+    assert!(detail.contains("must be usize"), "{detail}");
+    assert!(!snapshot.to_string().contains("panicsecret"));
+    assert!(panic["fields"]["source_file"].is_string());
+    let plain = env
+        .mg(&["--json", "diagnostics", "logs"])
+        .assert_code(0)
+        .json();
+    assert!(
+        plain["records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r.get("detail").is_none())
+    );
+    let out = env.home().join("startup.zip");
+    env.mg(&["diagnostics", "collect", "--out", out.to_str().unwrap()])
+        .assert_code(0);
+    let archived = read_zip(&out, "diagnostics.json");
+    assert!(!archived.contains("must be usize"));
+    assert!(!archived.contains("panicsecret"));
+}

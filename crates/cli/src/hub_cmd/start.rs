@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use hub::{Home, HubError, StoreError};
 
 use super::probe::{Running, probe};
-use super::report::{HubStatus, unresponsive};
+use super::report::{HubStatus, diagnostics_hint, unresponsive};
 use super::service::{self, Loaded, Role};
 use super::spawn::Spawned;
 use super::{POLL, io_error};
@@ -102,7 +102,7 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
                 "hub_start_timeout",
                 format!("the hub did not answer within {TIMEOUT:?}; it may still be starting"),
             )
-            .hint(format!("mg hub status; see {}", home.log().display()))
+            .hint(format!("mg hub status; {}", diagnostics_hint(&home)))
             .exit(exit::TIMEOUT));
         }
         std::thread::sleep(POLL);

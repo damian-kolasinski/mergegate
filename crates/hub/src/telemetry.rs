@@ -91,14 +91,26 @@ pub(crate) fn init(home: &Home, version: &str) -> Guard {
             .with(console),
     );
     std::panic::set_hook(Box::new(|panic| {
-        // Panic payloads can contain source, arguments and credentials.
+        // The recorder bounds and sanitizes the payload as private detail;
+        // default exports retain only the panic's location and event code.
+        let message = panic
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| panic.payload().downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("non-string panic payload");
         let line = panic.location().map_or(0, |l| l.line());
         let source_file = panic
             .location()
             .and_then(|l| std::path::Path::new(l.file()).file_name())
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
-        tracing::error!(event_code = "panic", source_line = line, source_file);
+        tracing::error!(
+            event_code = "panic",
+            source_line = line,
+            source_file,
+            "{message}"
+        );
     }));
     tracing::info!(
         event_code = "hub_starting",
