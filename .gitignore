@@ -9,3 +9,8 @@
 /ui/playwright-report/
 /langs/.work/
 /langs/dist/
+/ios/*.xcodeproj/
+/ios/*.xcworkspace/
+/ios/Derived/
+/ios/.build/
+/ios/.mise.toml
