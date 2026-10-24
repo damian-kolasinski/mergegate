@@ -7,6 +7,7 @@ struct ReviewSnapshot: Decodable, Sendable {
     struct Item: Decodable, Sendable {
         struct Revision: Decodable, Sendable { let number: UInt32 }
         let id: String
+        var project: String { String(id.prefix { $0 != "#" }) }
         let name: String
         let title: String
         let target: String
@@ -24,6 +25,8 @@ struct ReviewSnapshot: Decodable, Sendable {
 struct ReviewFile: Decodable, Identifiable, Sendable {
     enum Tier: String, Decodable, Sendable { case review, trusted }
     let path: String
+    let oldBlob: String?
+    let newBlob: String?
     let oldPath: String?
     let oldMode: String?
     let newMode: String?
@@ -46,6 +49,8 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
     }
     enum CodingKeys: String, CodingKey {
         case path, additions, deletions, tier, viewed, reason, why, hint, content
+        case oldBlob = "old_blob"
+        case newBlob = "new_blob"
         case oldPath = "old_path"
         case oldMode = "old_mode"
         case newMode = "new_mode"

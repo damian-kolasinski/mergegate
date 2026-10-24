@@ -10,15 +10,17 @@ public struct UnifiedDiffView: UIViewRepresentable {
     public init(hunks: [DiffHunk]) { self.hunks = hunks }
 
     public func makeUIView(context: Context) -> UITextView {
-        let view = UITextView(usingTextLayoutManager: true)
+        let view = SourceTextView(usingTextLayoutManager: true)
         view.isScrollEnabled = false
         view.isEditable = false
-        view.isSelectable = false
+        view.isSelectable = true
+        view.textContainer.lineBreakMode = .byCharWrapping
         view.backgroundColor = .clear
         view.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 24, right: 10)
         view.textContainer.lineFragmentPadding = 0
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityIdentifier = "unifiedDiff"
+        view.accessibilityHint = "Select text to copy source without line numbers or diff markers."
         return view
     }
 
@@ -28,7 +30,9 @@ public struct UnifiedDiffView: UIViewRepresentable {
     }
 
     public func updateUIView(_ view: UITextView, context: Context) {
-        let rendered = DiffText.render(hunks, traits: view.traitCollection)
+        let document = DiffText.document(hunks, traits: view.traitCollection)
+        let rendered = document.text
+        (view as? SourceTextView)?.sourceSelection = document.selection
         if !view.attributedText.isEqual(to: rendered) {
             let offset = view.contentOffset
             view.attributedText = rendered

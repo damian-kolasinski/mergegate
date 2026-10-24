@@ -49,7 +49,7 @@ struct ReviewScene: View {
                             sheet = .files
                         }
                         Divider()
-                        ReviewFileReader(file: file).id(file.path)
+                        ReviewFileReader(file: file, project: snapshot.item.project, sourceService: model.sourceService).id(file.path)
                     } else {
                         ContentUnavailableView(
                             "No changed files", systemImage: "doc",

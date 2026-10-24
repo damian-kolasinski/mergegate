@@ -47,9 +47,9 @@ final class StartReviewTests: XCTestCase {
         try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
         capture(app, "Importance-ordered files and reasons")
         tapWhenStable(app.buttons["reviewFile-2"])
-        let lastLine = reader.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Region 80:")).firstMatch
-        for _ in 0..<12 where !lastLine.isHittable { app.swipeUp() }
-        XCTAssertTrue(lastLine.isHittable, "The TextKit reader must expose the final source line.")
+        XCTAssertTrue((reader.value as? String ?? "").contains("Region 80:"))
+        for _ in 0..<12 where reader.frame.maxY > app.frame.maxY { app.swipeUp() }
+        XCTAssertLessThanOrEqual(reader.frame.maxY, app.frame.maxY, "The final source line must remain reachable.")
         capture(app, "Long diff — final source line")
         for _ in 0..<12 where !app.buttons["reviewFiles"].isHittable { app.swipeDown() }
         tapWhenStable(app.buttons["reviewFiles"])
@@ -81,9 +81,9 @@ final class StartReviewTests: XCTestCase {
         for _ in 0..<5 where !open.isHittable { app.swipeUp() }
         tapWhenStable(open)
         XCTAssertTrue(reader.waitForExistence(timeout: 20))
-        let firstSourceLine = reader.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "struct Checkout")).firstMatch
-        for _ in 0..<5 where !firstSourceLine.isHittable { app.swipeUp() }
-        XCTAssertTrue(firstSourceLine.isHittable, "Source text must remain reachable at the largest text size.")
+        XCTAssertTrue((reader.value as? String ?? "").contains("struct Checkout"))
+        for _ in 0..<5 where reader.frame.minY > app.frame.maxY - 100 { app.swipeUp() }
+        XCTAssertLessThan(reader.frame.minY, app.frame.maxY - 100, "Source must remain reachable at the largest text size.")
         capture(app, "Review at the largest accessibility text size")
     }
 

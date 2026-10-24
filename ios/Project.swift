@@ -82,7 +82,8 @@ let project = Project(
                 arguments: .arguments(environmentVariables: [
                     "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)",
                     "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)",
-                    "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)"
+                    "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)",
+                    "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)"
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )
