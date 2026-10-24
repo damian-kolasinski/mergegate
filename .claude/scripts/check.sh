@@ -3,13 +3,15 @@
 # otherwise the first failing step's diagnostics. VERBOSE=1 prints cargo's
 # full output instead.
 #
-# Usage: .claude/scripts/check.sh [all|lint|test] [CRATE...|ui] [-- TEST_ARGS...]
+# Usage: .claude/scripts/check.sh [all|lint|test] [CRATE...|ui|ios] [-- TEST_ARGS...]
 #   all (default)  lint, then tests; stops at the first failure
 #   lint           cargo fmt, clippy, then the UI's Biome, ESLint and tsc
 #   test           tests only, without formatting; the UI's are Playwright's,
 #                  which need `pnpm --dir ui exec playwright install chromium`
 #   CRATE          a directory under crates/ (core, cli, ...); limits clippy
 #                  and tests to those crates
+#   ios            Tuist iOS app (macOS/Xcode 26+); lint builds, test runs tests
+#                  MG_IOS_TEST_HUB_URL enables the real Tailscale UI flow
 #   ui             the UI in ui/; checked when no CRATE is named
 # pnpm is required except for lint of named crates: without it the hub embeds
 # a stub page, which the hub's tests fail on.
@@ -42,12 +44,18 @@ case "${1:-}" in
 esac
 
 packages=()
+ios=0
 # ui: 0 skip, 1 named (pnpm required), auto (no target named)
 ui=auto
 while [ $# -gt 0 ] && [ "$1" != "--" ]; do
   if [ "$ui" = auto ]; then ui=0; fi
   if [ "$1" = ui ]; then
     ui=1
+    shift
+    continue
+  fi
+  if [ "$1" = ios ]; then
+    ios=1
     shift
     continue
   fi
@@ -67,7 +75,7 @@ elif [ ${#packages[@]} -eq 0 ]; then
   rust=0
 fi
 if [ "$ui" = auto ]; then ui=1; fi
-if { [ "$ui" = 1 ] || [ "$mode" != lint ]; } && ! command -v pnpm >/dev/null; then
+if { [ "$ui" = 1 ] || { [ "$rust" = 1 ] && [ "$mode" != lint ]; }; } && ! command -v pnpm >/dev/null; then
   echo "SETUP_ERROR: pnpm not found; install it (mise use pnpm, or corepack enable)"
   exit 1
 fi
@@ -140,6 +148,7 @@ ui_run() {
 }
 
 if [ "$mode" != test ] && [ "$ui" = 1 ]; then
+  run python3 appearance/generate.py --check || fail APPEARANCE_ERROR "$output"
   ui_run UI_INSTALL_ERROR install --frozen-lockfile --prefer-offline
   ui_run UI_FORMAT_ERROR format
   fixed="$(sed -n -E 's/.*Fixed ([0-9]+) file.*/\1/p' <<<"$output")"
@@ -176,6 +185,11 @@ fi
 
 if [ "$(cksum Cargo.lock 2>/dev/null || true)" != "$lock_before" ]; then
   summary+=("Cargo.lock updated, commit it")
+fi
+
+if [ "$ios" = 1 ]; then
+  run ios/Scripts/check.sh "$mode" || fail IOS_ERROR "$output"
+  summary+=("iOS $mode passed")
 fi
 
 line="OK"

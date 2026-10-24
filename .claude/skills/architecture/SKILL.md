@@ -25,6 +25,13 @@ ui/                SolidJS bundled by esbuild; one pnpm package
   <feature>/       UI features
   tests/           Playwright against the real hub; state comes from mg commands
   api/             TypeScript generated from `api` by `pnpm gen`; gitignored
+ios/               Tuist native iOS client; App composes feature builders
+  HubConnection/   connection, device trust, and selected hub; Interface is the
+                   cross-feature contract
+  Inbox/           inbox wire subset, refresh policy, and presentation
+  Networking/      transport primitives only; no feature endpoints or DTOs
+  Appearance/      generated values compiled privately into each feature
+appearance/        shared web/native semantic colors and typography, generator
 langs/             language pack builder: pinned grammars and queries, build.mjs
 ```
 
@@ -40,6 +47,8 @@ langs/             language pack builder: pinned grammars and queries, build.mjs
 - Adapters are chosen per project through config, optional ones sit behind cargo features, and third-party extensions run out of process (JSON over stdio).
 - Expensive work runs when data arrives and is cached; request paths only read.
 - Build a new slice the way existing slices are built.
+- Native features own their wire subsets, services, refresh policy, and persistence; `crates/api` remains the wire authority. Cross-feature dependencies use `<Feature>Interface`, with the app composing implementations. Add native feature modules only as their delivery slice needs them; no shared API, store, cache, or design-system module.
+- Edit shared colors and typography in `appearance/tokens.json`, then run `python3 appearance/generate.py`; generated web and native values must stay in sync.
 
 ## Dependencies
 
