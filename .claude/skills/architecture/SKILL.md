@@ -33,6 +33,7 @@ langs/             language pack builder: pinned grammars and queries, build.mjs
 - Domain logic goes in `core`. `core` has no I/O: no async runtime, network, filesystem, subprocess, database or git crates.
 - `core` depends on no other workspace crate, `api` included, and has no serde: it doesn't know the wire format.
 - `core` reaches every external system through a port trait it defines. Check the existing ports before adding one; a new external system means a new port or an extension of an existing one.
+- Define ports from the perspective of the domain logic. Do not reshape domain logic to fit an adapter.
 - Adapters depend on `core` and `api` only, never on each other. Wiring happens only in `hub` and `cli`.
 - Wire types live in `api`. TypeScript types are generated from them; never hand-write API types in `ui/`. A type the UI reads gets `#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]`.
 - The edge maps domain to wire: `core` defines its own types, and the `hub` route module or `cli` command that serves them converts to and from `api`.
