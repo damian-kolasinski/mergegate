@@ -13,6 +13,31 @@ enum Appearance {
             ? UIColor(red: 0.227451, green: 0.239216, blue: 0.250980, alpha: 1)
             : UIColor(red: 0.921569, green: 0.937255, blue: 0.949020, alpha: 1)
     })
+    static let border = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.321569, green: 0.337255, blue: 0.349020, alpha: 1)
+            : UIColor(red: 0.721569, green: 0.737255, blue: 0.749020, alpha: 1)
+    })
+    static let tintBrand = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.019608, green: 0.125490, blue: 0.200000, alpha: 1)
+            : UIColor(red: 0.898039, green: 0.956863, blue: 1.000000, alpha: 1)
+    })
+    static let onTintBrand = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.600000, green: 0.831373, blue: 1.000000, alpha: 1)
+            : UIColor(red: 0.000000, green: 0.231373, blue: 0.400000, alpha: 1)
+    })
+    static let onTintSuccess = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.682353, green: 0.800000, blue: 0.600000, alpha: 1)
+            : UIColor(red: 0.149020, green: 0.250980, blue: 0.074510, alpha: 1)
+    })
+    static let onTintError = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1.000000, green: 0.701961, blue: 0.701961, alpha: 1)
+            : UIColor(red: 0.450980, green: 0.133333, blue: 0.133333, alpha: 1)
+    })
     static let primary = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.921569, green: 0.937255, blue: 0.949020, alpha: 1)

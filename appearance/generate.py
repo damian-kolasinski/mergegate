@@ -28,7 +28,7 @@ import UIKit
 
 enum Appearance {
 '''
-for name,key in {'page':'background-page','surface':'background-subtle','primary':'text-primary','secondary':'text-secondary','brand':'background-brand','onFill':'text-on-fill','error':'text-error','added':'text-added','removed':'text-removed'}.items():
+for name,key in {'page':'background-page','surface':'background-subtle','border':'border-inactive','tintBrand':'background-tint-brand','onTintBrand':'text-tint-brand','onTintSuccess':'text-tint-success','onTintError':'text-tint-error','primary':'text-primary','secondary':'text-secondary','brand':'background-brand','onFill':'text-on-fill','error':'text-error','added':'text-added','removed':'text-removed'}.items():
     swift += f'''    static let {name} = Color(uiColor: UIColor {{ traits in
         traits.userInterfaceStyle == .dark
             ? UIColor({rgb(resolved('dark',key))}, alpha: 1)

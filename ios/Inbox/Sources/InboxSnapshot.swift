@@ -22,14 +22,25 @@ struct InboxItem: Decodable, Identifiable, Sendable {
     let title: String
     let state: String
     let revision: UInt32
+    let questions: UInt32?
+    let rejections: UInt32?
+    let votes: UInt32?
+    let target: String?
+    let note: String?
+    let priority: String?
     let reviewFiles: UInt32
     let additions: UInt64
     let deletions: UInt64
 
     enum CodingKeys: String, CodingKey {
         case id, name, title, state, revision, additions, deletions
+        case questions, rejections, votes, target, note, priority
         case reviewFiles = "review_files"
     }
+
+    var project: String { String(id.split(separator: "#", maxSplits: 1)[0]) }
+    var needsDecision: Bool { (questions ?? 0) + (rejections ?? 0) + (votes ?? 0) > 0 }
+    var isClosed: Bool { state == "merged" || state == "abandoned" }
 
     var status: String {
         switch state {
