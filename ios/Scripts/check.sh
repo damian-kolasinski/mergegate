@@ -11,6 +11,7 @@ if [ "$mode" = lint ]; then action=build; fi
 args=()
 if [ -n "${MG_IOS_TEST_HUB_URL:-}" ]; then args+=("MG_IOS_TEST_HUB_URL=$MG_IOS_TEST_HUB_URL"); fi
 if [ -n "${MG_IOS_TEST_TRIAGE:-}" ]; then args+=("MG_IOS_TEST_TRIAGE=$MG_IOS_TEST_TRIAGE"); fi
+if [ -n "${MG_IOS_TEST_REVIEW:-}" ]; then args+=("MG_IOS_TEST_REVIEW=$MG_IOS_TEST_REVIEW"); fi
 if ! xcodebuild "$action" -workspace Mergegate.xcworkspace -scheme Mergegate \
   -destination "${MG_IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=latest}" \
   -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO \

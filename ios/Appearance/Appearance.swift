@@ -23,6 +23,16 @@ enum Appearance {
             ? UIColor(red: 0.019608, green: 0.125490, blue: 0.200000, alpha: 1)
             : UIColor(red: 0.898039, green: 0.956863, blue: 1.000000, alpha: 1)
     })
+    static let tintSuccess = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.062745, green: 0.149020, blue: 0.000000, alpha: 1)
+            : UIColor(red: 0.847059, green: 0.898039, blue: 0.811765, alpha: 1)
+    })
+    static let tintError = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.200000, green: 0.031373, blue: 0.031373, alpha: 1)
+            : UIColor(red: 1.000000, green: 0.898039, blue: 0.898039, alpha: 1)
+    })
     static let onTintBrand = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.600000, green: 0.831373, blue: 1.000000, alpha: 1)
@@ -78,6 +88,7 @@ enum Appearance {
     static let body = TextStyle(size: 14, lineHeight: 20, weight: .regular, relativeTo: .body, tracking: 0.0)
     static let caption = TextStyle(size: 12, lineHeight: 16, weight: .regular, relativeTo: .caption, tracking: 0.0)
     static let label = TextStyle(size: 14, lineHeight: 14, weight: .medium, relativeTo: .subheadline, tracking: 0.03)
+    static let code = TextStyle(size: 13, lineHeight: 20, weight: .regular, relativeTo: .body, tracking: 0.0)
 
     struct TextStyle {
         let size: CGFloat

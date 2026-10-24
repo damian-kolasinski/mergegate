@@ -19,7 +19,9 @@ func tests(_ name: String) -> Target {
     .target(
         name: "\(name)Tests", destinations: [.iPhone, .iPad], product: .unitTests,
         bundleId: "dev.mergegate.\(name)Tests", deploymentTargets: .iOS("26.0"),
-        sources: ["\(name)/Tests/**"], dependencies: [.target(name: name)]
+        sources: ["\(name)/Tests/**"],
+        resources: name == "DiffView" ? [.folderReference(path: "DiffView/Tests/Goldens")] : [],
+        dependencies: [.target(name: name)]
     )
 }
 let project = Project(
@@ -46,7 +48,7 @@ let project = Project(
                 ],
             ]),
             sources: ["App/**"], resources: ["Resources/**"],
-            dependencies: [.target(name: "HubConnection"), .target(name: "Inbox")]
+            dependencies: [.target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review")]
         ),
         .target(
             name: "HubConnectionInterface", destinations: [.iPhone, .iPad], product: .framework,
@@ -56,6 +58,15 @@ let project = Project(
         module("Networking"),
         module("HubConnection", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
         module("Inbox", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
+        .target(
+            name: "DiffDocumentInterface", destinations: [.iPhone, .iPad], product: .framework,
+            bundleId: "dev.mergegate.DiffDocumentInterface", deploymentTargets: .iOS("26.0"),
+            sources: ["DiffDocument/Interface/**"]
+        ),
+        module("DiffDocument", dependencies: ["DiffDocumentInterface"]),
+        module("DiffView", dependencies: ["DiffDocumentInterface"], appearance: true),
+        module("Review", dependencies: ["HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface", "DiffView"], appearance: true),
+        tests("DiffDocument"), tests("DiffView"), tests("Review"),
         tests("HubConnection"), tests("Inbox"), tests("Networking"),
         .target(
             name: "MergegateUITests", destinations: [.iPhone, .iPad], product: .uiTests,
@@ -67,10 +78,11 @@ let project = Project(
         .scheme(
             name: "Mergegate", buildAction: .buildAction(targets: ["Mergegate"]),
             testAction: .targets(
-                ["HubConnectionTests", "InboxTests", "NetworkingTests", "MergegateUITests"],
+                ["HubConnectionTests", "InboxTests", "NetworkingTests", "DiffDocumentTests", "DiffViewTests", "ReviewTests", "MergegateUITests"],
                 arguments: .arguments(environmentVariables: [
                     "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)",
-                    "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)"
+                    "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)",
+                    "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)"
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )

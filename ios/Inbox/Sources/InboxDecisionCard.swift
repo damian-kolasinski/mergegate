@@ -5,6 +5,7 @@ struct InboxDecisionCard: View {
     let triage: InboxTriage?
     let error: String?
     let retry: () -> Void
+    let openReview: () -> Void
     @State private var details: DecisionPresentation?
 
     var body: some View {
@@ -27,20 +28,20 @@ struct InboxDecisionCard: View {
             if let decision = triage?.decisions.first {
                 Text(decision.preview).appearanceText(Appearance.body)
                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        Text(decisionLabel).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                        Spacer(minLength: 8)
-                        detailsButton
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(decisionLabel).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                        detailsButton
-                    }
-                }
             } else if error == nil {
                 Text(triage == nil ? "Loading decision details…" : "Decision changed. Refresh the inbox.")
                     .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    reviewButton
+                    Spacer(minLength: 8)
+                    if triage?.decisions.isEmpty == false { detailsButton }
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    reviewButton
+                    if triage?.decisions.isEmpty == false { detailsButton }
+                }
             }
             InboxProgress(item: item, triage: triage, onSurface: true)
             if let error {
@@ -60,14 +61,21 @@ struct InboxDecisionCard: View {
         let count = triage?.decisions.count ?? 0
         return count > 1 ? "\(count) pending decisions" : triage?.decisions.first?.kind ?? "Decision"
     }
+    private var reviewButton: some View {
+        Button(action: openReview) {
+            Text("Open review")
+                .appearanceText(Appearance.label).frame(minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain).foregroundStyle(Appearance.brand).accessibilityIdentifier("openReview-\(item.id)")
+    }
+
     private var detailsButton: some View {
         Button {
             if let triage { details = DecisionPresentation(item: item, triage: triage) }
         } label: {
-            Label("Read details", systemImage: "arrow.up.right")
+            Label((triage?.decisions.count ?? 0) > 1 ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details", systemImage: "arrow.up.right")
                 .appearanceText(Appearance.label)
                 .padding(.horizontal, 12).frame(minHeight: 44)
-        }.buttonStyle(.glass).tint(Appearance.brand).accessibilityIdentifier("decisionDetails-\(item.id)")
+        }.buttonStyle(.glass).tint(Appearance.brand).accessibilityHint(decisionLabel).accessibilityIdentifier("decisionDetails-\(item.id)")
     }
 }
 
