@@ -35,10 +35,10 @@ for name,key in {'page':'background-page','surface':'background-subtle','border'
             : UIColor({rgb(resolved('light',key))}, alpha: 1)
     }})
 '''
-for name,key,style in [('displayHeading','type-h2','largeTitle'),('heading','type-h3','title3'),('rowHeading','type-h4','headline'),('body','type-p3','body'),('caption','type-p4','caption'),('label','type-label3','subheadline')]:
+for name,key,style in [('heading','type-h3','title3'),('rowHeading','type-h4','headline'),('body','type-p3','body'),('caption','type-p4','caption'),('label','type-label3','subheadline')]:
     match=re.match(r'(\d+) (\d+)px / (\d+)px',tokens['light'][key])
     weight={'400':'regular','500':'medium','600':'semibold'}[match[1]]
-    tracking=tokens['light']['tracking-heading'] if name in ['displayHeading','heading','rowHeading'] else tokens['light']['tracking-label'] if name=='label' else '0em'
+    tracking=tokens['light']['tracking-heading'] if name in ['heading','rowHeading'] else tokens['light']['tracking-label'] if name=='label' else '0em'
     swift+=f'    static let {name} = TextStyle(size: {match[2]}, lineHeight: {match[3]}, weight: .{weight}, relativeTo: .{style}, tracking: {float(tracking[:-2])})\n'
 swift += '''
     struct TextStyle {

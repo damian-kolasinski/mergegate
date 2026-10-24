@@ -67,9 +67,7 @@ struct InboxDecisionCard: View {
             Label("Read details", systemImage: "arrow.up.right")
                 .appearanceText(Appearance.label)
                 .padding(.horizontal, 12).frame(minHeight: 44)
-                .foregroundStyle(Appearance.onTintBrand)
-                .background(Appearance.tintBrand, in: RoundedRectangle(cornerRadius: 12))
-        }.buttonStyle(.plain).accessibilityIdentifier("decisionDetails-\(item.id)")
+        }.buttonStyle(.glass).tint(Appearance.brand).accessibilityIdentifier("decisionDetails-\(item.id)")
     }
 }
 

@@ -10,61 +10,64 @@ struct InboxScene: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let snapshot = model.snapshot {
-                    InboxControls(snapshot: snapshot, model: model).padding(.top, 12).padding(.bottom, 8)
-                        .listRowSeparator(.hidden).listRowBackground(Appearance.page)
-                }
-                if let error = model.error {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Couldn’t refresh inbox").appearanceText(Appearance.rowHeading)
-                        Text(error).foregroundStyle(Appearance.error)
-                        Button("Retry") { Task { await model.refresh() } }.frame(minHeight: 44)
+            VStack(spacing: 0) {
+                List {
+                    if let snapshot = model.snapshot {
+                        InboxControls(snapshot: snapshot, model: model).padding(.top, 12).padding(.bottom, 8)
+                            .listRowSeparator(.hidden).listRowBackground(Appearance.page)
                     }
-                }
-                if let snapshot = model.snapshot {
-                    if model.groups.isEmpty {
-                        ContentUnavailableView(
-                            snapshot.isEmpty ? "Inbox is clear" : "No matching items", systemImage: "tray",
-                            description: Text("Choose another project or state, or pull to refresh."))
-                    }
-                    ForEach(model.groups) { group in
-                        Section {
-                            ForEach(group.items) { item in
-                                InboxRow(item: item, triage: model.triage[item.id], error: model.triageErrors[item.id]) {
-                                    Task { await model.loadTriage(item) }
-                                }.task(id: model.generation) { await model.loadTriage(item) }
-                                    .listRowSeparator(.hidden).listRowBackground(Appearance.page)
-                            }
-                        } header: {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(group.title.uppercased())
-                                Spacer(minLength: 8)
-                                Text("\(group.items.count) \(group.items.count == 1 ? "item" : "items")")
-                            }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                                .padding(.horizontal, 6).padding(.top, 8).accessibilityAddTraits(.isHeader)
+                    if let error = model.error {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Couldn’t refresh inbox").appearanceText(Appearance.rowHeading)
+                            Text(error).foregroundStyle(Appearance.error)
+                            Button("Retry") { Task { await model.refresh() } }.frame(minHeight: 44)
                         }
                     }
-                } else if model.isLoading {
-                    ProgressView("Loading inbox…").frame(maxWidth: .infinity)
+                    if let snapshot = model.snapshot {
+                        if model.groups.isEmpty {
+                            ContentUnavailableView(
+                                snapshot.isEmpty ? "Inbox is clear" : "No matching items", systemImage: "tray",
+                                description: Text("Choose another project or state, or pull to refresh."))
+                        }
+                        ForEach(model.groups) { group in
+                            Section {
+                                ForEach(group.items) { item in
+                                    InboxRow(item: item, triage: model.triage[item.id], error: model.triageErrors[item.id]) {
+                                        Task { await model.loadTriage(item) }
+                                    }.task(id: model.generation) { await model.loadTriage(item) }
+                                        .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                                }
+                            } header: {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(group.title.uppercased())
+                                    Spacer(minLength: 8)
+                                    Text("\(group.items.count) \(group.items.count == 1 ? "item" : "items")")
+                                }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                                    .padding(.horizontal, 6).padding(.top, 8).accessibilityAddTraits(.isHeader)
+                            }
+                        }
+                    } else if model.isLoading {
+                        ProgressView("Loading inbox…").frame(maxWidth: .infinity)
+                    }
                 }
+                .listStyle(.plain).listSectionSpacing(12)
+                .environment(\.defaultMinListRowHeight, 0)
+                .listRowSpacing(6)
+                .scrollContentBackground(.hidden)
+                .scrollEdgeEffectHidden(for: .bottom)
+                .appearanceText(Appearance.body).foregroundStyle(Appearance.primary)
+                .background(Appearance.page)
+                footer
             }
-            .listStyle(.plain).listSectionSpacing(12)
-            .environment(\.defaultMinListRowHeight, 0)
-            .listRowSpacing(6)
-            .scrollContentBackground(.hidden)
-            .appearanceText(Appearance.body).foregroundStyle(Appearance.primary)
             .background(Appearance.page)
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                HStack(spacing: 12) {
-                    Button { showingHub = true } label: {
-                        Label("mergegate", systemImage: "arrow.triangle.branch")
-                            .appearanceText(Appearance.label).frame(minHeight: 44)
-                            .contentShape(Rectangle())
-                    }.buttonStyle(.plain).foregroundStyle(Appearance.brand)
+            .navigationTitle("Your next move")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Hub", systemImage: "arrow.triangle.branch") { showingHub = true }
                         .accessibilityLabel("Hub settings").accessibilityIdentifier("hubSettings")
-                    Spacer(minLength: 0)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Picker("Project", selection: $model.project) {
                             Text("All projects").tag(String?.none)
@@ -73,15 +76,12 @@ struct InboxScene: View {
                             }
                         }
                     } label: {
-                        HStack(spacing: 6) {
-                            Text(model.project ?? "All projects")
-                            Image(systemName: "chevron.down")
-                        }.appearanceText(Appearance.caption).lineLimit(1).frame(minHeight: 44)
+                        Label(model.project ?? "All projects", systemImage: "line.3.horizontal.decrease")
+                            .labelStyle(.iconOnly)
                     }.accessibilityLabel("Project").accessibilityValue(model.project ?? "All projects")
                         .accessibilityIdentifier("projectFilter")
-                }.padding(.horizontal, 24).background(Appearance.page)
+                }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { footer }
             .refreshable { await model.refresh() }
             .task { await model.refresh() }
             .onChange(of: scenePhase) { _, phase in
@@ -94,7 +94,7 @@ struct InboxScene: View {
     private var footer: some View {
         HStack(spacing: 12) {
             Label(hub.url.host ?? "Hub", systemImage: "network")
-                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary).lineLimit(1)
+                .appearanceText(Appearance.caption).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: 0)
             Menu {
                 Picker("State", selection: $model.filter) {
@@ -105,8 +105,9 @@ struct InboxScene: View {
                     .frame(minHeight: 44)
             }.accessibilityLabel("State").accessibilityValue(model.filter.rawValue)
                 .accessibilityIdentifier("stateFilter")
-        }.padding(.horizontal, 24).padding(.top, 4).background(Appearance.page)
-            .overlay(alignment: .top) { Divider() }
+        }.padding(.horizontal, 16).padding(.vertical, 6)
+            .glassEffect(.regular, in: .capsule)
+            .padding(.horizontal, 16).padding(.bottom, 8)
     }
 
     private var stateLabel: String {

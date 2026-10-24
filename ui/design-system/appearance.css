@@ -49,7 +49,6 @@
   --ramp-green-100: #d8e5cf;
   --font-sans: "DM Sans", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --type-h2: 600 32px / 36px var(--font-sans);
   --type-h3: 600 19px / 24px var(--font-sans);
   --type-h4: 600 16px / 20px var(--font-sans);
   --type-h5: 600 14px / 16px var(--font-sans);

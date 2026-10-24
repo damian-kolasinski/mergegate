@@ -46,7 +46,7 @@ struct InboxDecisionScene: View {
                 Button { dismiss() } label: {
                     Text("Done").appearanceText(Appearance.label).frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
-                }.buttonStyle(.plain).foregroundStyle(Appearance.brand)
+                }.buttonStyle(.glass).tint(Appearance.brand)
                     .accessibilityIdentifier("closeDecisionDetails")
             }.padding(.horizontal, 24).padding(.top, 12).background(Appearance.page)
         }

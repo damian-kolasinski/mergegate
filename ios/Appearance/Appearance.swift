@@ -73,7 +73,6 @@ enum Appearance {
             ? UIColor(red: 1.000000, green: 0.400000, blue: 0.400000, alpha: 1)
             : UIColor(red: 0.698039, green: 0.211765, blue: 0.211765, alpha: 1)
     })
-    static let displayHeading = TextStyle(size: 32, lineHeight: 36, weight: .semibold, relativeTo: .largeTitle, tracking: -0.03)
     static let heading = TextStyle(size: 19, lineHeight: 24, weight: .semibold, relativeTo: .title3, tracking: -0.03)
     static let rowHeading = TextStyle(size: 16, lineHeight: 20, weight: .semibold, relativeTo: .headline, tracking: -0.03)
     static let body = TextStyle(size: 14, lineHeight: 20, weight: .regular, relativeTo: .body, tracking: 0.0)

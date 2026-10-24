@@ -25,7 +25,17 @@ final class TriageInboxTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(app.staticTexts["1 of 2 review files remaining"].exists)
         try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
-        capture(app, "Decision desk — question and remaining work")
+        capture(app, "Decision desk — large title and Liquid Glass")
+        let title = app.staticTexts["Your next move"].firstMatch
+        let expandedHeight = title.frame.height
+        app.swipeUp()
+        XCTAssertTrue(title.exists)
+        let collapsedHeight = title.frame.height
+        XCTAssertLessThan(collapsedHeight, expandedHeight)
+        capture(app, "Collapsed native navigation title")
+        app.swipeDown()
+        XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(title.frame.height, collapsedHeight)
         app.buttons["decisionDetails-mobile-smoke#2"].tap()
         XCTAssertTrue(app.staticTexts["Keep compatibility with the previous response format."].waitForExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
