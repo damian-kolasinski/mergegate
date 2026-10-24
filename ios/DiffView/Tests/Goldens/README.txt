@@ -1,4 +1,5 @@
-These golden images cover the native attributed diff in light, dark, and accessibility text sizes.
+These golden images capture the same native selectable reader used by the app in light, dark,
+and accessibility text sizes, including source-column wrapping.
 DiffGoldenTests attaches each actual render to the xcresult. To update an intentional rendering change,
 export that test's attachments, inspect them, and replace the matching PNG in this directory.
 The renderer uses scale 1 with fixed font/appearance traits for stable comparison on iOS 26.2.

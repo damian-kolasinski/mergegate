@@ -26,19 +26,27 @@ final class DiffGoldenTests: XCTestCase {
                 traits.performAsCurrent {
                     UIColor(Appearance.page).setFill()
                     context.fill(CGRect(origin: .zero, size: size))
-                    DiffText.render(
+                    let view = SourceTextView.reader()
+                    view.overrideUserInterfaceStyle = style
+                    view.traitOverrides.preferredContentSizeCategory = category
+                    view.frame = CGRect(origin: .zero, size: size)
+                    view.attributedText = DiffText.render(
                         [
                             DiffHunk(
                                 header: "@@ -8,2 +8,2 @@",
                                 lines: [
                                     DiffLine(kind: .context, oldLine: 8, newLine: 8, text: "var total: Int {"),
                                     DiffLine(kind: .removed, oldLine: 9, newLine: nil, text: "    subtotal"),
-                                    DiffLine(kind: .added, oldLine: nil, newLine: 9, text: "    subtotal + delivery"),
+                                    DiffLine(
+                                        kind: .added, oldLine: nil, newLine: 9,
+                                        text: "    subtotal + deliveryForRegion(customer.region)"),
                                     DiffLine(
                                         kind: .note, oldLine: nil, newLine: nil, text: "\\ No newline at end of file"),
                                 ])
                         ], traits: traits
-                    ).draw(in: CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 12))
+                    )
+                    view.layoutIfNeeded()
+                    view.layer.render(in: context.cgContext)
                 }
             }
             let attachment = XCTAttachment(image: image)
@@ -50,7 +58,8 @@ final class DiffGoldenTests: XCTestCase {
                 XCTFail("Missing inspected golden: \(name).png")
                 continue
             }
-            XCTAssertEqual(try XCTUnwrap(pixels(image)), try XCTUnwrap(pixels(expected)), "Diff rendering changed: \(name)")
+            XCTAssertEqual(
+                try XCTUnwrap(pixels(image)), try XCTUnwrap(pixels(expected)), "Diff rendering changed: \(name)")
         }
     }
 

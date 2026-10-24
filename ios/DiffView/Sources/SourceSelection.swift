@@ -15,6 +15,21 @@ struct SourceSelection {
 }
 
 final class SourceTextView: UITextView {
+    static func reader() -> SourceTextView {
+        let view = SourceTextView(usingTextLayoutManager: true)
+        view.isScrollEnabled = false
+        view.isEditable = false
+        view.isSelectable = true
+        view.textContainer.lineBreakMode = .byWordWrapping
+        view.backgroundColor = .clear
+        view.textContainerInset = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 12)
+        view.textContainer.lineFragmentPadding = 0
+        view.adjustsFontForContentSizeCategory = true
+        view.accessibilityIdentifier = "unifiedDiff"
+        view.accessibilityHint = "Select text to copy source without line numbers or diff markers."
+        return view
+    }
+
     var sourceSelection = SourceSelection(text: "", ranges: [])
 
     override func copy(_ sender: Any?) {

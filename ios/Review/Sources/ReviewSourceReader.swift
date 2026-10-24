@@ -9,6 +9,13 @@ struct ReviewSourceReader: View {
     let service: ReviewSourceService
     @State private var model = ReviewSourceModel()
 
+    private var maximumLine: UInt32 {
+        let tail = model.context?.gaps.last?.lines.last
+        return max(
+            UInt32(hunks.last?.oldRange.upperBound ?? 0), UInt32(hunks.last?.newRange.upperBound ?? 0),
+            tail?.oldLine ?? 0, tail?.newLine ?? 0)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let context = model.context {
@@ -19,22 +26,27 @@ struct ReviewSourceReader: View {
                 ForEach(context.gaps) { gap in
                     let count = min(model.revealed[gap.id, default: 0], gap.lines.count)
                     if count > 0 {
-                        UnifiedDiffView(hunks: [DiffHunk(header: "", lines: Array(gap.lines.prefix(count)))])
+                        UnifiedDiffView(
+                            hunks: [DiffHunk(header: "", lines: Array(gap.lines.prefix(count)))],
+                            maximumLine: maximumLine)
                     }
                     if count < gap.lines.count {
                         Button {
                             model.revealed[gap.id] = min(count + 20, gap.lines.count)
                         } label: {
-                            Label(
-                                "Show \(min(20, gap.lines.count - count)) unchanged lines (\(gap.lines.count - count) hidden)",
-                                systemImage: "arrow.up.and.down.text.horizontal"
-                            )
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            HStack {
+                                Label(
+                                    "Show \(min(20, gap.lines.count - count)) lines",
+                                    systemImage: "arrow.up.and.down.text.horizontal")
+                                Spacer(minLength: 8)
+                                Text("\(gap.lines.count - count) unchanged").foregroundStyle(Appearance.secondary)
+                            }.appearanceText(Appearance.caption)
+                                .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .accessibilityIdentifier("expandContext-\(gap.id)")
-                        .padding(.horizontal, 10)
+                        .background(Appearance.surface)
                     }
-                    if gap.id < hunks.count { UnifiedDiffView(hunks: [hunks[gap.id]]) }
+                    if gap.id < hunks.count { UnifiedDiffView(hunks: [hunks[gap.id]], maximumLine: maximumLine) }
                 }
             } else {
                 if file.oldBlob != nil || file.newBlob != nil {
@@ -50,13 +62,13 @@ struct ReviewSourceReader: View {
                         }.frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .disabled(model.loading).accessibilityIdentifier("loadSourceContext")
-                    .padding(.horizontal, 10)
+                    .appearanceText(Appearance.caption).background(Appearance.surface)
                     if let error = model.error {
                         Text(error).appearanceText(Appearance.caption).foregroundStyle(Appearance.error)
                             .padding(10).accessibilityIdentifier("sourceContextError")
                     }
                 }
-                if !hunks.isEmpty { UnifiedDiffView(hunks: hunks) }
+                if !hunks.isEmpty { UnifiedDiffView(hunks: hunks, maximumLine: maximumLine) }
             }
         }.tint(Appearance.brand)
     }
