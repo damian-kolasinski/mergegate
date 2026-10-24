@@ -7,6 +7,7 @@ mod comments;
 mod pulls;
 mod reactions;
 mod repo;
+mod report;
 mod token;
 
 use std::path::PathBuf;

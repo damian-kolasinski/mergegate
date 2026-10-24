@@ -8,6 +8,7 @@ use axum::{Extension, Router};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
+use tracing::Instrument;
 
 use backend_github::GithubClient;
 use git::HubGit;
@@ -21,10 +22,10 @@ use store_sqlite::Store;
 
 use crate::{
     Home, HubError, HubInfo, abandon, attachments, branches, comments, conflicts, conversation,
-    demo_zip, devices, diff, doctor, draft_replies, event_log, events, external, feedback,
-    git_http, guard, highlights, io, items, judge, languages, lifecycle, merge, names, presence,
-    priority, projects, remote_wakes, replies, reply, resume, review_time, reviews, rules,
-    settings, tailnet, ui, viewed, wake,
+    demo_zip, devices, diagnostics, diff, doctor, draft_replies, event_log, events, external,
+    feedback, git_http, guard, highlights, io, items, judge, languages, lifecycle, merge, names,
+    presence, priority, projects, remote_wakes, replies, reply, resume, review_time, reviews,
+    rules, settings, tailnet, telemetry, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -92,7 +93,9 @@ impl AppState {
         f: impl FnOnce(&mut Store, &HubGit, &GithubClient) -> T + Send + 'static,
     ) -> T {
         let state = Arc::clone(self);
+        let span = tracing::Span::current();
         tokio::task::spawn_blocking(move || {
+            let _span = span.enter();
             // A panic mid-request leaves nothing half-applied: every write is
             // a single statement.
             let mut store = state.store.lock().unwrap_or_else(|e| e.into_inner());
@@ -111,7 +114,9 @@ impl AppState {
     ) -> T {
         let landing = self.landing().await;
         let state = Arc::clone(self);
+        let span = tracing::Span::current();
         tokio::task::spawn_blocking(move || {
+            let _span = span.enter();
             let _landing = landing;
             f(&Steps(&state.store), &state.git, &state.github)
         })
@@ -138,7 +143,7 @@ impl AppState {
     pub(crate) async fn detached<T: Send + 'static>(
         f: impl Future<Output = T> + Send + 'static,
     ) -> T {
-        tokio::spawn(f)
+        tokio::spawn(f.in_current_span())
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
@@ -149,7 +154,8 @@ impl AppState {
         f: impl FnOnce(&GithubClient) -> T + Send + 'static,
     ) -> T {
         let state = Arc::clone(self);
-        tokio::task::spawn_blocking(move || f(&state.github))
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || span.in_scope(|| f(&state.github)))
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
@@ -161,7 +167,8 @@ impl AppState {
         f: impl FnOnce(&HubGit) -> T + Send + 'static,
     ) -> T {
         let state = Arc::clone(self);
-        tokio::task::spawn_blocking(move || f(&state.git))
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || span.in_scope(|| f(&state.git)))
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
@@ -173,7 +180,8 @@ impl AppState {
         f: impl FnOnce(&HubGit, &GithubClient) -> T + Send + 'static,
     ) -> T {
         let state = Arc::clone(self);
-        tokio::task::spawn_blocking(move || f(&state.git, &state.github))
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || span.in_scope(|| f(&state.git, &state.github)))
             .await
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
@@ -279,11 +287,13 @@ pub(crate) async fn serve(
         .merge(resume::routes())
         .merge(git_http::routes())
         .merge(doctor::routes())
+        .merge(diagnostics::routes())
         .merge(events::routes())
         .merge(ui::routes())
         .fallback(reply::no_route)
         .method_not_allowed_fallback(reply::wrong_method)
         .layer(middleware::from_fn_with_state(state.clone(), guard::guard))
+        .layer(middleware::from_fn(telemetry::record_request))
         .with_state(state.clone());
     state.tailnet.set_router(app.clone());
     let app = app.layer(Extension(tailnet::Via::Loopback));
@@ -302,14 +312,14 @@ pub(crate) async fn serve(
     );
 
     branches::sweep(&state).await;
-    tokio::spawn(wake::run(state.clone()));
-    tokio::spawn(external::run(state.clone()));
-    tokio::spawn(languages::refresh(state.clone()));
-    tokio::spawn(highlights::run(state.clone()));
-    tokio::spawn(attachments::prune(state.clone()));
-    tokio::spawn(rules::run(state.clone()));
-    tokio::spawn(conflicts::run(state.clone()));
-    tokio::spawn(judge::run(state.clone()));
+    telemetry::spawn("wake", wake::run(state.clone()));
+    telemetry::spawn("external", external::run(state.clone()));
+    telemetry::spawn("languages", languages::refresh(state.clone()));
+    telemetry::spawn("highlights", highlights::run(state.clone()));
+    telemetry::spawn("attachments", attachments::prune(state.clone()));
+    telemetry::spawn("rules", rules::run(state.clone()));
+    telemetry::spawn("conflicts", conflicts::run(state.clone()));
+    telemetry::spawn("judge", judge::run(state.clone()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

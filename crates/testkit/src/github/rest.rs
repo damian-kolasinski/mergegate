@@ -38,6 +38,8 @@ pub(super) fn handle(shared: &Shared, request: &Request, path: &str) -> Response
         can_push,
     };
     match (method, rest) {
+        ("GET", ["issues"]) => super::issues::list(&state, &call.repo, &shared.web),
+        ("POST", ["issues"]) => super::issues::create(shared, &mut state, &call.repo, &body),
         ("GET", []) => call.repo(),
         ("GET", ["pulls"]) => call.find(&state, request),
         ("POST", ["pulls"]) => call.open(&mut state, &body),

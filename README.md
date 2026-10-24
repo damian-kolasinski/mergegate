@@ -136,6 +136,65 @@ The commands an agent uses most:
 | `mg rules propose ...` | Propose a triage rule for you to approve |
 | `mg doctor` | Check the whole setup and print fixes |
 
+## Reporting a problem
+
+The hub keeps local operational telemetry in `~/.mergegate/telemetry/` (or
+`$MERGEGATE_HOME/telemetry/`). Five rotating JSONL files hold up to 10 MiB each.
+While the hub runs, maintenance removes records older than seven days once per
+minute, including from active files. Extraction always excludes expired records
+and returns at most the newest 2,048 records. A bounded background
+writer drops records rather than blocking hub requests when it cannot keep up;
+subsequent records include the dropped count. Nothing is uploaded automatically.
+
+Operational telemetry contains run and request IDs, timestamps, module/line locations,
+request route templates, status codes, durations, stable error codes, and worker
+lifecycle events. Default exports exclude free-form messages, request/response
+bodies, repository content, credentials, and subprocess output. Private local
+records also retain bounded, sanitized warning/error and panic text for debugging;
+`mg diagnostics logs --details --json` explicitly includes it so relevant
+excerpts can be selected. Free-form redaction is heuristic. Failed CLI
+requests print a request ID that can be matched to the recorded events.
+Existing `hub.log` files are not included in diagnostic exports.
+
+```sh
+mg diagnostics logs --since 30m --json
+mg diagnostics collect --since 2h --out diagnostics.zip
+```
+
+Collection works from local files when the hub is stopped or its database is
+broken. It never upgrades or restarts the hub. With `mg connect`, it collects
+from that hub and requires an owner device; an allowed collaborator cannot
+extract hub-wide diagnostics. An unreachable remote hub is reported as an error
+rather than returning diagnostics from the wrong machine.
+
+To report a product bug, write a summary with reproduction steps and
+expected/actual behavior, then select the relevant log excerpts into a text file:
+
+```sh
+mg report prepare --title "Submit returns an error" \
+  --body summary.txt --logs selected-logs.txt --out issue-report
+# Review issue-report/report.md and issue-report/diagnostics.zip.
+mg report send --from issue-report
+```
+
+Preparation creates a private directory containing the editable draft,
+metadata, and a ZIP. It does not publish anything. Sending uses the author's
+local `gh` login to create an issue in `damian-kolasinski/mergegate`, independently
+of the repository being reviewed, and returns its URL plus the local ZIP path.
+The author can drag the ZIP into a GitHub issue comment to attach it manually.
+The issue and any attached ZIP are public. Selected excerpts are limited to
+12 KiB, summaries to 32 KiB, and complete issue bodies to 48 KiB. Known credential
+formats, authorization/cookie headers, URLs, common private paths and email
+addresses are redacted during preparation and again before sending. This
+redaction is heuristic: inspect the selected prose and ZIP before sharing them.
+
+A successful send saves its receipt; repeating it returns the same issue. If a
+send fails or is interrupted, the draft and ZIP remain locally. Check GitHub
+before running `mg report send --from issue-report --retry`; recovery looks for
+the report ID across open and closed issues. GitHub's list can lag after creation,
+so an uncertain retry never creates another issue when the report is absent:
+it asks you to wait and retry. A definite rejection permits a fresh send.
+
 ## How is mergegate different from reviewing pull requests on GitHub?
 
 | | GitHub web UI | mergegate |
@@ -178,7 +237,7 @@ No. mergegate is a personal tool: one operator per hub, reviewing the work of th
 
 ### What does it write to GitHub?
 
-Branches, pull requests and squash merges. Each pull request is described with the agent's guide, unless you wrote its description on GitHub, which the hub never overwrites. Your review comments and the agent's replies stay in mergegate, which keeps the GitHub thread clean for human reviewers.
+Branches, pull requests and squash merges. Explicitly sending a product report also creates an issue in the mergegate repository. Each pull request is described with the agent's guide, unless you wrote its description on GitHub, which the hub never overwrites. Your review comments and the agent's replies stay in mergegate, which keeps the GitHub thread clean for human reviewers.
 
 ## License
 

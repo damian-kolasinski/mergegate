@@ -4,6 +4,7 @@ mod abandon_cmd;
 mod attach_cmd;
 mod client;
 mod connect_cmd;
+mod diagnostics_cmd;
 mod doctor_cmd;
 mod events_cmd;
 mod feedback_cmd;
@@ -19,6 +20,7 @@ mod project_cmd;
 mod project_here;
 mod reply_cmd;
 mod repo;
+mod report_cmd;
 mod resume_cmd;
 mod rules_cmd;
 mod skill_cmd;
@@ -219,6 +221,12 @@ enum Command {
     Inbox,
     /// Check that the hub, git and every project are set up to work
     Doctor,
+    /// Extract sanitized hub telemetry, including when the local hub is down
+    #[command(subcommand)]
+    Diagnostics(diagnostics_cmd::DiagnosticsCommand),
+    /// Prepare and send a product issue with selected evidence
+    #[command(subcommand)]
+    Report(report_cmd::ReportCommand),
     /// The agent skill matching this mg
     #[command(subcommand)]
     Skill(skill_cmd::SkillCommand),
@@ -287,6 +295,8 @@ fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
         Command::Resume { item } => resume_cmd::run(item),
         Command::Inbox => inbox_cmd::run(),
         Command::Doctor => doctor_cmd::run(),
+        Command::Diagnostics(command) => diagnostics_cmd::run(command),
+        Command::Report(command) => report_cmd::run(command),
         Command::Skill(command) => skill_cmd::run(command),
     }
 }
