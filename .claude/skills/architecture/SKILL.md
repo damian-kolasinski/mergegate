@@ -29,6 +29,10 @@ ios/               Tuist native iOS client; App composes feature builders
   HubConnection/   connection, device trust, and selected hub; Interface is the
                    cross-feature contract
   Inbox/           inbox wire subset, refresh policy, and presentation
+  Review/          review wire subset, guide, ordered files, and review loading
+  DiffDocument/    unified hunks and source coordinates; Interface is the
+                   rendering contract
+  DiffView/        UIKit/TextKit 2 unified diff layout
   Networking/      transport primitives only; no feature endpoints or DTOs
   Appearance/      generated values compiled privately into each feature
 appearance/        shared web/native semantic colors and typography, generator

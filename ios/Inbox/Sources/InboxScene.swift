@@ -1,15 +1,17 @@
 import HubConnectionInterface
 import SwiftUI
 
-struct InboxScene: View {
+struct InboxScene<Review: View>: View {
     let hub: ConnectedHub
     @State var model: InboxViewModel
     let disconnect: () -> Void
+    let review: (String) -> Review
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingHub = false
+    @State private var path: [String] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 List {
                     if let snapshot = model.snapshot {
@@ -34,6 +36,8 @@ struct InboxScene: View {
                                 ForEach(group.items) { item in
                                     InboxRow(item: item, triage: model.triage[item.id], error: model.triageErrors[item.id]) {
                                         Task { await model.loadTriage(item) }
+                                    } openReview: {
+                                        path.append(item.id)
                                     }.task(id: model.generation) { await model.loadTriage(item) }
                                         .listRowSeparator(.hidden).listRowBackground(Appearance.page)
                                 }
@@ -85,8 +89,12 @@ struct InboxScene: View {
             .refreshable { await model.refresh() }
             .task { await model.refresh() }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await model.refresh() } }
+                if phase == .active && path.isEmpty { Task { await model.refresh() } }
             }
+            .onChange(of: path) { previous, current in
+                if !previous.isEmpty && current.isEmpty { Task { await model.refresh() } }
+            }
+            .navigationDestination(for: String.self) { item in review(item) }
             .sheet(isPresented: $showingHub) { hubSettings }
         }
     }

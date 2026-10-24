@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first two slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, and triage its Decision desk across projects and item states. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The first three slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, and start a review with a real unified diff. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -8,7 +8,9 @@ Install Xcode 26.2+ and Tuist (the version is pinned in `mise.toml`). With mise,
 
 On the hub machine run `mg hub set listen tailnet`. Enable the installed Tailscale app on the phone, then enter the URL the command prints. Short MagicDNS names, full `.ts.net` names, and Tailscale IPv4/IPv6 addresses are accepted. The hub must admit the caller through `/api/whoami`; the app cannot allow itself. Denied/unknown devices receive the hub's error and recovery hint. Only a successful connection is saved. Hub → Forget hub clears it.
 
-The inbox refreshes on entry, pull to refresh, retry, and returning to the foreground. A failed refresh leaves the last response visible with an error. Reopening a saved hub revalidates device trust before displaying its inbox. The native large-title navigation bar collapses as the inbox scrolls. Its project menu, All/Decide/Review chips, floating state bar, and detail controls use iOS 26 Liquid Glass; review content stays on solid surfaces. Native materials follow the system’s Reduce Transparency and Reduce Motion settings. The project menu and action chips keep decisions/questions ahead of reviewable work; other states are available in the footer. Decision cards show the pending question or disputed comment, with the full text in a read-only native sheet; working, merging, and closed-today items follow. Visible open rows load the real pending question, disputed comment and rejection reason, or comment awaiting a vote, plus unviewed review-file counts (trusted files are excluded). Each detail response must match the inbox revision; a mismatch asks for an inbox refresh. Per-item failures have their own retry. Persistent offline caching, SSE, opening a review, and decision/review actions belong to later slices.
+The inbox refreshes on entry, after returning from a review, on pull to refresh/retry, and when foregrounded while visible. A failed refresh leaves the last response visible with an error. Reopening a saved hub revalidates device trust before displaying its inbox. The native large-title navigation bar collapses as the inbox scrolls. Its project menu, All/Decide/Review chips, floating state bar, and detail controls use iOS 26 Liquid Glass; review content stays on solid surfaces. Native materials follow the system’s Reduce Transparency and Reduce Motion settings. The project menu and action chips keep decisions/questions ahead of reviewable work; other states are available in the footer. Decision cards show the pending question or disputed comment, with the full text in a read-only native sheet; working, merging, and closed-today items follow. Visible open rows load the real pending question, disputed comment and rejection reason, or comment awaiting a vote, plus unviewed review-file counts (trusted files are excluded). Each detail response must match the inbox revision; a mismatch asks for an inbox refresh. Per-item failures have their own retry. Persistent offline caching, SSE, and decision/review mutations belong to later slices.
+
+Every inbox item opens its current authoritative review. The screen shows the item identity, revision and target, all-changes comparison scope, and remaining review-file count. Guide opens the complete submitted guide; Files preserves the hub’s importance order and shows its reading reasons, viewed state, and trusted tier. The first review-tier file opens automatically (or the first trusted file when there are no review-tier files). The native TextKit 2 reader displays unified hunks with old/new source coordinates, explicit addition/removal markers, and shared semantic colors. Binary, oversized, discarded, and metadata-only diffs have explicit states. Opening or reading never marks a file viewed. The displayed snapshot stays fixed while open, including across foregrounding; returning to the inbox and reopening loads the current revision. The entire review scrolls at accessibility text sizes. Source-context expansion, source selection/copy, syntax highlighting, and viewed-state changes are later slices.
 
 ## Verification
 
@@ -43,11 +45,25 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-triage
 
 The additional fixture uses real review routes on the isolated smoke hub to seed a sent question, one viewed file out of two, working/closed items, and a second project. It never contacts the operator hub. The UI test verifies large-title collapse/expansion, project/state and action filtering, full decision text, details surviving foreground refresh, empty results, remaining-work counts, accessibility, and relaunch loading, and retains screenshots. Pending external disagreements/votes and answered/agreed threads are covered by Swift contract tests; the local git fixture has no GitHub comments.
 
+For the start-review UI flow, use a fresh smoke hub and seed its guided, importance-ordered change:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-review
+python3 ios/Scripts/review-fixture.py /tmp/mergegate-ios-review
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_REVIEW=1 .claude/scripts/check.sh test ios
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-review
+```
+
+This flow opens a real inbox item, checks revision/target/scope, reads its guide and ordered file reasons, verifies source text and addition/removal coordinates, opens a binary file, and returns/reopens. It audits contrast, Dynamic Type, touch targets, and labels, reaches the end of a long diff, resets position when changing files, and opens the review at the largest accessibility text size. It retains screenshots in the xcresult. Pixel goldens cover native attributed diff rendering in light, dark, and accessibility text sizes. Swift behavior tests cover failed-request retry, mismatched identity/comparison, content boundaries, empty diff sides, no-newline markers, Unicode prefixes, and source-coordinate mapping.
+
 ## Module boundaries
 
 - `App` composes feature builders.
 - `HubConnection` owns URL validation, `/api/whoami`, connection presentation, and the selected URL in UserDefaults. `HubConnectionInterface` exposes only the established connection value needed by Inbox.
 - `Inbox` owns `/api/inbox` and its consumed `/api/items/{id}` triage subset, project/state filtering, pending-decision interpretation, refresh policy, state, and rows.
+- `Review` owns its `/api/items/{id}?since=all` subset, guide/file presentation, snapshot loading/retry, and selected file. Inbox accepts a destination builder; App composes it with Review without sharing DTOs.
+- `DiffDocument` maps unified hunks into source-coordinate lines; `DiffDocumentInterface` exposes only those rendering values.
+- `DiffView` renders those values with UIKit/TextKit 2 and feature-local generated appearance.
 - `Networking` provides HTTP transport only: bounded URLSession requests, hub error decoding, and rejection of redirects. It owns no endpoint or feature refresh policy.
 - `Appearance/Appearance.swift` is generated from [shared tokens](../appearance/README.md) and compiled privately into features. DM Sans is registered by the app; semantic colors follow light/dark appearance and typography scales with Dynamic Type.
 

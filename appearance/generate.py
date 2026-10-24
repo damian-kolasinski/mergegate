@@ -28,14 +28,14 @@ import UIKit
 
 enum Appearance {
 '''
-for name,key in {'page':'background-page','surface':'background-subtle','border':'border-inactive','tintBrand':'background-tint-brand','onTintBrand':'text-tint-brand','onTintSuccess':'text-tint-success','onTintError':'text-tint-error','primary':'text-primary','secondary':'text-secondary','brand':'background-brand','onFill':'text-on-fill','error':'text-error','added':'text-added','removed':'text-removed'}.items():
+for name,key in {'page':'background-page','surface':'background-subtle','border':'border-inactive','tintBrand':'background-tint-brand','tintSuccess':'background-tint-success','tintError':'background-tint-error','onTintBrand':'text-tint-brand','onTintSuccess':'text-tint-success','onTintError':'text-tint-error','primary':'text-primary','secondary':'text-secondary','brand':'background-brand','onFill':'text-on-fill','error':'text-error','added':'text-added','removed':'text-removed'}.items():
     swift += f'''    static let {name} = Color(uiColor: UIColor {{ traits in
         traits.userInterfaceStyle == .dark
             ? UIColor({rgb(resolved('dark',key))}, alpha: 1)
             : UIColor({rgb(resolved('light',key))}, alpha: 1)
     }})
 '''
-for name,key,style in [('heading','type-h3','title3'),('rowHeading','type-h4','headline'),('body','type-p3','body'),('caption','type-p4','caption'),('label','type-label3','subheadline')]:
+for name,key,style in [('heading','type-h3','title3'),('rowHeading','type-h4','headline'),('body','type-p3','body'),('caption','type-p4','caption'),('label','type-label3','subheadline'),('code','type-mono','body')]:
     match=re.match(r'(\d+) (\d+)px / (\d+)px',tokens['light'][key])
     weight={'400':'regular','500':'medium','600':'semibold'}[match[1]]
     tracking=tokens['light']['tracking-heading'] if name in ['heading','rowHeading'] else tokens['light']['tracking-label'] if name=='label' else '0em'
