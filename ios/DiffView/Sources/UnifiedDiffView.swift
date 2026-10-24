@@ -4,22 +4,17 @@ import UIKit
 
 public struct UnifiedDiffView: UIViewRepresentable {
     private let hunks: [DiffHunk]
+    private let maximumLine: UInt32
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(hunks: [DiffHunk]) { self.hunks = hunks }
+    public init(hunks: [DiffHunk], maximumLine: UInt32 = 0) {
+        self.hunks = hunks
+        self.maximumLine = maximumLine
+    }
 
     public func makeUIView(context: Context) -> UITextView {
-        let view = UITextView(usingTextLayoutManager: true)
-        view.isScrollEnabled = false
-        view.isEditable = false
-        view.isSelectable = false
-        view.backgroundColor = .clear
-        view.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 24, right: 10)
-        view.textContainer.lineFragmentPadding = 0
-        view.adjustsFontForContentSizeCategory = true
-        view.accessibilityIdentifier = "unifiedDiff"
-        return view
+        SourceTextView.reader()
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
@@ -28,7 +23,15 @@ public struct UnifiedDiffView: UIViewRepresentable {
     }
 
     public func updateUIView(_ view: UITextView, context: Context) {
-        let rendered = DiffText.render(hunks, traits: view.traitCollection)
+        // Environment reads refresh resolved colors and scaled fonts when the reader stays open.
+        _ = dynamicTypeSize
+        let traits = UITraitCollection(traitsFrom: [
+            view.traitCollection,
+            UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light),
+        ])
+        let document = DiffText.document(hunks, traits: traits, maximumLine: maximumLine)
+        let rendered = document.text
+        (view as? SourceTextView)?.sourceSelection = document.selection
         if !view.attributedText.isEqual(to: rendered) {
             let offset = view.contentOffset
             view.attributedText = rendered

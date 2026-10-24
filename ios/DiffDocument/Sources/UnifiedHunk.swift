@@ -6,6 +6,7 @@ public enum UnifiedHunk {
     public static func build(
         oldStart: UInt32, oldLines: UInt32, newStart: UInt32, newLines: UInt32, lines: [String]
     ) throws -> DiffHunk {
+        guard (oldLines == 0 || oldStart > 0), (newLines == 0 || newStart > 0) else { throw InvalidHunk() }
         var old = oldStart
         var new = newStart
         var removed: UInt32 = 0
@@ -41,7 +42,12 @@ public enum UnifiedHunk {
             }
         }
         guard removed == oldLines, added == newLines else { throw InvalidHunk() }
-        return DiffHunk(header: "@@ -\(oldStart),\(oldLines) +\(newStart),\(newLines) @@", lines: parsed)
+        let oldBoundary = Int(oldLines == 0 ? oldStart : oldStart - 1)
+        let newBoundary = Int(newLines == 0 ? newStart : newStart - 1)
+        return DiffHunk(
+            header: "@@ -\(oldStart),\(oldLines) +\(newStart),\(newLines) @@", lines: parsed,
+            oldRange: oldBoundary..<(oldBoundary + Int(oldLines)),
+            newRange: newBoundary..<(newBoundary + Int(newLines)))
     }
 
     private static func advance(_ value: UInt32) throws -> UInt32 {

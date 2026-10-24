@@ -10,6 +10,7 @@ final class ReviewViewModel {
     }
     private(set) var state: State = .loading
     var selectedPath: String?
+    var sourceService: ReviewSourceService { .init(transport: service.transport, url: service.url) }
     private let service: ReviewWebService
     private let item: String
 

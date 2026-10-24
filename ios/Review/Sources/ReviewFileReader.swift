@@ -1,8 +1,9 @@
-import DiffView
 import SwiftUI
 
 struct ReviewFileReader: View {
     let file: ReviewFile
+    let project: String
+    let sourceService: ReviewSourceService
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,10 +18,11 @@ struct ReviewFileReader: View {
             }.padding(.horizontal, 20).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
             Divider()
             switch file.content {
-            case .text(let hunks) where !hunks.isEmpty:
-                UnifiedDiffView(hunks: hunks)
-            case .text:
-                message("No changed text", "This change contains only file metadata, such as a rename or mode change.")
+            case .text(let hunks):
+                if hunks.isEmpty {
+                    message("No changed text", "This change contains only file metadata, such as a rename or mode change.")
+                }
+                ReviewSourceReader(file: file, hunks: hunks, project: project, service: sourceService)
             case .binary:
                 message("Binary file", "A unified text diff is unavailable for this file.")
             case .tooLarge:
