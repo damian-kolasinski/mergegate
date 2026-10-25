@@ -46,9 +46,10 @@ final class SendFeedbackTests: XCTestCase {
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertEqual(
             app.textViews["feedbackSummary"].value as? String, "Check delivery and receipt consistency.")
-        try audit(app)
         capture(app, "Feedback — restored completion sheet")
+        // Audit the source quotes after scrolling them clear of the fixed send bar.
         app.swipeUp()
+        try audit(app)
         capture(app, "Feedback — both source anchors")
         app.buttons["sendFeedback"].tap()
         XCTAssertTrue(

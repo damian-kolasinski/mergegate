@@ -21,14 +21,29 @@ struct FeedbackScene: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(model.sent ? "Feedback sent" : "Send feedback")
+                    Text(
+                        model.sent
+                            ? (model.sentVerdict == .changesRequested ? "Changes requested" : "Feedback sent")
+                            : "Send feedback")
                         .appearanceText(Appearance.heading).accessibilityAddTraits(.isHeader)
                         .fixedSize(horizontal: false, vertical: true)
                     if model.sent {
                         Label("The hub received your feedback", systemImage: "checkmark.circle")
                             .appearanceText(Appearance.label).accessibilityIdentifier("feedbackSent")
-                        Text("Your comments are now in Conversations.").appearanceText(Appearance.body)
+                        Text(model.sentVerdict == .changesRequested
+                            ? "Return to the inbox to follow this item in In progress. Your feedback is in Conversations."
+                            : "Your comments are now in Conversations.").appearanceText(Appearance.body)
                     } else {
+                        Picker("Review outcome", selection: $model.verdict) {
+                            ForEach(FeedbackVerdict.allCases) { verdict in
+                                Text(verdict.title).tag(verdict)
+                            }
+                        }.pickerStyle(.menu).appearanceText(Appearance.label).frame(minHeight: 44)
+                            .disabled(model.frozen || model.busy).accessibilityIdentifier("feedbackVerdict")
+                        Text(model.verdict == .changesRequested
+                            ? "Describe what needs to change. Requesting changes returns this revision to In progress."
+                            : "Send comments and a summary for this revision.")
+                            .appearanceText(Appearance.body).fixedSize(horizontal: false, vertical: true)
                         Text("Summary").appearanceText(Appearance.label)
                         TextEditor(text: $model.summary).appearanceText(Appearance.body)
                             .scrollContentBackground(.hidden).frame(minHeight: 120).padding(8)
@@ -84,7 +99,7 @@ struct FeedbackScene: View {
                             if model.busy { ProgressView() }
                             Text(
                                 model.uncertain
-                                    ? "Check delivery" : model.frozen ? "Retry sending" : "Send feedback")
+                                    ? "Check delivery" : model.frozen ? "Retry sending" : model.verdict.title)
                         }.appearanceText(Appearance.label)
                             .foregroundStyle(model.canSend ? Appearance.onFill : Appearance.primary)
                             .frame(maxWidth: .infinity, minHeight: 44)

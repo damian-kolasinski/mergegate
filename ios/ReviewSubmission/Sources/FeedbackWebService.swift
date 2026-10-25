@@ -50,17 +50,19 @@ struct FeedbackWebService: Sendable {
         _ = try await transport.delete(endpoint(scope).appending(path: "drafts").appending(component: id))
     }
 
-    func submit(scope: CommentDraftScope, summary: String) async throws -> FeedbackReceipt {
+    func submit(scope: CommentDraftScope, summary: String, verdict: FeedbackVerdict) async throws
+        -> FeedbackReceipt
+    {
         struct Body: Encodable {
             let revision: UInt32
-            let verdict = "comment"
+            let verdict: FeedbackVerdict
             let summary: String
         }
         return try await JSONDecoder().decode(
             FeedbackReceipt.self,
             from: transport.post(
                 endpoint(scope).appending(path: "reviews"),
-                body: JSONEncoder().encode(Body(revision: scope.revision, summary: summary))))
+                body: JSONEncoder().encode(Body(revision: scope.revision, verdict: verdict, summary: summary))))
     }
 
     private func endpoint(_ scope: CommentDraftScope) -> URL {
