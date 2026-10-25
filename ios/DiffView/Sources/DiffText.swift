@@ -13,10 +13,11 @@ enum DiffText {
         _ hunks: [DiffHunk], traits: UITraitCollection, maximumLine: UInt32 = 0,
         styling: (any CodeStyling)? = nil
     ) -> (
-        text: NSAttributedString, selection: SourceSelection
+        text: NSAttributedString, selection: SourceSelection, comments: SourceCommentSelection
     ) {
         let result = NSMutableAttributedString()
         var ranges: [NSRange] = []
+        var commentRows: [SourceCommentSelection.Row] = []
         let font = UIFontMetrics(forTextStyle: .body).scaledFont(
             for: .monospacedSystemFont(ofSize: Appearance.code.size, weight: .regular),
             compatibleWith: traits)
@@ -76,6 +77,11 @@ enum DiffText {
                 let gutter = "\t\(number)\t\(marker)\t"
                 let start = result.length
                 if line.kind != .note {
+                    commentRows.append(
+                        .init(
+                            range: NSRange(
+                                location: start, length: gutter.utf16.count + line.text.utf16.count + 1),
+                            line: line))
                     let hasNewline =
                         line.hasNewline
                         && (index + 1 >= hunk.lines.count || hunk.lines[index + 1].kind != .note)
@@ -110,6 +116,6 @@ enum DiffText {
                     range: NSRange(location: start, length: number.utf16.count + 1))
             }
         }
-        return (result, SourceSelection(text: result.string, ranges: ranges))
+        return (result, SourceSelection(text: result.string, ranges: ranges), .init(rows: commentRows))
     }
 }

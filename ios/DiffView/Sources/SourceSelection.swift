@@ -1,3 +1,4 @@
+import DiffDocumentInterface
 import Foundation
 import UIKit
 
@@ -26,11 +27,15 @@ final class SourceTextView: UITextView {
         view.textContainer.lineFragmentPadding = 0
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityIdentifier = "unifiedDiff"
-        view.accessibilityHint = "Select text to copy source without line numbers or diff markers."
+        view.accessibilityHint =
+            "Select text to copy source or choose Comment. Select lines on one diff side to comment."
+        view.delegate = view
         return view
     }
 
     var sourceSelection = SourceSelection(text: "", ranges: [])
+    var commentSelection = SourceCommentSelection(rows: [])
+    var onComment: ((SourceAnchor) -> Void)?
 
     func install(_ text: NSAttributedString, selection: SourceSelection) {
         sourceSelection = selection

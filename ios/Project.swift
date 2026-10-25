@@ -50,7 +50,7 @@ let project = Project(
             sources: ["App/**"], resources: ["Resources/**"],
             dependencies: [
                 .target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review"),
-                .target(name: "CodeStyling"),
+                .target(name: "CodeStyling"), .target(name: "Conversation"),
             ]
         ),
         .target(
@@ -67,6 +67,14 @@ let project = Project(
             bundleId: "dev.mergegate.DiffDocumentInterface", deploymentTargets: .iOS("26.0"),
             sources: ["DiffDocument/Interface/**"]
         ),
+        .target(
+            name: "ConversationInterface", destinations: [.iPhone, .iPad], product: .framework,
+            bundleId: "dev.mergegate.ConversationInterface", deploymentTargets: .iOS("26.0"),
+            sources: ["Conversation/Interface/**"], dependencies: [.target(name: "DiffDocumentInterface")]
+        ),
+        module(
+            "Conversation", dependencies: ["ConversationInterface", "DiffDocumentInterface"],
+            appearance: true),
         module("DiffDocument", dependencies: ["DiffDocumentInterface"]),
         .target(
             name: "CodeStylingInterface", destinations: [.iPhone, .iPad], product: .framework,
@@ -80,9 +88,10 @@ let project = Project(
             "Review",
             dependencies: [
                 "HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface", "DiffView",
-                "CodeStylingInterface",
+                "CodeStylingInterface", "ConversationInterface",
             ], appearance: true),
-        tests("CodeStyling"), tests("DiffDocument"), tests("DiffView"), tests("Review"),
+        tests("Conversation"), tests("CodeStyling"), tests("DiffDocument"), tests("DiffView"),
+        tests("Review"),
         tests("HubConnection"), tests("Inbox"), tests("Networking"),
         .target(
             name: "MergegateUITests", destinations: [.iPhone, .iPad], product: .uiTests,
@@ -95,7 +104,8 @@ let project = Project(
             name: "Mergegate", buildAction: .buildAction(targets: ["Mergegate"]),
             testAction: .targets(
                 [
-                    "CodeStylingTests", "HubConnectionTests", "InboxTests", "NetworkingTests",
+                    "ConversationTests", "CodeStylingTests", "HubConnectionTests", "InboxTests",
+                    "NetworkingTests",
                     "DiffDocumentTests", "DiffViewTests", "ReviewTests", "MergegateUITests",
                 ],
                 arguments: .arguments(environmentVariables: [
@@ -105,6 +115,7 @@ let project = Project(
                     "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)",
                     "MG_IOS_TEST_HIGHLIGHT": "$(MG_IOS_TEST_HIGHLIGHT)",
                     "MG_IOS_TEST_VIEWED": "$(MG_IOS_TEST_VIEWED)",
+                    "MG_IOS_TEST_DRAFTS": "$(MG_IOS_TEST_DRAFTS)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )

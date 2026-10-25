@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first six slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, and track viewed files. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The first seven slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, and keep source-anchored comment drafts. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -17,6 +17,8 @@ Load unchanged context fetches the comparison’s immutable old/new blobs, then 
 The reader applies hub-provided UTF-16 syntax spans in source coordinates before wrapping, using the same generated light/dark palette as the web. Removed lines use old-blob spans; additions and context use new-blob spans. The text, diff backgrounds, gutters, and source-only Copy remain intact. Missing grammars, pending spans, failed highlighting requests, unknown tags, and invalid ranges leave readable plain source. One shared foreground SSE transport refreshes highlighting on connect/reconnect and `highlights.changed`; it stops when there are no consumers or the app leaves the foreground. Each file subscription refreshes initially, including when reusing a stream. Highlight refreshes use the displayed immutable blob IDs and never switch the open revision, file, expanded context, or selection. Other live review/inbox updates belong to a later slice.
 
 The File reader’s bottom bar explicitly marks/unmarks the selected file viewed through the hub, naming the displayed revision. It keeps the file open, including expanded context and reading position. Progress and the file list update after confirmation; a failed write retains the previous state and offers retry for that file. Only one viewed write is sent at a time; Back is temporarily hidden while saving so the inbox refresh follows the write. Trusted files count as viewed automatically and have no toggle. Viewed marks persist in the hub, so reopening the review, relaunching the app, and returning to the inbox show the saved progress. Marking viewed does not submit feedback or approve a review.
+
+Select source text and choose **Comment** in the native selection menu to start a draft. The sheet shows the pinned item/revision, file, Before/After side, source-line range, and quoted source. Removals anchor to old lines; additions and unchanged context anchor to new lines. Selections spanning both sides or hidden source gaps cannot create a comment. Wrapped display rows never become anchors. The navigation bar’s **Comment drafts** control lists this review’s local drafts across files, with editing and confirmed deletion. Text saves synchronously through SwiftData as it changes, including unfinished edits before closing the sheet. Drafts are isolated by normalized hub address, internal item identity, and revision; they survive process termination. Storage failures retain the editor text with retry and confirmed discard recovery. Existing unchanged drafts stay readable when writing fails. These drafts stay on this iPhone and do not submit feedback, change viewed state, or mutate the hub; feedback delivery belongs to slice 9.
 
 ## Verification
 
@@ -98,15 +100,27 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-viewed
 
 This flow marks/unmarks through the native control, verifies the file list and inbox counts, reopens and terminates/relaunches the app, and checks the trusted-file boundary. It audits accessibility and dark mode at the largest text size and retains screenshots. Behavior tests cover confirmed progress, failed-write retry after changing files, serialized writes while navigating, revision/path encoding, and excluding trusted files from remaining work. Use this fixture independently of the start-review fixture flow, which expects all four files to require review.
 
+For the persistent-draft flow, seed both real diff sides on a fresh smoke hub:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-drafts
+python3 ios/Scripts/drafts-fixture.py /tmp/mergegate-ios-drafts
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_DRAFTS=1 .claude/scripts/check.sh test ios
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-drafts
+```
+
+The UI test selects removed and added source, creates drafts through the real native menu, terminates the app with an open editor, restores and edits feedback, navigates files, and verifies deletion across another relaunch. It audits the list/editor in normal and dark/accessibility appearances and retains screenshots. Swift behavior tests reopen an on-disk SwiftData store, verify hub/item/revision isolation, exact Unicode quotes and old/new line ranges, empty edits, save/delete failure retries, unchanged reads under write failure, and discard recovery. The fixture remains unreviewed on the hub.
+
 ## Module boundaries
 
 - `App` composes feature builders.
 - `HubConnection` owns URL validation, `/api/whoami`, connection presentation, and the selected URL in UserDefaults. `HubConnectionInterface` exposes only the established connection value needed by Inbox.
 - `Inbox` owns `/api/inbox` and its consumed `/api/items/{id}` triage subset, project/state filtering, pending-decision interpretation, refresh policy, state, and rows.
 - `Review` owns its `/api/items/{id}?since=all` subset, revision-scoped `/viewed` writes/retry, guide/file presentation, snapshot loading/retry, selected file, loading/retrying blobs and highlights from the displayed revision, and its highlighting event policy. Inbox accepts a destination builder; App composes it with Review without sharing DTOs.
+- `Conversation` owns local comment drafts, their SwiftData schema and persistence, editing/list sheets, and storage recovery. `ConversationInterface` exposes only the review scope and source location needed for composition.
 - `DiffDocument` maps unified hunks and unchanged blob gaps into source-coordinate lines; `DiffDocumentInterface` exposes only those rendering values.
 - `CodeStyling` implements `CodeStylingInterface`, mapping neutral UTF-16 spans to native attributes; App injects the implementation into Review and DiffView.
-- `DiffView` renders those values with UIKit/TextKit 2, native selection with source-only Copy, wrapping, and feature-local generated appearance.
+- `DiffView` renders those values with UIKit/TextKit 2, native selection with source-only Copy and source-coordinate Comment actions, wrapping, and feature-local generated appearance.
 - `Networking` provides transport primitives: bounded URLSession GET/JSON PUT requests, hub error decoding, rejection of redirects, and a multiplexed reconnecting SSE byte stream. It owns no endpoint or feature refresh policy.
 - `Appearance/Appearance.swift` is generated from [shared tokens](../appearance/README.md) and compiled privately into features. DM Sans is registered by the app; semantic colors follow light/dark appearance and typography scales with Dynamic Type.
 

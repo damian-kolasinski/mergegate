@@ -12,6 +12,7 @@ struct ReviewSourceReader: View {
     let item: String
     let revision: UInt32
     let styling: any CodeStyling
+    let onComment: (SourceAnchor) -> Void
     @Environment(\.scenePhase) private var scenePhase
     @State private var highlights = ReviewHighlightModel()
     private var paintedHunks: [DiffHunk] { highlights.painting?.paint(hunks) ?? hunks }
@@ -41,7 +42,7 @@ struct ReviewSourceReader: View {
                                     lines: highlights.painting?.paint(Array(gap.lines.prefix(count)))
                                         ?? Array(gap.lines.prefix(count)))
                             ],
-                            maximumLine: maximumLine, styling: styling)
+                            maximumLine: maximumLine, styling: styling, onComment: onComment)
                     }
                     if count < gap.lines.count {
                         Button {
@@ -52,7 +53,8 @@ struct ReviewSourceReader: View {
                                     "Show \(min(20, gap.lines.count - count)) lines",
                                     systemImage: "arrow.up.and.down.text.horizontal")
                                 Spacer(minLength: 8)
-                                Text("\(gap.lines.count - count) unchanged").foregroundStyle(Appearance.secondary)
+                                Text("\(gap.lines.count - count) unchanged").foregroundStyle(
+                                    Appearance.secondary)
                             }.appearanceText(Appearance.caption)
                                 .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44)
                         }
@@ -61,13 +63,16 @@ struct ReviewSourceReader: View {
                     }
                     if gap.id < hunks.count {
                         UnifiedDiffView(
-                            hunks: [paintedHunks[gap.id]], maximumLine: maximumLine, styling: styling)
+                            hunks: [paintedHunks[gap.id]], maximumLine: maximumLine, styling: styling,
+                            onComment: onComment)
                     }
                 }
             } else {
                 if file.oldBlob != nil || file.newBlob != nil {
                     Button {
-                        Task { await model.load(service: service, project: project, file: file, hunks: hunks) }
+                        Task {
+                            await model.load(service: service, project: project, file: file, hunks: hunks)
+                        }
                     } label: {
                         HStack {
                             if model.loading { ProgressView() }
@@ -85,7 +90,8 @@ struct ReviewSourceReader: View {
                     }
                 }
                 if !hunks.isEmpty {
-                    UnifiedDiffView(hunks: paintedHunks, maximumLine: maximumLine, styling: styling)
+                    UnifiedDiffView(
+                        hunks: paintedHunks, maximumLine: maximumLine, styling: styling, onComment: onComment)
                 }
             }
         }.tint(Appearance.brand)

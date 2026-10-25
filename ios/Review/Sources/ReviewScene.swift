@@ -1,13 +1,23 @@
 import CodeStylingInterface
+import ConversationInterface
 import DiffView
 import SwiftUI
 
 struct ReviewScene: View {
     @State var model: ReviewViewModel
     let styling: any CodeStyling
-    private enum Sheet: String, Identifiable {
+    let hub: URL
+    let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> AnyView
+    private enum Sheet: Identifiable {
         case guide, files
-        var id: String { rawValue }
+        case drafts(CommentDraftLocation?)
+        var id: String {
+            switch self {
+            case .guide: "guide"
+            case .files: "files"
+            case .drafts: "drafts"
+            }
+        }
     }
     @State private var sheet: Sheet?
 
@@ -55,9 +65,14 @@ struct ReviewScene: View {
                             }
                             Divider()
                             ReviewFileReader(
-                                file: file, project: snapshot.item.project, sourceService: model.sourceService,
+                                file: file, project: snapshot.item.project,
+                                sourceService: model.sourceService,
                                 highlightService: model.highlightService,
-                                item: snapshot.item.id, revision: snapshot.item.revision.number, styling: styling
+                                item: snapshot.item.id, revision: snapshot.item.revision.number,
+                                styling: styling,
+                                onComment: { anchor in
+                                    sheet = .drafts(.init(path: file.path, anchor: anchor))
+                                }
                             ).id(file.path)
                         } else {
                             ContentUnavailableView(
@@ -70,7 +85,8 @@ struct ReviewScene: View {
             }
             if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
                 ReviewViewedBar(
-                    file: file, viewed: snapshot.reviewCount - snapshot.remaining, total: snapshot.reviewCount,
+                    file: file, viewed: snapshot.reviewCount - snapshot.remaining,
+                    total: snapshot.reviewCount,
                     saving: model.isSavingViewed, failure: model.viewedFailure,
                     mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
                     retry: { Task { await model.retryViewed() } })
@@ -87,6 +103,13 @@ struct ReviewScene: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    sheet = .drafts(nil)
+                } label: {
+                    Label("Comment drafts", systemImage: "text.bubble")
+                }.tint(Appearance.brand).accessibilityIdentifier("reviewDrafts")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     sheet = .guide
                 } label: {
                     Label("Review guide", systemImage: "book")
@@ -95,9 +118,17 @@ struct ReviewScene: View {
         }
         .sheet(item: $sheet) { selection in
             switch selection {
+            case .drafts(let location):
+                drafts(
+                    .init(
+                        hub: hub, item: snapshot.item.id, name: snapshot.item.name,
+                        revision: snapshot.item.revision.number), location
+                ) { sheet = nil }
             case .guide: ReviewGuideScene(guide: snapshot.guide) { sheet = nil }
             case .files:
-                ReviewFilesScene(files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }) {
+                ReviewFilesScene(
+                    files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }
+                ) {
                     path in
                     model.selectedPath = path
                     sheet = nil
