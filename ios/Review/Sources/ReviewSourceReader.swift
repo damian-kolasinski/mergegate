@@ -17,6 +17,9 @@ struct ReviewSourceReader: View {
     let onReady: () -> Void
     let onComment: (SourceAnchor) -> Void
     let onReadConversations: ([SourceAnchor]) -> Void
+    var focus: SourceAnchor? = nil
+    var revealRequest: UUID? = nil
+    var didReveal: (() -> Void)? = nil
     @Environment(\.scenePhase) private var scenePhase
     @State private var highlights = ReviewHighlightModel()
     private var paintedHunks: [DiffHunk] { highlights.painting?.paint(hunks) ?? hunks }
@@ -25,7 +28,8 @@ struct ReviewSourceReader: View {
     private var maximumLine: UInt32 {
         let tail = model.context?.gaps.last?.lines.last
         return max(
-            UInt32(hunks.last?.oldRange.upperBound ?? 0), UInt32(hunks.last?.newRange.upperBound ?? 0),
+            UInt32(hunks.last?.oldRange.upperBound ?? 0),
+            UInt32(hunks.last?.newRange.upperBound ?? 0),
             tail?.oldLine ?? 0, tail?.newLine ?? 0)
     }
 
@@ -43,7 +47,8 @@ struct ReviewSourceReader: View {
                             hunks: [
                                 DiffHunk(
                                     header: "",
-                                    lines: highlights.painting?.paint(Array(gap.lines.prefix(count)))
+                                    lines: highlights.painting?.paint(
+                                        Array(gap.lines.prefix(count)))
                                         ?? Array(gap.lines.prefix(count)))
                             ],
                             // The hub accepts anchors only within its submitted diff hunks.
@@ -70,16 +75,21 @@ struct ReviewSourceReader: View {
                     }
                     if gap.id < hunks.count {
                         UnifiedDiffView(
-                            hunks: [paintedHunks[gap.id]], maximumLine: maximumLine, styling: styling,
+                            hunks: [paintedHunks[gap.id]], maximumLine: maximumLine,
+                            styling: styling,
                             sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
-                            onComment: onComment, onReadConversations: onReadConversations)
+                            onComment: onComment, onReadConversations: onReadConversations,
+                            focus: focus, revealRequest: revealRequest, didReveal: didReveal
+                        )
+                        .id("reviewHunk-\(gap.id)")
                     }
                 }
             } else {
                 if file.oldBlob != nil || file.newBlob != nil {
                     Button {
                         Task {
-                            await model.load(service: service, project: project, file: file, hunks: hunks)
+                            await model.load(
+                                service: service, project: project, file: file, hunks: hunks)
                             contextLoaded = model.context != nil
                         }
                     } label: {
@@ -88,21 +98,30 @@ struct ReviewSourceReader: View {
                             Text(
                                 model.loading
                                     ? "Loading source context…"
-                                    : model.error == nil ? "Load unchanged context" : "Retry source context")
+                                    : model.error == nil
+                                        ? "Load unchanged context" : "Retry source context")
                         }.frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .disabled(model.loading).accessibilityIdentifier("loadSourceContext")
                     .appearanceText(Appearance.caption).background(Appearance.surface)
                     if let error = model.error {
-                        Text(error).appearanceText(Appearance.caption).foregroundStyle(Appearance.error)
-                            .padding(10).accessibilityIdentifier("sourceContextError")
+                        Text(error).appearanceText(Appearance.caption).foregroundStyle(
+                            Appearance.error
+                        )
+                        .padding(10).accessibilityIdentifier("sourceContextError")
                     }
                 }
                 if !hunks.isEmpty {
-                    UnifiedDiffView(
-                        hunks: paintedHunks, maximumLine: maximumLine, styling: styling,
-                        sourceSides: file.interdiff?.sourceSides ?? [.old, .new], onComment: onComment,
-                        onReadConversations: onReadConversations)
+                    ForEach(Array(paintedHunks.enumerated()), id: \.offset) { index, hunk in
+                        UnifiedDiffView(
+                            hunks: [hunk], maximumLine: maximumLine, styling: styling,
+                            sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
+                            onComment: onComment,
+                            onReadConversations: onReadConversations, focus: focus,
+                            revealRequest: revealRequest, didReveal: didReveal
+                        )
+                        .id("reviewHunk-\(index)")
+                    }
                 }
             }
         }.tint(Appearance.brand)

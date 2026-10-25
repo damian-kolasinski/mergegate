@@ -19,7 +19,12 @@ struct InboxGroup: Identifiable {
 
 extension InboxSnapshot {
     var allItems: [InboxItem] { needsYou + withAgents + merging + closed }
-    var projects: [String] { Set(allItems.map(\.project)).sorted() }
+    var projects: [String] {
+        Set(
+            allItems.map(\.project) + (rules ?? []).map(\.project)
+                + (weekly?.repositories.map(\.project) ?? [])
+        ).sorted()
+    }
 
     func groups(project: String?, filter: InboxFilter) -> [InboxGroup] {
         let matching: ([InboxItem]) -> [InboxItem] = { items in
@@ -34,7 +39,11 @@ extension InboxSnapshot {
             (.closed, "Closed today", matching(closed)),
         ]
         return groups.compactMap { state, title, items in
-            guard (filter == .all || filter == state || (filter == .needsYou && (state == .decisions || state == .review))) && !items.isEmpty else { return nil }
+            guard
+                (filter == .all || filter == state
+                    || (filter == .needsYou && (state == .decisions || state == .review)))
+                    && !items.isEmpty
+            else { return nil }
             return InboxGroup(title: title, items: items)
         }
     }

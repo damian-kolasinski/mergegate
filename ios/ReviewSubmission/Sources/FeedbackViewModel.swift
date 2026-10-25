@@ -8,6 +8,7 @@ final class FeedbackViewModel {
     let scope: CommentDraftScope
     private let draftsStore: any FeedbackDrafts
     private let outbox: any FeedbackOutbox
+    private let beforeSend: () async -> Void
     private let service: FeedbackWebService
     private var record: FeedbackRecord
     private(set) var isCurrent = false
@@ -17,7 +18,9 @@ final class FeedbackViewModel {
     private(set) var sent = false
     private(set) var completedTarget: String?
     private(set) var approval: ApprovalOutcome?
-    var approvalTarget: String? { record.attempt?.target ?? snapshot?.item.target ?? completedTarget }
+    var approvalTarget: String? {
+        record.attempt?.target ?? snapshot?.item.target ?? completedTarget
+    }
     private(set) var error: String?
     private(set) var summarySaved = true
     var summary: String
@@ -43,8 +46,9 @@ final class FeedbackViewModel {
 
     init(
         scope: CommentDraftScope, drafts: any FeedbackDrafts, outbox: any FeedbackOutbox,
-        service: FeedbackWebService
+        service: FeedbackWebService, beforeSend: @escaping () async -> Void = {}
     ) throws {
+        self.beforeSend = beforeSend
         self.scope = scope
         draftsStore = drafts
         self.outbox = outbox
@@ -102,7 +106,8 @@ final class FeedbackViewModel {
             for draft in attempt.drafts {
                 if let copy = available.first(where: {
                     !baseline.contains($0.id) && $0.matches(draft, revision: scope.revision)
-                        && (attempt.uploaded[draft.id] == nil || attempt.uploaded[draft.id] == $0.id)
+                        && (attempt.uploaded[draft.id] == nil
+                            || attempt.uploaded[draft.id] == $0.id)
                 }) {
                     try await service.delete(copy.id, scope: scope)
                     available.removeAll { $0.id == copy.id }
@@ -146,7 +151,8 @@ final class FeedbackViewModel {
                     confirmedTarget == current.item.target,
                     record.attempt?.target == nil || record.attempt?.target == confirmedTarget
                 else {
-                    throw FeedbackIssue(message: "Confirm the revision and target before approving.")
+                    throw FeedbackIssue(
+                        message: "Confirm the revision and target before approving.")
                 }
             }
             if record.attempt == nil {
@@ -163,7 +169,8 @@ final class FeedbackViewModel {
                 guard local == drafts else {
                     drafts = local
                     throw FeedbackIssue(
-                        message: "Local drafts changed. Read the updated feedback, then send again.")
+                        message: "Local drafts changed. Read the updated feedback, then send again."
+                    )
                 }
                 guard canSendContent(current) else {
                     throw FeedbackIssue(message: "Add a summary or comment before sending.")
@@ -172,7 +179,8 @@ final class FeedbackViewModel {
                 record.attempt = FeedbackAttempt(
                     drafts: drafts, verdict: verdict,
                     summary: summary.trimmingCharacters(in: .whitespacesAndNewlines),
-                    cursor: log.cursor, hubDrafts: current.drafts, hubReplies: current.draft_replies,
+                    cursor: log.cursor, hubDrafts: current.drafts,
+                    hubReplies: current.draft_replies,
                     target: verdict == .approved ? confirmedTarget : nil)
                 try save()
             }
@@ -182,7 +190,8 @@ final class FeedbackViewModel {
             for draft in attempt.drafts {
                 let match = available.first {
                     !baseline.contains($0.id) && $0.matches(draft, revision: scope.revision)
-                        && (attempt.uploaded[draft.id] == nil || attempt.uploaded[draft.id] == $0.id)
+                        && (attempt.uploaded[draft.id] == nil
+                            || attempt.uploaded[draft.id] == $0.id)
                 }
                 let comment: FeedbackComment
                 if let match {
@@ -208,7 +217,8 @@ final class FeedbackViewModel {
                 attempt.hubDrafts.allSatisfy({ ready.drafts.contains($0) }),
                 attempt.drafts.allSatisfy({ draft in
                     ready.drafts.contains {
-                        $0.id == attempt.uploaded[draft.id] && $0.matches(draft, revision: scope.revision)
+                        $0.id == attempt.uploaded[draft.id]
+                            && $0.matches(draft, revision: scope.revision)
                     }
                 }), ready.draft_replies == attempt.hubReplies
             else {
@@ -219,8 +229,11 @@ final class FeedbackViewModel {
             }
             if attempt.verdict == .approved && ready.item.target != attempt.target {
                 throw FeedbackIssue(
-                    message: "The merge target changed. Reopen the completion sheet and confirm it again.")
+                    message:
+                        "The merge target changed. Reopen the completion sheet and confirm it again."
+                )
             }
+            await beforeSend()
             attempt.reviewStarted = true
             record.attempt = attempt
             try save()
@@ -232,7 +245,8 @@ final class FeedbackViewModel {
                     guard try await reconcile() else {
                         throw FeedbackIssue(
                             message:
-                                "Approval receipt is not available yet. Check delivery before continuing.")
+                                "Approval receipt is not available yet. Check delivery before continuing."
+                        )
                     }
                     return
                 }
@@ -241,7 +255,8 @@ final class FeedbackViewModel {
                 guard
                     receipt.revision == scope.revision
                         && receipt.verdict == (attempt.verdict ?? .comment).rawValue
-                        && receipt.summary == attempt.summary && Set(receipt.comments.map(\.id)) == expected
+                        && receipt.summary == attempt.summary
+                        && Set(receipt.comments.map(\.id)) == expected
                         && receipt.replies == attempt.hubReplies
                 else {
                     throw FeedbackIssue(
@@ -274,7 +289,8 @@ final class FeedbackViewModel {
         let expected = Set(attempt.hubDrafts.map(\.id) + Array(attempt.uploaded.values))
         if log.events.contains(where: {
             $0.item == scope.item && $0.revision == scope.revision && $0.type == "review.submitted"
-                && $0.verdict == (attempt.verdict ?? .comment).rawValue && $0.summary == attempt.summary
+                && $0.verdict == (attempt.verdict ?? .comment).rawValue
+                && $0.summary == attempt.summary
                 && Set(($0.comments ?? []).map(\.id)) == expected
                 && ($0.replies ?? []) == attempt.hubReplies
         }) {

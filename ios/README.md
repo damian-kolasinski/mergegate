@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first fourteen slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, keep source-anchored comment drafts, follow existing conversations, send feedback with a summary, request changes, re-review revised items, resolve pending decisions, approve and merge an exact revision, and stay current through foreground live updates. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The review workflow described in [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, keep source-anchored comment drafts, follow existing conversations, send feedback with a summary, request changes, re-review revised items, resolve pending decisions, approve and merge an exact revision, and stay current through foreground live updates. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -277,3 +277,32 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-offline
 ```
 
 The native flow caches real source/highlighting, stops the isolated hub, terminates/reopens the app, restores expanded context and edits local feedback offline. It then restarts the hub with a CLI-submitted revision, verifies stale feedback cannot send, explicitly opens the current revision and verifies its delivered summary in the real hub event log. It retains demo screenshots and audits light and dark/largest-text appearances. Behavior tests cover comparison/position restoration, immutable source and span reuse, hub/item isolation, corrupt cache, authorization failures, reconnect revision pinning, delayed refreshes, and same-revision versus stale feedback recovery.
+
+
+## Web feature parity
+
+The native client exposes the web operator workflow through native navigation and sheets:
+
+| Area | Native controls |
+| --- | --- |
+| Inbox | Project/state/action filters, pending decisions and rule changes, priority/notes, stack/merge flags, revision changes, demos and weekly closures |
+| Review | Importance order and full ranking reasons, viewed state, any available interdiff, source context, highlighting, source selection/copy and conversation-to-source navigation |
+| Content | Rendered guide and Markdown previews, before/after images, overlay and exact pixel differences (including resized images), original-file sharing, screenshot/video demos and current demo ZIP sharing |
+| Conversations | Sent history, GitHub links, local comments, hub draft editing/deletion/re-placement, reply creation/editing/deletion, votes including lapsed/dismissed comments, acceptance and override of rejections |
+| Completion | Feedback, changes requested, exact-revision approval, merge outcome, next review, held-merge retry/cancellation, confirmed abandonment, GitHub comment sync and priority editing |
+| Rules | Applied rules, proposal previews and affected files, approve/reject proposals and held edits, explicit confirmation before overwriting the rules file |
+
+The native reader uses a single column and touch/source-selection controls in place of desktop keyboard navigation. It also retains offline reviews, drafts and reading position. Image decoding is bounded to 64 MB and 16 million pixels; an image pair whose combined extent exceeds the comparison limit remains readable side by side. Markdown and guide rendering never load remote images or run HTML. Active review time includes guide/thread scrolling, typing and bounded video playback, and is settled before feedback delivery or abandonment.
+
+Run the new parity flow with a fresh disposable hub:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-parity
+python3 ios/Scripts/parity-fixture.py /tmp/mergegate-ios-parity
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_PARITY=1 \
+  .claude/scripts/check.sh test ios -- -only-testing:MergegateUITests/WebParityTests
+python3 ios/Scripts/parity-fixture.py /tmp/mergegate-ios-parity --verify
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-parity
+```
+
+This fixture creates only disposable local repositories and an isolated hub. The flow approves a proposed rule, changes priority, reads attached media, previews Markdown and images, saves a thread reply, jumps to source, submits real feedback, abandons the item and opens the next review. Screenshots remain in the Xcode result bundle. Behavior tests cover stale decisions, mutable ZIP downloads, resized pixel differences, same-revision rule reclassification, exact-line revealing, idle review time, and repeated lost reply responses with intervening edits.

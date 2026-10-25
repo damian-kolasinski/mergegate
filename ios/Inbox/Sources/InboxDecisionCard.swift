@@ -24,14 +24,18 @@ struct InboxDecisionCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(triage?.decisions.first?.headline ?? "A decision needs your attention")
                     .appearanceText(Appearance.rowHeading)
-                Text(item.title).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                Text(item.title).appearanceText(Appearance.caption).foregroundStyle(
+                    Appearance.secondary)
             }
             if let decision = triage?.decisions.first {
                 Text(decision.preview).appearanceText(Appearance.body)
                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
             } else if error == nil {
-                Text(triage == nil ? "Loading decision details…" : "Decision changed. Refresh the inbox.")
-                    .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                Text(
+                    triage == nil
+                        ? "Loading decision details…" : "Decision changed. Refresh the inbox."
+                )
+                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
             }
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
@@ -47,6 +51,7 @@ struct InboxDecisionCard: View {
                     }
                 }
             }
+            InboxItemStatus(item: item, showPriority: false)
             InboxProgress(item: item, triage: triage, onSurface: true)
             if let error {
                 Text(error).appearanceText(Appearance.caption).foregroundStyle(Appearance.error)
@@ -60,21 +65,28 @@ struct InboxDecisionCard: View {
 
     private var decisionLabel: String {
         let count = triage?.decisions.count ?? 0
-        return count > 1 ? "\(count) pending decisions" : triage?.decisions.first?.kind ?? "Decision"
+        return count > 1
+            ? "\(count) pending decisions" : triage?.decisions.first?.kind ?? "Decision"
     }
     private var reviewButton: some View {
         Button(action: openReview) {
             Text("Open review")
                 .appearanceText(Appearance.label).frame(minHeight: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain).foregroundStyle(Appearance.brand).accessibilityIdentifier("openReview-\(item.id)")
+        }.buttonStyle(.plain).foregroundStyle(Appearance.brand).accessibilityIdentifier(
+            "openReview-\(item.id)")
     }
 
     private var detailsButton: some View {
         Button(action: openDecisions) {
-            Label((triage?.decisions.count ?? 0) > 1 ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details", systemImage: "arrow.up.right")
-                .appearanceText(Appearance.label).foregroundStyle(Appearance.primary)
-                .accessibilityIdentifier("inboxDecisionDetailsLabel")
-                .padding(.horizontal, 12).frame(minHeight: 44)
-        }.buttonStyle(.glass).tint(Appearance.brand).accessibilityHint(decisionLabel).accessibilityIdentifier("decisionDetails-\(item.id)")
+            Label(
+                (triage?.decisions.count ?? 0) > 1
+                    ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details",
+                systemImage: "arrow.up.right"
+            )
+            .appearanceText(Appearance.label).foregroundStyle(Appearance.primary)
+            .accessibilityIdentifier("inboxDecisionDetailsLabel")
+            .padding(.horizontal, 12).frame(minHeight: 44)
+        }.buttonStyle(.glass).tint(Appearance.brand).accessibilityHint(decisionLabel)
+            .accessibilityIdentifier("decisionDetails-\(item.id)")
     }
 }

@@ -7,27 +7,41 @@ import SwiftUI
 public enum ReviewBuilder {
     @MainActor
     public static func build<
-        Drafts: View, Conversations: View, FileConversations: View, Feedback: View
+        Drafts: View, Conversations: View, FileConversations: View, Feedback: View, Rules: View
     >(
         hub: ConnectedHub, item: String, styling: any CodeStyling,
+        openItem: @escaping (String) -> Void,
         @ViewBuilder drafts:
             @escaping (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts,
         @ViewBuilder conversations:
-            @escaping (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> Conversations,
+            @escaping (
+                CommentDraftScope, ConversationLocation?, @escaping (ConversationLocation) -> Void,
+                @escaping () -> Void,
+                @escaping () -> Void
+            ) -> Conversations,
         @ViewBuilder fileConversations: @escaping (CommentDraftScope, String) -> FileConversations,
-        @ViewBuilder feedback: @escaping (CommentDraftScope, @escaping () -> Void) -> Feedback
+        @ViewBuilder rules: @escaping (String, @escaping (String) -> Void) -> Rules,
+        @ViewBuilder feedback:
+            @escaping (
+                CommentDraftScope, @escaping () async -> Void, @escaping () -> Void,
+                @escaping () -> Void,
+                @escaping () -> Void
+            ) -> Feedback
     ) -> some View {
         ReviewScene(
-            model: model(hub: hub, item: item),
+            model: model(
+                service: ReviewWebService(
+                    transport: URLSessionTransport(), url: hub.url, cache: ReviewCache()),
+                item: item),
             styling: styling, hub: hub.url, drafts: drafts, conversations: conversations,
-            fileConversations: fileConversations, feedback: feedback)
+            fileConversations: fileConversations, feedback: feedback, rules: rules,
+            openItem: openItem)
     }
 
-    @MainActor private static func model(hub: ConnectedHub, item: String) -> ReviewViewModel {
-        let service = ReviewWebService(
-            transport: URLSessionTransport(), url: hub.url, cache: ReviewCache())
+    @MainActor static func model(service: ReviewWebService, item: String) -> ReviewViewModel {
         do {
-            return ReviewViewModel(service: service, item: item, readingStore: try ReviewReadingStore())
+            return ReviewViewModel(
+                service: service, item: item, readingStore: try ReviewReadingStore())
         } catch {
             let model = ReviewViewModel(service: service, item: item)
             model.positionFailure =

@@ -6,18 +6,22 @@ import Foundation
 struct ConversationSnapshot: Decodable, Sendable {
     let comments: [ThreadComment]
     let replies: [ThreadReply]
+    var drafts: [ThreadComment]? = nil
+    var draft_replies: [ThreadReply]? = nil
 
     func threads(path: String? = nil, anchors: [SourceAnchor] = [], revision: UInt32)
         -> [ConversationThread]
     {
         comments.compactMap { comment in
             let thread = ConversationThread(
-                comment: comment, replies: replies.filter { $0.comment == comment.id }, revision: revision)
+                comment: comment, replies: replies.filter { $0.comment == comment.id },
+                revision: revision)
             guard path == nil || comment.filePath == path else { return nil }
             if !anchors.isEmpty {
                 guard let range = thread.sourceRange,
                     anchors.contains(where: {
-                        comment.side == $0.side.rawValue && range.overlaps($0.startLine...$0.endLine)
+                        comment.side == $0.side.rawValue
+                            && range.overlaps($0.startLine...$0.endLine)
                     })
                 else { return nil }
             }
@@ -33,6 +37,7 @@ struct ThreadComment: Decodable, Sendable {
         let line: UInt32?
     }
     struct External: Decodable, Sendable {
+        var url: URL? = nil
         let author: String
         let path: String?
         let pending: Bool
@@ -83,7 +88,8 @@ struct ThreadReply: Decodable, Identifiable, Sendable {
 
     var statusLabel: String? {
         switch status {
-        case "addressed": addressed_in.map { "Addressed in r\($0)" } ?? "Addressed in the next revision"
+        case "addressed":
+            addressed_in.map { "Addressed in r\($0)" } ?? "Addressed in the next revision"
         case "question": "Question"
         case "rejected": "Rejected"
         default: status

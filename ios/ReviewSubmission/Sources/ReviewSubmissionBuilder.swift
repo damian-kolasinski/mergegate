@@ -6,15 +6,23 @@ public enum ReviewSubmissionBuilder {
     @MainActor
     public static func build(
         scope: CommentDraftScope, drafts: @escaping () throws -> any FeedbackDrafts,
+        beforeSend: @escaping () async -> Void = {}, onActivity: @escaping () -> Void = {},
+        onSent: @escaping () -> Void = {},
         close: @escaping () -> Void
     ) -> some View {
-        FeedbackRoot(scope: scope, drafts: drafts, close: close)
+        FeedbackRoot(
+            scope: scope, drafts: drafts, beforeSend: beforeSend, onActivity: onActivity,
+            onSent: onSent,
+            close: close)
     }
 }
 
 private struct FeedbackRoot: View {
     let scope: CommentDraftScope
     let drafts: () throws -> any FeedbackDrafts
+    let beforeSend: () async -> Void
+    let onActivity: () -> Void
+    let onSent: () -> Void
     let close: () -> Void
     @State private var model: FeedbackViewModel?
     @State private var failure: String?
@@ -22,7 +30,10 @@ private struct FeedbackRoot: View {
     var body: some View {
         Group {
             if let model {
-                FeedbackScene(model: model, close: close)
+                FeedbackScene(model: model, close: close).onChange(of: model.summary) { _, _ in
+                    onActivity()
+                }
+                .onChange(of: model.sent) { _, sent in if sent { onSent() } }
             } else {
                 VStack(spacing: 16) {
                     Text(failure ?? "Opening feedback…")
@@ -37,7 +48,7 @@ private struct FeedbackRoot: View {
         do {
             model = try FeedbackViewModel(
                 scope: scope, drafts: try drafts(), outbox: SwiftDataFeedbackOutbox(),
-                service: .init(transport: URLSessionTransport()))
+                service: .init(transport: URLSessionTransport()), beforeSend: beforeSend)
             failure = nil
         } catch { failure = error.localizedDescription }
     }

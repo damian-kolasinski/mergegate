@@ -5,12 +5,15 @@ import SwiftUI
 public enum ConversationBuilder {
     @MainActor
     public static func threads(
-        scope: CommentDraftScope, location: ConversationLocation?, close: @escaping () -> Void
+        scope: CommentDraftScope, location: ConversationLocation?,
+        showSource: @escaping (ConversationLocation) -> Void = { _ in },
+        onActivity: @escaping () -> Void = {}, close: @escaping () -> Void
     ) -> some View {
         ConversationScene(
             model: ConversationViewModel(
                 scope: scope, path: location?.path, anchors: location?.anchors ?? [],
-                service: .init(transport: URLSessionTransport())), close: close)
+                service: .init(transport: URLSessionTransport())), close: close,
+            showSource: showSource)
     }
 
     @MainActor
