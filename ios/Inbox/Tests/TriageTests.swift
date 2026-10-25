@@ -79,6 +79,10 @@ struct TriageTests {
 }
 
 private actor TriageTransport: HTTPTransport {
+    func delete(_ url: URL) async throws -> Data { throw URLError(.unsupportedURL) }
+
+    func post(_ url: URL, body: Data) async throws -> Data { throw URLError(.unsupportedURL) }
+
     func put(_ url: URL, body: Data) async throws -> Data {
         throw URLError(.unsupportedURL)
     }

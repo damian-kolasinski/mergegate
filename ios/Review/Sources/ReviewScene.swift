@@ -10,14 +10,16 @@ struct ReviewScene: View {
     let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> AnyView
     let conversations: (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> AnyView
     let fileConversations: (CommentDraftScope, String) -> AnyView
+    let feedback: (CommentDraftScope, @escaping () -> Void) -> AnyView
     private enum Sheet: Identifiable {
-        case guide, files
+        case guide, files, feedback
         case drafts(CommentDraftLocation?)
         case conversations(ConversationLocation?)
         var id: String {
             switch self {
             case .guide: "guide"
             case .files: "files"
+            case .feedback: "feedback"
             case .drafts: "drafts"
             case .conversations: "conversations"
             }
@@ -101,6 +103,12 @@ struct ReviewScene: View {
                     retry: { Task { await model.retryViewed() } })
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            Button("Send feedback") { sheet = .feedback }
+                .appearanceText(Appearance.label).frame(maxWidth: .infinity, minHeight: 44)
+                .buttonStyle(.glass).padding(.horizontal, 20).padding(.bottom, 8)
+                .disabled(model.isSavingViewed).accessibilityIdentifier("reviewFeedback")
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("\(snapshot.item.name) · r\(snapshot.item.revision.number)")
@@ -142,6 +150,7 @@ struct ReviewScene: View {
                         hub: hub, item: snapshot.item.id, name: snapshot.item.name,
                         revision: snapshot.item.revision.number), location
                 ) { sheet = nil }
+            case .feedback: feedback(scope(snapshot)) { sheet = nil }
             case .guide: ReviewGuideScene(guide: snapshot.guide) { sheet = nil }
             case .files:
                 ReviewFilesScene(

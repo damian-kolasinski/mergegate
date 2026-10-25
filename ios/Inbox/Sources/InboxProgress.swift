@@ -1,20 +1,24 @@
 import SwiftUI
 
 struct InboxProgress: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: InboxItem
     let triage: InboxTriage?
     var onSurface = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                remaining
-                Spacer(minLength: 4)
-                delta
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                remaining
-                delta
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    remaining
+                    delta
+                }
+            } else {
+                HStack(spacing: 8) {
+                    remaining
+                    Spacer(minLength: 4)
+                    delta
+                }
             }
         }.appearanceText(Appearance.caption)
     }
@@ -28,6 +32,7 @@ struct InboxProgress: View {
                     Text("\(triage.remainingFiles) of \(triage.reviewFiles) files left")
                         .foregroundStyle(Appearance.secondary)
                         .accessibilityLabel("\(triage.remainingFiles) of \(triage.reviewFiles) review files remaining")
+                        .accessibilityIdentifier("inboxRemaining")
                 }
             } else {
                 Text("\(item.reviewFiles) review files · Loading progress…")
@@ -39,11 +44,11 @@ struct InboxProgress: View {
         HStack(spacing: 5) {
             if item.additions > 0 {
                 Text("+\(item.additions)").foregroundStyle(onSurface ? Appearance.onTintSuccess : Appearance.added)
-                    .accessibilityLabel("\(item.additions) added lines")
+                    .accessibilityLabel("\(item.additions) added lines").accessibilityIdentifier("inboxAdded")
             }
             if item.deletions > 0 {
                 Text("−\(item.deletions)").foregroundStyle(onSurface ? Appearance.onTintError : Appearance.removed)
-                    .accessibilityLabel("\(item.deletions) removed lines")
+                    .accessibilityLabel("\(item.deletions) removed lines").accessibilityIdentifier("inboxRemoved")
             }
         }
     }

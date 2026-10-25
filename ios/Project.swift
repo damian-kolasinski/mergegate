@@ -51,6 +51,7 @@ let project = Project(
             dependencies: [
                 .target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review"),
                 .target(name: "CodeStyling"), .target(name: "Conversation"),
+                .target(name: "ReviewSubmission"),
             ]
         ),
         .target(
@@ -73,7 +74,8 @@ let project = Project(
             sources: ["Conversation/Interface/**"], dependencies: [.target(name: "DiffDocumentInterface")]
         ),
         module(
-            "Conversation", dependencies: ["ConversationInterface", "DiffDocumentInterface", "Networking"],
+            "Conversation",
+            dependencies: ["ConversationInterface", "DiffDocumentInterface", "Networking"],
             appearance: true),
         module("DiffDocument", dependencies: ["DiffDocumentInterface"]),
         .target(
@@ -90,7 +92,10 @@ let project = Project(
                 "HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface", "DiffView",
                 "CodeStylingInterface", "ConversationInterface",
             ], appearance: true),
-        tests("Conversation"), tests("CodeStyling"), tests("DiffDocument"), tests("DiffView"),
+        module(
+            "ReviewSubmission", dependencies: ["ConversationInterface", "Networking"], appearance: true),
+        tests("ReviewSubmission"), tests("Conversation"), tests("CodeStyling"), tests("DiffDocument"),
+        tests("DiffView"),
         tests("Review"),
         tests("HubConnection"), tests("Inbox"), tests("Networking"),
         .target(
@@ -104,7 +109,8 @@ let project = Project(
             name: "Mergegate", buildAction: .buildAction(targets: ["Mergegate"]),
             testAction: .targets(
                 [
-                    "ConversationTests", "CodeStylingTests", "HubConnectionTests", "InboxTests",
+                    "ReviewSubmissionTests", "ConversationTests", "CodeStylingTests", "HubConnectionTests",
+                    "InboxTests",
                     "NetworkingTests",
                     "DiffDocumentTests", "DiffViewTests", "ReviewTests", "MergegateUITests",
                 ],
@@ -117,6 +123,7 @@ let project = Project(
                     "MG_IOS_TEST_VIEWED": "$(MG_IOS_TEST_VIEWED)",
                     "MG_IOS_TEST_DRAFTS": "$(MG_IOS_TEST_DRAFTS)",
                     "MG_IOS_TEST_CONVERSATIONS": "$(MG_IOS_TEST_CONVERSATIONS)",
+                    "MG_IOS_TEST_FEEDBACK": "$(MG_IOS_TEST_FEEDBACK)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )

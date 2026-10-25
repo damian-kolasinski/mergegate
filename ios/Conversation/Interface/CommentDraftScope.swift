@@ -15,7 +15,7 @@ public struct CommentDraftScope: Sendable, Equatable {
     }
 }
 
-public struct CommentDraftLocation: Sendable, Equatable {
+public struct CommentDraftLocation: Sendable, Equatable, Codable {
     public let path: String
     public let anchor: SourceAnchor
 
