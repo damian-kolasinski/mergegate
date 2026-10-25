@@ -45,7 +45,7 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
         .background(Appearance.page).foregroundStyle(Appearance.primary)
         .navigationTitle("Review").navigationBarTitleDisplayMode(.inline)
         // Returning triggers the inbox refresh, which must follow the pending write.
-        .navigationBarBackButtonHidden(model.isSavingViewed)
+        .navigationBarBackButtonHidden(model.isSavingViewed || model.isComparing)
         .task { await model.load() }
     }
 
@@ -58,11 +58,19 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                             Text(snapshot.item.title).appearanceText(Appearance.heading)
                                 .accessibilityAddTraits(.isHeader)
                             HStack(alignment: .top, spacing: 12) {
-                                Text("All changes → \(snapshot.item.target)")
+                                ReviewComparisonControl(
+                                    snapshot: snapshot, loading: model.isComparing,
+                                    disabled: model.isSavingViewed,
+                                    compare: { since in Task { await model.compare(since: since) } })
                                 Spacer(minLength: 0)
-                                Text("\(snapshot.remaining) files left")
+                                Text("\(snapshot.remaining) \(snapshot.remaining == 1 ? "file" : "files") left")
                             }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                         }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
+                        if let failure = model.comparisonFailure {
+                            Text(failure).appearanceText(Appearance.caption).foregroundStyle(Appearance.error)
+                                .padding(.horizontal, 20).padding(.bottom, 8)
+                                .accessibilityIdentifier("comparisonError")
+                        }
                         Divider()
                         if let index = snapshot.files.firstIndex(where: { $0.path == model.selectedPath }) {
                             let file = snapshot.files[index]
@@ -84,7 +92,7 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                                 onReadConversations: { anchors in
                                     sheet = .conversations(.init(path: file.path, anchors: anchors))
                                 }
-                            ).id(file.path)
+                            ).id("\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)")
                         } else {
                             ContentUnavailableView(
                                 "No changed files", systemImage: "doc",
@@ -92,13 +100,15 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                         }
                     }
                 }
+                .accessibilityIdentifier("reviewScroll")
+                .onChange(of: snapshot.since) { _, _ in proxy.scrollTo("reviewTop", anchor: .top) }
                 .onChange(of: model.selectedPath) { _, _ in proxy.scrollTo("reviewTop", anchor: .top) }
             }
             if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
                 ReviewViewedBar(
                     file: file, viewed: snapshot.reviewCount - snapshot.remaining,
                     total: snapshot.reviewCount,
-                    saving: model.isSavingViewed, failure: model.viewedFailure,
+                    saving: model.isSavingViewed || model.isComparing, failure: model.viewedFailure,
                     mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
                     retry: { Task { await model.retryViewed() } })
             }
@@ -107,7 +117,7 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
             Button("Send feedback") { sheet = .feedback }
                 .appearanceText(Appearance.label).frame(maxWidth: .infinity, minHeight: 44)
                 .buttonStyle(.glass).padding(.horizontal, 20).padding(.bottom, 8)
-                .disabled(model.isSavingViewed).accessibilityIdentifier("reviewFeedback")
+                .disabled(model.isSavingViewed || model.isComparing).accessibilityIdentifier("reviewFeedback")
         }
         .toolbar {
             ToolbarItem(placement: .principal) {

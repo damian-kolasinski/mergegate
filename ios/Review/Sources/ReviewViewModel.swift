@@ -11,11 +11,17 @@ final class ReviewViewModel {
     }
     private(set) var state: State = .loading
     var selectedPath: String?
+    private(set) var isComparing = false
+    private(set) var comparisonFailure: String?
     private(set) var isSavingViewed = false
     private(set) var viewedFailure: ReviewViewedFailure?
     var sourceService: ReviewSourceService { .init(transport: service.transport, url: service.url) }
     let events = ServerEvents()
-    var highlightService: ReviewHighlightService { .init(web: service, events: events) }
+    var highlightService: ReviewHighlightService {
+        let since: UInt32?
+        if case .loaded(let snapshot) = state { since = snapshot.since } else { since = nil }
+        return .init(web: service, events: events, since: since)
+    }
     private let service: ReviewWebService
     private let item: String
 
@@ -28,20 +34,55 @@ final class ReviewViewModel {
         state = .loading
         viewedFailure = nil
         do {
-            let snapshot = try await service.load(item: item)
+            var snapshot = try await service.load(item: item)
+            if let reviewed = snapshot.last_reviewed, reviewed < snapshot.item.revision.number,
+                snapshot.interdiffs.contains(reviewed) {
+                let comparison = try await service.load(item: item, since: reviewed)
+                guard comparison.item.revision.number == snapshot.item.revision.number else {
+                    throw ReviewComparisonChanged()
+                }
+                snapshot = comparison
+            }
             try Task.checkCancellation()
             selectedPath =
-                snapshot.files.first(where: { $0.tier == .review })?.path ?? snapshot.files.first?.path
+                snapshot.reviewFiles.first(where: {
+                    snapshot.since == nil || (!$0.viewed && $0.interdiff != .unchanged)
+                })?.path
+                ?? snapshot.reviewFiles.first?.path ?? snapshot.files.first?.path
             state = .loaded(snapshot)
         } catch {
             if !Task.isCancelled { state = .failed(error.localizedDescription) }
         }
     }
 
+    func compare(since: UInt32?) async {
+        guard !isComparing, !isSavingViewed, case .loaded(let before) = state,
+            since != before.since,
+            since.map(before.interdiffs.contains) ?? true else { return }
+        isComparing = true
+        comparisonFailure = nil
+        defer { isComparing = false }
+        do {
+            let snapshot = try await service.load(item: item, since: since)
+            try Task.checkCancellation()
+            guard snapshot.item.revision.number == before.item.revision.number else {
+                throw ReviewComparisonChanged()
+            }
+            if !snapshot.files.contains(where: { $0.path == selectedPath }) {
+                selectedPath = snapshot.reviewFiles.first(where: { !$0.viewed })?.path
+                    ?? snapshot.files.first?.path
+            }
+            viewedFailure = nil
+            state = .loaded(snapshot)
+        } catch {
+            if !Task.isCancelled { comparisonFailure = error.localizedDescription }
+        }
+    }
+
     func setViewed(path: String, viewed: Bool) async {
         guard case .loaded(let snapshot) = state,
             let file = snapshot.files.first(where: { $0.path == path }),
-            file.tier == .review, file.viewed != viewed else { return }
+            file.tier == .review, file.interdiff != .dropped, file.viewed != viewed else { return }
         await updateViewed(.init(revision: snapshot.item.revision.number, path: path, viewed: viewed))
     }
 
@@ -51,7 +92,7 @@ final class ReviewViewModel {
     }
 
     private func updateViewed(_ change: ReviewViewedChange) async {
-        guard !isSavingViewed, case .loaded(let before) = state,
+        guard !isSavingViewed, !isComparing, case .loaded(let before) = state,
             before.item.revision.number == change.revision else { return }
         isSavingViewed = true
         viewedFailure = nil

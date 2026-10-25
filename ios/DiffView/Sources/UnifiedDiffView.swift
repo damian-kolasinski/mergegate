@@ -7,6 +7,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
     private let hunks: [DiffHunk]
     private let styling: (any CodeStyling)?
     private let maximumLine: UInt32
+    private let sourceSides: [SourceAnchor.Side]
     private let onComment: ((SourceAnchor) -> Void)?
     private let onReadConversations: (([SourceAnchor]) -> Void)?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -14,9 +15,11 @@ public struct UnifiedDiffView: UIViewRepresentable {
 
     public init(
         hunks: [DiffHunk], maximumLine: UInt32 = 0, styling: (any CodeStyling)? = nil,
+        sourceSides: [SourceAnchor.Side] = [.old, .new],
         onComment: ((SourceAnchor) -> Void)? = nil,
         onReadConversations: (([SourceAnchor]) -> Void)? = nil
     ) {
+        self.sourceSides = sourceSides
         self.styling = styling
         self.hunks = hunks
         self.maximumLine = maximumLine
@@ -46,6 +49,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
             hunks, traits: traits, maximumLine: maximumLine, styling: styling)
         (view as? SourceTextView)?.install(document.text, selection: document.selection)
         (view as? SourceTextView)?.commentSelection = document.comments
+        (view as? SourceTextView)?.sourceSides = sourceSides
         (view as? SourceTextView)?.onComment = onComment
         (view as? SourceTextView)?.onReadConversations = onReadConversations
     }

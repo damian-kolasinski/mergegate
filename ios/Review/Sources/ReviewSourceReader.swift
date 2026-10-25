@@ -45,6 +45,7 @@ struct ReviewSourceReader: View {
                             ],
                             // The hub accepts anchors only within its submitted diff hunks.
                             maximumLine: maximumLine, styling: styling,
+                            sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
                             onReadConversations: onReadConversations)
                     }
                     if count < gap.lines.count {
@@ -67,6 +68,7 @@ struct ReviewSourceReader: View {
                     if gap.id < hunks.count {
                         UnifiedDiffView(
                             hunks: [paintedHunks[gap.id]], maximumLine: maximumLine, styling: styling,
+                            sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
                             onComment: onComment, onReadConversations: onReadConversations)
                     }
                 }
@@ -94,7 +96,8 @@ struct ReviewSourceReader: View {
                 }
                 if !hunks.isEmpty {
                     UnifiedDiffView(
-                        hunks: paintedHunks, maximumLine: maximumLine, styling: styling, onComment: onComment,
+                        hunks: paintedHunks, maximumLine: maximumLine, styling: styling,
+                        sourceSides: file.interdiff?.sourceSides ?? [.old, .new], onComment: onComment,
                         onReadConversations: onReadConversations)
                 }
             }

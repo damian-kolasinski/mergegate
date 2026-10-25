@@ -81,7 +81,7 @@ private actor ReviewTransport: HTTPTransport {
         return Data(
             """
             {"item":{"id":"\(id)","name":"sample#93","title":"Workflow","target":"main","state":"needs_review","revision":{"number":2}},
-             "since":\(since),"guide":"Read the workflow first.","files":[
+             "interdiffs":[],"since":\(since),"guide":"Read the workflow first.","files":[
               {"path":"z.swift","tier":"review","viewed":false,"reason":"Workflow before helpers","content":{"kind":"text","hunks":[{"old_start":1,"old_lines":1,"new_start":1,"new_lines":1,"lines":["-let value = 1","+let value = 2"]}]}},
               {"path":"a.swift","tier":"review","viewed":true,"content":{"kind":"text","hunks":[]}},
               {"path":"image.png","tier":"trusted","viewed":true,"content":{"kind":"binary"}},

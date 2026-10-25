@@ -19,8 +19,12 @@ struct ReviewSnapshot: Decodable, Sendable {
     var files: [ReviewFile]
     let since: UInt32?
 
-    var remaining: Int { files.filter { $0.tier == .review && !$0.viewed }.count }
-    var reviewCount: Int { files.filter { $0.tier == .review }.count }
+    let last_reviewed: UInt32?
+    let interdiffs: [UInt32]
+
+    var reviewFiles: [ReviewFile] { files.filter { $0.tier == .review && $0.interdiff != .dropped } }
+    var remaining: Int { reviewFiles.filter { !$0.viewed }.count }
+    var reviewCount: Int { reviewFiles.count }
 }
 
 struct ReviewFile: Decodable, Identifiable, Sendable {
@@ -40,6 +44,7 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
     let judgeReason: String?
     let why: String?
     let hint: String?
+    let interdiff: ReviewInterdiff?
     let content: ReviewContent
     var id: String { path }
     var rankingReason: String? { reason ?? judgeReason ?? why ?? hint }
@@ -50,7 +55,7 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
         return "Modified"
     }
     enum CodingKeys: String, CodingKey {
-        case grammar, path, additions, deletions, tier, viewed, reason, why, hint, content
+        case grammar, path, additions, deletions, tier, viewed, reason, why, hint, content, interdiff
         case oldBlob = "old_blob"
         case newBlob = "new_blob"
         case oldPath = "old_path"

@@ -10,12 +10,12 @@ struct ReviewWebService: Sendable {
         _ = try await transport.put(endpoint, body: JSONEncoder().encode(change))
     }
 
-    func load(item: String) async throws -> ReviewSnapshot {
+    func load(item: String, since: UInt32? = nil) async throws -> ReviewSnapshot {
         var endpoint = URLComponents(
             url: url.appending(path: "api/items").appending(component: item), resolvingAgainstBaseURL: false)!
-        endpoint.queryItems = [URLQueryItem(name: "since", value: "all")]
+        endpoint.queryItems = [URLQueryItem(name: "since", value: since.map(String.init) ?? "all")]
         let snapshot = try await JSONDecoder().decode(ReviewSnapshot.self, from: transport.get(endpoint.url!))
-        guard snapshot.item.id == item, snapshot.since == nil else { throw InvalidReview() }
+        guard snapshot.item.id == item, snapshot.since == since else { throw InvalidReview() }
         return snapshot
     }
 }

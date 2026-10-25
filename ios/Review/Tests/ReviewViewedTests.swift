@@ -103,7 +103,7 @@ private actor ViewedTransport: HTTPTransport {
         Data(
             """
             {"item":{"id":"sample#3","name":"sample#93","title":"Totals","target":"main","state":"needs_review","revision":{"number":2}},
-             "since":null,"files":[
+             "interdiffs":[],"since":null,"files":[
               {"path":"\(Self.path)","tier":"review","viewed":\(viewed),"content":{"kind":"text","hunks":[]}},
               {"path":"other.swift","tier":"review","viewed":false,"content":{"kind":"text","hunks":[]}},
               {"path":"receipt.bin","tier":"trusted","viewed":true,"content":{"kind":"binary"}}]}

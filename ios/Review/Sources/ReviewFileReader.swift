@@ -19,6 +19,10 @@ struct ReviewFileReader: View {
                 if let oldPath = file.oldPath {
                     Text("From \(oldPath)").appearanceText(Appearance.caption)
                 }
+                if let comparison = file.interdiff {
+                    Text(comparison.label).appearanceText(Appearance.label)
+                        .foregroundStyle(Appearance.secondary)
+                }
                 Text(metadata).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                 if let reason = file.rankingReason {
                     Text(reason).appearanceText(Appearance.body)

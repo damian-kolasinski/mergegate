@@ -18,8 +18,12 @@ struct ReviewFilesScene: View {
                                 .foregroundStyle(Appearance.secondary)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(file.path).appearanceText(Appearance.rowHeading)
-                                Text(file.tier == .trusted ? "Trusted" : file.viewed ? "Viewed" : "To review")
+                                Text(file.interdiff == .dropped ? "Not in current revision" : file.tier == .trusted ? "Trusted" : file.viewed ? "Viewed" : "To review")
                                     .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                                if let comparison = file.interdiff {
+                                    Text(comparison.label).appearanceText(Appearance.caption)
+                                        .foregroundStyle(Appearance.secondary)
+                                }
                                 if let reason = file.rankingReason { Text(reason).appearanceText(Appearance.body) }
                             }.frame(maxWidth: .infinity, alignment: .leading)
                             if file.viewed {

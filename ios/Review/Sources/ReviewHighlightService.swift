@@ -5,9 +5,10 @@ import Networking
 struct ReviewHighlightService: Sendable {
     let web: ReviewWebService
     let events: ServerEvents
+    var since: UInt32? = nil
 
     func load(item: String, revision: UInt32, file: ReviewFile) async throws -> ReviewPainting {
-        let snapshot = try await web.load(item: item)
+        let snapshot = try await web.load(item: item, since: since)
         // A highlight refresh must never replace the displayed revision's code or source coordinates.
         let current =
             snapshot.item.revision.number == revision
