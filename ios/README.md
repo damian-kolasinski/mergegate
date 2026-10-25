@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first nine slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, keep source-anchored comment drafts, follow existing conversations, and send feedback with a summary. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The first ten slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, keep source-anchored comment drafts, follow existing conversations, send feedback with a summary, and request changes. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -160,3 +160,17 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-feedback
 A feature-owned SwiftData outbox freezes the confirmed content before the first upload. Partial delivery can resume after relaunch, matching uploaded comments without creating duplicates. A lost review response is reconciled against the read-only operator event log, without acknowledging workflow feedback. Unconfirmed delivery offers Check delivery; Send again requires an explicit duplicate-summary confirmation. Before review delivery starts, Edit feedback removes unchanged uploaded copies and restores an editable preview while retaining local work. Only confirmed local snapshots are removed; later edits survive. Storage or network failures retain feedback for recovery. The UI flow creates comments on both source sides, restores the summary after termination, sends, checks the real hub event’s revision/anchors/text, verifies conversations and local cleanup, and audits normal/dark/largest-text appearances. Behavior tests cover partial uploads, lost responses, summary-only delivery, shared hub drafts, stale/closed items, outbox scope, and cleanup retry.
 
 The inbox UI audits retain all checks. For identified inbox labels that XCTest reports as low contrast, a narrow fallback verifies substantial foreground/background populations in the actual rendered label crop and requires at least 4.5:1 contrast. Other labels and audit types still fail normally. An unattributed contrast report retains its diagnostics and receives one complete audit retry without changing the UI; unresolved reports still fail. This handles the [contrast false positives documented by Apple](https://developer.apple.com/videos/play/wwdc2023/10035/) while retaining rendered-color coverage; a regression test rejects low contrast, uniform crops, gradients with low contrast, and isolated dark pixels.
+
+For the request-changes flow, seed a fresh disposable hub:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-request-changes
+python3 ios/Scripts/drafts-fixture.py /tmp/mergegate-ios-request-changes --pack ~/.mergegate/languages/swift/0.7.1
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_REQUEST_CHANGES=1 \
+  .claude/scripts/check.sh test ios -- -only-testing:MergegateUITests/RequestChangesTests
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-request-changes
+```
+
+The completion sheet’s **Review outcome** menu selects **Send feedback** or **Request changes**. Request changes requires a summary or comments/replies describing the work, sends the pinned revision through the existing review endpoint, and returns the item to **In progress** in the Decision desk. The hub remains authoritative for the transition. The selected outcome persists with the summary and is frozen with each delivery attempt, including partial uploads, relaunch, lost-response reconciliation, and editing retained feedback. Existing outbox records default to Send feedback. The receipt must match the frozen verdict before local feedback is cleared.
+
+The UI flow sends an actionable summary, restores the selected outcome after termination, verifies the exact verdict/revision/text in the real hub event log, and checks the item moves out of Needs you into In progress. It audits normal/light and largest-text/dark sheets and retains screenshots. Behavior tests cover comment-bearing requests, summary-only requests, empty/stale prevention, outcome persistence, retries, and avoiding confirmation from another verdict’s receipt.

@@ -32,6 +32,7 @@ struct FeedbackTests {
         #expect(uploads[1]["side"]?.value as? String == "new")
         #expect(uploads[1]["body"]?.value as? String == new.body)
         #expect(await hub.summaries == ["Check the receipt é 🐙\nSecond paragraph"])
+        #expect(await hub.verdicts == ["comment"])
         await model.send()
         #expect(await hub.summaries.count == 1)
     }
@@ -217,18 +218,18 @@ struct FeedbackTests {
 
     }
 
-    private func model(_ hub: FeedbackHub, _ drafts: LocalDrafts, _ outbox: MemoryOutbox) throws
+    func model(_ hub: FeedbackHub, _ drafts: LocalDrafts, _ outbox: MemoryOutbox) throws
         -> FeedbackViewModel
     {
         try FeedbackViewModel(
             scope: scope(), drafts: drafts, outbox: outbox, service: .init(transport: hub))
     }
-    private func scope(hub: String = "http://my-mac", item: String = "app#1", revision: UInt32 = 3)
+    func scope(hub: String = "http://my-mac", item: String = "app#1", revision: UInt32 = 3)
         -> CommentDraftScope
     {
         .init(hub: URL(string: hub)!, item: item, name: "app#44", revision: revision)
     }
-    private func draft(_ side: SourceAnchor.Side, start: UInt32 = 3, end: UInt32 = 3) -> FeedbackDraft {
+    func draft(_ side: SourceAnchor.Side, start: UInt32 = 3, end: UInt32 = 3) -> FeedbackDraft {
         .init(
             id: UUID(),
             location: .init(
@@ -239,7 +240,7 @@ struct FeedbackTests {
     }
 }
 
-@MainActor private final class LocalDrafts: FeedbackDrafts {
+@MainActor final class LocalDrafts: FeedbackDrafts {
     var values: [FeedbackDraft] = []
     var failRemoval = false
     func load(scope: CommentDraftScope) throws -> [FeedbackDraft] { values }
@@ -249,7 +250,7 @@ struct FeedbackTests {
     }
 }
 
-@MainActor private final class MemoryOutbox: FeedbackOutbox {
+@MainActor final class MemoryOutbox: FeedbackOutbox {
     var record = FeedbackRecord()
     var fail = false
     func load(scope: CommentDraftScope) -> FeedbackRecord { record }
@@ -259,13 +260,14 @@ struct FeedbackTests {
     }
 }
 
-private actor FeedbackHub: HTTPTransport {
+actor FeedbackHub: HTTPTransport {
     let revision: Int
     let state: String
     var drafts: [[String: SendableJSON]] = []
     var sent: [[String: SendableJSON]] = []
     var uploads: [[String: SendableJSON]] = []
     var summaries: [String] = []
+    var verdicts: [String] = []
     var reviewRequests = 0
     var uploadLost = false
     var reviewLost = false
@@ -292,7 +294,7 @@ private actor FeedbackHub: HTTPTransport {
         if url.path == "/api/events" {
             let events: [[String: Any]] = summaries.enumerated().map { index, summary in
                 [
-                    "item": "app#1", "revision": revision, "type": "review.submitted", "verdict": "comment",
+                    "item": "app#1", "revision": revision, "type": "review.submitted", "verdict": verdicts[index],
                     "summary": summary, "comments": sent.map { $0.mapValues(\.value) },
                 ]
             }
@@ -325,7 +327,8 @@ private actor FeedbackHub: HTTPTransport {
         }
         #expect(url.path == "/api/items/app#1/reviews")
         #expect(request["revision"] as? Int == 3)
-        #expect(request["verdict"] as? String == "comment")
+        let verdict = try #require(request["verdict"] as? String)
+        #expect(["comment", "changes_requested"].contains(verdict))
         reviewRequests += 1
         if refusal {
             refusal = false
@@ -337,6 +340,7 @@ private actor FeedbackHub: HTTPTransport {
         }
         let summary = try #require(request["summary"] as? String)
         summaries.append(summary)
+        verdicts.append(verdict)
         sent += drafts
         drafts = []
         if reviewLost {
@@ -344,7 +348,7 @@ private actor FeedbackHub: HTTPTransport {
             throw URLError(.timedOut)
         }
         return try json([
-            "revision": revision, "verdict": "comment", "summary": summary,
+            "revision": revision, "verdict": verdict, "summary": summary,
             "comments": sent.map { $0.mapValues(\.value) },
         ])
     }
@@ -354,7 +358,7 @@ private actor FeedbackHub: HTTPTransport {
     }
 }
 
-private enum SendableJSON: Sendable {
+enum SendableJSON: Sendable {
     case string(String)
     case number(Int)
     init(_ value: Any) {

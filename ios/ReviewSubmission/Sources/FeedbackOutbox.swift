@@ -4,6 +4,8 @@ import SwiftData
 
 struct FeedbackAttempt: Codable {
     let drafts: [FeedbackDraft]
+    // Missing in records saved before outcome selection; those deliveries used comment.
+    var verdict: FeedbackVerdict?
     let summary: String
     let cursor: UInt64
     let hubDrafts: [FeedbackComment]
@@ -15,6 +17,7 @@ struct FeedbackAttempt: Codable {
 
 struct FeedbackRecord: Codable {
     var summary = ""
+    var verdict: FeedbackVerdict?
     var attempt: FeedbackAttempt?
 }
 

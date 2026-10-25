@@ -17,6 +17,15 @@ final class FeedbackViewModel {
     private(set) var error: String?
     private(set) var summarySaved = true
     var summary: String
+    private(set) var sentVerdict: FeedbackVerdict = .comment
+    var verdict: FeedbackVerdict {
+        get { record.attempt?.verdict ?? record.verdict ?? .comment }
+        set {
+            guard !frozen && !busy else { return }
+            record.verdict = newValue
+            saveSummary()
+        }
+    }
     var frozen: Bool { record.attempt != nil }
     var uncertain: Bool { record.attempt?.reviewStarted == true }
     var canSend: Bool {
@@ -91,7 +100,7 @@ final class FeedbackViewModel {
                     available.removeAll { $0.id == copy.id }
                 }
             }
-            let editable = FeedbackRecord(summary: attempt.summary)
+            let editable = FeedbackRecord(summary: attempt.summary, verdict: attempt.verdict)
             try outbox.save(editable, scope: scope)
             record = editable
             summary = editable.summary
@@ -142,7 +151,8 @@ final class FeedbackViewModel {
                 }
                 let log = try await service.log(scope: scope)
                 record.attempt = FeedbackAttempt(
-                    drafts: drafts, summary: summary.trimmingCharacters(in: .whitespacesAndNewlines),
+                    drafts: drafts, verdict: verdict,
+                    summary: summary.trimmingCharacters(in: .whitespacesAndNewlines),
                     cursor: log.cursor, hubDrafts: current.drafts, hubReplies: current.draft_replies)
                 try save()
             }
@@ -191,9 +201,10 @@ final class FeedbackViewModel {
             record.attempt = attempt
             try save()
             do {
-                let receipt = try await service.submit(scope: scope, summary: attempt.summary)
+                let receipt = try await service.submit(
+                    scope: scope, summary: attempt.summary, verdict: attempt.verdict ?? .comment)
                 guard
-                    receipt.revision == scope.revision && receipt.verdict == "comment"
+                    receipt.revision == scope.revision && receipt.verdict == (attempt.verdict ?? .comment).rawValue
                         && receipt.summary == attempt.summary && Set(receipt.comments.map(\.id)) == expected
                 else {
                     throw FeedbackIssue(
@@ -224,7 +235,7 @@ final class FeedbackViewModel {
         let expected = Set(attempt.hubDrafts.map(\.id) + Array(attempt.uploaded.values))
         if log.events.contains(where: {
             $0.item == scope.item && $0.revision == scope.revision && $0.type == "review.submitted"
-                && $0.verdict == "comment" && $0.summary == attempt.summary
+                && $0.verdict == (attempt.verdict ?? .comment).rawValue && $0.summary == attempt.summary
                 && Set(($0.comments ?? []).map(\.id)) == expected
         }) {
             record.attempt?.confirmed = true
@@ -237,6 +248,7 @@ final class FeedbackViewModel {
 
     private func finish() throws {
         try draftsStore.removeSent(record.attempt!.drafts, scope: scope)
+        sentVerdict = record.attempt?.verdict ?? .comment
         let cleared = FeedbackRecord()
         try outbox.save(cleared, scope: scope)
         record = cleared
