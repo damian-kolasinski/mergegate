@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mode="${1:-all}"
+if [ $# -gt 0 ]; then shift; fi
 python3 ../appearance/generate.py --check
 mkdir -p .build
 # mise.toml pins the same Tuist for local generation and CI.
@@ -15,10 +16,11 @@ if [ -n "${MG_IOS_TEST_REVIEW:-}" ]; then args+=("MG_IOS_TEST_REVIEW=$MG_IOS_TES
 if [ -n "${MG_IOS_TEST_SOURCE:-}" ]; then args+=("MG_IOS_TEST_SOURCE=$MG_IOS_TEST_SOURCE"); fi
 if [ -n "${MG_IOS_TEST_HIGHLIGHT:-}" ]; then args+=("MG_IOS_TEST_HIGHLIGHT=$MG_IOS_TEST_HIGHLIGHT"); fi
 if [ -n "${MG_IOS_TEST_VIEWED:-}" ]; then args+=("MG_IOS_TEST_VIEWED=$MG_IOS_TEST_VIEWED"); fi
+if [ -n "${MG_IOS_TEST_DRAFTS:-}" ]; then args+=("MG_IOS_TEST_DRAFTS=$MG_IOS_TEST_DRAFTS"); fi
 if ! xcodebuild "$action" -workspace Mergegate.xcworkspace -scheme Mergegate \
   -destination "${MG_IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2}" \
   -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO \
-  ${args[@]+"${args[@]}"} >.build/check.log 2>&1; then
+  ${args[@]+"${args[@]}"} "$@" >.build/check.log 2>&1; then
   tail -80 .build/check.log
   exit 1
 fi

@@ -7,13 +7,18 @@ public struct UnifiedDiffView: UIViewRepresentable {
     private let hunks: [DiffHunk]
     private let styling: (any CodeStyling)?
     private let maximumLine: UInt32
+    private let onComment: ((SourceAnchor) -> Void)?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(hunks: [DiffHunk], maximumLine: UInt32 = 0, styling: (any CodeStyling)? = nil) {
+    public init(
+        hunks: [DiffHunk], maximumLine: UInt32 = 0, styling: (any CodeStyling)? = nil,
+        onComment: ((SourceAnchor) -> Void)? = nil
+    ) {
         self.styling = styling
         self.hunks = hunks
         self.maximumLine = maximumLine
+        self.onComment = onComment
     }
 
     public func makeUIView(context: Context) -> UITextView {
@@ -37,5 +42,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
         let document = DiffText.document(
             hunks, traits: traits, maximumLine: maximumLine, styling: styling)
         (view as? SourceTextView)?.install(document.text, selection: document.selection)
+        (view as? SourceTextView)?.commentSelection = document.comments
+        (view as? SourceTextView)?.onComment = onComment
     }
 }

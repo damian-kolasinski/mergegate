@@ -7,7 +7,7 @@ struct InboxControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("\(model.project ?? "All projects") · \(needs.count) \(needs.count == 1 ? "item needs" : "items need") you · \(workingCount) in progress")
-                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                .appearanceText(Appearance.body).foregroundStyle(Appearance.secondary)
             ScrollView(.horizontal) { chips }.scrollIndicators(.hidden).scrollClipDisabled()
         }.frame(maxWidth: .infinity, alignment: .leading)
     }

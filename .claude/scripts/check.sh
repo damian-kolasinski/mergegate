@@ -16,6 +16,7 @@
 # pnpm is required except for lint of named crates: without it the hub embeds
 # a stub page, which the hub's tests fail on.
 #   TEST_ARGS      passed to the test binaries, e.g. a test name filter
+#                  for ios, forwarded to xcodebuild, e.g. -only-testing:MergegateUITests/ConnectAndReopenTests
 # Exit codes: 0 ok, 1 a check failed, 64 usage.
 
 set -euo pipefail
@@ -188,7 +189,7 @@ if [ "$(cksum Cargo.lock 2>/dev/null || true)" != "$lock_before" ]; then
 fi
 
 if [ "$ios" = 1 ]; then
-  run ios/Scripts/check.sh "$mode" || fail IOS_ERROR "$output"
+  run ios/Scripts/check.sh "$mode" "$@" || fail IOS_ERROR "$output"
   summary+=("iOS $mode passed")
 fi
 
