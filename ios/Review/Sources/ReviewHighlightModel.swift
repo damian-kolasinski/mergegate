@@ -26,6 +26,7 @@ final class ReviewHighlightModel {
             guard !Task.isCancelled else { return }
             switch event {
             case .connected: break
+            case .disconnected: continue
             case .data(let data):
                 guard let value = try? JSONDecoder().decode(Invalidation.self, from: Data(data.utf8)),
                     value.type == "highlights.changed"

@@ -16,21 +16,31 @@ final class ReviewViewModel {
     private(set) var isSavingViewed = false
     private(set) var viewedFailure: ReviewViewedFailure?
     var sourceService: ReviewSourceService { .init(transport: service.transport, url: service.url) }
-    let events = ServerEvents()
+    let events: ServerEvents
+    var latestRevision: UInt32?
+    var latestState: String?
+    var refreshFailure: String?
+    var isReconnecting = false
+    var viewedVersion = 0
+    private var openingVersion = 0
+    private var refreshVersion = 0
     var highlightService: ReviewHighlightService {
         let since: UInt32?
         if case .loaded(let snapshot) = state { since = snapshot.since } else { since = nil }
         return .init(web: service, events: events, since: since)
     }
-    private let service: ReviewWebService
-    private let item: String
+    let service: ReviewWebService
+    let item: String
 
-    init(service: ReviewWebService, item: String) {
+    init(service: ReviewWebService, item: String, events: ServerEvents = .shared) {
         self.service = service
         self.item = item
+        self.events = events
     }
 
     func load() async {
+        openingVersion += 1
+        let version = openingVersion
         state = .loading
         viewedFailure = nil
         do {
@@ -44,6 +54,7 @@ final class ReviewViewModel {
                 snapshot = comparison
             }
             try Task.checkCancellation()
+            guard version == openingVersion else { return }
             selectedPath =
                 snapshot.reviewFiles.first(where: {
                     snapshot.since == nil || (!$0.viewed && $0.interdiff != .unchanged)
@@ -51,7 +62,7 @@ final class ReviewViewModel {
                 ?? snapshot.reviewFiles.first?.path ?? snapshot.files.first?.path
             state = .loaded(snapshot)
         } catch {
-            if !Task.isCancelled { state = .failed(error.localizedDescription) }
+            if !Task.isCancelled && version == openingVersion { state = .failed(error.localizedDescription) }
         }
     }
 
@@ -79,6 +90,37 @@ final class ReviewViewModel {
         }
     }
 
+    func refreshCurrent() async {
+        guard case .loaded(let before) = state else {
+            await load()
+            return
+        }
+        refreshVersion += 1
+        let request = refreshVersion
+        let version = viewedVersion
+        do {
+            let current = try await service.load(item: item, since: before.since)
+            try Task.checkCancellation()
+            guard request == refreshVersion else { return }
+            latestRevision = current.item.revision.number
+            latestState = current.item.state
+            refreshFailure = nil
+            // Preserve the immutable diff and reader identity. Only progress for this same revision changes.
+            guard current.item.revision.number == before.item.revision.number,
+                !isSavingViewed, viewedVersion == version,
+                case .loaded(var displayed) = state, displayed.since == before.since
+            else { return }
+            for index in displayed.files.indices {
+                if let file = current.files.first(where: { $0.path == displayed.files[index].path }) {
+                    displayed.files[index].viewed = file.viewed
+                }
+            }
+            state = .loaded(displayed)
+        } catch {
+            if !Task.isCancelled && request == refreshVersion { refreshFailure = error.localizedDescription }
+        }
+    }
+
     func setViewed(path: String, viewed: Bool) async {
         guard case .loaded(let snapshot) = state,
             let file = snapshot.files.first(where: { $0.path == path }),
@@ -95,6 +137,7 @@ final class ReviewViewModel {
         guard !isSavingViewed, !isComparing, case .loaded(let before) = state,
             before.item.revision.number == change.revision else { return }
         isSavingViewed = true
+        viewedVersion += 1
         viewedFailure = nil
         defer { isSavingViewed = false }
         do {

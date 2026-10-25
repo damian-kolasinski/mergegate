@@ -45,13 +45,38 @@ final class SendFeedbackTests: XCTestCase {
         app.buttons["reviewFeedback"].tap()
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertEqual(
-            app.textViews["feedbackSummary"].value as? String, "Check delivery and receipt consistency.")
+            app.textViews["feedbackSummary"].value as? String,
+            "Check delivery and receipt consistency.")
         capture(app, "Feedback — restored completion sheet")
         // Start below the summary editor so its own scrolling cannot consume this gesture.
         // Audit the source quotes after moving them clear of the fixed send bar.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.78)).press(
             forDuration: 0.05,
-            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.4)))
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.4)),
+            withVelocity: .slow, thenHoldForDuration: 0.1)
+        let firstComment = app.staticTexts["Should delivery be included in the receipt?"]
+        let lastComment = app.staticTexts["Keep the charged total consistent with the receipt."]
+        for _ in 0..<4 {
+            let top = app.staticTexts["feedbackScope"].frame.maxY + 20
+            let bottom = app.buttons["sendFeedback"].frame.minY - 20
+            let adjustment: CGFloat
+            if firstComment.frame.minY < top {
+                adjustment = 0.1
+            } else if lastComment.frame.maxY > bottom {
+                adjustment = -0.1
+            } else {
+                break
+            }
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.6)).press(
+                forDuration: 0.05,
+                thenDragTo: app.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.9, dy: 0.6 + adjustment)),
+                withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        XCTAssertGreaterThanOrEqual(
+            firstComment.frame.minY, app.staticTexts["feedbackScope"].frame.maxY + 20)
+        XCTAssertLessThanOrEqual(
+            lastComment.frame.maxY, app.buttons["sendFeedback"].frame.minY - 20)
         try audit(app)
         capture(app, "Feedback — both source anchors")
         app.buttons["sendFeedback"].tap()
@@ -77,7 +102,8 @@ final class SendFeedbackTests: XCTestCase {
         try openReview(app)
         app.buttons["reviewFeedback"].tap()
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
-        XCTAssertFalse((app.textViews["feedbackSummary"].value as? String ?? "").contains("Check delivery"))
+        XCTAssertFalse(
+            (app.textViews["feedbackSummary"].value as? String ?? "").contains("Check delivery"))
         XCTAssertFalse(app.buttons["sendFeedback"].isEnabled)
         capture(app, "Feedback — dark and largest text size")
         try audit(app)
@@ -120,7 +146,8 @@ final class SendFeedbackTests: XCTestCase {
     }
 
     @MainActor private func openReview(_ app: XCUIApplication) throws {
-        XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(
+            app.buttons["hubSettings"].waitForExistence(timeout: 20), app.debugDescription)
         let open = app.buttons["openReview-mobile-smoke#2"]
         for _ in 0..<8 {
             if open.waitForExistence(timeout: 1) && open.isHittable { break }
@@ -137,7 +164,8 @@ final class SendFeedbackTests: XCTestCase {
             forDuration: 1.2)
         let menu = app.menuItems["Comment"]
         XCTAssertTrue(
-            menu.waitForExistence(timeout: 4) || app.buttons["Comment"].exists, app.debugDescription)
+            menu.waitForExistence(timeout: 4) || app.buttons["Comment"].exists, app.debugDescription
+        )
         if menu.exists { menu.tap() } else { app.buttons["Comment"].tap() }
         XCTAssertTrue(app.textViews["draftBody"].waitForExistence(timeout: 5))
         app.textViews["draftBody"].tap()

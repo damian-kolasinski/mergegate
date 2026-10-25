@@ -18,6 +18,11 @@ struct InboxScene<Review: View, Feedback: View>: View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 List {
+                    if model.isReconnecting {
+                        Label("Reconnecting… Showing the last inbox.", systemImage: "wifi.exclamationmark")
+                            .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                            .accessibilityIdentifier("inboxReconnecting")
+                    }
                     if let snapshot = model.snapshot {
                         InboxControls(snapshot: snapshot, model: model).padding(.top, 12).padding(.bottom, 8)
                             .listRowSeparator(.hidden).listRowBackground(Appearance.page)
@@ -95,9 +100,9 @@ struct InboxScene<Review: View, Feedback: View>: View {
                 }
             }
             .refreshable { await model.refresh() }
-            .task { await model.refresh() }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active && path.isEmpty { Task { await model.refresh() } }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                await model.follow()
             }
             .onChange(of: path) { previous, current in
                 if !previous.isEmpty && current.isEmpty { Task { await model.refresh() } }
@@ -120,7 +125,8 @@ struct InboxScene<Review: View, Feedback: View>: View {
     private var footer: some View {
         HStack(spacing: 12) {
             Label(hub.url.host ?? "Hub", systemImage: "network")
-                .appearanceText(Appearance.caption).foregroundStyle(.secondary).lineLimit(1)
+                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary).lineLimit(1)
+                .accessibilityIdentifier("inboxHubLabel")
             Spacer(minLength: 0)
             Menu {
                 Picker("State", selection: $model.filter) {
@@ -128,6 +134,7 @@ struct InboxScene<Review: View, Feedback: View>: View {
                 }
             } label: {
                 Label(stateLabel, systemImage: "chevron.down").appearanceText(Appearance.caption)
+                    .accessibilityIdentifier("inboxStateLabel")
                     .frame(minHeight: 44)
             }.accessibilityLabel("State").accessibilityValue(model.filter.rawValue)
                 .accessibilityIdentifier("stateFilter")

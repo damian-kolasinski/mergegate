@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, Feedback: View>: View {
     @State var model: ReviewViewModel
+    @Environment(\.scenePhase) private var scenePhase
     let styling: any CodeStyling
     let hub: URL
     let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts
@@ -46,7 +47,10 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
         .navigationTitle("Review").navigationBarTitleDisplayMode(.inline)
         // Returning triggers the inbox refresh, which must follow the pending write.
         .navigationBarBackButtonHidden(model.isSavingViewed || model.isComparing)
-        .task { await model.load() }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await model.follow()
+        }
     }
 
     private func content(_ snapshot: ReviewSnapshot) -> some View {
@@ -65,6 +69,7 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                                 Spacer(minLength: 0)
                                 Text("\(snapshot.remaining) \(snapshot.remaining == 1 ? "file" : "files") left")
                             }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                            ReviewUpdatesView(model: model, revision: snapshot.item.revision.number)
                         }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
                         if let failure = model.comparisonFailure {
                             Text(failure).appearanceText(Appearance.caption).foregroundStyle(Appearance.error)

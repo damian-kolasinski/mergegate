@@ -1,4 +1,5 @@
 import Foundation
+import Networking
 import Observation
 
 @MainActor @Observable
@@ -6,15 +7,21 @@ final class InboxViewModel {
     private(set) var snapshot: InboxSnapshot?
     private(set) var isLoading = false
     private(set) var error: String?
+    var isReconnecting = false
     var project: String?
     var filter: InboxFilter = .all
     private(set) var generation = 0
     private(set) var triage: [String: InboxTriage] = [:]
     private(set) var triageErrors: [String: String] = [:]
     var groups: [InboxGroup] { snapshot?.groups(project: project, filter: filter) ?? [] }
-    private let service: InboxWebService
+    let service: InboxWebService
+    let events: ServerEvents
+    private var refreshVersion = 0
 
-    init(service: InboxWebService) { self.service = service }
+    init(service: InboxWebService, events: ServerEvents = .shared) {
+        self.service = service
+        self.events = events
+    }
 
     func loadTriage(_ item: InboxItem) async {
         guard !item.isClosed, triage[item.id] == nil else { return }
@@ -37,12 +44,14 @@ final class InboxViewModel {
     }
 
     func refresh() async {
-        guard !isLoading else { return }
+        refreshVersion += 1
+        let version = refreshVersion
         isLoading = true
-        defer { isLoading = false }
+        defer { if version == refreshVersion { isLoading = false } }
         do {
             let snapshot = try await service.load()
             try Task.checkCancellation()
+            guard version == refreshVersion else { return }
             self.snapshot = snapshot
             if let project, !snapshot.projects.contains(project) { self.project = nil }
             triage = [:]
@@ -50,7 +59,9 @@ final class InboxViewModel {
             generation += 1
             error = nil
         } catch {
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            if !Task.isCancelled && version == refreshVersion {
+                self.error = error.localizedDescription
+            }
         }
     }
 }

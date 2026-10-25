@@ -39,7 +39,10 @@ struct InboxControls: View {
 
     private func chipButton(_ filter: InboxFilter, label: String) -> some View {
         Button { model.filter = filter } label: {
-            Text(label).appearanceText(Appearance.body).padding(.horizontal, 4).frame(minHeight: 44)
+            Text(label).appearanceText(Appearance.body)
+                .foregroundStyle(model.filter == filter ? Appearance.onFill : Appearance.primary)
+                .accessibilityIdentifier("inboxActionLabel")
+                .padding(.horizontal, 4).frame(minHeight: 44)
         }
         .buttonBorderShape(.capsule).tint(Appearance.brand)
         .accessibilityAddTraits(model.filter == filter ? .isSelected : [])
