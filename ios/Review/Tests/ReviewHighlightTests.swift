@@ -60,6 +60,10 @@ struct ReviewHighlightTests {
 }
 
 private actor HighlightTransport: HTTPTransport {
+    func put(_ url: URL, body: Data) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
     var ready = false
     var revision = 1
     var grammar = "\"swift\""

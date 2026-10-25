@@ -30,6 +30,10 @@ struct ReviewSourceTests {
 }
 
 private actor SourceTransport: HTTPTransport {
+    func put(_ url: URL, body: Data) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
     var failFirst = true
     var paths: [String] = []
     func get(_ url: URL) async throws -> Data {

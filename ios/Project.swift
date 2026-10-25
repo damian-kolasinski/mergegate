@@ -104,6 +104,7 @@ let project = Project(
                     "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)",
                     "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)",
                     "MG_IOS_TEST_HIGHLIGHT": "$(MG_IOS_TEST_HIGHLIGHT)",
+                    "MG_IOS_TEST_VIEWED": "$(MG_IOS_TEST_VIEWED)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )

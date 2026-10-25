@@ -2,6 +2,7 @@ import Foundation
 
 public protocol HTTPTransport: Sendable {
     func get(_ url: URL) async throws -> Data
+    func put(_ url: URL, body: Data) async throws -> Data
 }
 
 public struct HTTPFailure: Error, LocalizedError, Sendable {
@@ -19,12 +20,23 @@ public final class URLSessionTransport: NSObject, HTTPTransport, URLSessionTaskD
     public override init() {}
 
     public func get(_ url: URL) async throws -> Data {
+        try await send(url, method: "GET", body: nil)
+    }
+
+    public func put(_ url: URL, body: Data) async throws -> Data {
+        try await send(url, method: "PUT", body: body)
+    }
+
+    private func send(_ url: URL, method: String, body: Data?) async throws -> Data {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.timeoutIntervalForResource = 20
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
         var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.httpBody = body
+        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("mergegate-ios", forHTTPHeaderField: "X-Mergegate-Client")
         let (data, response) = try await session.data(for: request)

@@ -79,6 +79,10 @@ struct TriageTests {
 }
 
 private actor TriageTransport: HTTPTransport {
+    func put(_ url: URL, body: Data) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
     var revision = 2
     func setRevision(_ value: Int) { revision = value }
     func get(_ url: URL) async throws -> Data {
