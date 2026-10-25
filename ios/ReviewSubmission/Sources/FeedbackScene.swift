@@ -25,11 +25,12 @@ struct FeedbackScene: View {
                     Text(
                         model.sent
                             ? (model.approval?.title
-                                ?? (model.sentVerdict == .changesRequested ? "Changes requested" : "Feedback sent"))
+                                ?? (model.sentVerdict == .changesRequested
+                                    ? "Changes requested" : "Feedback sent"))
                             : (model.verdict == .approved ? "Approve & merge" : "Send feedback")
                     )
-                        .appearanceText(Appearance.heading).accessibilityAddTraits(.isHeader)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .appearanceText(Appearance.heading).accessibilityAddTraits(.isHeader)
+                    .fixedSize(horizontal: false, vertical: true)
                     if model.sent {
                         Label("The hub received your feedback", systemImage: "checkmark.circle")
                             .appearanceText(Appearance.label).accessibilityIdentifier("feedbackSent")
@@ -96,7 +97,8 @@ struct FeedbackScene: View {
                                     .appearanceText(Appearance.body)
                             }
                             ForEach(model.hubReplies) { reply in
-                                Text("Reply to \(reply.comment): \(reply.body)").appearanceText(Appearance.body)
+                                Text("Reply to \(reply.comment): \(reply.body)").appearanceText(
+                                    Appearance.body)
                             }
                         }
                     }
@@ -106,10 +108,20 @@ struct FeedbackScene: View {
                         if !model.summarySaved {
                             Button("Retry saving summary") { model.saveSummary() }.frame(minHeight: 44)
                         }
-                        if model.snapshot == nil {
-                            Button("Retry loading") { Task { await model.load() } }.frame(minHeight: 44)
+
+                    }
+                    if !model.isCurrent && !model.sent {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(
+                                "Your feedback is saved on this iPhone. Check the current revision before sending."
+                            )
+                            .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                            Button("Reconnect & check revision") { Task { await model.load() } }
+                                .frame(minHeight: 44).disabled(model.busy)
+                                .accessibilityIdentifier("recheckFeedbackRevision")
                         }
                     }
+
                 }.padding(20)
             }.scrollDismissesKeyboard(.immediately)
             if !model.sent {
@@ -137,7 +149,11 @@ struct FeedbackScene: View {
                     }
                     if model.uncertain && !model.busy {
                         Button("Send again") {
-                            if model.verdict == .approved { confirmApproval = true } else { confirmResend = true }
+                            if model.verdict == .approved {
+                                confirmApproval = true
+                            } else {
+                                confirmResend = true
+                            }
                         }.frame(minHeight: 44)
                     }
                 }.padding(.horizontal, 20).padding(.vertical, 12)

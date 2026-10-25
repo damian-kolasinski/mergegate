@@ -62,7 +62,9 @@ let project = Project(
         module("Networking"),
         module(
             "HubConnection", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
-        module("Inbox", dependencies: ["HubConnectionInterface", "ConversationInterface", "Networking"], appearance: true),
+        module(
+            "Inbox", dependencies: ["HubConnectionInterface", "ConversationInterface", "Networking"],
+            appearance: true),
         .target(
             name: "DiffDocumentInterface", destinations: [.iPhone, .iPad], product: .framework,
             bundleId: "dev.mergegate.DiffDocumentInterface", deploymentTargets: .iOS("26.0"),
@@ -125,6 +127,7 @@ let project = Project(
                     "MG_IOS_TEST_CONVERSATIONS": "$(MG_IOS_TEST_CONVERSATIONS)",
                     "MG_IOS_TEST_REREVIEW": "$(MG_IOS_TEST_REREVIEW)",
                     "MG_IOS_TEST_APPROVAL": "$(MG_IOS_TEST_APPROVAL)",
+                    "MG_IOS_TEST_OFFLINE": "$(MG_IOS_TEST_OFFLINE)",
                     "MG_IOS_TEST_LIVE_UPDATES": "$(MG_IOS_TEST_LIVE_UPDATES)",
                     "MG_IOS_TEST_CONTROL_URL": "$(MG_IOS_TEST_CONTROL_URL)",
                     "MG_IOS_TEST_DECISIONS": "$(MG_IOS_TEST_DECISIONS)",

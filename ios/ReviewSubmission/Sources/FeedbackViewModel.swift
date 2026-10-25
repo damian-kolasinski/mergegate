@@ -10,6 +10,7 @@ final class FeedbackViewModel {
     private let outbox: any FeedbackOutbox
     private let service: FeedbackWebService
     private var record: FeedbackRecord
+    private(set) var isCurrent = false
     private(set) var snapshot: FeedbackSnapshot?
     private(set) var drafts: [FeedbackDraft] = []
     private(set) var busy = false
@@ -32,7 +33,7 @@ final class FeedbackViewModel {
     var frozen: Bool { record.attempt != nil }
     var uncertain: Bool { record.attempt?.reviewStarted == true }
     var canSend: Bool {
-        !busy && !sent && summarySaved && snapshot != nil
+        !busy && !sent && summarySaved && snapshot != nil && isCurrent
             && (verdict == .approved || frozen
                 || !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !drafts.isEmpty || !hubDrafts.isEmpty || !hubReplies.isEmpty)
@@ -69,6 +70,7 @@ final class FeedbackViewModel {
     func load() async {
         guard !busy else { return }
         busy = true
+        isCurrent = false
         defer { busy = false }
         do {
             drafts =
@@ -81,8 +83,10 @@ final class FeedbackViewModel {
                 return
             }
             if try await reconcile() { return }
-            snapshot = try await service.load(scope: scope)
-            try validate(snapshot!)
+            let current = try await service.load(scope: scope)
+            try validate(current)
+            snapshot = current
+            isCurrent = true
             error = nil
         } catch { self.error = error.localizedDescription }
     }
@@ -111,7 +115,10 @@ final class FeedbackViewModel {
             drafts = try draftsStore.load(scope: scope).filter {
                 !$0.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
-            snapshot = try await service.load(scope: scope)
+            let refreshed = try await service.load(scope: scope)
+            try validate(refreshed)
+            snapshot = refreshed
+            isCurrent = true
             error = nil
         } catch { self.error = error.localizedDescription }
     }
@@ -224,7 +231,8 @@ final class FeedbackViewModel {
                     try save()
                     guard try await reconcile() else {
                         throw FeedbackIssue(
-                            message: "Approval receipt is not available yet. Check delivery before continuing.")
+                            message:
+                                "Approval receipt is not available yet. Check delivery before continuing.")
                     }
                     return
                 }
@@ -238,7 +246,8 @@ final class FeedbackViewModel {
                 else {
                     throw FeedbackIssue(
                         message:
-                            "The hub returned a different review receipt. Check delivery before sending again.")
+                            "The hub returned a different review receipt. Check delivery before sending again."
+                    )
                 }
             } catch let failure as HTTPFailure where (400..<500).contains(failure.status) {
                 record.attempt?.reviewStarted = false
@@ -249,6 +258,7 @@ final class FeedbackViewModel {
             try save()
             try finish()
         } catch {
+            isCurrent = false
             self.error = error.localizedDescription
             if uncertain {
                 do { if try await reconcile() { return } } catch {

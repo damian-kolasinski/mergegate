@@ -8,9 +8,10 @@ final class ReviewSourceModel {
     private(set) var context: SourceContext?
     private(set) var loading = false
     private(set) var error: String?
-    var revealed: [Int: Int] = [:]
 
-    func load(service: ReviewSourceService, project: String, file: ReviewFile, hunks: [DiffHunk]) async {
+    func load(service: ReviewSourceService, project: String, file: ReviewFile, hunks: [DiffHunk])
+        async
+    {
         guard !loading, context == nil else { return }
         loading = true
         error = nil

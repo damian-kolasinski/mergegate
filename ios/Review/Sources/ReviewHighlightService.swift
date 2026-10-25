@@ -8,11 +8,12 @@ struct ReviewHighlightService: Sendable {
     var since: UInt32? = nil
 
     func load(item: String, revision: UInt32, file: ReviewFile) async throws -> ReviewPainting {
-        let snapshot = try await web.load(item: item, since: since)
+        // Blob identities are immutable, so cached spans remain valid across revisions and outages.
+        let snapshot = try? await web.load(item: item, since: since)
         // A highlight refresh must never replace the displayed revision's code or source coordinates.
         let current =
-            snapshot.item.revision.number == revision
-            ? snapshot.files.first(where: {
+            snapshot?.item.revision.number == revision
+            ? snapshot?.files.first(where: {
                 $0.path == file.path && $0.oldBlob == file.oldBlob && $0.newBlob == file.newBlob
             })
             : nil
@@ -23,12 +24,37 @@ struct ReviewHighlightService: Sendable {
         return try await ReviewPainting(old: old, new: new)
     }
 
+    func cached(file: ReviewFile) async -> ReviewPainting? {
+        guard let grammar = file.grammar, let cache = web.cache else { return nil }
+        func saved(_ blob: String?) async -> [[CodeSpan]]? {
+            guard let blob else { return [] }
+            let endpoint = web.url.appending(path: "api/highlights").appending(component: grammar).appending(
+                component: blob)
+            guard let response = await cache.read(endpoint.absoluteString),
+                let result = try? JSONDecoder().decode(Blob.self, from: response.data)
+            else { return nil }
+            return result.lines.map { $0.map(\.value) }
+        }
+        async let old = saved(file.oldBlob)
+        async let new = saved(file.newBlob)
+        let painting = await ReviewPainting(old: old, new: new)
+        return painting.old == nil && painting.new == nil ? nil : painting
+    }
+
     private func spans(grammar: String, blob: String?) async throws -> [[CodeSpan]]? {
         guard let blob else { return [] }
         let endpoint = web.url.appending(path: "api/highlights").appending(component: grammar)
             .appending(component: blob)
         do {
-            let result = try await JSONDecoder().decode(Blob.self, from: web.transport.get(endpoint))
+            let data: Data
+            if let saved = await web.cache?.read(endpoint.absoluteString) {
+                data = saved.data
+            } else {
+                data = try await web.transport.get(endpoint)
+                _ = try JSONDecoder().decode(Blob.self, from: data)
+                await web.cache?.save(data, key: endpoint.absoluteString)
+            }
+            let result = try JSONDecoder().decode(Blob.self, from: data)
             return result.lines.map { $0.map(\.value) }
         } catch let error as HTTPFailure where error.status == 404 {
             return nil

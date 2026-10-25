@@ -20,6 +20,10 @@ final class HubConnectionViewModel {
     }
 
     func restore() async {
+        if let hub = interactor.selectedHub {
+            state = .connected(hub)
+            return
+        }
         guard interactor.selectedURL != nil else { return }
         await connect()
     }

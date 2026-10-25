@@ -253,3 +253,27 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-live
 ```
 
 The optional `--pack` installs an existing Swift grammar; omit it to use plain code. The controller submits real CLI items/revisions/replies and restarts only its isolated hub. The native flow checks live inbox arrivals and replies in an already-open thread, edits a pinned draft across revision changes, stops/restarts the hub, verifies missed-revision recovery after backgrounding, and explicitly reopens the latest revision. It retains demo screenshots and audits light and dark/largest-text appearances. Behavior tests cover event filtering, submitted-review invalidation, failure/retry, cancelled/overlapping refreshes, revision pinning, and a stale read racing viewed progress.
+
+## Resume offline work
+
+Previously opened reviews retain their guide, ordered files, diff hunks and highlighting on this iPhone. Loaded source blobs and their syntax spans remain available for unchanged context; unopened source still requires the hub. Reopening restores the selected comparison/file, expanded context and scroll position for that revision. Saved inbox/review notices show when the snapshot was stored. A missing or unreadable cache produces the normal retry screen.
+
+The saved trusted hub opens without requiring a new network handshake. This only permits local reading: every remote operation still uses the hub's existing authorization. Inbox and Review own their separate caches; Review owns SwiftData reading metadata and files for source/snapshots. Comment drafts and summaries continue using their existing feature-owned durable stores. No migration or legacy support is added.
+
+On reconnect, the reader checks the authoritative revision and progress while keeping the displayed code and draft scope. **Open rN** explicitly opens a newer revision; earlier drafts remain on their original revision. The completion sheet preserves offline edits and offers **Reconnect & check revision**. Sending requires a successful current-revision check and revalidates immediately before delivery. Stale or closed revisions retain feedback and cannot send.
+
+Verify against a fresh disposable hub with an installed Swift grammar:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-offline
+python3 ios/Scripts/offline-fixture.py /tmp/mergegate-ios-offline \
+  --pack ~/.mergegate/languages/swift/0.7.1
+# Keep the controller running, using its printed URL and the hub's tailnet URL:
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_OFFLINE=1 \
+  MG_IOS_TEST_CONTROL_URL=http://127.0.0.1:CONTROL_PORT \
+  .claude/scripts/check.sh test ios -- -only-testing:MergegateUITests/ResumeOfflineTests
+# Ctrl-C stops the controller, then:
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-offline
+```
+
+The native flow caches real source/highlighting, stops the isolated hub, terminates/reopens the app, restores expanded context and edits local feedback offline. It then restarts the hub with a CLI-submitted revision, verifies stale feedback cannot send, explicitly opens the current revision and verifies its delivered summary in the real hub event log. It retains demo screenshots and audits light and dark/largest-text appearances. Behavior tests cover comparison/position restoration, immutable source and span reuse, hub/item isolation, corrupt cache, authorization failures, reconnect revision pinning, delayed refreshes, and same-revision versus stale feedback recovery.

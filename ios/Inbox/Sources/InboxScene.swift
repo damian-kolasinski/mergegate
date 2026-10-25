@@ -18,7 +18,16 @@ struct InboxScene<Review: View, Feedback: View>: View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 List {
-                    if model.isReconnecting {
+                    if let date = model.cachedAt {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Offline · saved inbox", systemImage: "wifi.slash")
+                            Text(
+                                "Saved \(date.formatted(date: .abbreviated, time: .shortened)). Open a previously read review to continue."
+                            )
+                            Button("Reconnect") { Task { await model.refresh() } }.frame(minHeight: 44)
+                        }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                            .accessibilityIdentifier("inboxOffline")
+                    } else if model.isReconnecting {
                         Label("Reconnecting… Showing the last inbox.", systemImage: "wifi.exclamationmark")
                             .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                             .accessibilityIdentifier("inboxReconnecting")
@@ -27,7 +36,7 @@ struct InboxScene<Review: View, Feedback: View>: View {
                         InboxControls(snapshot: snapshot, model: model).padding(.top, 12).padding(.bottom, 8)
                             .listRowSeparator(.hidden).listRowBackground(Appearance.page)
                     }
-                    if let error = model.error {
+                    if let error = model.error, model.cachedAt == nil {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Couldn’t refresh inbox").appearanceText(Appearance.rowHeading)
                             Text(error).foregroundStyle(Appearance.error)
@@ -37,13 +46,17 @@ struct InboxScene<Review: View, Feedback: View>: View {
                     if let snapshot = model.snapshot {
                         if model.groups.isEmpty {
                             ContentUnavailableView(
-                                snapshot.isEmpty ? "Inbox is clear" : "No matching items", systemImage: "tray",
+                                snapshot.isEmpty ? "Inbox is clear" : "No matching items",
+                                systemImage: "tray",
                                 description: Text("Choose another project or state, or pull to refresh."))
                         }
                         ForEach(model.groups) { group in
                             Section {
                                 ForEach(group.items) { item in
-                                    InboxRow(item: item, triage: model.triage[item.id], error: model.triageErrors[item.id]) {
+                                    InboxRow(
+                                        item: item, triage: model.triage[item.id],
+                                        error: model.triageErrors[item.id]
+                                    ) {
                                         Task { await model.loadTriage(item) }
                                     } openReview: {
                                         path.append(item.id)
@@ -60,7 +73,8 @@ struct InboxScene<Review: View, Feedback: View>: View {
                                     Spacer(minLength: 8)
                                     Text("\(group.items.count) \(group.items.count == 1 ? "item" : "items")")
                                 }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                                    .padding(.horizontal, 6).padding(.top, 8).accessibilityAddTraits(.isHeader)
+                                    .padding(.horizontal, 6).padding(.top, 8).accessibilityAddTraits(
+                                        .isHeader)
                             }
                         }
                     } else if model.isLoading {
@@ -113,9 +127,10 @@ struct InboxScene<Review: View, Feedback: View>: View {
                     item: selection.item, triage: selection.triage,
                     service: .init(transport: URLSessionTransport(), hub: hub.url)
                 ) { close in
-                    feedback(.init(
-                        hub: hub.url, item: selection.item.id, name: selection.item.name,
-                        revision: selection.item.revision), close)
+                    feedback(
+                        .init(
+                            hub: hub.url, item: selection.item.id, name: selection.item.name,
+                            revision: selection.item.revision), close)
                 }
             }
             .sheet(isPresented: $showingHub) { hubSettings }

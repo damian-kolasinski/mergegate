@@ -85,6 +85,23 @@ struct ReviewEventsTests {
         #expect(snapshot.item.revision.number == 1)
     }
 
+    @Test @MainActor func openingLatestInvalidatesAnOlderRefresh() async throws {
+        let transport = LiveReviewTransport()
+        let model = ReviewViewModel(
+            service: .init(transport: transport, url: URL(string: "http://my-mac")!), item: "sample#3")
+        await model.load()
+        await transport.holdNextRead()
+        let old = Task { await model.refreshCurrent() }
+        await transport.waitForRead()
+        await transport.advance()
+        await model.load(allowCached: false)
+        await transport.releaseRead()
+        await old.value
+        guard case .loaded(let snapshot) = model.state else { return }
+        #expect(snapshot.item.revision.number == 2 && model.latestRevision == 2)
+        #expect(snapshot.files[0].viewed)
+    }
+
     @Test @MainActor func sameRevisionRefetchUpdatesProgressAndClosedState() async throws {
         let transport = LiveReviewTransport()
         let model = ReviewViewModel(

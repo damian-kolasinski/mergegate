@@ -47,13 +47,34 @@ struct HubConnectionTests {
     }
 
     @Test @MainActor
+    func trustedHubRestoresWithoutAWorkingNetworkAndForgetClearsIdentity() async throws {
+        let name = "HubOfflineTests-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let selection = HubSelection(defaults: defaults)
+        selection.save(ConnectedHub(url: URL(string: "http://my-mac")!, deviceName: "phone"))
+        let model = HubConnectionViewModel(
+            interactor: .init(
+                service: .init(transport: NoNetworkIdentity()), selection: selection))
+        await model.restore()
+        guard case .connected(let hub) = model.state else {
+            Issue.record("Expected offline hub")
+            return
+        }
+        #expect(hub.deviceName == "phone")
+        model.forget()
+        #expect(selection.hub == nil && selection.url == nil)
+    }
+
+    @Test @MainActor
     func refusesLoopbackIdentityWithoutSaving() async throws {
         let name = "HubConnectionTests-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let selection = HubSelection(defaults: defaults)
         let model = HubConnectionViewModel(
-            interactor: .init(service: .init(transport: IdentityTransport(via: "loopback")), selection: selection))
+            interactor: .init(
+                service: .init(transport: IdentityTransport(via: "loopback")), selection: selection))
         model.address = "http://my-mac:7800"
         await model.connect()
         #expect(model.error != nil)
@@ -75,4 +96,14 @@ private struct IdentityTransport: HTTPTransport {
         #expect(url.path == "/api/whoami")
         return Data("{\"via\":\"\(via)\",\"device\":{\"name\":\"phone\",\"trust\":\"owner\"}}".utf8)
     }
+}
+
+private struct NoNetworkIdentity: HTTPTransport {
+    func get(_ url: URL) async throws -> Data {
+        Issue.record("Restoring the saved hub must not require a network request")
+        throw URLError(.notConnectedToInternet)
+    }
+    func put(_ url: URL, body: Data) async throws -> Data { throw URLError(.unsupportedURL) }
+    func post(_ url: URL, body: Data) async throws -> Data { throw URLError(.unsupportedURL) }
+    func delete(_ url: URL) async throws -> Data { throw URLError(.unsupportedURL) }
 }

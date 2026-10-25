@@ -6,6 +6,7 @@ struct ReviewViewedBar: View {
     let viewed: Int
     let total: Int
     let saving: Bool
+    var disabled = false
     let failure: ReviewViewedFailure?
     let mark: () -> Void
     let retry: () -> Void
@@ -18,7 +19,7 @@ struct ReviewViewedBar: View {
                     Text("Couldn’t update \(failure.change.path): \(failure.message)")
                         .foregroundStyle(Appearance.error).accessibilityIdentifier("viewedError")
                     Button("Retry viewed change", action: retry).frame(minHeight: 44)
-                        .disabled(saving).accessibilityIdentifier("retryViewed")
+                        .disabled(saving || disabled).accessibilityIdentifier("retryViewed")
                 }.appearanceText(Appearance.caption).padding(.horizontal, 20)
             }
             layout {
@@ -47,9 +48,11 @@ struct ReviewViewedBar: View {
             Button(action: mark) {
                 HStack(spacing: 8) {
                     if saving { ProgressView().accessibilityLabel("Saving viewed state") }
-                    Label(file.viewed ? "Viewed" : "Mark viewed", systemImage: file.viewed ? "checkmark.circle.fill" : "circle")
+                    Label(
+                        file.viewed ? "Viewed" : "Mark viewed",
+                        systemImage: file.viewed ? "checkmark.circle.fill" : "circle")
                 }.appearanceText(Appearance.body).frame(minHeight: 44)
-            }.disabled(saving).accessibilityIdentifier("reviewViewed")
+            }.disabled(saving || disabled).accessibilityIdentifier("reviewViewed")
                 .accessibilityValue(file.viewed ? "Viewed" : "Not viewed")
                 .accessibilityHint(file.viewed ? "Mark this file as not viewed" : "Mark this file as viewed")
         }

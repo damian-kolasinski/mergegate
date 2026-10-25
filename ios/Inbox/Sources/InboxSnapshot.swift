@@ -1,7 +1,7 @@
 import Foundation
 
 // The inbox feature consumes only this subset of crates/api/src/item.rs.
-struct InboxSnapshot: Decodable, Sendable {
+struct InboxSnapshot: Codable, Sendable {
     let needsYou: [InboxItem]
     let withAgents: [InboxItem]
     let merging: [InboxItem]
@@ -16,7 +16,7 @@ struct InboxSnapshot: Decodable, Sendable {
     var isEmpty: Bool { needsYou.isEmpty && withAgents.isEmpty && merging.isEmpty && closed.isEmpty }
 }
 
-struct InboxItem: Decodable, Identifiable, Sendable {
+struct InboxItem: Codable, Identifiable, Sendable {
     let id: String
     let name: String
     let title: String
