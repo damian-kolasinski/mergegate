@@ -28,6 +28,10 @@ final class ConversationViewModel {
         self.events = events
     }
 
+    var editingService: ConversationEditingService {
+        .init(scope: scope, transport: service.transport)
+    }
+
     var threads: [ConversationThread] {
         snapshot?.threads(path: path, anchors: anchors, revision: scope.revision) ?? []
     }

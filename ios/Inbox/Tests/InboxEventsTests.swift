@@ -95,7 +95,7 @@ private actor LiveInboxTransport: HTTPTransport {
             """
         }.joined(separator: ",")
         let response = Data(
-            "{\"needs_you\":[\(items)],\"with_agents\":[],\"merging\":[],\"closed\":[],\"weekly\":{},\"rules\":[]}"
+            "{\"needs_you\":[\(items)],\"with_agents\":[],\"merging\":[],\"closed\":[],\"weekly\":{\"monday\":\"2026-10-19\",\"today\":\"2026-10-25\",\"repositories\":[]},\"rules\":[]}"
                 .utf8)
         if hold {
             hold = false

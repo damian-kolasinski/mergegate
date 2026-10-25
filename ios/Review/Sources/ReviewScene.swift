@@ -1,23 +1,44 @@
 import CodeStylingInterface
 import ConversationInterface
+import DiffDocumentInterface
 import DiffView
 import SwiftUI
 
-struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, Feedback: View>: View {
+struct ReviewScene<
+    Drafts: View, Conversations: View, FileConversations: View, Feedback: View, Rules: View
+>: View {
     @State var model: ReviewViewModel
     @Environment(\.scenePhase) private var scenePhase
     let styling: any CodeStyling
     let hub: URL
     let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts
-    let conversations: (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> Conversations
+    let conversations:
+        (
+            CommentDraftScope, ConversationLocation?, @escaping (ConversationLocation) -> Void,
+            @escaping () -> Void,
+            @escaping () -> Void
+        ) -> Conversations
     let fileConversations: (CommentDraftScope, String) -> FileConversations
-    let feedback: (CommentDraftScope, @escaping () -> Void) -> Feedback
+    let feedback:
+        (
+            CommentDraftScope, @escaping () async -> Void, @escaping () -> Void,
+            @escaping () -> Void,
+            @escaping () -> Void
+        ) -> Feedback
+    let rules: (String, @escaping (String) -> Void) -> Rules
+    @State private var feedbackSent = false
+    @State private var sourceFocus: SourceAnchor?
+    @State private var sourceRequest = UUID()
+    let openItem: (String) -> Void
     private enum Sheet: Identifiable {
-        case guide, files, feedback
+        case guide, files, feedback, details
+        case demo(ReviewDemo)
         case drafts(CommentDraftLocation?)
         case conversations(ConversationLocation?)
         var id: String {
             switch self {
+            case .details: "details"
+            case .demo: "demo"
             case .guide: "guide"
             case .files: "files"
             case .feedback: "feedback"
@@ -69,16 +90,31 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                             disabled: model.isSavingViewed || model.cachedAt != nil,
                             compare: { since in Task { await model.compare(since: since) } })
                         ReviewUpdatesView(model: model, revision: snapshot.item.revision.number)
+                        ReviewStatusView(snapshot: model.currentDetails ?? snapshot) {
+                            sheet = .details
+                        }
+                        if let demo = (model.currentDetails ?? snapshot).demo {
+                            Button("Demo (\(demo.attachments.count)) · from r\(demo.revision)") {
+                                sheet = .demo(demo)
+                            }
+                            .frame(minHeight: 44).accessibilityIdentifier("reviewDemo")
+                        }
                     }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
                     if let failure = model.comparisonFailure {
-                        Text(failure).appearanceText(Appearance.caption).foregroundStyle(Appearance.error)
-                            .padding(.horizontal, 20).padding(.bottom, 8)
-                            .accessibilityIdentifier("comparisonError")
+                        Text(failure).appearanceText(Appearance.caption).foregroundStyle(
+                            Appearance.error
+                        )
+                        .padding(.horizontal, 20).padding(.bottom, 8)
+                        .accessibilityIdentifier("comparisonError")
                     }
                     Divider()
-                    if let index = snapshot.files.firstIndex(where: { $0.path == model.selectedPath }) {
+                    if let index = snapshot.files.firstIndex(where: {
+                        $0.path == model.selectedPath
+                    }) {
                         let file = snapshot.files[index]
-                        ReviewFilePicker(file: file, position: index + 1, count: snapshot.files.count) {
+                        ReviewFilePicker(
+                            file: file, position: index + 1, count: snapshot.files.count
+                        ) {
                             sheet = .files
                         }
                         Divider()
@@ -99,7 +135,8 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                             },
                             onReadConversations: { anchors in
                                 sheet = .conversations(.init(path: file.path, anchors: anchors))
-                            }
+                            }, focus: sourceFocus, revealRequest: sourceRequest,
+                            didReveal: { sourceFocus = nil }
                         ).id(
                             "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
                         )
@@ -139,6 +176,7 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                     restoreOffset = nil
                 }
                 if phase == .idle && (previous == .interacting || previous == .decelerating) {
+                    model.reviewTime.input()
                     model.readingOffset = visibleOffset
                     model.rememberPosition()
                 }
@@ -147,9 +185,9 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                 of:
                     "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(model.selectedPath ?? "")"
             ) { _, _ in
-                readerMoved = false
-                restoreOffset = model.readingOffset
-                scrollPosition.scrollTo(y: model.readingOffset)
+                readerMoved = sourceFocus != nil
+                restoreOffset = sourceFocus == nil ? model.readingOffset : nil
+                if sourceFocus == nil { scrollPosition.scrollTo(y: model.readingOffset) }
             }
             .onChange(of: model.contextLoaded) { _, _ in model.rememberPosition() }
             .onChange(of: model.revealed) { _, _ in model.rememberPosition() }
@@ -162,22 +200,67 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                     file: file, viewed: snapshot.reviewCount - snapshot.remaining,
                     total: snapshot.reviewCount,
                     saving: model.isSavingViewed || model.isComparing,
-                    disabled: model.cachedAt != nil, failure: model.viewedFailure,
+                    disabled: model.cachedAt != nil
+                        || !(model.currentDetails ?? snapshot).item.isReviewable,
+                    failure: model.viewedFailure,
                     mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
                     retry: { Task { await model.retryViewed() } })
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Button("Complete review") { sheet = .feedback }
-                .appearanceText(Appearance.label).frame(maxWidth: .infinity, minHeight: 44)
-                .buttonStyle(.glass).padding(.horizontal, 20).padding(.bottom, 8)
-                .disabled(model.isSavingViewed || model.isComparing).accessibilityIdentifier(
-                    "reviewFeedback")
+            VStack(spacing: 0) {
+                if (model.currentDetails ?? snapshot).item.isClosed {
+                    ReviewNextItem(after: snapshot.item.id, service: model.service) {
+                        openItem($0)
+                    }
+                }
+                HStack(spacing: 12) {
+                    Button("Complete review") {
+                        feedbackSent = false
+                        sheet = .feedback
+                    }
+                    .appearanceText(Appearance.label).frame(maxWidth: .infinity, minHeight: 44)
+                    .buttonStyle(.glass)
+                    .disabled(
+                        model.isSavingViewed || model.isComparing
+                            || !(model.currentDetails ?? snapshot).item.isReviewable
+                    ).accessibilityIdentifier(
+                        "reviewFeedback")
+                    Button {
+                        sheet = .details
+                    } label: {
+                        Label("Item details and actions", systemImage: "ellipsis.circle")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }.buttonStyle(.glass).accessibilityIdentifier("reviewMore")
+                        .disabled(model.isSavingViewed || model.isComparing)
+                }.padding(.horizontal, 20).padding(.bottom, 8)
+            }
         }
+        .task(
+            id:
+                "\(scenePhase)-\((model.currentDetails ?? snapshot).item.state)-\(snapshot.item.revision.number)"
+        ) {
+            guard scenePhase == .active, (model.currentDetails ?? snapshot).item.isReviewable,
+                model.cachedAt == nil
+            else {
+                await model.reviewTime.stop()
+                return
+            }
+            let session = model.reviewTime.start(revision: snapshot.item.revision.number)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { break }
+                await model.reviewTime.report()
+            }
+            await model.reviewTime.stop(session: session)
+        }
+        .onChange(of: sheet?.id) { _, _ in model.reviewTime.input() }
+        .onChange(of: model.selectedPath) { _, _ in model.reviewTime.input() }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("\(snapshot.item.name) · r\(snapshot.item.revision.number)")
-                    .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary).lineLimit(1)
+                    .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                    .lineLimit(1)
                     .accessibilityLabel(
                         "\(snapshot.item.name) · r\(snapshot.item.revision.number) → \(snapshot.item.target)"
                     )
@@ -205,29 +288,100 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
                 }.tint(Appearance.brand).accessibilityIdentifier("reviewGuide")
             }
         }
-        .sheet(item: $sheet) { selection in
-            switch selection {
-            case .conversations(let location):
-                conversations(scope(snapshot), location) { sheet = nil }
-            case .drafts(let location):
-                drafts(
-                    .init(
-                        hub: hub, item: snapshot.item.id, name: snapshot.item.name,
-                        revision: snapshot.item.revision.number), location
-                ) { sheet = nil }
-            case .feedback: feedback(scope(snapshot)) { sheet = nil }
-            case .guide: ReviewGuideScene(guide: snapshot.guide) { sheet = nil }
-            case .files:
-                ReviewFilesScene(
-                    files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }
-                ) {
-                    path in
-                    model.selectedPath = path
-                    sheet = nil
+        .sheet(item: $sheet, onDismiss: { Task { await model.refreshCurrent() } }) { selection in
+            Group {
+                switch selection {
+                case .details:
+                    ReviewDetailsScene(
+                        model: ReviewActionsModel(
+                            service: model.service, item: snapshot.item.id,
+                            beforeLeaving: { await model.reviewTime.settle() }),
+                        displayedRevision: snapshot.item.revision.number, close: { sheet = nil },
+                        openItem: {
+                            sheet = nil
+                            openItem($0)
+                        }, rules: rules)
+                case .demo(let demo):
+                    ReviewDemoScene(
+                        demo: demo, service: model.sourceService, close: { sheet = nil },
+                        onActivity: { model.reviewTime.input() })
+                case .conversations(let location):
+                    conversations(
+                        scope(snapshot), location,
+                        { target in Task { await revealSource(target) } },
+                        { model.reviewTime.input() }
+                    ) { sheet = nil }
+                case .drafts(let location):
+                    drafts(
+                        .init(
+                            hub: hub, item: snapshot.item.id, name: snapshot.item.name,
+                            revision: snapshot.item.revision.number), location
+                    ) { sheet = nil }
+                case .feedback:
+                    VStack(spacing: 0) {
+                        feedback(
+                            scope(snapshot), { await model.reviewTime.settle() },
+                            { model.reviewTime.input() },
+                            { feedbackSent = true }
+                        ) { sheet = nil }
+                        if feedbackSent {
+                            ReviewNextItem(after: snapshot.item.id, service: model.service) {
+                                sheet = nil
+                                openItem($0)
+                            }
+                        }
+                    }
+                case .guide:
+                    ReviewGuideScene(
+                        guide: snapshot.guide, onActivity: { model.reviewTime.input() }
+                    ) { sheet = nil }
+                case .files:
+                    ReviewFilesScene(
+                        files: snapshot.files, selectedPath: model.selectedPath,
+                        close: { sheet = nil }
+                    ) {
+                        path in
+                        sourceFocus = nil
+                        model.selectedPath = path
+                        sheet = nil
+                    }
                 }
-            }
+            }.onReceive(
+                NotificationCenter.default.publisher(for: UITextField.textDidChangeNotification)
+            ) { _ in model.reviewTime.input() }
+            .onReceive(
+                NotificationCenter.default.publisher(for: UITextView.textDidChangeNotification)
+            ) { _ in model.reviewTime.input() }
         }
     }
+    private func revealSource(_ target: ConversationLocation) async {
+        guard case .loaded(let before) = model.state,
+            let file = before.files.first(where: { $0.path == target.path })
+        else { return }
+        if let anchor = target.anchors.first,
+            !(file.interdiff?.sourceSides ?? [.old, .new]).contains(anchor.side)
+        {
+            await model.compare(since: nil)
+        }
+        guard case .loaded(let current) = model.state,
+            current.item.revision.number == before.item.revision.number,
+            let file = current.files.first(where: { $0.path == target.path }),
+            target.anchors.allSatisfy({
+                (file.interdiff?.sourceSides ?? [.old, .new]).contains($0.side)
+            })
+        else {
+            model.refreshFailure =
+                "This conversation’s source is not available on the displayed comparison."
+            return
+        }
+        model.selectedPath = target.path
+        sourceFocus = target.anchors.first
+        sourceRequest = UUID()
+        readerMoved = true
+        restoreOffset = nil
+        sheet = nil
+    }
+
     private func scope(_ snapshot: ReviewSnapshot) -> CommentDraftScope {
         .init(
             hub: hub, item: snapshot.item.id, name: snapshot.item.name,

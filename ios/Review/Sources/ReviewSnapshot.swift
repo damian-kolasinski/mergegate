@@ -13,16 +13,31 @@ struct ReviewSnapshot: Decodable, Sendable {
         let target: String
         let state: String
         let revision: Revision
+        var branch: String? = nil
+        var backend: String? = nil
+        var priority: String? = nil
+        var note: String? = nil
+        var link: ReviewLink? = nil
+        var isClosed: Bool { ["merged", "abandoned"].contains(state) }
+        var isReviewable: Bool { ["needs_review", "changes_requested"].contains(state) }
     }
-    let item: Item
+    var item: Item
     let guide: String?
     var files: [ReviewFile]
     let since: UInt32?
+    var blocked: ReviewBlocked? = nil
+    var agent: String? = nil
+    var bots: [ReviewBot]? = nil
+    var stack: [ReviewStackEntry]? = nil
+    var behind: Bool? = nil
+    var demo: ReviewDemo? = nil
 
     let last_reviewed: UInt32?
     let interdiffs: [UInt32]
 
-    var reviewFiles: [ReviewFile] { files.filter { $0.tier == .review && $0.interdiff != .dropped } }
+    var reviewFiles: [ReviewFile] {
+        files.filter { $0.tier == .review && $0.interdiff != .dropped }
+    }
     var remaining: Int { reviewFiles.filter { !$0.viewed }.count }
     var reviewCount: Int { reviewFiles.count }
 }
@@ -45,6 +60,12 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
     let why: String?
     let hint: String?
     let interdiff: ReviewInterdiff?
+    var importance: UInt8? = nil
+    var rule: String? = nil
+    var promoted: Bool? = nil
+    var raised: Bool? = nil
+    var missingPack: String? = nil
+    var generated: Bool? = nil
     let content: ReviewContent
     var id: String { path }
     var rankingReason: String? { reason ?? judgeReason ?? why ?? hint }
@@ -55,7 +76,10 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
         return "Modified"
     }
     enum CodingKeys: String, CodingKey {
-        case grammar, path, additions, deletions, tier, viewed, reason, why, hint, content, interdiff
+        case grammar, path, additions, deletions, tier, viewed, reason, why, hint, content,
+            interdiff
+        case importance, rule, promoted, raised, generated
+        case missingPack = "missing_pack"
         case oldBlob = "old_blob"
         case newBlob = "new_blob"
         case oldPath = "old_path"

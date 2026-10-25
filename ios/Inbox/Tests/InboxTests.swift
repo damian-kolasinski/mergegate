@@ -8,7 +8,8 @@ struct InboxTests {
     @Test @MainActor
     func refreshKeepsLastInboxOnFailureAndRecovers() async throws {
         let transport = InboxTransport()
-        let model = InboxViewModel(service: .init(transport: transport, url: URL(string: "http://my-mac:7800")!))
+        let model = InboxViewModel(
+            service: .init(transport: transport, url: URL(string: "http://my-mac:7800")!))
         await model.refresh()
         #expect(model.snapshot?.needsYou.first?.name == "sample#1")
         await transport.fail(true)
@@ -38,7 +39,7 @@ private actor InboxTransport: HTTPTransport {
         if failing { throw URLError(.notConnectedToInternet) }
         return Data(
             """
-            {"needs_you":[{"id":"sample#1","name":"sample#1","title":"First item","state":"needs_review","revision":1,"review_files":1,"additions":2,"deletions":0}],"with_agents":[],"merging":[],"closed":[],"weekly":{},"rules":[]}
+            {"needs_you":[{"id":"sample#1","name":"sample#1","title":"First item","state":"needs_review","revision":1,"review_files":1,"additions":2,"deletions":0}],"with_agents":[],"merging":[],"closed":[],"weekly":{"monday":"2026-10-19","today":"2026-10-25","repositories":[]},"rules":[]}
             """.utf8)
     }
 }

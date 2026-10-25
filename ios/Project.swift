@@ -21,7 +21,8 @@ func tests(_ name: String) -> Target {
         bundleId: "dev.mergegate.\(name)Tests", deploymentTargets: .iOS("26.0"),
         sources: ["\(name)/Tests/**"],
         resources: name == "DiffView" ? [.folderReference(path: "DiffView/Tests/Goldens")] : [],
-        dependencies: [.target(name: name)] + (name == "DiffView" ? [.target(name: "CodeStyling")] : [])
+        dependencies: [.target(name: name)]
+            + (name == "DiffView" ? [.target(name: "CodeStyling")] : [])
     )
 }
 let project = Project(
@@ -34,7 +35,8 @@ let project = Project(
                 "CFBundleDisplayName": "mergegate",
                 "UILaunchScreen": [:],
                 "UIAppFonts": ["DMSans.ttf"],
-                "NSLocalNetworkUsageDescription": "Connect to your mergegate hub through Tailscale.",
+                "NSLocalNetworkUsageDescription":
+                    "Connect to your mergegate hub through Tailscale.",
                 "NSAppTransportSecurity": [
                     "NSAllowsLocalNetworking": true,
                     "NSExceptionDomains": [
@@ -51,7 +53,7 @@ let project = Project(
             dependencies: [
                 .target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review"),
                 .target(name: "CodeStyling"), .target(name: "Conversation"),
-                .target(name: "ReviewSubmission"),
+                .target(name: "ReviewSubmission"), .target(name: "ProjectRules"),
             ]
         ),
         .target(
@@ -60,10 +62,14 @@ let project = Project(
             sources: ["HubConnection/Interface/**"]
         ),
         module("Networking"),
+        module("ProjectRules", dependencies: ["Networking"], appearance: true),
+        tests("ProjectRules"),
         module(
-            "HubConnection", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
+            "HubConnection", dependencies: ["HubConnectionInterface", "Networking"],
+            appearance: true),
         module(
-            "Inbox", dependencies: ["HubConnectionInterface", "ConversationInterface", "Networking"],
+            "Inbox",
+            dependencies: ["HubConnectionInterface", "ConversationInterface", "Networking"],
             appearance: true),
         .target(
             name: "DiffDocumentInterface", destinations: [.iPhone, .iPad], product: .framework,
@@ -73,7 +79,8 @@ let project = Project(
         .target(
             name: "ConversationInterface", destinations: [.iPhone, .iPad], product: .framework,
             bundleId: "dev.mergegate.ConversationInterface", deploymentTargets: .iOS("26.0"),
-            sources: ["Conversation/Interface/**"], dependencies: [.target(name: "DiffDocumentInterface")]
+            sources: ["Conversation/Interface/**"],
+            dependencies: [.target(name: "DiffDocumentInterface")]
         ),
         module(
             "Conversation",
@@ -83,20 +90,25 @@ let project = Project(
         .target(
             name: "CodeStylingInterface", destinations: [.iPhone, .iPad], product: .framework,
             bundleId: "dev.mergegate.CodeStylingInterface", deploymentTargets: .iOS("26.0"),
-            sources: ["CodeStyling/Interface/**"], dependencies: [.target(name: "DiffDocumentInterface")]
+            sources: ["CodeStyling/Interface/**"],
+            dependencies: [.target(name: "DiffDocumentInterface")]
         ),
         module("CodeStyling", dependencies: ["CodeStylingInterface", "DiffDocumentInterface"]),
         module(
-            "DiffView", dependencies: ["DiffDocumentInterface", "CodeStylingInterface"], appearance: true),
+            "DiffView", dependencies: ["DiffDocumentInterface", "CodeStylingInterface"],
+            appearance: true),
         module(
             "Review",
             dependencies: [
-                "HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface", "DiffView",
+                "HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface",
+                "DiffView",
                 "CodeStylingInterface", "ConversationInterface",
             ], appearance: true),
         module(
-            "ReviewSubmission", dependencies: ["ConversationInterface", "Networking"], appearance: true),
-        tests("ReviewSubmission"), tests("Conversation"), tests("CodeStyling"), tests("DiffDocument"),
+            "ReviewSubmission", dependencies: ["ConversationInterface", "Networking"],
+            appearance: true),
+        tests("ReviewSubmission"), tests("Conversation"), tests("CodeStyling"),
+        tests("DiffDocument"),
         tests("DiffView"),
         tests("Review"),
         tests("HubConnection"), tests("Inbox"), tests("Networking"),
@@ -111,13 +123,16 @@ let project = Project(
             name: "Mergegate", buildAction: .buildAction(targets: ["Mergegate"]),
             testAction: .targets(
                 [
-                    "ReviewSubmissionTests", "ConversationTests", "CodeStylingTests", "HubConnectionTests",
+                    "ProjectRulesTests", "ReviewSubmissionTests", "ConversationTests",
+                    "CodeStylingTests",
+                    "HubConnectionTests",
                     "InboxTests",
                     "NetworkingTests",
                     "DiffDocumentTests", "DiffViewTests", "ReviewTests", "MergegateUITests",
                 ],
                 arguments: .arguments(environmentVariables: [
                     "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)",
+                    "MG_IOS_TEST_PARITY": "$(MG_IOS_TEST_PARITY)",
                     "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)",
                     "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)",
                     "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)",

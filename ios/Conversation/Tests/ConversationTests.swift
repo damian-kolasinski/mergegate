@@ -10,7 +10,8 @@ struct ConversationTests {
     @Test @MainActor func readsPinnedThreadsAndRetriesWithoutDiscardingLastResponse() async throws {
         let transport = ThreadTransport()
         let scope = CommentDraftScope(
-            hub: URL(string: "http://my-mac:7800")!, item: "sample#3", name: "sample#93", revision: 2)
+            hub: URL(string: "http://my-mac:7800")!, item: "sample#3", name: "sample#93",
+            revision: 2)
         let model = ConversationViewModel(scope: scope, service: .init(transport: transport))
         await transport.fail()
         await model.load()
@@ -129,5 +130,5 @@ private let threadWire = Data(
       {"id":2,"comment":"c_2","author":"agent","status":"addressed","body":"","addressed_in":2,"created_at":"2026-10-25T10:01:00Z"},
       {"id":3,"comment":"c_1","author":"operator","status":null,"body":"The receipt client.","created_at":"2026-10-25T10:02:00Z"},
       {"id":4,"comment":"c_4","author":"agent","status":"rejected","body":"Already covered.","created_at":"2026-10-25T10:03:00Z"}
-    ],"drafts":[{"id":"unsent"}],"draft_replies":[{"id":99,"comment":"c_1"}]}
+    ],"drafts":[{"id":"unsent","revision":2,"body":"Unsent comment"}],"draft_replies":[{"id":99,"comment":"c_1","author":"operator","body":"Unsent reply","created_at":"2026-10-25T10:00:00Z"}]}
     """.utf8)

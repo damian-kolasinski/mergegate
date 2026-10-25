@@ -88,7 +88,8 @@ struct ReviewEventsTests {
     @Test @MainActor func openingLatestInvalidatesAnOlderRefresh() async throws {
         let transport = LiveReviewTransport()
         let model = ReviewViewModel(
-            service: .init(transport: transport, url: URL(string: "http://my-mac")!), item: "sample#3")
+            service: .init(transport: transport, url: URL(string: "http://my-mac")!),
+            item: "sample#3")
         await model.load()
         await transport.holdNextRead()
         let old = Task { await model.refreshCurrent() }
@@ -100,6 +101,24 @@ struct ReviewEventsTests {
         guard case .loaded(let snapshot) = model.state else { return }
         #expect(snapshot.item.revision.number == 2 && model.latestRevision == 2)
         #expect(snapshot.files[0].viewed)
+    }
+
+    @Test @MainActor func ruleChangesRefreshTiersAndReasonsWithoutMovingTheReader() async {
+        let transport = LiveReviewTransport()
+        let model = ReviewViewModel(
+            service: .init(transport: transport, url: URL(string: "http://hub")!), item: "sample#3")
+        await model.load()
+        model.readingOffset = 120
+        await transport.trust()
+        await model.refreshCurrent()
+        guard case .loaded(let snapshot) = model.state else {
+            Issue.record("Missing review")
+            return
+        }
+        #expect(snapshot.files.first?.tier == .trusted)
+        #expect(snapshot.files.first?.rankingReason == "Generated")
+        #expect(snapshot.remaining == 0)
+        #expect(model.selectedPath == "checkout.swift" && model.readingOffset == 120)
     }
 
     @Test @MainActor func sameRevisionRefetchUpdatesProgressAndClosedState() async throws {
@@ -124,6 +143,11 @@ private actor LiveReviewTransport: HTTPTransport {
     var revision = 1
     var viewed = false
     var state = "needs_review"
+    var tier = "review"
+    func trust() {
+        tier = "trusted"
+        viewed = true
+    }
     var reads = 0
     var failNext = false
     var hold = false
@@ -160,7 +184,7 @@ private actor LiveReviewTransport: HTTPTransport {
         let response = Data(
             """
             {"item":{"id":"sample#3","name":"sample#93","title":"Checkout","target":"main","state":"\(state)","revision":{"number":\(revision)}},
-            "since":null,"interdiffs":[],"files":[{"path":"checkout.swift","tier":"review","viewed":\(viewed),"content":{"kind":"text","hunks":[]}}]}
+            "since":null,"interdiffs":[],"files":[{"path":"checkout.swift","tier":"\(tier)","reason":"Generated","viewed":\(viewed),"content":{"kind":"text","hunks":[]}}]}
             """.utf8)
         if hold {
             hold = false

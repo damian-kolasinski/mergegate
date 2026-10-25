@@ -11,14 +11,18 @@ struct InboxRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if item.needsDecision {
-                InboxDecisionCard(item: item, triage: triage, error: error, retry: retry, openReview: openReview, openDecisions: openDecisions)
+                InboxDecisionCard(
+                    item: item, triage: triage, error: error, retry: retry, openReview: openReview,
+                    openDecisions: openDecisions)
             } else {
                 Button(action: openReview) {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 7) {
                             Text(item.title).appearanceText(Appearance.rowHeading)
                             Text("\(item.name) · r\(item.revision) · \(item.status)")
-                                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                                .appearanceText(Appearance.caption).foregroundStyle(
+                                    Appearance.secondary)
+                            InboxItemStatus(item: item)
                             InboxProgress(item: item, triage: triage)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }.padding(.horizontal, 6).padding(.vertical, 6)

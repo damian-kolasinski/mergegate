@@ -35,6 +35,7 @@ final class ReviewViewModel {
         .init(transport: service.transport, url: service.url, cache: service.cache)
     }
     let events: ServerEvents
+    var currentDetails: ReviewSnapshot?
     var latestRevision: UInt32?
     var latestState: String?
     var refreshFailure: String?
@@ -47,6 +48,7 @@ final class ReviewViewModel {
         if case .loaded(let snapshot) = state { since = snapshot.since } else { since = nil }
         return .init(web: service, events: events, since: since)
     }
+    let reviewTime: ReviewTimeModel
     let service: ReviewWebService
     let item: String
 
@@ -54,12 +56,14 @@ final class ReviewViewModel {
         service: ReviewWebService, item: String, events: ServerEvents = .shared,
         readingStore: ReviewReadingStore? = nil
     ) {
+        self.reviewTime = ReviewTimeModel(service: service, item: item)
         self.service = service
         self.item = item
         self.events = events
         self.readingStore = readingStore
         do { savedPosition = try readingStore?.load(hub: service.url, item: item) } catch {
-            positionFailure = "Couldn’t restore your reading position. \(error.localizedDescription)"
+            positionFailure =
+                "Couldn’t restore your reading position. \(error.localizedDescription)"
         }
     }
 
@@ -81,7 +85,8 @@ final class ReviewViewModel {
                 since = position.since
             } else {
                 since = snapshot.last_reviewed.flatMap {
-                    $0 < snapshot.item.revision.number && snapshot.interdiffs.contains($0) ? $0 : nil
+                    $0 < snapshot.item.revision.number && snapshot.interdiffs.contains($0)
+                        ? $0 : nil
                 }
             }
             if let since {
@@ -102,6 +107,7 @@ final class ReviewViewModel {
             contextLoaded = false
             revealed = [:]
             state = .loaded(snapshot)
+            currentDetails = snapshot
             savedPosition = openingPosition
             restorePosition(snapshot)
             cachedAt = nil
@@ -117,6 +123,7 @@ final class ReviewViewModel {
                 version == openingVersion, !Task.isCancelled
             {
                 state = .loaded(snapshot)
+                currentDetails = snapshot
                 selectedPath = position.path
                 savedPosition = openingPosition
                 restorePosition(snapshot)
@@ -171,6 +178,7 @@ final class ReviewViewModel {
             let current = try await service.load(item: item, since: before.since)
             try Task.checkCancellation()
             guard request == refreshVersion else { return }
+            currentDetails = current
             latestRevision = current.item.revision.number
             latestState = current.item.state
             refreshFailure = nil
@@ -181,11 +189,7 @@ final class ReviewViewModel {
                 case .loaded(var displayed) = state, displayed.since == before.since,
                 displayed.item.revision.number == before.item.revision.number
             else { return }
-            for index in displayed.files.indices {
-                if let file = current.files.first(where: { $0.path == displayed.files[index].path }) {
-                    displayed.files[index].viewed = file.viewed
-                }
-            }
+            displayed.files = current.files
             state = .loaded(displayed)
         } catch {
             if !Task.isCancelled && request == refreshVersion {
@@ -199,7 +203,8 @@ final class ReviewViewModel {
             let file = snapshot.files.first(where: { $0.path == path }),
             file.tier == .review, file.interdiff != .dropped, file.viewed != viewed
         else { return }
-        await updateViewed(.init(revision: snapshot.item.revision.number, path: path, viewed: viewed))
+        await updateViewed(
+            .init(revision: snapshot.item.revision.number, path: path, viewed: viewed))
     }
 
     func retryViewed() async {
@@ -227,7 +232,8 @@ final class ReviewViewModel {
                 await cache.markViewed(
                     change,
                     key: cache.snapshotKey(
-                        hub: service.url, item: item, revision: change.revision, since: snapshot.since))
+                        hub: service.url, item: item, revision: change.revision,
+                        since: snapshot.since))
             }
         } catch {
             if !Task.isCancelled {

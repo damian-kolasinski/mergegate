@@ -33,6 +33,33 @@ final class SourceTextView: UITextView {
         return view
     }
 
+    var revealedAnchor: SourceAnchor?
+    var revealedRequest: UUID?
+    var pendingReveal: NSRange?
+    var didReveal: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let range = pendingReveal,
+            let start = position(from: beginningOfDocument, offset: range.location),
+            let end = position(from: start, offset: range.length),
+            let textRange = textRange(from: start, to: end)
+        else { return }
+        let rect = firstRect(for: textRange)
+        guard rect.height > 0 && rect.minY.isFinite else { return }
+        var ancestor = superview
+        while let view = ancestor {
+            if let scroll = view as? UIScrollView, scroll.isScrollEnabled {
+                pendingReveal = nil
+                scroll.scrollRectToVisible(
+                    convert(rect, to: scroll).insetBy(dx: 0, dy: -20), animated: false)
+                if let didReveal { Task { @MainActor in didReveal() } }
+                return
+            }
+            ancestor = view.superview
+        }
+    }
+
     var sourceSelection = SourceSelection(text: "", ranges: [])
     var commentSelection = SourceCommentSelection(rows: [])
     var sourceSides: [SourceAnchor.Side] = [.old, .new]

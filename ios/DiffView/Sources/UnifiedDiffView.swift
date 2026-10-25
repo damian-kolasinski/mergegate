@@ -4,6 +4,9 @@ import SwiftUI
 import UIKit
 
 public struct UnifiedDiffView: UIViewRepresentable {
+    private let didReveal: (() -> Void)?
+    private let revealRequest: UUID?
+    private let focus: SourceAnchor?
     private let hunks: [DiffHunk]
     private let styling: (any CodeStyling)?
     private let maximumLine: UInt32
@@ -17,8 +20,12 @@ public struct UnifiedDiffView: UIViewRepresentable {
         hunks: [DiffHunk], maximumLine: UInt32 = 0, styling: (any CodeStyling)? = nil,
         sourceSides: [SourceAnchor.Side] = [.old, .new],
         onComment: ((SourceAnchor) -> Void)? = nil,
-        onReadConversations: (([SourceAnchor]) -> Void)? = nil
+        onReadConversations: (([SourceAnchor]) -> Void)? = nil,
+        focus: SourceAnchor? = nil, revealRequest: UUID? = nil, didReveal: (() -> Void)? = nil
     ) {
+        self.didReveal = didReveal
+        self.revealRequest = revealRequest
+        self.focus = focus
         self.sourceSides = sourceSides
         self.styling = styling
         self.hunks = hunks
@@ -52,5 +59,16 @@ public struct UnifiedDiffView: UIViewRepresentable {
         (view as? SourceTextView)?.sourceSides = sourceSides
         (view as? SourceTextView)?.onComment = onComment
         (view as? SourceTextView)?.onReadConversations = onReadConversations
+        (view as? SourceTextView)?.didReveal = didReveal
+        if let focus, let source = view as? SourceTextView,
+            source.revealedAnchor != focus || source.revealedRequest != revealRequest,
+            let range = document.comments.range(for: focus)
+        {
+            source.revealedAnchor = focus
+            source.revealedRequest = revealRequest
+            source.selectedRange = range
+            source.pendingReveal = range
+            source.setNeedsLayout()
+        }
     }
 }

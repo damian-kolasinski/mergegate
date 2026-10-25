@@ -8,14 +8,27 @@ struct SourceCommentSelection {
     }
     let rows: [Row]
 
+    func range(for anchor: SourceAnchor) -> NSRange? {
+        let matching = rows.filter {
+            let line = anchor.side == .old ? $0.line.oldLine : $0.line.newLine
+            return line.map { anchor.startLine...anchor.endLine ~= $0 } ?? false
+        }
+        guard let first = matching.first, let last = matching.last else { return nil }
+        return NSUnionRange(first.range, last.range)
+    }
+
     func conversationAnchors(in selection: NSRange) -> [SourceAnchor] {
         guard selection.length > 0 else { return [] }
         let selected = rows.filter { NSIntersectionRange($0.range, selection).length > 0 }
         return [SourceAnchor.Side.old, .new].compactMap { side in
-            let lines = selected.filter { (side == .old ? $0.line.oldLine : $0.line.newLine) != nil }
+            let lines = selected.filter {
+                (side == .old ? $0.line.oldLine : $0.line.newLine) != nil
+            }
             let numbers = lines.compactMap { side == .old ? $0.line.oldLine : $0.line.newLine }
             guard let first = numbers.first, first > 0,
-                numbers.enumerated().allSatisfy({ UInt64($0.element) == UInt64(first) + UInt64($0.offset) })
+                numbers.enumerated().allSatisfy({
+                    UInt64($0.element) == UInt64(first) + UInt64($0.offset)
+                })
             else { return nil }
             return SourceAnchor(side: side, startLine: first, endLine: numbers.last!, quote: "")
         }
@@ -29,7 +42,9 @@ struct SourceCommentSelection {
         let numbers = selected.compactMap { side == .old ? $0.line.oldLine : $0.line.newLine }
         // A selection crossing both sides or an undisplayed gap cannot name one source range.
         guard numbers.count == selected.count, let first = numbers.first, first > 0,
-            numbers.enumerated().allSatisfy({ UInt64($0.element) == UInt64(first) + UInt64($0.offset) })
+            numbers.enumerated().allSatisfy({
+                UInt64($0.element) == UInt64(first) + UInt64($0.offset)
+            })
         else { return nil }
         return SourceAnchor(
             side: side, startLine: first, endLine: numbers.last!,
