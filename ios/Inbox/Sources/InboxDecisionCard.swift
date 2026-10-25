@@ -72,7 +72,8 @@ struct InboxDecisionCard: View {
     private var detailsButton: some View {
         Button(action: openDecisions) {
             Label((triage?.decisions.count ?? 0) > 1 ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details", systemImage: "arrow.up.right")
-                .appearanceText(Appearance.label)
+                .appearanceText(Appearance.label).foregroundStyle(Appearance.primary)
+                .accessibilityIdentifier("inboxDecisionDetailsLabel")
                 .padding(.horizontal, 12).frame(minHeight: 44)
         }.buttonStyle(.glass).tint(Appearance.brand).accessibilityHint(decisionLabel).accessibilityIdentifier("decisionDetails-\(item.id)")
     }

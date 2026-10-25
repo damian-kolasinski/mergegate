@@ -28,6 +28,7 @@ final class TriageInboxTests: XCTestCase {
         app.buttons["connectHub"].tap()
         XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(app.staticTexts["1 of 2 review files remaining"].exists)
+        XCTAssertTrue(app.staticTexts["1 of 1 review files remaining"].waitForExistence(timeout: 10))
         try auditInboxAccessibility(app)
         capture(app, "Decision desk — large title and Liquid Glass")
         let title = app.staticTexts["Your next move"].firstMatch

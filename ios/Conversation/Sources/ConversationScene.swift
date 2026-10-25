@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ConversationScene: View {
     @State var model: ConversationViewModel
+    @Environment(\.scenePhase) private var scenePhase
     let close: () -> Void
 
     var body: some View {
@@ -29,6 +30,11 @@ struct ConversationScene: View {
                         if model.loading && model.snapshot == nil {
                             ProgressView("Loading conversations…").padding(20)
                         }
+                        if model.isReconnecting {
+                            Label("Reconnecting… Showing the last conversations.", systemImage: "wifi.exclamationmark")
+                                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                                .padding(20).accessibilityIdentifier("conversationsReconnecting")
+                        }
                         if let error = model.error {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(error).appearanceText(Appearance.body).foregroundStyle(Appearance.error)
@@ -43,7 +49,7 @@ struct ConversationScene: View {
                         }
                         ForEach(model.threads) { thread in
                             NavigationLink {
-                                ConversationThreadView(thread: thread)
+                                ConversationThreadScene(model: model, threadID: thread.id)
                             } label: {
                                 ConversationThreadRow(thread: thread)
                             }.buttonStyle(.plain).accessibilityIdentifier("conversation-\(thread.id)")
@@ -57,7 +63,10 @@ struct ConversationScene: View {
             }
         }.background(Appearance.page)
             .foregroundStyle(Appearance.primary).tint(Appearance.brand)
-            .task { await model.load() }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                await model.follow()
+            }
     }
 }
 

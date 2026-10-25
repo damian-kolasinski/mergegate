@@ -125,6 +125,7 @@ let project = Project(
                     "MG_IOS_TEST_CONVERSATIONS": "$(MG_IOS_TEST_CONVERSATIONS)",
                     "MG_IOS_TEST_REREVIEW": "$(MG_IOS_TEST_REREVIEW)",
                     "MG_IOS_TEST_APPROVAL": "$(MG_IOS_TEST_APPROVAL)",
+                    "MG_IOS_TEST_LIVE_UPDATES": "$(MG_IOS_TEST_LIVE_UPDATES)",
                     "MG_IOS_TEST_CONTROL_URL": "$(MG_IOS_TEST_CONTROL_URL)",
                     "MG_IOS_TEST_DECISIONS": "$(MG_IOS_TEST_DECISIONS)",
                     "MG_IOS_TEST_FEEDBACK": "$(MG_IOS_TEST_FEEDBACK)",
