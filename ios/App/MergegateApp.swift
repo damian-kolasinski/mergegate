@@ -24,16 +24,8 @@ struct MergegateApp: App {
                             ConversationBuilder.fileThreads(scope: scope, path: path)
                         },
                         feedback: { scope, close in
-                            do {
-                                return ReviewSubmissionBuilder.build(
-                                    scope: scope, drafts: try FeedbackDraftStore(), close: close)
-                            } catch {
-                                return AnyView(
-                                    VStack {
-                                        Text("Couldn’t open local drafts: \(error.localizedDescription)")
-                                        Button("Done", action: close)
-                                    }.padding())
-                            }
+                            ReviewSubmissionBuilder.build(
+                                scope: scope, drafts: { try FeedbackDraftStore() }, close: close)
                         })
                 }
             }

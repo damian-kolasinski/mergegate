@@ -3,14 +3,14 @@ import ConversationInterface
 import DiffView
 import SwiftUI
 
-struct ReviewScene: View {
+struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, Feedback: View>: View {
     @State var model: ReviewViewModel
     let styling: any CodeStyling
     let hub: URL
-    let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> AnyView
-    let conversations: (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> AnyView
-    let fileConversations: (CommentDraftScope, String) -> AnyView
-    let feedback: (CommentDraftScope, @escaping () -> Void) -> AnyView
+    let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts
+    let conversations: (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> Conversations
+    let fileConversations: (CommentDraftScope, String) -> FileConversations
+    let feedback: (CommentDraftScope, @escaping () -> Void) -> Feedback
     private enum Sheet: Identifiable {
         case guide, files, feedback
         case drafts(CommentDraftLocation?)

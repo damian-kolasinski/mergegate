@@ -5,15 +5,16 @@ import SwiftUI
 public enum ReviewSubmissionBuilder {
     @MainActor
     public static func build(
-        scope: CommentDraftScope, drafts: any FeedbackDrafts, close: @escaping () -> Void
-    ) -> AnyView {
-        AnyView(FeedbackRoot(scope: scope, drafts: drafts, close: close))
+        scope: CommentDraftScope, drafts: @escaping () throws -> any FeedbackDrafts,
+        close: @escaping () -> Void
+    ) -> some View {
+        FeedbackRoot(scope: scope, drafts: drafts, close: close)
     }
 }
 
 private struct FeedbackRoot: View {
     let scope: CommentDraftScope
-    let drafts: any FeedbackDrafts
+    let drafts: () throws -> any FeedbackDrafts
     let close: () -> Void
     @State private var model: FeedbackViewModel?
     @State private var failure: String?
@@ -35,7 +36,7 @@ private struct FeedbackRoot: View {
     private func open() {
         do {
             model = try FeedbackViewModel(
-                scope: scope, drafts: drafts, outbox: SwiftDataFeedbackOutbox(),
+                scope: scope, drafts: try drafts(), outbox: SwiftDataFeedbackOutbox(),
                 service: .init(transport: URLSessionTransport()))
             failure = nil
         } catch { failure = error.localizedDescription }

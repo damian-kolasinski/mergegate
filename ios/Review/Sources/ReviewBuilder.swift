@@ -6,13 +6,13 @@ import SwiftUI
 
 public enum ReviewBuilder {
     @MainActor
-    public static func build(
+    public static func build<Drafts: View, Conversations: View, FileConversations: View, Feedback: View>(
         hub: ConnectedHub, item: String, styling: any CodeStyling,
-        drafts: @escaping (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> AnyView,
-        conversations:
-            @escaping (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> AnyView,
-        fileConversations: @escaping (CommentDraftScope, String) -> AnyView,
-        feedback: @escaping (CommentDraftScope, @escaping () -> Void) -> AnyView
+        @ViewBuilder drafts: @escaping (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts,
+        @ViewBuilder conversations:
+            @escaping (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> Conversations,
+        @ViewBuilder fileConversations: @escaping (CommentDraftScope, String) -> FileConversations,
+        @ViewBuilder feedback: @escaping (CommentDraftScope, @escaping () -> Void) -> Feedback
     ) -> some View {
         ReviewScene(
             model: ReviewViewModel(
