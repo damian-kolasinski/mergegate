@@ -13,6 +13,7 @@ struct ReviewSourceReader: View {
     let revision: UInt32
     let styling: any CodeStyling
     let onComment: (SourceAnchor) -> Void
+    let onReadConversations: ([SourceAnchor]) -> Void
     @Environment(\.scenePhase) private var scenePhase
     @State private var highlights = ReviewHighlightModel()
     private var paintedHunks: [DiffHunk] { highlights.painting?.paint(hunks) ?? hunks }
@@ -42,7 +43,8 @@ struct ReviewSourceReader: View {
                                     lines: highlights.painting?.paint(Array(gap.lines.prefix(count)))
                                         ?? Array(gap.lines.prefix(count)))
                             ],
-                            maximumLine: maximumLine, styling: styling, onComment: onComment)
+                            maximumLine: maximumLine, styling: styling, onComment: onComment,
+                            onReadConversations: onReadConversations)
                     }
                     if count < gap.lines.count {
                         Button {
@@ -64,7 +66,7 @@ struct ReviewSourceReader: View {
                     if gap.id < hunks.count {
                         UnifiedDiffView(
                             hunks: [paintedHunks[gap.id]], maximumLine: maximumLine, styling: styling,
-                            onComment: onComment)
+                            onComment: onComment, onReadConversations: onReadConversations)
                     }
                 }
             } else {
@@ -91,7 +93,8 @@ struct ReviewSourceReader: View {
                 }
                 if !hunks.isEmpty {
                     UnifiedDiffView(
-                        hunks: paintedHunks, maximumLine: maximumLine, styling: styling, onComment: onComment)
+                        hunks: paintedHunks, maximumLine: maximumLine, styling: styling, onComment: onComment,
+                        onReadConversations: onReadConversations)
                 }
             }
         }.tint(Appearance.brand)

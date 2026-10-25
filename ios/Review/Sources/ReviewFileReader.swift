@@ -11,6 +11,7 @@ struct ReviewFileReader: View {
     let revision: UInt32
     let styling: any CodeStyling
     let onComment: (SourceAnchor) -> Void
+    let onReadConversations: ([SourceAnchor]) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,7 +36,7 @@ struct ReviewFileReader: View {
                 ReviewSourceReader(
                     file: file, hunks: hunks, project: project, service: sourceService,
                     highlightService: highlightService, item: item, revision: revision, styling: styling,
-                    onComment: onComment)
+                    onComment: onComment, onReadConversations: onReadConversations)
             case .binary:
                 message("Binary file", "A unified text diff is unavailable for this file.")
             case .tooLarge:

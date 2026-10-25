@@ -11,10 +11,17 @@ struct MergegateApp: App {
         WindowGroup {
             HubConnectionBuilder.build { hub, disconnect in
                 InboxBuilder.build(hub: hub, disconnect: disconnect) { item in
-                    ReviewBuilder.build(hub: hub, item: item, styling: NativeCodeStyling()) {
-                        scope, location, close in
-                        ConversationBuilder.drafts(scope: scope, location: location, close: close)
-                    }
+                    ReviewBuilder.build(
+                        hub: hub, item: item, styling: NativeCodeStyling(),
+                        drafts: { scope, location, close in
+                            ConversationBuilder.drafts(scope: scope, location: location, close: close)
+                        },
+                        conversations: { scope, location, close in
+                            ConversationBuilder.threads(scope: scope, location: location, close: close)
+                        },
+                        fileConversations: { scope, path in
+                            ConversationBuilder.fileThreads(scope: scope, path: path)
+                        })
                 }
             }
         }

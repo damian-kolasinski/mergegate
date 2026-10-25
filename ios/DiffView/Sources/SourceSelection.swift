@@ -28,7 +28,7 @@ final class SourceTextView: UITextView {
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityIdentifier = "unifiedDiff"
         view.accessibilityHint =
-            "Select text to copy source or choose Comment. Select lines on one diff side to comment."
+            "Select source text to copy, comment, or read conversations on those lines."
         view.delegate = view
         return view
     }
@@ -36,6 +36,8 @@ final class SourceTextView: UITextView {
     var sourceSelection = SourceSelection(text: "", ranges: [])
     var commentSelection = SourceCommentSelection(rows: [])
     var onComment: ((SourceAnchor) -> Void)?
+
+    var onReadConversations: (([SourceAnchor]) -> Void)?
 
     func install(_ text: NSAttributedString, selection: SourceSelection) {
         sourceSelection = selection

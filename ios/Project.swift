@@ -73,7 +73,7 @@ let project = Project(
             sources: ["Conversation/Interface/**"], dependencies: [.target(name: "DiffDocumentInterface")]
         ),
         module(
-            "Conversation", dependencies: ["ConversationInterface", "DiffDocumentInterface"],
+            "Conversation", dependencies: ["ConversationInterface", "DiffDocumentInterface", "Networking"],
             appearance: true),
         module("DiffDocument", dependencies: ["DiffDocumentInterface"]),
         .target(
@@ -116,6 +116,7 @@ let project = Project(
                     "MG_IOS_TEST_HIGHLIGHT": "$(MG_IOS_TEST_HIGHLIGHT)",
                     "MG_IOS_TEST_VIEWED": "$(MG_IOS_TEST_VIEWED)",
                     "MG_IOS_TEST_DRAFTS": "$(MG_IOS_TEST_DRAFTS)",
+                    "MG_IOS_TEST_CONVERSATIONS": "$(MG_IOS_TEST_CONVERSATIONS)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )
