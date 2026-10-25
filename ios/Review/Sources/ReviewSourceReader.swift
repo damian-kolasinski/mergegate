@@ -12,6 +12,9 @@ struct ReviewSourceReader: View {
     let item: String
     let revision: UInt32
     let styling: any CodeStyling
+    @Binding var contextLoaded: Bool
+    @Binding var revealed: [Int: Int]
+    let onReady: () -> Void
     let onComment: (SourceAnchor) -> Void
     let onReadConversations: ([SourceAnchor]) -> Void
     @Environment(\.scenePhase) private var scenePhase
@@ -34,7 +37,7 @@ struct ReviewSourceReader: View {
                         .foregroundStyle(Appearance.secondary).padding(10)
                 }
                 ForEach(context.gaps) { gap in
-                    let count = min(model.revealed[gap.id, default: 0], gap.lines.count)
+                    let count = min(revealed[gap.id, default: 0], gap.lines.count)
                     if count > 0 {
                         UnifiedDiffView(
                             hunks: [
@@ -50,7 +53,7 @@ struct ReviewSourceReader: View {
                     }
                     if count < gap.lines.count {
                         Button {
-                            model.revealed[gap.id] = min(count + 20, gap.lines.count)
+                            revealed[gap.id] = min(count + 20, gap.lines.count)
                         } label: {
                             HStack {
                                 Label(
@@ -77,6 +80,7 @@ struct ReviewSourceReader: View {
                     Button {
                         Task {
                             await model.load(service: service, project: project, file: file, hunks: hunks)
+                            contextLoaded = model.context != nil
                         }
                     } label: {
                         HStack {
@@ -102,6 +106,12 @@ struct ReviewSourceReader: View {
                 }
             }
         }.tint(Appearance.brand)
+            .task {
+                if contextLoaded {
+                    await model.load(service: service, project: project, file: file, hunks: hunks)
+                }
+                onReady()
+            }
             .task(id: scenePhase) {
                 guard scenePhase == .active else { return }
                 await highlights.follow(

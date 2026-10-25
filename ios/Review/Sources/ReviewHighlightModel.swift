@@ -9,6 +9,7 @@ final class ReviewHighlightModel {
     func refresh(service: ReviewHighlightService, item: String, revision: UInt32, file: ReviewFile)
         async
     {
+        if painting == nil { painting = await service.cached(file: file) }
         do {
             let next = try await service.load(item: item, revision: revision, file: file)
             try Task.checkCancellation()

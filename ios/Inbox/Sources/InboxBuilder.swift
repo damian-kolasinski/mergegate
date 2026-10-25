@@ -12,7 +12,9 @@ public enum InboxBuilder {
     ) -> some View {
         InboxScene(
             hub: hub,
-            model: InboxViewModel(service: InboxWebService(transport: URLSessionTransport(), url: hub.url)),
+            model: InboxViewModel(
+                service: InboxWebService(transport: URLSessionTransport(), url: hub.url),
+                cache: InboxCache()),
             disconnect: disconnect, feedback: feedback, review: review
         )
     }

@@ -9,6 +9,37 @@ import Testing
 
 @MainActor
 struct FeedbackTests {
+    @Test func offlineSummaryAndDraftsRequireFreshRevisionBeforeSending() async throws {
+        let hub = FeedbackHub()
+        let drafts = LocalDrafts()
+        drafts.values = [draft(.new)]
+        let outbox = MemoryOutbox()
+        let first = try model(hub, drafts, outbox)
+        await first.load()
+        first.summary = "Keep this offline summary"
+        first.saveSummary()
+        await hub.disconnect()
+        await first.load()
+        #expect(!first.canSend && !first.isCurrent)
+        #expect(first.drafts.count == 1 && first.summary == "Keep this offline summary")
+        let reopened = try model(hub, drafts, outbox)
+        await reopened.load()
+        #expect(!reopened.canSend && reopened.summary == "Keep this offline summary")
+        await hub.reconnect(revision: 4)
+        await reopened.load()
+        #expect(!reopened.canSend && reopened.error?.contains("newer revision") == true)
+        await reopened.send()
+        #expect(await hub.reviewRequests == 0)
+        #expect(await hub.uploads.isEmpty)
+        #expect(drafts.values.count == 1)
+        await hub.reconnect(revision: 3)
+        await reopened.load()
+        #expect(reopened.canSend)
+        await reopened.send()
+        #expect(reopened.sent && drafts.values.isEmpty)
+        #expect(await hub.summaries == ["Keep this offline summary"])
+    }
+
     @Test func sendsBothSourceSidesExactUnicodeSummaryAndPinnedRevision() async throws {
         let hub = FeedbackHub()
         let drafts = LocalDrafts()
@@ -159,6 +190,7 @@ struct FeedbackTests {
         await model.send()
         #expect(model.frozen)
         await model.editFeedback()
+        #expect(model.isCurrent && model.canSend)
         #expect(!model.frozen)
         #expect(drafts.values.count == 1)
         #expect(await hub.drafts.isEmpty)
@@ -182,6 +214,7 @@ struct FeedbackTests {
         #expect(model.frozen && !model.uncertain && !model.sent)
         await hub.removeSharedDraft()
         await model.editFeedback()
+        #expect(model.isCurrent && model.canSend)
         #expect(!model.frozen)
         await model.send()
         #expect(model.sent)
@@ -278,7 +311,8 @@ struct FeedbackTests {
 }
 
 actor FeedbackHub: HTTPTransport {
-    let revision: Int
+    var revision: Int
+    var offline = false
     let state: String
     var drafts: [[String: SendableJSON]] = []
     var sent: [[String: SendableJSON]] = []
@@ -301,6 +335,11 @@ actor FeedbackHub: HTTPTransport {
             "id": .number(17), "comment": .string("c_question"), "body": .string("Receipt client é 🐙"),
         ])
     }
+    func disconnect() { offline = true }
+    func reconnect(revision: Int) {
+        offline = false
+        self.revision = revision
+    }
     func refuseReview() { refusal = true }
     func removeSharedDraft() { drafts.removeAll { $0["id"]?.value as? String == "c_external" } }
     func loseUploadResponse() { uploadLost = true }
@@ -314,6 +353,7 @@ actor FeedbackHub: HTTPTransport {
         ])
     }
     func get(_ url: URL) throws -> Data {
+        if offline { throw URLError(.notConnectedToInternet) }
         #expect(url.fragment == nil)
         if url.path == "/api/events" {
             var events: [[String: Any]] = summaries.enumerated().map { index, summary in

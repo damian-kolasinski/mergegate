@@ -24,6 +24,7 @@ if [ -n "${MG_IOS_TEST_REREVIEW:-}" ]; then args+=("MG_IOS_TEST_REREVIEW=$MG_IOS
 if [ -n "${MG_IOS_TEST_DECISIONS:-}" ]; then args+=("MG_IOS_TEST_DECISIONS=$MG_IOS_TEST_DECISIONS"); fi
 if [ -n "${MG_IOS_TEST_APPROVAL:-}" ]; then args+=("MG_IOS_TEST_APPROVAL=$MG_IOS_TEST_APPROVAL"); fi
 if [ -n "${MG_IOS_TEST_LIVE_UPDATES:-}" ]; then args+=("MG_IOS_TEST_LIVE_UPDATES=$MG_IOS_TEST_LIVE_UPDATES"); fi
+if [ -n "${MG_IOS_TEST_OFFLINE:-}" ]; then args+=("MG_IOS_TEST_OFFLINE=$MG_IOS_TEST_OFFLINE"); fi
 if [ -n "${MG_IOS_TEST_CONTROL_URL:-}" ]; then args+=("MG_IOS_TEST_CONTROL_URL=$MG_IOS_TEST_CONTROL_URL"); fi
 if ! xcodebuild "$action" -workspace Mergegate.xcworkspace -scheme Mergegate \
   -destination "${MG_IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2}" \

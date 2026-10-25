@@ -10,12 +10,30 @@ final class ReviewViewModel {
         case loaded(ReviewSnapshot)
     }
     private(set) var state: State = .loading
-    var selectedPath: String?
+    var selectedPath: String? {
+        didSet {
+            guard selectedPath != oldValue else { return }
+            readingOffset = 0
+            contextLoaded = false
+            revealed = [:]
+            rememberPosition()
+        }
+    }
+    var readingOffset: Double = 0
+    var contextLoaded = false
+    var revealed: [Int: Int] = [:]
+    var positionFailure: String?
+    private(set) var cachedAt: Date?
+    private let readingStore: ReviewReadingStore?
+    private var savedPosition: ReviewReadingPosition?
+    var cacheFailure: String?
     private(set) var isComparing = false
     private(set) var comparisonFailure: String?
     private(set) var isSavingViewed = false
     private(set) var viewedFailure: ReviewViewedFailure?
-    var sourceService: ReviewSourceService { .init(transport: service.transport, url: service.url) }
+    var sourceService: ReviewSourceService {
+        .init(transport: service.transport, url: service.url, cache: service.cache)
+    }
     let events: ServerEvents
     var latestRevision: UInt32?
     var latestState: String?
@@ -32,22 +50,42 @@ final class ReviewViewModel {
     let service: ReviewWebService
     let item: String
 
-    init(service: ReviewWebService, item: String, events: ServerEvents = .shared) {
+    init(
+        service: ReviewWebService, item: String, events: ServerEvents = .shared,
+        readingStore: ReviewReadingStore? = nil
+    ) {
         self.service = service
         self.item = item
         self.events = events
+        self.readingStore = readingStore
+        do { savedPosition = try readingStore?.load(hub: service.url, item: item) } catch {
+            positionFailure = "Couldn’t restore your reading position. \(error.localizedDescription)"
+        }
     }
 
-    func load() async {
+    func load(allowCached: Bool = true) async {
+        guard !isComparing, !isSavingViewed else { return }
+        refreshVersion += 1
+        rememberPosition()
         openingVersion += 1
         let version = openingVersion
+        let openingPosition = savedPosition
         state = .loading
         viewedFailure = nil
         do {
             var snapshot = try await service.load(item: item)
-            if let reviewed = snapshot.last_reviewed, reviewed < snapshot.item.revision.number,
-                snapshot.interdiffs.contains(reviewed) {
-                let comparison = try await service.load(item: item, since: reviewed)
+            let since: UInt32?
+            if let position = openingPosition, position.revision == snapshot.item.revision.number,
+                position.since.map(snapshot.interdiffs.contains) ?? true
+            {
+                since = position.since
+            } else {
+                since = snapshot.last_reviewed.flatMap {
+                    $0 < snapshot.item.revision.number && snapshot.interdiffs.contains($0) ? $0 : nil
+                }
+            }
+            if let since {
+                let comparison = try await service.load(item: item, since: since)
                 guard comparison.item.revision.number == snapshot.item.revision.number else {
                     throw ReviewComparisonChanged()
                 }
@@ -60,16 +98,41 @@ final class ReviewViewModel {
                     snapshot.since == nil || (!$0.viewed && $0.interdiff != .unchanged)
                 })?.path
                 ?? snapshot.reviewFiles.first?.path ?? snapshot.files.first?.path
+            readingOffset = 0
+            contextLoaded = false
+            revealed = [:]
             state = .loaded(snapshot)
+            savedPosition = openingPosition
+            restorePosition(snapshot)
+            cachedAt = nil
+            latestRevision = snapshot.item.revision.number
+            latestState = snapshot.item.state
+            refreshFailure = nil
+            cacheFailure = await service.cache?.failure
+            rememberPosition()
         } catch {
-            if !Task.isCancelled && version == openingVersion { state = .failed(error.localizedDescription) }
+            guard !Task.isCancelled, version == openingVersion else { return }
+            if allowCached, error is URLError, let position = savedPosition,
+                let (snapshot, date) = await service.cached(item: item, position: position),
+                version == openingVersion, !Task.isCancelled
+            {
+                state = .loaded(snapshot)
+                selectedPath = position.path
+                savedPosition = openingPosition
+                restorePosition(snapshot)
+                cachedAt = date
+                refreshFailure = nil
+            } else {
+                state = .failed(error.localizedDescription)
+            }
         }
     }
 
     func compare(since: UInt32?) async {
         guard !isComparing, !isSavingViewed, case .loaded(let before) = state,
             since != before.since,
-            since.map(before.interdiffs.contains) ?? true else { return }
+            since.map(before.interdiffs.contains) ?? true
+        else { return }
         isComparing = true
         comparisonFailure = nil
         defer { isComparing = false }
@@ -80,11 +143,17 @@ final class ReviewViewModel {
                 throw ReviewComparisonChanged()
             }
             if !snapshot.files.contains(where: { $0.path == selectedPath }) {
-                selectedPath = snapshot.reviewFiles.first(where: { !$0.viewed })?.path
+                selectedPath =
+                    snapshot.reviewFiles.first(where: { !$0.viewed })?.path
                     ?? snapshot.files.first?.path
             }
             viewedFailure = nil
             state = .loaded(snapshot)
+            readingOffset = 0
+            contextLoaded = false
+            revealed = [:]
+            cachedAt = nil
+            rememberPosition()
         } catch {
             if !Task.isCancelled { comparisonFailure = error.localizedDescription }
         }
@@ -105,10 +174,12 @@ final class ReviewViewModel {
             latestRevision = current.item.revision.number
             latestState = current.item.state
             refreshFailure = nil
+            cachedAt = nil
             // Preserve the immutable diff and reader identity. Only progress for this same revision changes.
             guard current.item.revision.number == before.item.revision.number,
                 !isSavingViewed, viewedVersion == version,
-                case .loaded(var displayed) = state, displayed.since == before.since
+                case .loaded(var displayed) = state, displayed.since == before.since,
+                displayed.item.revision.number == before.item.revision.number
             else { return }
             for index in displayed.files.indices {
                 if let file = current.files.first(where: { $0.path == displayed.files[index].path }) {
@@ -117,14 +188,17 @@ final class ReviewViewModel {
             }
             state = .loaded(displayed)
         } catch {
-            if !Task.isCancelled && request == refreshVersion { refreshFailure = error.localizedDescription }
+            if !Task.isCancelled && request == refreshVersion {
+                refreshFailure = error.localizedDescription
+            }
         }
     }
 
     func setViewed(path: String, viewed: Bool) async {
-        guard case .loaded(let snapshot) = state,
+        guard cachedAt == nil, case .loaded(let snapshot) = state,
             let file = snapshot.files.first(where: { $0.path == path }),
-            file.tier == .review, file.interdiff != .dropped, file.viewed != viewed else { return }
+            file.tier == .review, file.interdiff != .dropped, file.viewed != viewed
+        else { return }
         await updateViewed(.init(revision: snapshot.item.revision.number, path: path, viewed: viewed))
     }
 
@@ -135,7 +209,8 @@ final class ReviewViewModel {
 
     private func updateViewed(_ change: ReviewViewedChange) async {
         guard !isSavingViewed, !isComparing, case .loaded(let before) = state,
-            before.item.revision.number == change.revision else { return }
+            before.item.revision.number == change.revision
+        else { return }
         isSavingViewed = true
         viewedVersion += 1
         viewedFailure = nil
@@ -144,13 +219,47 @@ final class ReviewViewModel {
             try await service.markViewed(item: item, change: change)
             guard case .loaded(var snapshot) = state,
                 snapshot.item.revision.number == change.revision,
-                let index = snapshot.files.firstIndex(where: { $0.path == change.path }) else { return }
+                let index = snapshot.files.firstIndex(where: { $0.path == change.path })
+            else { return }
             snapshot.files[index].viewed = change.viewed
             state = .loaded(snapshot)
+            if let cache = service.cache {
+                await cache.markViewed(
+                    change,
+                    key: cache.snapshotKey(
+                        hub: service.url, item: item, revision: change.revision, since: snapshot.since))
+            }
         } catch {
             if !Task.isCancelled {
                 viewedFailure = .init(change: change, message: error.localizedDescription)
             }
         }
     }
+
+    func rememberPosition() {
+        guard case .loaded(let snapshot) = state else { return }
+        let position = ReviewReadingPosition(
+            revision: snapshot.item.revision.number, since: snapshot.since, path: selectedPath,
+            offset: readingOffset, contextLoaded: contextLoaded, revealed: revealed)
+        savedPosition = position
+        guard let readingStore else { return }
+        do {
+            try readingStore.save(position, hub: service.url, item: item)
+            positionFailure = nil
+        } catch {
+            positionFailure = "Couldn’t save your reading position. \(error.localizedDescription)"
+        }
+    }
+
+    private func restorePosition(_ snapshot: ReviewSnapshot) {
+        guard let position = savedPosition, position.revision == snapshot.item.revision.number,
+            position.since == snapshot.since,
+            snapshot.files.contains(where: { $0.path == position.path })
+        else { return }
+        selectedPath = position.path
+        readingOffset = position.offset
+        contextLoaded = position.contextLoaded
+        revealed = position.revealed
+    }
+
 }

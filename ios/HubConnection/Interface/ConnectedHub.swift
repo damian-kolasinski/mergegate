@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ConnectedHub: Equatable, Sendable {
+public struct ConnectedHub: Codable, Equatable, Sendable {
     public let url: URL
     public let deviceName: String
 

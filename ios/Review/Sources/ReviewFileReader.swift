@@ -10,6 +10,9 @@ struct ReviewFileReader: View {
     let item: String
     let revision: UInt32
     let styling: any CodeStyling
+    @Binding var contextLoaded: Bool
+    @Binding var revealed: [Int: Int]
+    let onReady: () -> Void
     let onComment: (SourceAnchor) -> Void
     let onReadConversations: ([SourceAnchor]) -> Void
 
@@ -40,6 +43,7 @@ struct ReviewFileReader: View {
                 ReviewSourceReader(
                     file: file, hunks: hunks, project: project, service: sourceService,
                     highlightService: highlightService, item: item, revision: revision, styling: styling,
+                    contextLoaded: $contextLoaded, revealed: $revealed, onReady: onReady,
                     onComment: onComment, onReadConversations: onReadConversations)
             case .binary:
                 message("Binary file", "A unified text diff is unavailable for this file.")

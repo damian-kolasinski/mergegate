@@ -8,6 +8,8 @@ final class InboxViewModel {
     private(set) var isLoading = false
     private(set) var error: String?
     var isReconnecting = false
+    private(set) var cachedAt: Date?
+    let cache: InboxCache?
     var project: String?
     var filter: InboxFilter = .all
     private(set) var generation = 0
@@ -18,13 +20,14 @@ final class InboxViewModel {
     let events: ServerEvents
     private var refreshVersion = 0
 
-    init(service: InboxWebService, events: ServerEvents = .shared) {
+    init(service: InboxWebService, events: ServerEvents = .shared, cache: InboxCache? = nil) {
         self.service = service
         self.events = events
+        self.cache = cache
     }
 
     func loadTriage(_ item: InboxItem) async {
-        guard !item.isClosed, triage[item.id] == nil else { return }
+        guard cachedAt == nil, !item.isClosed, triage[item.id] == nil else { return }
         let requestedGeneration = generation
         do {
             let detail = try await service.triage(item: item.id)
@@ -53,6 +56,8 @@ final class InboxViewModel {
             try Task.checkCancellation()
             guard version == refreshVersion else { return }
             self.snapshot = snapshot
+            cachedAt = nil
+            await cache?.save(snapshot, hub: service.url)
             if let project, !snapshot.projects.contains(project) { self.project = nil }
             triage = [:]
             triageErrors = [:]
@@ -61,6 +66,12 @@ final class InboxViewModel {
         } catch {
             if !Task.isCancelled && version == refreshVersion {
                 self.error = error.localizedDescription
+                if self.snapshot == nil, error is URLError,
+                    let saved = await cache?.load(hub: service.url), version == refreshVersion
+                {
+                    self.snapshot = saved.snapshot
+                    cachedAt = saved.date
+                }
             }
         }
     }
