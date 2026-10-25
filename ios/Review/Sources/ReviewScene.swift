@@ -8,14 +8,18 @@ struct ReviewScene: View {
     let styling: any CodeStyling
     let hub: URL
     let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> AnyView
+    let conversations: (CommentDraftScope, ConversationLocation?, @escaping () -> Void) -> AnyView
+    let fileConversations: (CommentDraftScope, String) -> AnyView
     private enum Sheet: Identifiable {
         case guide, files
         case drafts(CommentDraftLocation?)
+        case conversations(ConversationLocation?)
         var id: String {
             switch self {
             case .guide: "guide"
             case .files: "files"
             case .drafts: "drafts"
+            case .conversations: "conversations"
             }
         }
     }
@@ -64,6 +68,8 @@ struct ReviewScene: View {
                                 sheet = .files
                             }
                             Divider()
+                            fileConversations(scope(snapshot), file.path).id(file.path)
+                            Divider()
                             ReviewFileReader(
                                 file: file, project: snapshot.item.project,
                                 sourceService: model.sourceService,
@@ -72,6 +78,9 @@ struct ReviewScene: View {
                                 styling: styling,
                                 onComment: { anchor in
                                     sheet = .drafts(.init(path: file.path, anchor: anchor))
+                                },
+                                onReadConversations: { anchors in
+                                    sheet = .conversations(.init(path: file.path, anchors: anchors))
                                 }
                             ).id(file.path)
                         } else {
@@ -103,6 +112,13 @@ struct ReviewScene: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    sheet = .conversations(nil)
+                } label: {
+                    Label("Conversations", systemImage: "bubble.left.and.bubble.right")
+                }.tint(Appearance.brand).accessibilityIdentifier("reviewConversations")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     sheet = .drafts(nil)
                 } label: {
                     Label("Comment drafts", systemImage: "text.bubble")
@@ -118,6 +134,8 @@ struct ReviewScene: View {
         }
         .sheet(item: $sheet) { selection in
             switch selection {
+            case .conversations(let location):
+                conversations(scope(snapshot), location) { sheet = nil }
             case .drafts(let location):
                 drafts(
                     .init(
@@ -136,4 +154,10 @@ struct ReviewScene: View {
             }
         }
     }
+    private func scope(_ snapshot: ReviewSnapshot) -> CommentDraftScope {
+        .init(
+            hub: hub, item: snapshot.item.id, name: snapshot.item.name,
+            revision: snapshot.item.revision.number)
+    }
+
 }

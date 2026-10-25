@@ -45,6 +45,10 @@ struct SourceCommentSelectionTests {
         let anchor = try #require(
             doc.comments.anchor(in: (doc.text.string as NSString).range(of: "context")))
         #expect(anchor.side == .new && anchor.startLine == 12)
+        let threads = doc.comments.conversationAnchors(in: (doc.text.string as NSString).range(of: "context"))
+        #expect(threads.map(\.side) == [.old, .new])
+        #expect(threads.map(\.startLine) == [10, 12])
+        #expect(doc.comments.conversationAnchors(in: NSRange(location: 0, length: doc.text.length)).isEmpty)
         #expect(doc.comments.anchor(in: NSRange(location: 0, length: doc.text.length)) == nil)
     }
 }

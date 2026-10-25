@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first seven slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, and keep source-anchored comment drafts. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The first eight slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, render hub-provided syntax highlighting, track viewed files, keep source-anchored comment drafts, and follow existing conversations. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -19,6 +19,8 @@ The reader applies hub-provided UTF-16 syntax spans in source coordinates before
 The File reader’s bottom bar explicitly marks/unmarks the selected file viewed through the hub, naming the displayed revision. It keeps the file open, including expanded context and reading position. Progress and the file list update after confirmation; a failed write retains the previous state and offers retry for that file. Only one viewed write is sent at a time; Back is temporarily hidden while saving so the inbox refresh follows the write. Trusted files count as viewed automatically and have no toggle. Viewed marks persist in the hub, so reopening the review, relaunching the app, and returning to the inbox show the saved progress. Marking viewed does not submit feedback or approve a review.
 
 Select source text and choose **Comment** in the native selection menu to start a draft. The sheet shows the pinned item/revision, file, Before/After side, source-line range, and quoted source. Removals anchor to old lines; additions and unchanged context anchor to new lines. Selections spanning both sides or hidden source gaps cannot create a comment. Wrapped display rows never become anchors. The navigation bar’s **Comment drafts** control lists this review’s local drafts across files, with editing and confirmed deletion. Text saves synchronously through SwiftData as it changes, including unfinished edits before closing the sheet. Drafts are isolated by normalized hub address, internal item identity, and revision; they survive process termination. Storage failures retain the editor text with retry and confirmed discard recovery. Existing unchanged drafts stay readable when writing fails. These drafts stay on this iPhone and do not submit feedback, change viewed state, or mutate the hub; feedback delivery belongs to slice 9.
+
+The file’s **Conversations** control opens sent threads for that file, showing source side/lines, comment previews, reply counts, and current status. Select source text and choose **Conversations** in the native menu to filter threads to those lines; unchanged context searches both old and new source coordinates. The navigation bar opens all item threads, including whole-item and outdated comments. Each thread shows its original quote, full comment and sent replies in order, authors, times, and question/rejection/addressed/override status. External comments retain their GitHub author, delivery/vote state, and file identity even when they have no source anchor. Earlier comments use hub-provided placement onto the displayed revision; changed, outdated, and later-revision anchors are labeled explicitly. Opening a sheet fetches authoritative conversations with `onto=<displayed revision>`; pull to refresh and Retry preserve the last readable response on failure. Reading threads keeps the diff, selection, expanded context, viewed state, and local drafts intact. Sending replies and resolving decisions remain later slices.
 
 ## Verification
 
@@ -129,3 +131,15 @@ The UI test selects removed and added source, creates drafts through the real na
 - `Appearance/Appearance.swift` is generated from [shared tokens](../appearance/README.md) and compiled privately into features. DM Sans is registered by the app; semantic colors follow light/dark appearance and typography scales with Dynamic Type.
 
 The Rust files `crates/api/src/device.rs`, `item.rs`, `diff.rs`, and `review.rs` remain the wire authority. Feature DTOs intentionally decode their consumed fields and ignore additional fields; the real-hub UI flow exercises the contract.
+
+For the conversations flow, seed sent threads and replies on a fresh disposable hub:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-conversations
+python3 ios/Scripts/conversations-fixture.py /tmp/mergegate-ios-conversations
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_CONVERSATIONS=1 \
+  .claude/scripts/check.sh test ios
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-conversations
+```
+
+The UI flow reads old/new-side threads, questions and sent operator answers, rejection reasons, file-scoped and all-item lists, and native source-selection filtering. It verifies dark mode and the largest Dynamic Type size, audits accessibility, and retains screenshots. Behavior tests cover pinned revision query encoding, transport retry, preserving the last response on failure, moved/changed/outdated/future anchors, both sides of unchanged context, accepted rejections followed by overrides, unplaced GitHub file comments, and keeping unsent drafts out of sent history. All fixture mutations use the isolated hub’s real routes and CLI; the app only reads conversations.
