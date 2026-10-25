@@ -19,7 +19,7 @@ struct ReviewFilePicker: View {
                 Image(systemName: "list.bullet").foregroundStyle(Appearance.brand)
             }.padding(.horizontal, 20).padding(.vertical, 8)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(Appearance.surface)
+        }.buttonStyle(.plain)
             .accessibilityLabel("File \(position) of \(count), \(file.path)")
             .accessibilityHint("Choose a file in review order")
             .accessibilityIdentifier("reviewFiles")

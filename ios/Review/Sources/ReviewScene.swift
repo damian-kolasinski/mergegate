@@ -112,7 +112,6 @@ struct ReviewScene<
                         .padding(.horizontal, 20).padding(.bottom, 8)
                         .accessibilityIdentifier("comparisonError")
                     }
-                    Divider()
                     if let index = snapshot.files.firstIndex(where: {
                         $0.path == model.selectedPath
                     }) {
@@ -140,16 +139,15 @@ struct ReviewScene<
                                 "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
                             )
                         } header: {
-                            VStack(spacing: 0) {
-                                fileControlsLayout {
-                                    filePicker(file, index: index, count: snapshot.files.count)
-                                    fileConversations(scope(snapshot), file.path).id(file.path)
-                                }
-                                Divider()
-                            }.background(Appearance.surface)
-                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                                    fileHeaderHeight = $0
-                                }
+                            fileControlsLayout {
+                                filePicker(file, index: index, count: snapshot.files.count)
+                                fileConversations(scope(snapshot), file.path).id(file.path)
+                            }
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
+                            .padding(.horizontal, 12).padding(.vertical, 4)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                                fileHeaderHeight = $0
+                            }
                         }
                     } else {
                         ContentUnavailableView(
