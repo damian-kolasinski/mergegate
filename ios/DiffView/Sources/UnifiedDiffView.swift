@@ -1,14 +1,17 @@
+import CodeStylingInterface
 import DiffDocumentInterface
 import SwiftUI
 import UIKit
 
 public struct UnifiedDiffView: UIViewRepresentable {
     private let hunks: [DiffHunk]
+    private let styling: (any CodeStyling)?
     private let maximumLine: UInt32
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(hunks: [DiffHunk], maximumLine: UInt32 = 0) {
+    public init(hunks: [DiffHunk], maximumLine: UInt32 = 0, styling: (any CodeStyling)? = nil) {
+        self.styling = styling
         self.hunks = hunks
         self.maximumLine = maximumLine
     }
@@ -17,7 +20,9 @@ public struct UnifiedDiffView: UIViewRepresentable {
         SourceTextView.reader()
     }
 
-    public func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+    public func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context)
+        -> CGSize?
+    {
         guard let width = proposal.width else { return nil }
         return uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
     }
@@ -29,13 +34,8 @@ public struct UnifiedDiffView: UIViewRepresentable {
             view.traitCollection,
             UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light),
         ])
-        let document = DiffText.document(hunks, traits: traits, maximumLine: maximumLine)
-        let rendered = document.text
-        (view as? SourceTextView)?.sourceSelection = document.selection
-        if !view.attributedText.isEqual(to: rendered) {
-            let offset = view.contentOffset
-            view.attributedText = rendered
-            view.setContentOffset(offset, animated: false)
-        }
+        let document = DiffText.document(
+            hunks, traits: traits, maximumLine: maximumLine, styling: styling)
+        (view as? SourceTextView)?.install(document.text, selection: document.selection)
     }
 }

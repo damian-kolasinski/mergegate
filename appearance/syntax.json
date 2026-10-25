@@ -1,0 +1,78 @@
+{
+  "attribute": [
+    "#18a46c",
+    "#60d199"
+  ],
+  "comment": [
+    "#737373",
+    "#737373"
+  ],
+  "constant": [
+    "#1ca1c7",
+    "#68cdf2"
+  ],
+  "escape": [
+    "#16a994",
+    "#61d5c0"
+  ],
+  "function": [
+    "#693acf",
+    "#9d6afb"
+  ],
+  "heading": [
+    "#d5512f",
+    "#ff855e"
+  ],
+  "keyword": [
+    "#d32a61",
+    "#ff678d"
+  ],
+  "label": [
+    "#a631be",
+    "#d568ea"
+  ],
+  "link": [
+    "#1ca1c7",
+    "#68cdf2"
+  ],
+  "literal": [
+    "#199f43",
+    "#5ecc71"
+  ],
+  "namespace": [
+    "#d5901c",
+    "#ffab16"
+  ],
+  "number": [
+    "#1ca1c7",
+    "#68cdf2"
+  ],
+  "operator": [
+    "#636363",
+    "#636363"
+  ],
+  "property": [
+    "#d47628",
+    "#ffa359"
+  ],
+  "punctuation": [
+    "#636363",
+    "#636363"
+  ],
+  "string": [
+    "#199f43",
+    "#5ecc71"
+  ],
+  "strong": [
+    "#d5a910",
+    "#ffd452"
+  ],
+  "tag": [
+    "#d5512f",
+    "#ff855e"
+  ],
+  "type": [
+    "#a631be",
+    "#d568ea"
+  ]
+}

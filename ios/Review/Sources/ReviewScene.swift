@@ -1,8 +1,10 @@
+import CodeStylingInterface
 import DiffView
 import SwiftUI
 
 struct ReviewScene: View {
     @State var model: ReviewViewModel
+    let styling: any CodeStyling
     private enum Sheet: String, Identifiable {
         case guide, files
         var id: String { rawValue }
@@ -49,7 +51,11 @@ struct ReviewScene: View {
                             sheet = .files
                         }
                         Divider()
-                        ReviewFileReader(file: file, project: snapshot.item.project, sourceService: model.sourceService).id(file.path)
+                        ReviewFileReader(
+                            file: file, project: snapshot.item.project, sourceService: model.sourceService,
+                            highlightService: model.highlightService,
+                            item: snapshot.item.id, revision: snapshot.item.revision.number, styling: styling
+                        ).id(file.path)
                     } else {
                         ContentUnavailableView(
                             "No changed files", systemImage: "doc",
@@ -80,7 +86,9 @@ struct ReviewScene: View {
             switch selection {
             case .guide: ReviewGuideScene(guide: snapshot.guide) { sheet = nil }
             case .files:
-                ReviewFilesScene(files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }) {
+                ReviewFilesScene(
+                    files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }
+                ) {
                     path in
                     model.selectedPath = path
                     sheet = nil

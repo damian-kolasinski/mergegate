@@ -1,3 +1,4 @@
+import CodeStylingInterface
 import DiffDocumentInterface
 import SwiftUI
 import UIKit
@@ -8,19 +9,27 @@ enum DiffText {
         document(hunks, traits: traits).text
     }
 
-    static func document(_ hunks: [DiffHunk], traits: UITraitCollection, maximumLine: UInt32 = 0) -> (
+    static func document(
+        _ hunks: [DiffHunk], traits: UITraitCollection, maximumLine: UInt32 = 0,
+        styling: (any CodeStyling)? = nil
+    ) -> (
         text: NSAttributedString, selection: SourceSelection
     ) {
         let result = NSMutableAttributedString()
         var ranges: [NSRange] = []
         let font = UIFontMetrics(forTextStyle: .body).scaledFont(
-            for: .monospacedSystemFont(ofSize: Appearance.code.size, weight: .regular), compatibleWith: traits)
+            for: .monospacedSystemFont(ofSize: Appearance.code.size, weight: .regular),
+            compatibleWith: traits)
         let gutterFont = UIFontMetrics(forTextStyle: .caption1).scaledFont(
-            for: .monospacedSystemFont(ofSize: Appearance.caption.size, weight: .regular), compatibleWith: traits)
-        let lastLine = max(maximumLine, hunks.flatMap(\.lines).compactMap { $0.newLine ?? $0.oldLine }.max() ?? 0)
+            for: .monospacedSystemFont(ofSize: Appearance.caption.size, weight: .regular),
+            compatibleWith: traits)
+        let lastLine = max(
+            maximumLine, hunks.flatMap(\.lines).compactMap { $0.newLine ?? $0.oldLine }.max() ?? 0)
         let digits = max(2, String(lastLine).count)
-        let numberWidth = (String(repeating: "0", count: digits) as NSString).size(withAttributes: [.font: gutterFont])
-            .width
+        let numberWidth = (String(repeating: "0", count: digits) as NSString).size(withAttributes: [
+            .font: gutterFont
+        ])
+        .width
         let characterWidth = ("0" as NSString).size(withAttributes: [.font: font]).width
         let sourceIndent = numberWidth + characterWidth * 3
         let paragraph = NSMutableParagraphStyle()
@@ -40,7 +49,8 @@ enum DiffText {
                     NSAttributedString(
                         string: hunk.header + "\n",
                         attributes: [
-                            .font: gutterFont, .foregroundColor: UIColor(Appearance.secondary).resolvedColor(with: traits),
+                            .font: gutterFont,
+                            .foregroundColor: UIColor(Appearance.secondary).resolvedColor(with: traits),
                         ]))
             }
             for (index, line) in hunk.lines.enumerated() {
@@ -67,7 +77,8 @@ enum DiffText {
                 let start = result.length
                 if line.kind != .note {
                     let hasNewline =
-                        line.hasNewline && (index + 1 >= hunk.lines.count || hunk.lines[index + 1].kind != .note)
+                        line.hasNewline
+                        && (index + 1 >= hunk.lines.count || hunk.lines[index + 1].kind != .note)
                     ranges.append(
                         NSRange(
                             location: start + gutter.utf16.count,
@@ -80,8 +91,22 @@ enum DiffText {
                             .font: font, .foregroundColor: foreground, .backgroundColor: background,
                             .paragraphStyle: paragraph,
                         ]))
+                if let styling, line.kind != .note {
+                    let styled = styling.apply(
+                        spans: line.spans, source: line.text, font: font, traits: traits)
+                    styled.enumerateAttributes(in: NSRange(location: 0, length: styled.length)) {
+                        attributes, range, _ in
+                        result.addAttributes(
+                            attributes,
+                            range: NSRange(
+                                location: start + gutter.utf16.count + range.location, length: range.length))
+                    }
+                }
                 result.addAttributes(
-                    [.font: gutterFont, .foregroundColor: UIColor(Appearance.secondary).resolvedColor(with: traits)],
+                    [
+                        .font: gutterFont,
+                        .foregroundColor: UIColor(Appearance.secondary).resolvedColor(with: traits),
+                    ],
                     range: NSRange(location: start, length: number.utf16.count + 1))
             }
         }

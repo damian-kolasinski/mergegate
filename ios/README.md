@@ -1,6 +1,6 @@
 # mergegate for iOS
 
-The first four slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, and read surrounding source context. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
+The first five slices of [iOS Mobile](../iOS%20Mobile.md): connect through the installed Tailscale app, reopen the selected hub, triage its Decision desk across projects and item states, start a review with a real unified diff, read surrounding source context, and render hub-provided syntax highlighting. iOS 26+, Swift 6, SwiftUI/Observation, and Tuist 4.206.0. There are no package dependencies.
 
 ## Build and run
 
@@ -12,7 +12,9 @@ The inbox refreshes on entry, after returning from a review, on pull to refresh/
 
 Every inbox item opens its current authoritative review. The screen shows the item identity, revision and target, all-changes comparison scope, and remaining review-file count. Guide opens the complete submitted guide; Files preserves the hub’s importance order and shows its reading reasons, viewed state, and trusted tier. The first review-tier file opens automatically (or the first trusted file when there are no review-tier files). The native TextKit 2 reader displays unified hunks with a compact line-number gutter (old coordinates for removals, new coordinates otherwise), explicit addition/removal markers, and shared semantic colors. Wrapped continuations align with the source column; all blocks in a file share its gutter width. Hunk headers retain both source ranges. Binary, oversized, discarded, and metadata-only diffs have explicit states. Opening or reading never marks a file viewed. The displayed snapshot stays fixed while open, including across foregrounding; returning to the inbox and reopening loads the current revision. The entire review scrolls at accessibility text sizes.
 
-Load unchanged context fetches the comparison’s immutable old/new blobs, then exposes leading, between-hunk, and trailing gaps in batches of 20 lines. A failed expansion leaves the diff readable and can be retried. Renamed and metadata-only text files can expose their unchanged source too. Long lines wrap at the reader width; native selection and Copy preserve source text and Unicode while excluding gutters, change markers, hunk headers, and no-newline notes. Selection spans one displayed text block; expanding gaps creates separate blocks. Syntax highlighting and viewed-state changes are later slices.
+Load unchanged context fetches the comparison’s immutable old/new blobs, then exposes leading, between-hunk, and trailing gaps in batches of 20 lines. A failed expansion leaves the diff readable and can be retried. Renamed and metadata-only text files can expose their unchanged source too. Long lines wrap at the reader width; native selection and Copy preserve source text and Unicode while excluding gutters, change markers, hunk headers, and no-newline notes. Selection spans one displayed text block; expanding gaps creates separate blocks. Viewed-state changes are a later slice.
+
+The reader applies hub-provided UTF-16 syntax spans in source coordinates before wrapping, using the same generated light/dark palette as the web. Removed lines use old-blob spans; additions and context use new-blob spans. The text, diff backgrounds, gutters, and source-only Copy remain intact. Missing grammars, pending spans, failed highlighting requests, unknown tags, and invalid ranges leave readable plain source. One shared foreground SSE transport refreshes highlighting on connect/reconnect and `highlights.changed`; it stops when there are no consumers or the app leaves the foreground. Each file subscription refreshes initially, including when reusing a stream. Highlight refreshes use the displayed immutable blob IDs and never switch the open revision, file, expanded context, or selection. Other live review/inbox updates belong to a later slice.
 
 ## Verification
 
@@ -69,15 +71,29 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-source
 
 This flow loads immutable blobs through the real hub, expands leading/between/trailing context, reads a long wrapped Unicode line, opens native selection/Copy, switches to a metadata-only rename, and checks dark mode at the largest accessibility size. It audits contrast, Dynamic Type, touch targets, and labels and retains screenshots. Behavior tests verify source coordinates across insertions/deletions, empty sides, invalid gaps, retry, exact UTF-16 copy ranges, and missing final newlines.
 
+For the highlighted-code UI flow, package an already installed Swift grammar and seed a fresh smoke hub:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-highlight
+python3 ios/Scripts/highlight-fixture.py /tmp/mergegate-ios-highlight --pack ~/.mergegate/languages/swift/0.7.1
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT \
+  MG_IOS_TEST_HIGHLIGHT=/private/tmp/mergegate-ios-highlight/swift.tar.gz \
+  .claude/scripts/check.sh test ios
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-highlight
+```
+
+Use the installed pack's actual version directory. The test opens plain source on the isolated hub, expands Unicode context, installs the real pack through that hub, and verifies SSE repainting without changing text, source layout, revision, or expanded context. It audits accessibility and retains normal/light and dark/accessibility screenshots. Unit tests cover span tuples, side mapping, malformed UTF-16 ranges, unknown categories, styling traits, failed requests, revision pinning, and raw SSE byte framing; pixel goldens cover highlighted light/dark/accessibility rendering and source-only Copy.
+
 ## Module boundaries
 
 - `App` composes feature builders.
 - `HubConnection` owns URL validation, `/api/whoami`, connection presentation, and the selected URL in UserDefaults. `HubConnectionInterface` exposes only the established connection value needed by Inbox.
 - `Inbox` owns `/api/inbox` and its consumed `/api/items/{id}` triage subset, project/state filtering, pending-decision interpretation, refresh policy, state, and rows.
-- `Review` owns its `/api/items/{id}?since=all` subset, guide/file presentation, snapshot loading/retry, selected file, and loading/retrying blobs from the displayed revision. Inbox accepts a destination builder; App composes it with Review without sharing DTOs.
+- `Review` owns its `/api/items/{id}?since=all` subset, guide/file presentation, snapshot loading/retry, selected file, and loading/retrying blobs and highlights from the displayed revision, and its highlighting event policy. Inbox accepts a destination builder; App composes it with Review without sharing DTOs.
 - `DiffDocument` maps unified hunks and unchanged blob gaps into source-coordinate lines; `DiffDocumentInterface` exposes only those rendering values.
+- `CodeStyling` implements `CodeStylingInterface`, mapping neutral UTF-16 spans to native attributes; App injects the implementation into Review and DiffView.
 - `DiffView` renders those values with UIKit/TextKit 2, native selection with source-only Copy, wrapping, and feature-local generated appearance.
-- `Networking` provides HTTP transport only: bounded URLSession requests, hub error decoding, and rejection of redirects. It owns no endpoint or feature refresh policy.
+- `Networking` provides transport primitives: bounded URLSession requests, hub error decoding, and rejection of redirects, and a multiplexed reconnecting SSE byte stream. It owns no endpoint or feature refresh policy.
 - `Appearance/Appearance.swift` is generated from [shared tokens](../appearance/README.md) and compiled privately into features. DM Sans is registered by the app; semantic colors follow light/dark appearance and typography scales with Dynamic Type.
 
 The Rust files `crates/api/src/device.rs`, `item.rs`, `diff.rs`, and `review.rs` remain the wire authority. Feature DTOs intentionally decode their consumed fields and ignore additional fields; the real-hub UI flow exercises the contract.

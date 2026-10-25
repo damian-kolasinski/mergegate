@@ -25,6 +25,7 @@ struct ReviewSnapshot: Decodable, Sendable {
 struct ReviewFile: Decodable, Identifiable, Sendable {
     enum Tier: String, Decodable, Sendable { case review, trusted }
     let path: String
+    let grammar: String?
     let oldBlob: String?
     let newBlob: String?
     let oldPath: String?
@@ -48,7 +49,7 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
         return "Modified"
     }
     enum CodingKeys: String, CodingKey {
-        case path, additions, deletions, tier, viewed, reason, why, hint, content
+        case grammar, path, additions, deletions, tier, viewed, reason, why, hint, content
         case oldBlob = "old_blob"
         case newBlob = "new_blob"
         case oldPath = "old_path"
@@ -68,6 +69,7 @@ enum ReviewContent: Decodable, Sendable {
         let new_start: UInt32
         let new_lines: UInt32
         let lines: [String]
+        let spans: [[ReviewCodeSpan]]?
     }
     private enum Keys: CodingKey { case kind, hunks }
     init(from decoder: any Decoder) throws {
@@ -78,7 +80,8 @@ enum ReviewContent: Decodable, Sendable {
                 try container.decode([Hunk].self, forKey: .hunks).map {
                     try UnifiedHunk.build(
                         oldStart: $0.old_start, oldLines: $0.old_lines,
-                        newStart: $0.new_start, newLines: $0.new_lines, lines: $0.lines)
+                        newStart: $0.new_start, newLines: $0.new_lines, lines: $0.lines,
+                        spans: ($0.spans ?? []).map { $0.map(\.value) })
                 })
         case "binary": self = .binary
         case "too_large": self = .tooLarge

@@ -1,3 +1,4 @@
+import CodeStyling
 import HubConnection
 import Inbox
 import Review
@@ -9,7 +10,7 @@ struct MergegateApp: App {
         WindowGroup {
             HubConnectionBuilder.build { hub, disconnect in
                 InboxBuilder.build(hub: hub, disconnect: disconnect) { item in
-                    ReviewBuilder.build(hub: hub, item: item)
+                    ReviewBuilder.build(hub: hub, item: item, styling: NativeCodeStyling())
                 }
             }
         }
