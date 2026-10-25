@@ -37,6 +37,22 @@ struct FeedbackTests {
         #expect(await hub.summaries.count == 1)
     }
 
+    @Test func savedAnswerIsPreviewedAndRecoveredFromLostReviewResponse() async throws {
+        let hub = FeedbackHub()
+        await hub.addHubReply()
+        let drafts = LocalDrafts()
+        let outbox = MemoryOutbox()
+        let model = try model(hub, drafts, outbox)
+        await model.load()
+        #expect(model.hubReplies.map(\.comment) == ["c_question"])
+        #expect(model.hubReplies.map(\.body) == ["Receipt client é 🐙"])
+        #expect(model.canSend)
+        await hub.loseReviewResponse()
+        await model.send()
+        #expect(model.sent)
+        #expect(await hub.reviewRequests == 1)
+    }
+
     @Test func partialUploadLostResponseReopensWithoutDuplicatingComments() async throws {
         let hub = FeedbackHub()
         await hub.loseUploadResponse()
@@ -265,6 +281,8 @@ actor FeedbackHub: HTTPTransport {
     let state: String
     var drafts: [[String: SendableJSON]] = []
     var sent: [[String: SendableJSON]] = []
+    var replies: [[String: SendableJSON]] = []
+    var sentReplies: [[String: SendableJSON]] = []
     var uploads: [[String: SendableJSON]] = []
     var summaries: [String] = []
     var verdicts: [String] = []
@@ -276,6 +294,9 @@ actor FeedbackHub: HTTPTransport {
     init(revision: Int = 3, state: String = "needs_review") {
         self.revision = revision
         self.state = state
+    }
+    func addHubReply() {
+        replies.append(["id": .number(17), "comment": .string("c_question"), "body": .string("Receipt client é 🐙")])
     }
     func refuseReview() { refusal = true }
     func removeSharedDraft() { drafts.removeAll { $0["id"]?.value as? String == "c_external" } }
@@ -296,6 +317,7 @@ actor FeedbackHub: HTTPTransport {
                 [
                     "item": "app#1", "revision": revision, "type": "review.submitted", "verdict": verdicts[index],
                     "summary": summary, "comments": sent.map { $0.mapValues(\.value) },
+                    "replies": sentReplies.map { $0.mapValues(\.value) },
                 ]
             }
             return try json(["cursor": summaries.count, "events": url.query == nil ? [] : events])
@@ -303,7 +325,7 @@ actor FeedbackHub: HTTPTransport {
         #expect(url.path == "/api/items/app#1")
         return try json([
             "item": ["id": "app#1", "revision": ["number": revision], "state": state],
-            "drafts": drafts.map { $0.mapValues(\.value) }, "draft_replies": [],
+            "drafts": drafts.map { $0.mapValues(\.value) }, "draft_replies": replies.map { $0.mapValues(\.value) },
         ])
     }
     func delete(_ url: URL) async throws -> Data {
@@ -342,7 +364,9 @@ actor FeedbackHub: HTTPTransport {
         summaries.append(summary)
         verdicts.append(verdict)
         sent += drafts
+        sentReplies += replies
         drafts = []
+        replies = []
         if reviewLost {
             reviewLost = false
             throw URLError(.timedOut)
@@ -350,6 +374,7 @@ actor FeedbackHub: HTTPTransport {
         return try json([
             "revision": revision, "verdict": verdict, "summary": summary,
             "comments": sent.map { $0.mapValues(\.value) },
+            "replies": sentReplies.map { $0.mapValues(\.value) },
         ])
     }
     func put(_ url: URL, body: Data) throws -> Data { throw URLError(.unsupportedURL) }

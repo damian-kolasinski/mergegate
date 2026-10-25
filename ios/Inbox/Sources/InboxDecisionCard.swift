@@ -7,7 +7,7 @@ struct InboxDecisionCard: View {
     let error: String?
     let retry: () -> Void
     let openReview: () -> Void
-    @State private var details: DecisionPresentation?
+    let openDecisions: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -56,9 +56,6 @@ struct InboxDecisionCard: View {
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .background(Appearance.surface, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Appearance.border, lineWidth: 0.5))
-        .sheet(item: $details) { selection in
-            InboxDecisionScene(item: selection.item, triage: selection.triage)
-        }
     }
 
     private var decisionLabel: String {
@@ -73,19 +70,10 @@ struct InboxDecisionCard: View {
     }
 
     private var detailsButton: some View {
-        Button {
-            if let triage { details = DecisionPresentation(item: item, triage: triage) }
-        } label: {
+        Button(action: openDecisions) {
             Label((triage?.decisions.count ?? 0) > 1 ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details", systemImage: "arrow.up.right")
                 .appearanceText(Appearance.label)
                 .padding(.horizontal, 12).frame(minHeight: 44)
         }.buttonStyle(.glass).tint(Appearance.brand).accessibilityHint(decisionLabel).accessibilityIdentifier("decisionDetails-\(item.id)")
     }
-}
-
-// Keep the displayed revision and text together while the inbox refreshes.
-private struct DecisionPresentation: Identifiable {
-    let item: InboxItem
-    let triage: InboxTriage
-    var id: String { item.id }
 }

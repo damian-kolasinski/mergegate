@@ -7,7 +7,11 @@ final class TriageInboxTests: XCTestCase {
         guard address.hasPrefix("http"), ProcessInfo.processInfo.environment["MG_IOS_TEST_TRIAGE"] == "1" else {
             throw XCTSkip("Run the disposable triage fixture and set MG_IOS_TEST_TRIAGE=1.")
         }
+        let appearance = XCUIDevice.shared.appearance
+        defer { XCUIDevice.shared.appearance = appearance }
+        XCUIDevice.shared.appearance = .light
         let app = XCUIApplication()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         if app.buttons["hubSettings"].waitForExistence(timeout: 3) {
             app.buttons["hubSettings"].tap()

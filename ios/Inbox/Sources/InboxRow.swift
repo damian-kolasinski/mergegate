@@ -6,11 +6,12 @@ struct InboxRow: View {
     let error: String?
     let retry: () -> Void
     let openReview: () -> Void
+    let openDecisions: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if item.needsDecision {
-                InboxDecisionCard(item: item, triage: triage, error: error, retry: retry, openReview: openReview)
+                InboxDecisionCard(item: item, triage: triage, error: error, retry: retry, openReview: openReview, openDecisions: openDecisions)
             } else {
                 Button(action: openReview) {
                     HStack(spacing: 12) {

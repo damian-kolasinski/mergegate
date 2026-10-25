@@ -73,7 +73,7 @@ struct FeedbackScene: View {
                                     .appearanceText(Appearance.body)
                             }
                             ForEach(model.hubReplies) { reply in
-                                Text("Reply: \(reply.body)").appearanceText(Appearance.body)
+                                Text("Reply to \(reply.comment): \(reply.body)").appearanceText(Appearance.body)
                             }
                         }
                     }
