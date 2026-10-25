@@ -29,6 +29,7 @@ struct FeedbackSnapshot: Decodable, Sendable {
         struct Revision: Decodable, Sendable { let number: UInt32 }
         let id: String
         let state: String
+        let target: String
         let revision: Revision
     }
     let item: Item
@@ -53,6 +54,9 @@ struct FeedbackLog: Decodable, Sendable {
         let summary: String?
         let comments: [FeedbackComment]?
         let replies: [FeedbackReply]?
+        let commit: String?
+        let reason: String?
+        let paths: [String]?
     }
     let cursor: UInt64
     let events: [Event]

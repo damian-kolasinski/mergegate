@@ -114,7 +114,7 @@ struct ReviewScene<Drafts: View, Conversations: View, FileConversations: View, F
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Button("Send feedback") { sheet = .feedback }
+            Button("Complete review") { sheet = .feedback }
                 .appearanceText(Appearance.label).frame(maxWidth: .infinity, minHeight: 44)
                 .buttonStyle(.glass).padding(.horizontal, 20).padding(.bottom, 8)
                 .disabled(model.isSavingViewed || model.isComparing).accessibilityIdentifier("reviewFeedback")
