@@ -123,6 +123,7 @@ let project = Project(
                     "MG_IOS_TEST_VIEWED": "$(MG_IOS_TEST_VIEWED)",
                     "MG_IOS_TEST_DRAFTS": "$(MG_IOS_TEST_DRAFTS)",
                     "MG_IOS_TEST_CONVERSATIONS": "$(MG_IOS_TEST_CONVERSATIONS)",
+                    "MG_IOS_TEST_REREVIEW": "$(MG_IOS_TEST_REREVIEW)",
                     "MG_IOS_TEST_FEEDBACK": "$(MG_IOS_TEST_FEEDBACK)",
                     "MG_IOS_TEST_REQUEST_CHANGES": "$(MG_IOS_TEST_REQUEST_CHANGES)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"

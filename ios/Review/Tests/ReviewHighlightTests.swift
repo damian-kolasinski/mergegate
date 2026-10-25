@@ -86,7 +86,7 @@ private actor HighlightTransport: HTTPTransport {
         }
         return Data(
             """
-            {"item":{"id":"sample#1","name":"sample#1","title":"Read code","target":"main","state":"needs_review","revision":{"number":\(revision)}},"since":null,
+            {"item":{"id":"sample#1","name":"sample#1","title":"Read code","target":"main","state":"needs_review","revision":{"number":\(revision)}},"interdiffs":[],"since":null,
             "files":[{"path":"a.swift","grammar":\(grammar),"new_blob":"\(revision == 1 ? "original" : "other-revision")","tier":"review","viewed":false,"content":{"kind":"text","hunks":[]}}]}
             """.utf8)
     }

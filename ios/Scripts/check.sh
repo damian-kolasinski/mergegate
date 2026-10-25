@@ -20,6 +20,7 @@ if [ -n "${MG_IOS_TEST_DRAFTS:-}" ]; then args+=("MG_IOS_TEST_DRAFTS=$MG_IOS_TES
 if [ -n "${MG_IOS_TEST_CONVERSATIONS:-}" ]; then args+=("MG_IOS_TEST_CONVERSATIONS=$MG_IOS_TEST_CONVERSATIONS"); fi
 if [ -n "${MG_IOS_TEST_FEEDBACK:-}" ]; then args+=("MG_IOS_TEST_FEEDBACK=$MG_IOS_TEST_FEEDBACK"); fi
 if [ -n "${MG_IOS_TEST_REQUEST_CHANGES:-}" ]; then args+=("MG_IOS_TEST_REQUEST_CHANGES=$MG_IOS_TEST_REQUEST_CHANGES"); fi
+if [ -n "${MG_IOS_TEST_REREVIEW:-}" ]; then args+=("MG_IOS_TEST_REREVIEW=$MG_IOS_TEST_REREVIEW"); fi
 if ! xcodebuild "$action" -workspace Mergegate.xcworkspace -scheme Mergegate \
   -destination "${MG_IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2}" \
   -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO \

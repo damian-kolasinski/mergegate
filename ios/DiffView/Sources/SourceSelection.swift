@@ -35,6 +35,7 @@ final class SourceTextView: UITextView {
 
     var sourceSelection = SourceSelection(text: "", ranges: [])
     var commentSelection = SourceCommentSelection(rows: [])
+    var sourceSides: [SourceAnchor.Side] = [.old, .new]
     var onComment: ((SourceAnchor) -> Void)?
 
     var onReadConversations: (([SourceAnchor]) -> Void)?

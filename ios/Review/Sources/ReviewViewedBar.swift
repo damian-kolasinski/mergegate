@@ -36,7 +36,10 @@ struct ReviewViewedBar: View {
     }
 
     @ViewBuilder private var control: some View {
-        if file.tier == .trusted {
+        if file.interdiff == .dropped {
+            Text("Dropped change · no viewed mark").appearanceText(Appearance.caption)
+                .foregroundStyle(Appearance.secondary).frame(minHeight: 44)
+        } else if file.tier == .trusted {
             Label("Trusted · counts as viewed", systemImage: "checkmark.shield")
                 .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                 .frame(minHeight: 44).accessibilityIdentifier("trustedViewed")
