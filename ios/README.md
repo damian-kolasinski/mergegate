@@ -104,10 +104,12 @@ For the persistent-draft flow, seed both real diff sides on a fresh smoke hub:
 
 ```sh
 python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-drafts
-python3 ios/Scripts/drafts-fixture.py /tmp/mergegate-ios-drafts
+python3 ios/Scripts/drafts-fixture.py /tmp/mergegate-ios-drafts --pack ~/.mergegate/languages/swift/0.7.1
 MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_DRAFTS=1 .claude/scripts/check.sh test ios
 python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-drafts
 ```
+
+Use the installed pack's actual version directory. The smoke hub starts without grammars; `--pack` installs Swift highlighting before submission so the demo shows highlighted source. Omit it to exercise plain-text fallback. Draft-sheet source quotes currently remain plain text.
 
 The UI test selects removed and added source, creates drafts through the real native menu, terminates the app with an open editor, restores and edits feedback, navigates files, and verifies deletion across another relaunch. It audits the list/editor in normal and dark/accessibility appearances and retains screenshots. Swift behavior tests reopen an on-disk SwiftData store, verify hub/item/revision isolation, exact Unicode quotes and old/new line ranges, empty edits, save/delete failure retries, unchanged reads under write failure, and discard recovery. The fixture remains unreviewed on the hub.
 
