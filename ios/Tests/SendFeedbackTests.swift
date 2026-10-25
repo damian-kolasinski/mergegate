@@ -47,8 +47,11 @@ final class SendFeedbackTests: XCTestCase {
         XCTAssertEqual(
             app.textViews["feedbackSummary"].value as? String, "Check delivery and receipt consistency.")
         capture(app, "Feedback — restored completion sheet")
-        // Audit the source quotes after scrolling them clear of the fixed send bar.
-        app.swipeUp()
+        // Start below the summary editor so its own scrolling cannot consume this gesture.
+        // Audit the source quotes after moving them clear of the fixed send bar.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.78)).press(
+            forDuration: 0.05,
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.4)))
         try audit(app)
         capture(app, "Feedback — both source anchors")
         app.buttons["sendFeedback"].tap()

@@ -12,6 +12,8 @@ struct FeedbackAttempt: Codable {
     let hubReplies: [FeedbackReply]
     var uploaded: [UUID: String] = [:]
     var reviewStarted = false
+    var target: String?
+    var approval: ApprovalOutcome?
     var confirmed = false
 }
 

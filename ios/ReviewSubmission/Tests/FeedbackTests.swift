@@ -215,7 +215,8 @@ struct FeedbackTests {
         record.summary = "Unfinished summary é 🐙"
         try store.save(record, scope: scope())
         #expect(
-            try SwiftDataFeedbackOutbox(configuration: .init(url: url)).load(scope: scope()).summary == record.summary)
+            try SwiftDataFeedbackOutbox(configuration: .init(url: url)).load(scope: scope()).summary
+                == record.summary)
         #expect(try store.load(scope: scope(hub: "http://MY-MAC:80/")).summary == record.summary)
         #expect(try store.load(scope: scope(revision: 4)).summary.isEmpty)
         #expect(try store.load(scope: scope(item: "app#2")).summary.isEmpty)
@@ -296,7 +297,9 @@ actor FeedbackHub: HTTPTransport {
         self.state = state
     }
     func addHubReply() {
-        replies.append(["id": .number(17), "comment": .string("c_question"), "body": .string("Receipt client é 🐙")])
+        replies.append([
+            "id": .number(17), "comment": .string("c_question"), "body": .string("Receipt client é 🐙"),
+        ])
     }
     func refuseReview() { refusal = true }
     func removeSharedDraft() { drafts.removeAll { $0["id"]?.value as? String == "c_external" } }
@@ -313,19 +316,26 @@ actor FeedbackHub: HTTPTransport {
     func get(_ url: URL) throws -> Data {
         #expect(url.fragment == nil)
         if url.path == "/api/events" {
-            let events: [[String: Any]] = summaries.enumerated().map { index, summary in
+            var events: [[String: Any]] = summaries.enumerated().map { index, summary in
                 [
-                    "item": "app#1", "revision": revision, "type": "review.submitted", "verdict": verdicts[index],
+                    "item": "app#1", "revision": revision, "type": "review.submitted",
+                    "verdict": verdicts[index],
                     "summary": summary, "comments": sent.map { $0.mapValues(\.value) },
                     "replies": sentReplies.map { $0.mapValues(\.value) },
                 ]
             }
-            return try json(["cursor": summaries.count, "events": url.query == nil ? [] : events])
+            if verdicts.contains("approved") {
+                events.append([
+                    "item": "app#1", "revision": revision, "type": "item.merged", "commit": "abc123",
+                ])
+            }
+            return try json(["cursor": events.count, "events": url.query == nil ? [] : events])
         }
         #expect(url.path == "/api/items/app#1")
         return try json([
-            "item": ["id": "app#1", "revision": ["number": revision], "state": state],
-            "drafts": drafts.map { $0.mapValues(\.value) }, "draft_replies": replies.map { $0.mapValues(\.value) },
+            "item": ["id": "app#1", "revision": ["number": revision], "state": state, "target": "main"],
+            "drafts": drafts.map { $0.mapValues(\.value) },
+            "draft_replies": replies.map { $0.mapValues(\.value) },
         ])
     }
     func delete(_ url: URL) async throws -> Data {
@@ -347,14 +357,16 @@ actor FeedbackHub: HTTPTransport {
             }
             return try json(comment.mapValues(\.value))
         }
-        #expect(url.path == "/api/items/app#1/reviews")
+        #expect(["/api/items/app#1/reviews", "/api/items/app#1/approve"].contains(url.path))
         #expect(request["revision"] as? Int == 3)
-        let verdict = try #require(request["verdict"] as? String)
-        #expect(["comment", "changes_requested"].contains(verdict))
+        let verdict =
+            url.path.hasSuffix("/approve") ? "approved" : try #require(request["verdict"] as? String)
+        #expect(["comment", "changes_requested", "approved"].contains(verdict))
         reviewRequests += 1
         if refusal {
             refusal = false
-            throw HTTPFailure(status: 409, code: "drafts_unplaced", message: "Place or remove the old hub draft")
+            throw HTTPFailure(
+                status: 409, code: "drafts_unplaced", message: "Place or remove the old hub draft")
         }
         if connectionLost {
             connectionLost = false
@@ -370,6 +382,14 @@ actor FeedbackHub: HTTPTransport {
         if reviewLost {
             reviewLost = false
             throw URLError(.timedOut)
+        }
+        if verdict == "approved" {
+            return try json([
+                "item": [
+                    "id": "app#1", "revision": ["number": revision], "target": "main", "state": "merged",
+                ],
+                "outcome": ["kind": "merged", "commit": "abc123"],
+            ])
         }
         return try json([
             "revision": revision, "verdict": verdict, "summary": summary,

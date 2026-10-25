@@ -6,6 +6,7 @@ struct FeedbackScene: View {
     let close: () -> Void
     @State private var confirmResend = false
     @State private var confirmEdit = false
+    @State private var confirmApproval = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -23,16 +24,29 @@ struct FeedbackScene: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(
                         model.sent
-                            ? (model.sentVerdict == .changesRequested ? "Changes requested" : "Feedback sent")
-                            : "Send feedback")
+                            ? (model.approval?.title
+                                ?? (model.sentVerdict == .changesRequested ? "Changes requested" : "Feedback sent"))
+                            : (model.verdict == .approved ? "Approve & merge" : "Send feedback")
+                    )
                         .appearanceText(Appearance.heading).accessibilityAddTraits(.isHeader)
                         .fixedSize(horizontal: false, vertical: true)
                     if model.sent {
                         Label("The hub received your feedback", systemImage: "checkmark.circle")
                             .appearanceText(Appearance.label).accessibilityIdentifier("feedbackSent")
-                        Text(model.sentVerdict == .changesRequested
-                            ? "Return to the inbox to follow this item in In progress. Your feedback is in Conversations."
-                            : "Your comments are now in Conversations.").appearanceText(Appearance.body)
+                        if let approval = model.approval {
+                            Text(
+                                "\(model.scope.name) · r\(model.scope.revision) → \(model.approvalTarget ?? "target")"
+                            )
+                            .appearanceText(Appearance.label).fixedSize(horizontal: false, vertical: true)
+                            Text(approval.detail).appearanceText(Appearance.body)
+                                .textSelection(.enabled).accessibilityIdentifier("approvalResult")
+                        } else {
+                            Text(
+                                model.sentVerdict == .changesRequested
+                                    ? "Return to the inbox to follow this item in In progress. Your feedback is in Conversations."
+                                    : "Your comments are now in Conversations."
+                            ).appearanceText(Appearance.body)
+                        }
                     } else {
                         Picker("Review outcome", selection: $model.verdict) {
                             ForEach(FeedbackVerdict.allCases) { verdict in
@@ -40,10 +54,19 @@ struct FeedbackScene: View {
                             }
                         }.pickerStyle(.menu).appearanceText(Appearance.label).frame(minHeight: 44)
                             .disabled(model.frozen || model.busy).accessibilityIdentifier("feedbackVerdict")
-                        Text(model.verdict == .changesRequested
-                            ? "Describe what needs to change. Requesting changes returns this revision to In progress."
-                            : "Send comments and a summary for this revision.")
+                        if model.verdict == .approved, let target = model.approvalTarget {
+                            Text("r\(model.scope.revision) → \(target)")
+                                .appearanceText(Appearance.label).accessibilityIdentifier("approvalTarget")
+                            Text("Summary optional.")
+                                .appearanceText(Appearance.body).fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(
+                                model.verdict == .changesRequested
+                                    ? "Describe what needs to change. Requesting changes returns this revision to In progress."
+                                    : "Send comments and a summary for this revision."
+                            )
                             .appearanceText(Appearance.body).fixedSize(horizontal: false, vertical: true)
+                        }
                         Text("Summary").appearanceText(Appearance.label)
                         TextEditor(text: $model.summary).appearanceText(Appearance.body)
                             .scrollContentBackground(.hidden).frame(minHeight: 120).padding(8)
@@ -93,7 +116,11 @@ struct FeedbackScene: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {
                     Button {
-                        Task { await model.send() }
+                        if model.verdict == .approved && !model.uncertain {
+                            confirmApproval = true
+                        } else {
+                            Task { await model.send() }
+                        }
                     } label: {
                         HStack {
                             if model.busy { ProgressView() }
@@ -109,7 +136,9 @@ struct FeedbackScene: View {
                         Button("Edit feedback") { confirmEdit = true }.frame(minHeight: 44)
                     }
                     if model.uncertain && !model.busy {
-                        Button("Send again") { confirmResend = true }.frame(minHeight: 44)
+                        Button("Send again") {
+                            if model.verdict == .approved { confirmApproval = true } else { confirmResend = true }
+                        }.frame(minHeight: 44)
                     }
                 }.padding(.horizontal, 20).padding(.vertical, 12)
             }
@@ -118,7 +147,23 @@ struct FeedbackScene: View {
         .interactiveDismissDisabled(model.busy || !model.summarySaved)
         .task { await model.load() }
         .onChange(of: model.summary) { _, _ in if !model.sent { model.saveSummary() } }
-        .confirmationDialog("Edit retained feedback?", isPresented: $confirmEdit, titleVisibility: .visible) {
+        .confirmationDialog(
+            "Approve \(model.scope.name) r\(model.scope.revision)?",
+            isPresented: $confirmApproval, titleVisibility: .visible
+        ) {
+            Button("Approve & merge into \(model.approvalTarget ?? "target")", role: .destructive) {
+                let target = model.approvalTarget
+                Task { await model.send(allowResend: model.uncertain, confirmedTarget: target) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Squash-merge exactly revision \(model.scope.revision) into \(model.approvalTarget ?? "target") and send the feedback shown here. This changes the target branch."
+            )
+        }
+        .confirmationDialog(
+            "Edit retained feedback?", isPresented: $confirmEdit, titleVisibility: .visible
+        ) {
             Button("Edit feedback") { Task { await model.editFeedback() } }
         } message: {
             Text(

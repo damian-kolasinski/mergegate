@@ -14,6 +14,9 @@ final class FeedbackViewModel {
     private(set) var drafts: [FeedbackDraft] = []
     private(set) var busy = false
     private(set) var sent = false
+    private(set) var completedTarget: String?
+    private(set) var approval: ApprovalOutcome?
+    var approvalTarget: String? { record.attempt?.target ?? snapshot?.item.target ?? completedTarget }
     private(set) var error: String?
     private(set) var summarySaved = true
     var summary: String
@@ -30,7 +33,8 @@ final class FeedbackViewModel {
     var uncertain: Bool { record.attempt?.reviewStarted == true }
     var canSend: Bool {
         !busy && !sent && summarySaved && snapshot != nil
-            && (frozen || !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (verdict == .approved || frozen
+                || !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !drafts.isEmpty || !hubDrafts.isEmpty || !hubReplies.isEmpty)
     }
     var hubDrafts: [FeedbackComment] { record.attempt?.hubDrafts ?? snapshot?.drafts ?? [] }
@@ -112,7 +116,7 @@ final class FeedbackViewModel {
         } catch { self.error = error.localizedDescription }
     }
 
-    func send(allowResend: Bool = false) async {
+    func send(allowResend: Bool = false, confirmedTarget: String? = nil) async {
         guard !busy && !sent else { return }
         busy = true
         defer { busy = false }
@@ -130,6 +134,14 @@ final class FeedbackViewModel {
             }
             let current = try await service.load(scope: scope)
             try validate(current)
+            if verdict == .approved {
+                guard let confirmedTarget, !confirmedTarget.isEmpty,
+                    confirmedTarget == current.item.target,
+                    record.attempt?.target == nil || record.attempt?.target == confirmedTarget
+                else {
+                    throw FeedbackIssue(message: "Confirm the revision and target before approving.")
+                }
+            }
             if record.attempt == nil {
                 guard let snapshot, snapshot.drafts == current.drafts,
                     snapshot.draft_replies == current.draft_replies
@@ -153,7 +165,8 @@ final class FeedbackViewModel {
                 record.attempt = FeedbackAttempt(
                     drafts: drafts, verdict: verdict,
                     summary: summary.trimmingCharacters(in: .whitespacesAndNewlines),
-                    cursor: log.cursor, hubDrafts: current.drafts, hubReplies: current.draft_replies)
+                    cursor: log.cursor, hubDrafts: current.drafts, hubReplies: current.draft_replies,
+                    target: verdict == .approved ? confirmedTarget : nil)
                 try save()
             }
             var attempt = record.attempt!
@@ -197,14 +210,29 @@ final class FeedbackViewModel {
                         "Hub drafts changed during delivery. Your feedback is retained; check the hub before continuing."
                 )
             }
+            if attempt.verdict == .approved && ready.item.target != attempt.target {
+                throw FeedbackIssue(
+                    message: "The merge target changed. Reopen the completion sheet and confirm it again.")
+            }
             attempt.reviewStarted = true
             record.attempt = attempt
             try save()
             do {
+                if attempt.verdict == .approved {
+                    record.attempt?.approval = try await service.approve(
+                        scope: scope, summary: attempt.summary, target: attempt.target!)
+                    try save()
+                    guard try await reconcile() else {
+                        throw FeedbackIssue(
+                            message: "Approval receipt is not available yet. Check delivery before continuing.")
+                    }
+                    return
+                }
                 let receipt = try await service.submit(
                     scope: scope, summary: attempt.summary, verdict: attempt.verdict ?? .comment)
                 guard
-                    receipt.revision == scope.revision && receipt.verdict == (attempt.verdict ?? .comment).rawValue
+                    receipt.revision == scope.revision
+                        && receipt.verdict == (attempt.verdict ?? .comment).rawValue
                         && receipt.summary == attempt.summary && Set(receipt.comments.map(\.id)) == expected
                         && receipt.replies == attempt.hubReplies
                 else {
@@ -240,6 +268,10 @@ final class FeedbackViewModel {
                 && Set(($0.comments ?? []).map(\.id)) == expected
                 && ($0.replies ?? []) == attempt.hubReplies
         }) {
+            if attempt.verdict == .approved && attempt.approval == nil {
+                record.attempt?.approval = ApprovalOutcome.recover(
+                    events: log.events, item: scope.item, revision: scope.revision)
+            }
             record.attempt?.confirmed = true
             try save()
             try finish()
@@ -251,6 +283,8 @@ final class FeedbackViewModel {
     private func finish() throws {
         try draftsStore.removeSent(record.attempt!.drafts, scope: scope)
         sentVerdict = record.attempt?.verdict ?? .comment
+        approval = record.attempt?.approval
+        completedTarget = record.attempt?.target
         let cleared = FeedbackRecord()
         try outbox.save(cleared, scope: scope)
         record = cleared
@@ -281,7 +315,8 @@ final class FeedbackViewModel {
     }
 
     private func canSendContent(_ value: FeedbackSnapshot) -> Bool {
-        !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !drafts.isEmpty
+        verdict == .approved || !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !drafts.isEmpty
             || !value.drafts.isEmpty || !value.draft_replies.isEmpty
     }
 }
