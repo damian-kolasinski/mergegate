@@ -1,4 +1,5 @@
 import Foundation
+import Networking
 import Observation
 
 @MainActor @Observable
@@ -11,6 +12,8 @@ final class ReviewViewModel {
     private(set) var state: State = .loading
     var selectedPath: String?
     var sourceService: ReviewSourceService { .init(transport: service.transport, url: service.url) }
+    let events = ServerEvents()
+    var highlightService: ReviewHighlightService { .init(web: service, events: events) }
     private let service: ReviewWebService
     private let item: String
 
@@ -24,7 +27,8 @@ final class ReviewViewModel {
         do {
             let snapshot = try await service.load(item: item)
             try Task.checkCancellation()
-            selectedPath = snapshot.files.first(where: { $0.tier == .review })?.path ?? snapshot.files.first?.path
+            selectedPath =
+                snapshot.files.first(where: { $0.tier == .review })?.path ?? snapshot.files.first?.path
             state = .loaded(snapshot)
         } catch {
             if !Task.isCancelled { state = .failed(error.localizedDescription) }

@@ -32,6 +32,16 @@ final class SourceTextView: UITextView {
 
     var sourceSelection = SourceSelection(text: "", ranges: [])
 
+    func install(_ text: NSAttributedString, selection: SourceSelection) {
+        sourceSelection = selection
+        guard !attributedText.isEqual(to: text) else { return }
+        let offset = contentOffset
+        let range = selectedRange
+        attributedText = text
+        if NSMaxRange(range) <= text.length { selectedRange = range }
+        setContentOffset(offset, animated: false)
+    }
+
     override func copy(_ sender: Any?) {
         let text = sourceSelection.copy(in: selectedRange)
         if !text.isEmpty { UIPasteboard.general.string = text }

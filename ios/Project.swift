@@ -21,7 +21,7 @@ func tests(_ name: String) -> Target {
         bundleId: "dev.mergegate.\(name)Tests", deploymentTargets: .iOS("26.0"),
         sources: ["\(name)/Tests/**"],
         resources: name == "DiffView" ? [.folderReference(path: "DiffView/Tests/Goldens")] : [],
-        dependencies: [.target(name: name)]
+        dependencies: [.target(name: name)] + (name == "DiffView" ? [.target(name: "CodeStyling")] : [])
     )
 }
 let project = Project(
@@ -48,7 +48,10 @@ let project = Project(
                 ],
             ]),
             sources: ["App/**"], resources: ["Resources/**"],
-            dependencies: [.target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review")]
+            dependencies: [
+                .target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review"),
+                .target(name: "CodeStyling"),
+            ]
         ),
         .target(
             name: "HubConnectionInterface", destinations: [.iPhone, .iPad], product: .framework,
@@ -56,7 +59,8 @@ let project = Project(
             sources: ["HubConnection/Interface/**"]
         ),
         module("Networking"),
-        module("HubConnection", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
+        module(
+            "HubConnection", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
         module("Inbox", dependencies: ["HubConnectionInterface", "Networking"], appearance: true),
         .target(
             name: "DiffDocumentInterface", destinations: [.iPhone, .iPad], product: .framework,
@@ -64,9 +68,21 @@ let project = Project(
             sources: ["DiffDocument/Interface/**"]
         ),
         module("DiffDocument", dependencies: ["DiffDocumentInterface"]),
-        module("DiffView", dependencies: ["DiffDocumentInterface"], appearance: true),
-        module("Review", dependencies: ["HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface", "DiffView"], appearance: true),
-        tests("DiffDocument"), tests("DiffView"), tests("Review"),
+        .target(
+            name: "CodeStylingInterface", destinations: [.iPhone, .iPad], product: .framework,
+            bundleId: "dev.mergegate.CodeStylingInterface", deploymentTargets: .iOS("26.0"),
+            sources: ["CodeStyling/Interface/**"], dependencies: [.target(name: "DiffDocumentInterface")]
+        ),
+        module("CodeStyling", dependencies: ["CodeStylingInterface", "DiffDocumentInterface"]),
+        module(
+            "DiffView", dependencies: ["DiffDocumentInterface", "CodeStylingInterface"], appearance: true),
+        module(
+            "Review",
+            dependencies: [
+                "HubConnectionInterface", "Networking", "DiffDocument", "DiffDocumentInterface", "DiffView",
+                "CodeStylingInterface",
+            ], appearance: true),
+        tests("CodeStyling"), tests("DiffDocument"), tests("DiffView"), tests("Review"),
         tests("HubConnection"), tests("Inbox"), tests("Networking"),
         .target(
             name: "MergegateUITests", destinations: [.iPhone, .iPad], product: .uiTests,
@@ -78,12 +94,16 @@ let project = Project(
         .scheme(
             name: "Mergegate", buildAction: .buildAction(targets: ["Mergegate"]),
             testAction: .targets(
-                ["HubConnectionTests", "InboxTests", "NetworkingTests", "DiffDocumentTests", "DiffViewTests", "ReviewTests", "MergegateUITests"],
+                [
+                    "CodeStylingTests", "HubConnectionTests", "InboxTests", "NetworkingTests",
+                    "DiffDocumentTests", "DiffViewTests", "ReviewTests", "MergegateUITests",
+                ],
                 arguments: .arguments(environmentVariables: [
                     "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)",
                     "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)",
                     "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)",
-                    "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)"
+                    "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)",
+                    "MG_IOS_TEST_HIGHLIGHT": "$(MG_IOS_TEST_HIGHLIGHT)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )

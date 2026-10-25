@@ -1,3 +1,4 @@
+import CodeStylingInterface
 import DiffDocumentInterface
 import DiffView
 import SwiftUI
@@ -7,6 +8,13 @@ struct ReviewSourceReader: View {
     let hunks: [DiffHunk]
     let project: String
     let service: ReviewSourceService
+    let highlightService: ReviewHighlightService
+    let item: String
+    let revision: UInt32
+    let styling: any CodeStyling
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var highlights = ReviewHighlightModel()
+    private var paintedHunks: [DiffHunk] { highlights.painting?.paint(hunks) ?? hunks }
     @State private var model = ReviewSourceModel()
 
     private var maximumLine: UInt32 {
@@ -27,8 +35,13 @@ struct ReviewSourceReader: View {
                     let count = min(model.revealed[gap.id, default: 0], gap.lines.count)
                     if count > 0 {
                         UnifiedDiffView(
-                            hunks: [DiffHunk(header: "", lines: Array(gap.lines.prefix(count)))],
-                            maximumLine: maximumLine)
+                            hunks: [
+                                DiffHunk(
+                                    header: "",
+                                    lines: highlights.painting?.paint(Array(gap.lines.prefix(count)))
+                                        ?? Array(gap.lines.prefix(count)))
+                            ],
+                            maximumLine: maximumLine, styling: styling)
                     }
                     if count < gap.lines.count {
                         Button {
@@ -46,7 +59,10 @@ struct ReviewSourceReader: View {
                         .accessibilityIdentifier("expandContext-\(gap.id)")
                         .background(Appearance.surface)
                     }
-                    if gap.id < hunks.count { UnifiedDiffView(hunks: [hunks[gap.id]], maximumLine: maximumLine) }
+                    if gap.id < hunks.count {
+                        UnifiedDiffView(
+                            hunks: [paintedHunks[gap.id]], maximumLine: maximumLine, styling: styling)
+                    }
                 }
             } else {
                 if file.oldBlob != nil || file.newBlob != nil {
@@ -68,8 +84,15 @@ struct ReviewSourceReader: View {
                             .padding(10).accessibilityIdentifier("sourceContextError")
                     }
                 }
-                if !hunks.isEmpty { UnifiedDiffView(hunks: hunks, maximumLine: maximumLine) }
+                if !hunks.isEmpty {
+                    UnifiedDiffView(hunks: paintedHunks, maximumLine: maximumLine, styling: styling)
+                }
             }
         }.tint(Appearance.brand)
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                await highlights.follow(
+                    service: highlightService, item: item, revision: revision, file: file)
+            }
     }
 }

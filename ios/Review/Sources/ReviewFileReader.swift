@@ -1,9 +1,14 @@
+import CodeStylingInterface
 import SwiftUI
 
 struct ReviewFileReader: View {
     let file: ReviewFile
     let project: String
     let sourceService: ReviewSourceService
+    let highlightService: ReviewHighlightService
+    let item: String
+    let revision: UInt32
+    let styling: any CodeStyling
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,20 +20,27 @@ struct ReviewFileReader: View {
                 if let reason = file.rankingReason {
                     Text(reason).appearanceText(Appearance.body)
                 }
-            }.padding(.horizontal, 20).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
+            }.padding(.horizontal, 20).padding(.vertical, 10).frame(
+                maxWidth: .infinity, alignment: .leading)
             Divider()
             switch file.content {
             case .text(let hunks):
                 if hunks.isEmpty {
-                    message("No changed text", "This change contains only file metadata, such as a rename or mode change.")
+                    message(
+                        "No changed text",
+                        "This change contains only file metadata, such as a rename or mode change.")
                 }
-                ReviewSourceReader(file: file, hunks: hunks, project: project, service: sourceService)
+                ReviewSourceReader(
+                    file: file, hunks: hunks, project: project, service: sourceService,
+                    highlightService: highlightService, item: item, revision: revision, styling: styling)
             case .binary:
                 message("Binary file", "A unified text diff is unavailable for this file.")
             case .tooLarge:
                 message("Diff too large", "The hub counted this change but could not include its text.")
             case .gone:
-                message("Diff no longer available", "The hub discarded this item's source diff after it was abandoned.")
+                message(
+                    "Diff no longer available",
+                    "The hub discarded this item's source diff after it was abandoned.")
             }
         }
     }
@@ -38,7 +50,9 @@ struct ReviewFileReader: View {
         if let additions = file.additions, let deletions = file.deletions {
             parts.append("+\(additions) −\(deletions)")
         }
-        if let old = file.oldMode, let new = file.newMode, old != new { parts.append("\(old) → \(new)") }
+        if let old = file.oldMode, let new = file.newMode, old != new {
+            parts.append("\(old) → \(new)")
+        }
         return parts.joined(separator: " · ")
     }
 
