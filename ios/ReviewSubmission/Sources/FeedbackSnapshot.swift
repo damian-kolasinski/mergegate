@@ -20,6 +20,7 @@ struct FeedbackComment: Codable, Equatable, Identifiable, Sendable {
 
 struct FeedbackReply: Codable, Equatable, Identifiable, Sendable {
     let id: UInt64
+    let comment: String
     let body: String
 }
 
@@ -40,6 +41,7 @@ struct FeedbackReceipt: Decodable, Sendable {
     let verdict: String
     let summary: String
     let comments: [FeedbackComment]
+    let replies: [FeedbackReply]
 }
 
 struct FeedbackLog: Decodable, Sendable {
@@ -50,6 +52,7 @@ struct FeedbackLog: Decodable, Sendable {
         let verdict: String?
         let summary: String?
         let comments: [FeedbackComment]?
+        let replies: [FeedbackReply]?
     }
     let cursor: UInt64
     let events: [Event]

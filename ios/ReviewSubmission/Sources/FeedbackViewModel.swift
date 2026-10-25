@@ -206,6 +206,7 @@ final class FeedbackViewModel {
                 guard
                     receipt.revision == scope.revision && receipt.verdict == (attempt.verdict ?? .comment).rawValue
                         && receipt.summary == attempt.summary && Set(receipt.comments.map(\.id)) == expected
+                        && receipt.replies == attempt.hubReplies
                 else {
                     throw FeedbackIssue(
                         message:
@@ -237,6 +238,7 @@ final class FeedbackViewModel {
             $0.item == scope.item && $0.revision == scope.revision && $0.type == "review.submitted"
                 && $0.verdict == (attempt.verdict ?? .comment).rawValue && $0.summary == attempt.summary
                 && Set(($0.comments ?? []).map(\.id)) == expected
+                && ($0.replies ?? []) == attempt.hubReplies
         }) {
             record.attempt?.confirmed = true
             try save()

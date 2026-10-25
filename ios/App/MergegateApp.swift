@@ -11,7 +11,10 @@ struct MergegateApp: App {
     var body: some Scene {
         WindowGroup {
             HubConnectionBuilder.build { hub, disconnect in
-                InboxBuilder.build(hub: hub, disconnect: disconnect) { item in
+                InboxBuilder.build(hub: hub, disconnect: disconnect, feedback: { scope, close in
+                    ReviewSubmissionBuilder.build(
+                        scope: scope, drafts: { try FeedbackDraftStore() }, close: close)
+                }) { item in
                     ReviewBuilder.build(
                         hub: hub, item: item, styling: NativeCodeStyling(),
                         drafts: { scope, location, close in

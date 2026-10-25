@@ -1,11 +1,15 @@
+import ConversationInterface
 import HubConnectionInterface
+import Networking
 import SwiftUI
 
-struct InboxScene<Review: View>: View {
+struct InboxScene<Review: View, Feedback: View>: View {
     let hub: ConnectedHub
     @State var model: InboxViewModel
     let disconnect: () -> Void
+    let feedback: (CommentDraftScope, @escaping () -> Void) -> Feedback
     let review: (String) -> Review
+    @State private var decisionItem: DecisionPresentation?
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingHub = false
     @State private var path: [String] = []
@@ -38,6 +42,10 @@ struct InboxScene<Review: View>: View {
                                         Task { await model.loadTriage(item) }
                                     } openReview: {
                                         path.append(item.id)
+                                    } openDecisions: {
+                                        if let triage = model.triage[item.id] {
+                                            decisionItem = DecisionPresentation(item: item, triage: triage)
+                                        }
                                     }.task(id: model.generation) { await model.loadTriage(item) }
                                         .listRowSeparator(.hidden).listRowBackground(Appearance.page)
                                 }
@@ -95,6 +103,16 @@ struct InboxScene<Review: View>: View {
                 if !previous.isEmpty && current.isEmpty { Task { await model.refresh() } }
             }
             .navigationDestination(for: String.self) { item in review(item) }
+            .sheet(item: $decisionItem, onDismiss: { Task { await model.refresh() } }) { selection in
+                InboxDecisionScene(
+                    item: selection.item, triage: selection.triage,
+                    service: .init(transport: URLSessionTransport(), hub: hub.url)
+                ) { close in
+                    feedback(.init(
+                        hub: hub.url, item: selection.item.id, name: selection.item.name,
+                        revision: selection.item.revision), close)
+                }
+            }
             .sheet(isPresented: $showingHub) { hubSettings }
         }
     }
@@ -137,4 +155,11 @@ struct InboxScene<Review: View>: View {
                 .toolbar { Button("Done") { showingHub = false } }
         }
     }
+}
+
+// Keep the displayed revision and text together while the inbox refreshes.
+private struct DecisionPresentation: Identifiable {
+    let item: InboxItem
+    let triage: InboxTriage
+    var id: String { item.id }
 }

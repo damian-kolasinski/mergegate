@@ -22,7 +22,8 @@ func auditInboxAccessibility(_ app: XCUIApplication) throws {
                 }
                 return true
             }
-            let identifiers: Set<String> = ["inboxSummary", "inboxRemaining", "inboxAdded", "inboxRemoved"]
+            let identifiers: Set<String> = ["inboxSummary", "inboxRemaining", "inboxAdded", "inboxRemoved",
+                "decisionResponse", "decisionAnswerSaved"]
             guard issue.auditType == .contrast, let element = issue.element,
                 element.elementType == .staticText, identifiers.contains(element.identifier)
             else { return false }

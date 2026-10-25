@@ -26,11 +26,13 @@ struct InboxTriage: Decodable, Sendable {
         let comment: String
         let author: String
         let status: String?
+        let overrides: Bool?
         let body: String
     }
     struct Decision: Identifiable, Sendable {
         let id: String
         let kind: String
+        let replyID: UInt64?
         let comment: String
         let response: String?
         let path: String?
@@ -58,6 +60,7 @@ struct InboxTriage: Decodable, Sendable {
         comments.compactMap { comment in
             let last = replies.last { $0.comment == comment.id }
             let kind: String
+        let replyID: UInt64?
             if last?.author == "agent", last?.status == "question" {
                 kind = "Question"
             } else if last?.author == "agent", last?.status == "rejected",
@@ -68,7 +71,7 @@ struct InboxTriage: Decodable, Sendable {
                 kind = "Vote needed"
             } else { return nil }
             return Decision(
-                id: comment.id, kind: kind, comment: comment.body,
+                id: comment.id, kind: kind, replyID: last?.id, comment: comment.body,
                 response: kind == "Vote needed" ? nil : last?.body, path: comment.path)
         }
     }
