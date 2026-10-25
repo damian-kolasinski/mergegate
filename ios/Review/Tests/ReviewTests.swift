@@ -51,6 +51,10 @@ struct ReviewTests {
 }
 
 private actor ReviewTransport: HTTPTransport {
+    func put(_ url: URL, body: Data) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
     var failFirst: Bool
     let id: String
     let since: String

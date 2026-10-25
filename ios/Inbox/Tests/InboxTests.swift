@@ -23,6 +23,10 @@ struct InboxTests {
 }
 
 private actor InboxTransport: HTTPTransport {
+    func put(_ url: URL, body: Data) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
     private var failing = false
     func fail(_ value: Bool) { failing = value }
     func get(_ url: URL) async throws -> Data {

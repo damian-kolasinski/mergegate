@@ -16,10 +16,11 @@ struct ReviewSnapshot: Decodable, Sendable {
     }
     let item: Item
     let guide: String?
-    let files: [ReviewFile]
+    var files: [ReviewFile]
     let since: UInt32?
 
     var remaining: Int { files.filter { $0.tier == .review && !$0.viewed }.count }
+    var reviewCount: Int { files.filter { $0.tier == .review }.count }
 }
 
 struct ReviewFile: Decodable, Identifiable, Sendable {
@@ -34,7 +35,7 @@ struct ReviewFile: Decodable, Identifiable, Sendable {
     let additions: UInt64?
     let deletions: UInt64?
     let tier: Tier
-    let viewed: Bool
+    var viewed: Bool
     let reason: String?
     let judgeReason: String?
     let why: String?

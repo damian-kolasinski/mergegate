@@ -5,6 +5,11 @@ struct ReviewWebService: Sendable {
     let transport: any HTTPTransport
     let url: URL
 
+    func markViewed(item: String, change: ReviewViewedChange) async throws {
+        let endpoint = url.appending(path: "api/items").appending(component: item).appending(path: "viewed")
+        _ = try await transport.put(endpoint, body: JSONEncoder().encode(change))
+    }
+
     func load(item: String) async throws -> ReviewSnapshot {
         var endpoint = URLComponents(
             url: url.appending(path: "api/items").appending(component: item), resolvingAgainstBaseURL: false)!

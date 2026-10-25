@@ -28,42 +28,53 @@ struct ReviewScene: View {
         }
         .background(Appearance.page).foregroundStyle(Appearance.primary)
         .navigationTitle("Review").navigationBarTitleDisplayMode(.inline)
+        // Returning triggers the inbox refresh, which must follow the pending write.
+        .navigationBarBackButtonHidden(model.isSavingViewed)
         .task { await model.load() }
     }
 
     private func content(_ snapshot: ReviewSnapshot) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(snapshot.item.title).appearanceText(Appearance.heading)
-                            .accessibilityAddTraits(.isHeader)
-                        HStack(alignment: .top, spacing: 12) {
-                            Text("All changes → \(snapshot.item.target)")
-                            Spacer(minLength: 0)
-                            Text("\(snapshot.remaining) files left")
-                        }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                    }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
-                    Divider()
-                    if let index = snapshot.files.firstIndex(where: { $0.path == model.selectedPath }) {
-                        let file = snapshot.files[index]
-                        ReviewFilePicker(file: file, position: index + 1, count: snapshot.files.count) {
-                            sheet = .files
-                        }
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(snapshot.item.title).appearanceText(Appearance.heading)
+                                .accessibilityAddTraits(.isHeader)
+                            HStack(alignment: .top, spacing: 12) {
+                                Text("All changes → \(snapshot.item.target)")
+                                Spacer(minLength: 0)
+                                Text("\(snapshot.remaining) files left")
+                            }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                        }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
                         Divider()
-                        ReviewFileReader(
-                            file: file, project: snapshot.item.project, sourceService: model.sourceService,
-                            highlightService: model.highlightService,
-                            item: snapshot.item.id, revision: snapshot.item.revision.number, styling: styling
-                        ).id(file.path)
-                    } else {
-                        ContentUnavailableView(
-                            "No changed files", systemImage: "doc",
-                            description: Text("This item has no files to display."))
+                        if let index = snapshot.files.firstIndex(where: { $0.path == model.selectedPath }) {
+                            let file = snapshot.files[index]
+                            ReviewFilePicker(file: file, position: index + 1, count: snapshot.files.count) {
+                                sheet = .files
+                            }
+                            Divider()
+                            ReviewFileReader(
+                                file: file, project: snapshot.item.project, sourceService: model.sourceService,
+                                highlightService: model.highlightService,
+                                item: snapshot.item.id, revision: snapshot.item.revision.number, styling: styling
+                            ).id(file.path)
+                        } else {
+                            ContentUnavailableView(
+                                "No changed files", systemImage: "doc",
+                                description: Text("This item has no files to display."))
+                        }
                     }
                 }
+                .onChange(of: model.selectedPath) { _, _ in proxy.scrollTo("reviewTop", anchor: .top) }
             }
-            .onChange(of: model.selectedPath) { _, _ in proxy.scrollTo("reviewTop", anchor: .top) }
+            if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
+                ReviewViewedBar(
+                    file: file, viewed: snapshot.reviewCount - snapshot.remaining, total: snapshot.reviewCount,
+                    saving: model.isSavingViewed, failure: model.viewedFailure,
+                    mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
+                    retry: { Task { await model.retryViewed() } })
+            }
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -86,9 +97,7 @@ struct ReviewScene: View {
             switch selection {
             case .guide: ReviewGuideScene(guide: snapshot.guide) { sheet = nil }
             case .files:
-                ReviewFilesScene(
-                    files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }
-                ) {
+                ReviewFilesScene(files: snapshot.files, selectedPath: model.selectedPath, close: { sheet = nil }) {
                     path in
                     model.selectedPath = path
                     sheet = nil

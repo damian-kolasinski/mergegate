@@ -261,13 +261,17 @@ test("f6 a file's header marks it viewed", async ({ page, hub }) => {
   const diff = page.getByRole("region", { name: "Diff" });
   // The list only shows the mark; the diff's header is where it's made.
   await expect(files.getByRole("checkbox")).toHaveCount(0);
+  await files.getByText("new.txt", { exact: true }).click();
+  await expect(files.locator("li[aria-current=true]")).toContainText("new.txt");
   await diff.getByText("new.txt", { exact: true }).click();
   await expect(page.getByText("1 of 4 reviewed")).toBeVisible();
   await expect(page.getByText("hello", { exact: true })).toHaveCount(0);
   await expect(diff.getByLabel("Viewed new.txt")).toBeChecked();
   // The header doesn't keep the keys.
-  await page.keyboard.press("n");
-  await expect(files.locator("li[aria-current=true]")).toContainText("a.txt");
+  await page.keyboard.press("p");
+  await expect(files.locator("li[aria-current=true]")).toContainText(
+    "gone.txt",
+  );
 
   await page.reload();
   // Its box unmarks it.

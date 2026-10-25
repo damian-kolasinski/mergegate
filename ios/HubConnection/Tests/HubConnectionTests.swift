@@ -62,6 +62,10 @@ struct HubConnectionTests {
 }
 
 private struct IdentityTransport: HTTPTransport {
+    func put(_ url: URL, body: Data) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
     let via: String
     func get(_ url: URL) async throws -> Data {
         #expect(url.path == "/api/whoami")

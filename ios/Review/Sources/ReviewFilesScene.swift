@@ -22,8 +22,12 @@ struct ReviewFilesScene: View {
                                     .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                                 if let reason = file.rankingReason { Text(reason).appearanceText(Appearance.body) }
                             }.frame(maxWidth: .infinity, alignment: .leading)
+                            if file.viewed {
+                                Image(systemName: file.tier == .trusted ? "checkmark.shield" : "checkmark.circle.fill")
+                                    .foregroundStyle(Appearance.brand).accessibilityLabel("Viewed")
+                            }
                             if selectedPath == file.path {
-                                Image(systemName: "checkmark").accessibilityLabel("Current file")
+                                Image(systemName: "arrow.left").accessibilityLabel("Current file")
                             }
                         }.padding(.vertical, 8).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(Rectangle())
