@@ -31,6 +31,8 @@ From the repository root:
 
 `lint ios` generates and builds; `test ios` runs Swift Testing behavior tests and XCTest UI tests. Pixel goldens use Xcode 26.2 and iOS 26.2; CI pins both, and the default destination is iPhone 17 Pro / iOS 26.2. `MG_IOS_DESTINATION` overrides the destination for other checks. Logs and xcresult bundles are under `ios/.build/`.
 
+Arguments after `--` reach `xcodebuild`, so a focused check can use `.claude/scripts/check.sh test ios -- -only-testing:MergegateUITests/ConnectAndReopenTests` with the fixture's `MG_IOS_TEST_HUB_URL`.
+
 The UI flow requires a real disposable hub and review repository. It skips when `MG_IOS_TEST_HUB_URL` is absent. The app has no stub transport or testing bypass. With Tailscale running on the Mac:
 
 ```sh
