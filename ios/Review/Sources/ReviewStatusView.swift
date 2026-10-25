@@ -18,7 +18,7 @@ struct ReviewStatusView: View {
                 }.accessibilityIdentifier("reviewBlocked")
             }
             if snapshot.agent == "away" {
-                Text("No agent is waiting. Feedback stays on the hub until this item is resumed.")
+                Text("No agent waiting · Feedback stays on the hub")
                     .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
             }
             if let priority = snapshot.item.priority {

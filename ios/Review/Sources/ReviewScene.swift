@@ -9,6 +9,7 @@ struct ReviewScene<
 >: View {
     @State var model: ReviewViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let styling: any CodeStyling
     let hub: URL
     let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts
@@ -29,6 +30,7 @@ struct ReviewScene<
     @State private var feedbackSent = false
     @State private var sourceFocus: SourceAnchor?
     @State private var sourceRequest = UUID()
+    @State private var fileHeaderHeight: CGFloat = 0
     let openItem: (String) -> Void
     private enum Sheet: Identifiable {
         case guide, files, feedback, details
@@ -81,7 +83,10 @@ struct ReviewScene<
     private func content(_ snapshot: ReviewSnapshot) -> some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(
+                    alignment: .leading, spacing: 0,
+                    pinnedViews: dynamicTypeSize.isAccessibilitySize ? [] : .sectionHeaders
+                ) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(snapshot.item.title).appearanceText(Appearance.heading)
                             .accessibilityAddTraits(.isHeader)
@@ -112,34 +117,40 @@ struct ReviewScene<
                         $0.path == model.selectedPath
                     }) {
                         let file = snapshot.files[index]
-                        ReviewFilePicker(
-                            file: file, position: index + 1, count: snapshot.files.count
-                        ) {
-                            sheet = .files
+                        Section {
+                            ReviewFileReader(
+                                file: file, project: snapshot.item.project,
+                                sourceService: model.sourceService,
+                                highlightService: model.highlightService,
+                                item: snapshot.item.id, revision: snapshot.item.revision.number,
+                                styling: styling,
+                                contextLoaded: $model.contextLoaded, revealed: $model.revealed,
+                                onReady: {
+                                    if !readerMoved { restoreOffset = model.readingOffset }
+                                },
+                                onComment: { anchor in
+                                    sheet = .drafts(.init(path: file.path, anchor: anchor))
+                                },
+                                onReadConversations: { anchors in
+                                    sheet = .conversations(.init(path: file.path, anchors: anchors))
+                                }, focus: sourceFocus, revealRequest: sourceRequest,
+                                revealTopInset: dynamicTypeSize.isAccessibilitySize ? 0 : fileHeaderHeight,
+                                didReveal: { sourceFocus = nil }
+                            ).id(
+                                "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
+                            )
+                        } header: {
+                            VStack(spacing: 0) {
+                                fileControlsLayout {
+                                    filePicker(file, index: index, count: snapshot.files.count)
+                                    fileConversations(scope(snapshot), file.path).id(file.path)
+                                }
+                                Divider()
+                            }.background(Appearance.surface)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                                    fileHeaderHeight = $0
+                                }
                         }
-                        Divider()
-                        fileConversations(scope(snapshot), file.path).id(file.path)
-                        Divider()
-                        ReviewFileReader(
-                            file: file, project: snapshot.item.project,
-                            sourceService: model.sourceService,
-                            highlightService: model.highlightService,
-                            item: snapshot.item.id, revision: snapshot.item.revision.number,
-                            styling: styling,
-                            contextLoaded: $model.contextLoaded, revealed: $model.revealed,
-                            onReady: {
-                                if !readerMoved { restoreOffset = model.readingOffset }
-                            },
-                            onComment: { anchor in
-                                sheet = .drafts(.init(path: file.path, anchor: anchor))
-                            },
-                            onReadConversations: { anchors in
-                                sheet = .conversations(.init(path: file.path, anchors: anchors))
-                            }, focus: sourceFocus, revealRequest: sourceRequest,
-                            didReveal: { sourceFocus = nil }
-                        ).id(
-                            "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
-                        )
                     } else {
                         ContentUnavailableView(
                             "No changed files", systemImage: "doc",
@@ -195,46 +206,28 @@ struct ReviewScene<
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { model.rememberPosition() }
             }
-            if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
-                ReviewViewedBar(
-                    file: file, viewed: snapshot.reviewCount - snapshot.remaining,
-                    total: snapshot.reviewCount,
-                    saving: model.isSavingViewed || model.isComparing,
-                    disabled: model.cachedAt != nil
-                        || !(model.currentDetails ?? snapshot).item.isReviewable,
-                    failure: model.viewedFailure,
-                    mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
-                    retry: { Task { await model.retryViewed() } })
-            }
         }
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 if (model.currentDetails ?? snapshot).item.isClosed {
                     ReviewNextItem(after: snapshot.item.id, service: model.service) {
                         openItem($0)
                     }
                 }
-                HStack(spacing: 12) {
-                    Button("Complete review") {
-                        feedbackSent = false
-                        sheet = .feedback
-                    }
-                    .appearanceText(Appearance.label).frame(maxWidth: .infinity, minHeight: 44)
-                    .buttonStyle(.glass)
-                    .disabled(
-                        model.isSavingViewed || model.isComparing
-                            || !(model.currentDetails ?? snapshot).item.isReviewable
-                    ).accessibilityIdentifier(
-                        "reviewFeedback")
-                    Button {
-                        sheet = .details
-                    } label: {
-                        Label("Item details and actions", systemImage: "ellipsis.circle")
-                            .labelStyle(.iconOnly)
-                            .frame(minWidth: 44, minHeight: 44)
-                    }.buttonStyle(.glass).accessibilityIdentifier("reviewMore")
-                        .disabled(model.isSavingViewed || model.isComparing)
-                }.padding(.horizontal, 20).padding(.bottom, 8)
+                if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
+                    ReviewViewedBar(
+                        file: file, viewed: snapshot.reviewCount - snapshot.remaining,
+                        total: snapshot.reviewCount,
+                        saving: model.isSavingViewed || model.isComparing,
+                        disabled: model.cachedAt != nil
+                            || !(model.currentDetails ?? snapshot).item.isReviewable,
+                        failure: model.viewedFailure,
+                        mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
+                        retry: { Task { await model.retryViewed() } }
+                    ) { completionActions(snapshot) }
+                } else {
+                    completionActions(snapshot).padding(.horizontal, 16).padding(.bottom, 8)
+                }
             }
         }
         .task(
@@ -271,21 +264,21 @@ struct ReviewScene<
                     sheet = .conversations(nil)
                 } label: {
                     Label("Conversations", systemImage: "bubble.left.and.bubble.right")
-                }.tint(Appearance.brand).accessibilityIdentifier("reviewConversations")
+                }.labelStyle(.iconOnly).tint(Appearance.brand).accessibilityIdentifier("reviewConversations")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     sheet = .drafts(nil)
                 } label: {
                     Label("Comment drafts", systemImage: "text.bubble")
-                }.tint(Appearance.brand).accessibilityIdentifier("reviewDrafts")
+                }.labelStyle(.iconOnly).tint(Appearance.brand).accessibilityIdentifier("reviewDrafts")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     sheet = .guide
                 } label: {
                     Label("Review guide", systemImage: "book")
-                }.tint(Appearance.brand).accessibilityIdentifier("reviewGuide")
+                }.labelStyle(.iconOnly).tint(Appearance.brand).accessibilityIdentifier("reviewGuide")
             }
         }
         .sheet(item: $sheet, onDismiss: { Task { await model.refreshCurrent() } }) { selection in
@@ -354,6 +347,44 @@ struct ReviewScene<
             ) { _ in model.reviewTime.input() }
         }
     }
+    private var fileControlsLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(HStackLayout(spacing: 0))
+    }
+
+    private func filePicker(_ file: ReviewFile, index: Int, count: Int) -> some View {
+        ReviewFilePicker(file: file, position: index + 1, count: count) {
+            sheet = .files
+        }
+    }
+
+    private func completionActions(_ snapshot: ReviewSnapshot) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                feedbackSent = false
+                sheet = .feedback
+            } label: {
+                Text("Complete review").appearanceText(Appearance.label)
+                    .foregroundStyle(Appearance.onFill)
+                    .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: true)
+                    .frame(minHeight: 44)
+            }.buttonStyle(.glassProminent).tint(Appearance.brand)
+            .disabled(
+                model.isSavingViewed || model.isComparing
+                    || !(model.currentDetails ?? snapshot).item.isReviewable
+            ).accessibilityIdentifier("reviewFeedback")
+            Button {
+                sheet = .details
+            } label: {
+                Label("Item details and actions", systemImage: "ellipsis.circle")
+                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+            }.buttonStyle(.glass).tint(Appearance.brand)
+                .accessibilityIdentifier("reviewMore")
+                .disabled(model.isSavingViewed || model.isComparing)
+        }
+    }
+
     private func revealSource(_ target: ConversationLocation) async {
         guard case .loaded(let before) = model.state,
             let file = before.files.first(where: { $0.path == target.path })

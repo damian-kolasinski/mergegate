@@ -33,13 +33,15 @@ struct InboxItemStatus: View {
                 default: EmptyView()
                 }
             }
-            if let updated = item.updatedAt {
-                let formatter = ISO8601DateFormatter()
-                Text(
-                    "Updated \(formatter.date(from: updated)?.formatted(date: .abbreviated, time: .shortened) ?? updated)"
-                )
+            if let date = updatedDate {
+                Text("Updated \(date.formatted(date: .abbreviated, time: .shortened))")
             }
             if item.demo == true { Label("Demo attached", systemImage: "play.rectangle") }
         }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+    }
+
+    private var updatedDate: Date? {
+        guard let updated = item.updatedAt else { return nil }
+        return try? Date(updated, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true))
     }
 }

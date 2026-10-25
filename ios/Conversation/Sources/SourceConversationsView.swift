@@ -9,9 +9,9 @@ struct SourceConversationsView: View {
         Button {
             showing = true
         } label: {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Label("Conversations", systemImage: "bubble.left.and.bubble.right")
-                Spacer(minLength: 8)
+                    .labelStyle(.iconOnly)
                 if model.loading {
                     ProgressView()
                 } else if model.error != nil {
@@ -20,8 +20,11 @@ struct SourceConversationsView: View {
                     Text("\(model.threads.count)")
                 }
             }.appearanceText(Appearance.caption)
-                .padding(.horizontal, 20).frame(minHeight: 44)
-        }.tint(Appearance.brand).accessibilityIdentifier("fileConversations")
+                .padding(.horizontal, 16).frame(minWidth: 44, minHeight: 44)
+                .fixedSize(horizontal: true, vertical: false)
+        }.tint(Appearance.brand).accessibilityLabel("File conversations")
+            .accessibilityValue(model.loading ? "Loading" : model.error != nil ? "Retry" : "\(model.threads.count)")
+            .accessibilityIdentifier("fileConversations")
             .sheet(isPresented: $showing) {
                 ConversationScene(model: model) { showing = false }
             }

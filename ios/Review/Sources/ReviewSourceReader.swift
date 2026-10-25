@@ -19,6 +19,7 @@ struct ReviewSourceReader: View {
     let onReadConversations: ([SourceAnchor]) -> Void
     var focus: SourceAnchor? = nil
     var revealRequest: UUID? = nil
+    var revealTopInset: CGFloat = 0
     var didReveal: (() -> Void)? = nil
     @Environment(\.scenePhase) private var scenePhase
     @State private var highlights = ReviewHighlightModel()
@@ -79,7 +80,8 @@ struct ReviewSourceReader: View {
                             styling: styling,
                             sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
                             onComment: onComment, onReadConversations: onReadConversations,
-                            focus: focus, revealRequest: revealRequest, didReveal: didReveal
+                            focus: focus, revealRequest: revealRequest,
+                            revealTopInset: revealTopInset, didReveal: didReveal
                         )
                         .id("reviewHunk-\(gap.id)")
                     }
@@ -118,7 +120,7 @@ struct ReviewSourceReader: View {
                             sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
                             onComment: onComment,
                             onReadConversations: onReadConversations, focus: focus,
-                            revealRequest: revealRequest, didReveal: didReveal
+                            revealRequest: revealRequest, revealTopInset: revealTopInset, didReveal: didReveal
                         )
                         .id("reviewHunk-\(index)")
                     }
