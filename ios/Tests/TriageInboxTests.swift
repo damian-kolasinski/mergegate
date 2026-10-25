@@ -24,7 +24,7 @@ final class TriageInboxTests: XCTestCase {
         app.buttons["connectHub"].tap()
         XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(app.staticTexts["1 of 2 review files remaining"].exists)
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
+        try auditInboxAccessibility(app)
         capture(app, "Decision desk — large title and Liquid Glass")
         let title = app.staticTexts["Your next move"].firstMatch
         let expandedHeight = title.frame.height
@@ -42,7 +42,7 @@ final class TriageInboxTests: XCTestCase {
         app.activate()
         XCTAssertTrue(app.staticTexts["Keep compatibility with the previous response format."].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["closeDecisionDetails"].exists)
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
+        try auditInboxAccessibility(app)
         capture(app, "Read the real question")
         app.buttons["closeDecisionDetails"].tap()
         app.buttons["actionFilter-Review"].tap()

@@ -3,6 +3,7 @@ import Conversation
 import HubConnection
 import Inbox
 import Review
+import ReviewSubmission
 import SwiftUI
 
 @main
@@ -21,6 +22,10 @@ struct MergegateApp: App {
                         },
                         fileConversations: { scope, path in
                             ConversationBuilder.fileThreads(scope: scope, path: path)
+                        },
+                        feedback: { scope, close in
+                            ReviewSubmissionBuilder.build(
+                                scope: scope, drafts: { try FeedbackDraftStore() }, close: close)
                         })
                 }
             }

@@ -12,17 +12,19 @@ final class FollowConversationsTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
-        if !app.buttons["hubSettings"].waitForExistence(timeout: 3) {
-            let field = app.textFields["hubURL"]
-            XCTAssertTrue(field.waitForExistence(timeout: 5))
-            field.tap()
-            if let value = field.value as? String, value.hasPrefix("http") {
-                field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
-            }
-            field.typeText(address)
-            app.swipeDown()
-            app.buttons["connectHub"].tap()
+        if app.buttons["hubSettings"].waitForExistence(timeout: 3) {
+            app.buttons["hubSettings"].tap()
+            app.buttons["forgetHub"].tap()
         }
+        let field = app.textFields["hubURL"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        if let value = field.value as? String, value.hasPrefix("http") {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
+        }
+        field.typeText(address)
+        app.swipeDown()
+        app.buttons["connectHub"].tap()
         let open = app.buttons["openReview-mobile-smoke#2"]
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
         for _ in 0..<8 {

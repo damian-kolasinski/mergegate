@@ -43,7 +43,8 @@ struct ReviewSourceReader: View {
                                     lines: highlights.painting?.paint(Array(gap.lines.prefix(count)))
                                         ?? Array(gap.lines.prefix(count)))
                             ],
-                            maximumLine: maximumLine, styling: styling, onComment: onComment,
+                            // The hub accepts anchors only within its submitted diff hunks.
+                            maximumLine: maximumLine, styling: styling,
                             onReadConversations: onReadConversations)
                     }
                     if count < gap.lines.count {

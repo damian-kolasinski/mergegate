@@ -2,6 +2,8 @@ import Foundation
 
 public protocol HTTPTransport: Sendable {
     func get(_ url: URL) async throws -> Data
+    func delete(_ url: URL) async throws -> Data
+    func post(_ url: URL, body: Data) async throws -> Data
     func put(_ url: URL, body: Data) async throws -> Data
 }
 
@@ -10,6 +12,13 @@ public struct HTTPFailure: Error, LocalizedError, Sendable {
     public let code: String
     public let message: String
     public let hint: String?
+
+    public init(status: Int, code: String, message: String, hint: String? = nil) {
+        self.status = status
+        self.code = code
+        self.message = message
+        self.hint = hint
+    }
 
     public var errorDescription: String? {
         [message, hint].compactMap { $0 }.joined(separator: "\n")
@@ -21,6 +30,14 @@ public final class URLSessionTransport: NSObject, HTTPTransport, URLSessionTaskD
 
     public func get(_ url: URL) async throws -> Data {
         try await send(url, method: "GET", body: nil)
+    }
+
+    public func delete(_ url: URL) async throws -> Data {
+        try await send(url, method: "DELETE", body: nil)
+    }
+
+    public func post(_ url: URL, body: Data) async throws -> Data {
+        try await send(url, method: "POST", body: body)
     }
 
     public func put(_ url: URL, body: Data) async throws -> Data {

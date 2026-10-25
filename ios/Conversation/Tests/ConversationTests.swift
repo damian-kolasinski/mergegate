@@ -96,6 +96,10 @@ struct ConversationTests {
 private actor ThreadTransport: HTTPTransport {
     var failing = false
     func fail() { failing = true }
+    func delete(_ url: URL) async throws -> Data { throw URLError(.unsupportedURL) }
+
+    func post(_ url: URL, body: Data) async throws -> Data { throw URLError(.unsupportedURL) }
+
     func put(_ url: URL, body: Data) throws -> Data { throw URLError(.unsupportedURL) }
     func get(_ url: URL) throws -> Data {
         #expect(url.path == "/api/items/sample#3/conversation")

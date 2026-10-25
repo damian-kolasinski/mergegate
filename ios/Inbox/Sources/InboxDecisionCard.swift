@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct InboxDecisionCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: InboxItem
     let triage: InboxTriage?
     let error: String?
@@ -32,15 +33,18 @@ struct InboxDecisionCard: View {
                 Text(triage == nil ? "Loading decision details…" : "Decision changed. Refresh the inbox.")
                     .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
             }
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    reviewButton
-                    Spacer(minLength: 8)
-                    if triage?.decisions.isEmpty == false { detailsButton }
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    reviewButton
-                    if triage?.decisions.isEmpty == false { detailsButton }
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 6) {
+                        reviewButton
+                        if triage?.decisions.isEmpty == false { detailsButton }
+                    }
+                } else {
+                    HStack {
+                        reviewButton
+                        Spacer(minLength: 8)
+                        if triage?.decisions.isEmpty == false { detailsButton }
+                    }
                 }
             }
             InboxProgress(item: item, triage: triage, onSurface: true)
