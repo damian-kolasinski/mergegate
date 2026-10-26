@@ -1,15 +1,18 @@
 //! Early conflict detection's loop: every project's open items
 //! test-merged into their targets on every submit, after each of the hub's
-//! merges, and on a poll for targets moved outside the hub.
+//! merges, and on a poll for targets moved outside the hub. What it finds
+//! is what the inbox and the review screen show as mergeable.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
 use api::event::UiEvent;
-use mergegate_core::conflict::{Seen, Watch};
+use mergegate_core::conflict::{self, Mergeable, Seen, Watch};
+use mergegate_core::feedback::FeedbackStore;
+use mergegate_core::item::{Item, ItemId};
 use mergegate_core::project::{ProjectName, ProjectStore};
-use mergegate_core::store::Shared;
+use mergegate_core::store::{Shared, StoreError};
 
 use crate::server::AppState;
 
@@ -54,6 +57,7 @@ async fn pass(
     let names: Vec<ProjectName> = projects.into_iter().map(|p| p.name).collect();
     seen.retain(|name, _| names.contains(name));
     failing.retain(|(name, _), _| names.contains(name));
+    clean(state).retain(&names);
     for name in names {
         let tried = seen.remove(&name).unwrap_or_default();
         let project = name.clone();
@@ -87,21 +91,24 @@ async fn pass(
             .stepwise(move |steps, git, _| steps.with(|store| merges.hand_back(store, git)))
             .await;
         // A hand-back that failed partway may have notified some items, so
-        // the clients refresh anyway, and the next pass tries every item.
-        let (handed_back, failed) = match handed_back {
-            Ok(ids) => {
-                seen.insert(name.clone(), next_seen);
-                (ids, false)
-            }
+        // the clients refresh anyway, and the next pass tries every item,
+        // none known to merge cleanly until then.
+        let (handed_back, failed, next_seen) = match handed_back {
+            Ok(ids) => (ids, false, next_seen),
             Err(e) => {
                 errors.push(e.to_string());
-                (Vec::new(), true)
+                (Vec::new(), true, Seen::default())
             }
         };
+        let flipped = clean(state).record(&name, &next_seen);
+        seen.insert(name.clone(), next_seen);
         report(failing, &name, INTO_TARGETS, errors);
         if failed || !handed_back.is_empty() {
             state.events.logged();
-            for id in &handed_back {
+        }
+        let changed: BTreeSet<&ItemId> = handed_back.iter().chain(&flipped).collect();
+        if failed || !changed.is_empty() {
+            for id in changed {
                 state.events.send(UiEvent::ItemChanged {
                     item: id.to_string(),
                 });
@@ -109,6 +116,31 @@ async fn pass(
             state.events.send(UiEvent::InboxChanged);
         }
     }
+}
+
+/// Whether `item`'s newest revision merges cleanly into its target, as the
+/// last pass found: requests only read it.
+pub(crate) fn mergeable(
+    store: &impl FeedbackStore,
+    state: &AppState,
+    item: &Item,
+) -> Result<api::merge::Mergeable, StoreError> {
+    Ok(match conflict::mergeable(store, &clean(state), item)? {
+        Mergeable::Clean => api::merge::Mergeable::Clean,
+        Mergeable::Conflict {
+            target_commit,
+            paths,
+        } => api::merge::Mergeable::Conflict {
+            target_commit,
+            paths,
+        },
+        Mergeable::Unknown => api::merge::Mergeable::Unknown,
+    })
+}
+
+/// Held only to read or record, never across a pass.
+fn clean(state: &AppState) -> std::sync::MutexGuard<'_, conflict::Clean> {
+    state.clean.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Logs what a check of a project failed on, unless it failed the same way

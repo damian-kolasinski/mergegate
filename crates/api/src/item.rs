@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::feedback::Source;
-use crate::merge::Blocked;
+use crate::merge::{Blocked, Mergeable};
 use crate::project::Backend;
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -193,6 +193,10 @@ pub struct InboxItem {
     pub updated_at: String,
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,
+    /// Whether the newest revision merges cleanly into the target, before
+    /// it's approved.
+    #[serde(default)]
+    pub mergeable: Mergeable,
     pub link: Option<Link>,
     /// Some revision has attachments.
     pub demo: bool,

@@ -71,3 +71,22 @@ pub enum Blocked {
         parent: String,
     },
 }
+
+/// Whether an open item's newest revision merges cleanly into its target,
+/// as the hub last tried it, for the operator to see before approving.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Mergeable {
+    Clean,
+    /// The target at `target_commit` and the revision change these paths
+    /// both.
+    Conflict {
+        target_commit: String,
+        paths: Vec<String>,
+    },
+    /// Not tried yet or the try failed; always so once the item is approved
+    /// or closed, or while it's stacked on another, which it merges after.
+    #[default]
+    Unknown,
+}

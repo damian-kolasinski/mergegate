@@ -6,7 +6,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
-use testkit::{Env, TestRepo};
+use testkit::{Env, TestRepo, http};
 
 /// The target polled often, so a commit outside the hub is seen quickly.
 fn env() -> Env {
@@ -66,6 +66,19 @@ fn log(env: &Env) -> Vec<(String, String)> {
             )
         })
         .collect()
+}
+
+/// `GET /api/items/app%23{number}`: what the item's page reads.
+fn item(env: &Env, number: u64) -> Value {
+    let addr = env.hub_addr();
+    let (status, body) = http(
+        &addr,
+        &format!(
+            "GET /api/items/app%23{number} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"
+        ),
+    );
+    assert_eq!(status, 200, "{body}");
+    serde_json::from_str(&body).unwrap()
 }
 
 fn ids(group: &Value) -> Vec<&str> {
@@ -169,4 +182,30 @@ fn f9_items_conflicting_only_with_each_other_show_nothing_until_one_lands() {
         text.contains(&format!("conflicts with main at {short}: README")),
         "{text}"
     );
+}
+
+#[test]
+fn f9_the_inbox_and_item_say_whether_an_item_merges_cleanly_before_review() {
+    let (env, repo) = submitted(&[("login", &[("src/login.rs", "fn login() {}\n")])]);
+    let clean = json!({ "kind": "clean" });
+    inbox_once(&env, |inbox| inbox["needs_you"][0]["mergeable"] == clean);
+    assert_eq!(item(&env, 1)["mergeable"], clean);
+
+    repo.commit_files("Login too", &[("src/login.rs", "fn login(x: u8) {}\n")]);
+    let conflict = json!({
+        "kind": "conflict",
+        "target_commit": repo.rev("main"),
+        "paths": ["src/login.rs"],
+    });
+    let found = inbox_once(&env, |inbox| inbox["with_agents"] != json!([]));
+    assert_eq!(found["with_agents"][0]["mergeable"], conflict);
+    assert_eq!(item(&env, 1)["mergeable"], conflict);
+
+    env.mg(&["abandon", "app#1"]).assert_code(0);
+    let closed = inbox(&env);
+    assert_eq!(
+        closed["closed"][0]["mergeable"],
+        json!({ "kind": "unknown" })
+    );
+    assert_eq!(item(&env, 1)["mergeable"], json!({ "kind": "unknown" }));
 }

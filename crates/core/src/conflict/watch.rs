@@ -4,10 +4,11 @@
 //! A pass reads under the store, fetches and merges without it, and hands
 //! back under it again, so a slow fetch never holds up the hub's requests.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
+use super::mergeable::told_conflict;
 use super::{ConflictError, ConflictGit};
-use crate::feedback::{EventKind, FeedbackStore, Notice, NoticeKind, Source};
+use crate::feedback::{FeedbackStore, Notice, NoticeKind, Source};
 use crate::git::Upstream;
 use crate::github::{Github, GithubRepo};
 use crate::item::{Item, ItemBackend, ItemId, ItemState, ItemStore};
@@ -15,10 +16,21 @@ use crate::project::{Project, ProjectName, ProjectStore};
 use crate::store::StoreError;
 
 /// What a project's last pass tried, as item number, target commit and
-/// head, so a pass where nothing moved merges nothing. It holds only what
-/// the last pass saw, so it never outgrows the open items.
+/// head, and whether it merged cleanly, so a pass where nothing moved merges
+/// nothing. It holds only what the last pass saw, so it never outgrows the
+/// open items.
 #[derive(Debug, Default)]
-pub struct Seen(BTreeSet<(u64, String, String)>);
+pub struct Seen(BTreeMap<(u64, String, String), bool>);
+
+impl Seen {
+    /// The items tried that merged cleanly, as item number and head.
+    pub(super) fn clean(&self) -> impl Iterator<Item = (u64, &str)> {
+        self.0
+            .iter()
+            .filter(|(_, clean)| **clean)
+            .map(|((number, _, head), _)| (*number, head.as_str()))
+    }
+}
 
 /// The open items of a project to test-merge, grouped by where their target
 /// comes from, so each is fetched once however many items use it. Items in
@@ -123,27 +135,31 @@ impl Watch {
                     target_commit.clone(),
                     item.revision.head.clone(),
                 );
-                if !seen.0.contains(&key) {
-                    match git.conflicts(project, &target_commit, &item.revision.head) {
-                        Ok(paths) if paths.is_empty() => {}
-                        Ok(paths) => merges.found.push((
-                            item.clone(),
-                            Notice {
-                                revision: item.revision.number,
-                                source: Source::Operator,
-                                kind: NoticeKind::MergeConflict {
-                                    target_commit: target_commit.clone(),
-                                    paths,
+                let clean = match seen.0.get(&key) {
+                    Some(&clean) => clean,
+                    None => match git.conflicts(project, &target_commit, &item.revision.head) {
+                        Ok(paths) if paths.is_empty() => true,
+                        Ok(paths) => {
+                            merges.found.push((
+                                item.clone(),
+                                Notice {
+                                    revision: item.revision.number,
+                                    source: Source::Operator,
+                                    kind: NoticeKind::MergeConflict {
+                                        target_commit: target_commit.clone(),
+                                        paths,
+                                    },
                                 },
-                            },
-                        )),
+                            ));
+                            false
+                        }
                         Err(e) => {
                             merges.errors.push(e.into());
                             continue;
                         }
-                    }
-                }
-                merges.seen.0.insert(key);
+                    },
+                };
+                merges.seen.0.insert(key, clean);
             }
         }
         merges
@@ -187,16 +203,7 @@ impl Merges {
 /// Whether the item's agent already heard of a conflict on this revision,
 /// from an earlier pass or a merge.
 fn told(store: &impl FeedbackStore, item: &Item) -> Result<bool, StoreError> {
-    Ok(store.events(&item.id, 0)?.iter().any(|event| {
-        matches!(
-            &event.kind,
-            EventKind::Notice(Notice {
-                revision,
-                kind: NoticeKind::MergeConflict { .. },
-                ..
-            }) if *revision == item.revision.number
-        )
-    }))
+    Ok(told_conflict(store, item)?.is_some())
 }
 
 #[cfg(test)]

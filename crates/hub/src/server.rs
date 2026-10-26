@@ -60,6 +60,9 @@ pub(crate) struct AppState {
     pub prune: Notify,
     /// Asks the conflict watch to test-merge now, after its current pass.
     pub conflicts: Notify,
+    /// What the conflict watch's last pass found merging cleanly. Taken
+    /// after the store when both are, as requests do.
+    pub clean: Mutex<mergegate_core::conflict::Clean>,
     /// Wakes the background judge pass, as [`Self::highlight`] does its own.
     pub judge: Notify,
     pub judge_failures: judge::Failures,
@@ -247,6 +250,7 @@ pub(crate) async fn serve(
         highlight: Notify::new(),
         prune: Notify::new(),
         conflicts: Notify::new(),
+        clean: Mutex::default(),
         judge: Notify::new(),
         judge_failures: judge::Failures::default(),
         stopping: Arc::default(),

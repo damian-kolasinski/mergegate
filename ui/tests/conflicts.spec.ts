@@ -83,3 +83,22 @@ test("f9 a target moved under an item sends it back before review", async ({
     ]);
   });
 });
+
+test("f9 an open item's page says whether it merges cleanly", async ({
+  page,
+}) => {
+  await watching(async (hub) => {
+    const app = hub.project("app");
+    app.seed({ README: "hello\n" });
+    app.submit("readme", "Greet", { README: "hello, login\n" });
+    await page.goto(`${hub.url}#/items/app%231`);
+    const screen = page.getByRole("region", { name: "app#1" });
+    await expect(screen.getByText("Merges cleanly")).toBeVisible();
+
+    // The merge-blocked note says the conflict the watch hands back.
+    app.seed({ README: "hi there\n" });
+    const conflict = screen.getByRole("region", { name: "Merge conflict" });
+    await expect(conflict).toContainText("Conflicts with main");
+    await expect(screen.getByText("Merges cleanly")).toHaveCount(0);
+  });
+});
