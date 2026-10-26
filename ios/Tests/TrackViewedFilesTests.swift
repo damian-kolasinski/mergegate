@@ -32,21 +32,24 @@ final class TrackViewedFilesTests: XCTestCase {
         // Normalize a repeated verification run using the same real control.
         if viewed.value as? String == "Viewed" { tapWhenStable(viewed) }
         assertProgress(app, "0 of 3 viewed")
-        XCTAssertTrue(app.staticTexts["3 files left"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["reviewStats"].firstMatch.label.contains("0 of 3 reviewed"))
         capture(app, "Viewed — file reader before marking")
         tapWhenStable(viewed)
         assertProgress(app, "1 of 3 viewed")
         XCTAssertEqual(viewed.value as? String, "Viewed")
-        XCTAssertTrue(app.staticTexts["2 files left"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["reviewStats"].firstMatch.label.contains("1 of 3 reviewed"))
         XCTAssertTrue((app.textViews["unifiedDiff"].value as? String ?? "").contains("subtotal + delivery"))
         try audit(app)
         capture(app, "Viewed — confirmed by the real hub")
         tapWhenStable(app.buttons["reviewFiles"])
         XCTAssertTrue(app.buttons["reviewFile-0"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["reviewFile-0"].label.contains("Viewed"))
-        capture(app, "Viewed — importance-ordered file list")
+        // Trusted files fold into their own group, as on the web.
+        XCTAssertFalse(app.buttons["reviewFile-3"].exists)
+        tapWhenStable(app.descendants(matching: .any)["reviewTrustedFiles"].firstMatch)
+        capture(app, "Viewed — tree with trusted files unfolded")
         tapWhenStable(app.buttons["reviewFile-3"])
-        XCTAssertTrue(app.staticTexts["trustedViewed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["trustedViewed"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(viewed.exists)
         assertProgress(app, "1 of 3 viewed")
         capture(app, "Viewed — trusted files count automatically")
@@ -56,6 +59,7 @@ final class TrackViewedFilesTests: XCTestCase {
         XCTAssertTrue(inboxItem.waitForExistence(timeout: 20), app.debugDescription)
         capture(app, "Viewed — back in the inbox")
         tapWhenStable(open)
+        showFirstFile(app)
         XCTAssertTrue(viewed.waitForExistence(timeout: 20))
         XCTAssertEqual(viewed.value as? String, "Viewed")
         assertProgress(app, "1 of 3 viewed")
@@ -63,6 +67,7 @@ final class TrackViewedFilesTests: XCTestCase {
         app.launch()
         XCTAssertTrue(open.waitForExistence(timeout: 20))
         tapWhenStable(open)
+        showFirstFile(app)
         XCTAssertTrue(viewed.waitForExistence(timeout: 20))
         XCTAssertEqual(viewed.value as? String, "Viewed")
         capture(app, "Viewed — persisted after process termination")
@@ -72,6 +77,7 @@ final class TrackViewedFilesTests: XCTestCase {
         tapWhenStable(app.navigationBars.buttons.element(boundBy: 0))
         XCTAssertTrue(inboxItem.waitForExistence(timeout: 20))
         tapWhenStable(open)
+        showFirstFile(app)
         XCTAssertTrue(viewed.waitForExistence(timeout: 20))
         XCTAssertEqual(viewed.value as? String, "Not viewed")
         assertProgress(app, "0 of 3 viewed")
@@ -82,6 +88,7 @@ final class TrackViewedFilesTests: XCTestCase {
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
         for _ in 0..<5 where !open.isHittable { app.swipeUp() }
         tapWhenStable(open)
+        showFirstFile(app)
         XCTAssertTrue(viewed.waitForExistence(timeout: 20))
         XCTAssertTrue(viewed.isHittable)
         tapWhenStable(viewed)
@@ -90,16 +97,36 @@ final class TrackViewedFilesTests: XCTestCase {
         let source = app.scrollViews.firstMatch
         for _ in 0..<3 { source.swipeUp() }
         XCTAssertTrue(reader.isHittable)
-        XCTAssertTrue(viewed.isHittable)
+        capture(app, "Viewed — bars hidden while reading")
+        source.swipeDown()
+        XCTAssertTrue(viewed.waitForExistence(timeout: 5))
+        XCTAssertTrue(viewed.isHittable, "Scrolling back up brings the review bar back.")
         try audit(app)
         capture(app, "Viewed — dark mode")
+        // The bar's main action marks the open file and moves to the next one still to view.
+        tapWhenStable(viewed)
+        assertProgress(app, "0 of 3 viewed")
+        let file = app.buttons["reviewFiles"].label
+        let primary = app.buttons["reviewPrimary"]
+        XCTAssertEqual(primary.label, "Viewed & next")
+        tapWhenStable(primary)
+        assertProgress(app, "1 of 3 viewed")
+        let moved = NSPredicate(format: "label != %@", file)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: moved, object: app.buttons["reviewFiles"])], timeout: 10), .completed)
+        capture(app, "Viewed & next — moved to the next file")
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription]) { issue in
-            print("Accessibility: \(issue.detailedDescription)\n\(issue.element?.debugDescription ?? "No element")")
-            return false
-        }
+        try auditReviewAccessibility(app)
+    }
+
+    // Reopening restores the last file read, which may be the trusted receipt with no mark.
+    @MainActor private func showFirstFile(_ app: XCUIApplication) {
+        let files = app.buttons["reviewFiles"]
+        XCTAssertTrue(files.waitForExistence(timeout: 20), app.debugDescription)
+        if files.label.hasPrefix("File 1 of") { return }
+        tapWhenStable(files)
+        tapWhenStable(app.buttons["reviewFile-0"])
     }
 
     @MainActor private func assertProgress(_ app: XCUIApplication, _ value: String) {

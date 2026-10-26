@@ -27,10 +27,8 @@ final class RequestChangesTests: XCTestCase {
         app.buttons["connectHub"].tap()
         try openReview(app)
         capture(app, "Request changes — File reader")
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app, "Request changes")
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
-        app.buttons["feedbackVerdict"].tap()
-        app.buttons["Request changes"].tap()
         XCTAssertFalse(app.buttons["sendFeedback"].isEnabled)
         app.textViews["feedbackSummary"].tap()
         app.textViews["feedbackSummary"].typeText(
@@ -45,7 +43,7 @@ final class RequestChangesTests: XCTestCase {
         ]
         app.launch()
         try openReview(app)
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app, "Request changes")
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["sendFeedback"].label, "Request changes")
         XCTAssertEqual(app.staticTexts["feedbackScope"].label, "mobile-smoke#2 · r1")
@@ -120,9 +118,7 @@ final class RequestChangesTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

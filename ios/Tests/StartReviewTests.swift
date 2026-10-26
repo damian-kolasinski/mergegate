@@ -40,13 +40,16 @@ final class StartReviewTests: XCTestCase {
         }
         XCTAssertEqual(app.buttons["reviewFiles"].label, "File 1 of 4, z-checkout.swift")
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("r1 → main"))
-        XCTAssertTrue(app.staticTexts["All changes → main"].exists && app.staticTexts["4 files left"].exists)
+        XCTAssertTrue(app.staticTexts["All changes → main"].exists)
+        XCTAssertEqual(app.staticTexts["reviewViewedProgress"].label, "0 of 4 viewed")
+        XCTAssertTrue(app.descendants(matching: .any)["reviewStats"].firstMatch.label.contains("0 of 4 reviewed"))
         let reader = app.textViews["unifiedDiff"]
         XCTAssertTrue(reader.waitForExistence(timeout: 5))
         XCTAssertTrue((reader.value as? String ?? "").contains("subtotal + delivery"), app.debugDescription)
         XCTAssertTrue((reader.value as? String ?? "").contains("@@ -0,0 +1,8 @@"))
         let viewed = app.buttons["reviewViewed"]
-        let complete = app.buttons["reviewFeedback"]
+        let complete = app.buttons["reviewPrimary"]
+        XCTAssertEqual(complete.label, "Viewed & next")
         XCTAssertTrue(viewed.isHittable && complete.isHittable)
         XCTAssertGreaterThanOrEqual(viewed.frame.height, 44)
         XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
@@ -54,9 +57,9 @@ final class StartReviewTests: XCTestCase {
             "Routine review actions should share one row at standard text sizes.")
         XCTAssertLessThan(reader.frame.minY, app.frame.height * 0.65,
             "Source should be visible above the bottom third on entry.")
-        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
+        try auditReviewAccessibility(app)
         capture(app, "Start review — first real unified diff")
-        tapWhenStable(app.buttons["reviewGuide"])
+        openReviewMenu(app, "Review guide")
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "amount shown matches the amount charged")).firstMatch.waitForExistence(timeout: 5))
         capture(app, "Review guide — full intent and reading order")
         tapWhenStable(app.buttons["closeReviewGuide"])
@@ -64,10 +67,19 @@ final class StartReviewTests: XCTestCase {
         let first = app.buttons["reviewFile-0"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertTrue(first.label.contains("z-checkout.swift"), first.label)
-        XCTAssertTrue(first.label.contains("Review the total calculation first."), first.label)
         XCTAssertTrue(app.buttons["reviewFile-1"].label.contains("README.md"))
-        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
-        capture(app, "Importance-ordered files and reasons")
+        try auditReviewAccessibility(app)
+        capture(app, "Importance-ordered file tree")
+        tapWhenStable(app.buttons["closeReviewFiles"])
+        tapWhenStable(app.buttons["reviewFileReasons"])
+        XCTAssertTrue(app.staticTexts["Review the total calculation first."].waitForExistence(timeout: 5))
+        capture(app, "Why this file")
+        tapWhenStable(app.buttons["closeFileReasons"])
+        tapWhenStable(app.buttons["reviewNextFile"])
+        XCTAssertEqual(app.buttons["reviewFiles"].label, "File 2 of 4, README.md")
+        tapWhenStable(app.buttons["reviewPreviousFile"])
+        XCTAssertEqual(app.buttons["reviewFiles"].label, "File 1 of 4, z-checkout.swift")
+        tapWhenStable(app.buttons["reviewFiles"])
         tapWhenStable(app.buttons["reviewFile-2"])
         XCTAssertTrue((reader.value as? String ?? "").contains("Region 80:"))
         for _ in 0..<12 where reader.frame.maxY > app.buttons["reviewViewed"].frame.minY { app.swipeUp() }
@@ -117,7 +129,7 @@ final class StartReviewTests: XCTestCase {
         XCTAssertTrue(reader.isHittable, "Source must remain reachable above the actions.")
         XCTAssertLessThan(reader.frame.minY, app.buttons["reviewViewed"].frame.minY)
         XCTAssertTrue(app.buttons["reviewViewed"].isHittable)
-        XCTAssertTrue(app.buttons["reviewFeedback"].isHittable)
+        XCTAssertTrue(app.buttons["reviewPrimary"].isHittable)
         capture(app, "Review in dark mode")
     }
 

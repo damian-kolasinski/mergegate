@@ -5,20 +5,22 @@ import SwiftUI
 public enum ReviewSubmissionBuilder {
     @MainActor
     public static func build(
-        scope: CommentDraftScope, drafts: @escaping () throws -> any FeedbackDrafts,
+        scope: CommentDraftScope, outcome: ReviewOutcome? = nil, unreviewed: Int = 0,
+        drafts: @escaping () throws -> any FeedbackDrafts,
         beforeSend: @escaping () async -> Void = {}, onActivity: @escaping () -> Void = {},
         onSent: @escaping () -> Void = {},
         close: @escaping () -> Void
     ) -> some View {
         FeedbackRoot(
-            scope: scope, drafts: drafts, beforeSend: beforeSend, onActivity: onActivity,
-            onSent: onSent,
-            close: close)
+            scope: scope, outcome: outcome, unreviewed: unreviewed, drafts: drafts,
+            beforeSend: beforeSend, onActivity: onActivity, onSent: onSent, close: close)
     }
 }
 
 private struct FeedbackRoot: View {
     let scope: CommentDraftScope
+    let outcome: ReviewOutcome?
+    let unreviewed: Int
     let drafts: () throws -> any FeedbackDrafts
     let beforeSend: () async -> Void
     let onActivity: () -> Void
@@ -30,7 +32,8 @@ private struct FeedbackRoot: View {
     var body: some View {
         Group {
             if let model {
-                FeedbackScene(model: model, close: close).onChange(of: model.summary) { _, _ in
+                FeedbackScene(model: model, unreviewed: unreviewed, close: close)
+                .onChange(of: model.summary) { _, _ in
                     onActivity()
                 }
                 .onChange(of: model.sent) { _, sent in if sent { onSent() } }
@@ -46,9 +49,12 @@ private struct FeedbackRoot: View {
 
     private func open() {
         do {
-            model = try FeedbackViewModel(
+            let model = try FeedbackViewModel(
                 scope: scope, drafts: try drafts(), outbox: SwiftDataFeedbackOutbox(),
                 service: .init(transport: URLSessionTransport()), beforeSend: beforeSend)
+            // A retained delivery keeps its own verdict; the setter ignores frozen feedback.
+            if let outcome { model.verdict = FeedbackVerdict(outcome) }
+            self.model = model
             failure = nil
         } catch { failure = error.localizedDescription }
     }

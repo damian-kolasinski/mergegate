@@ -78,7 +78,7 @@ final class TriageInboxTests: XCTestCase {
         app.buttons["openReview-mobile-smoke#2"].tap()
         XCTAssertTrue(app.buttons["reviewFiles"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("mobile-smoke#2"))
-        app.buttons["reviewGuide"].tap()
+        openReviewMenu(app, "Review guide")
         XCTAssertTrue(app.staticTexts["No review guide"].waitForExistence(timeout: 5))
         capture(app, "Question item — open its real review without a guide")
         app.terminate()

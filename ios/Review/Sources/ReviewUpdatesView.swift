@@ -32,8 +32,12 @@ struct ReviewUpdatesView: View {
                         "You’re reading r\(revision). Drafts stay with this revision. Open r\(latest) when you’re ready."
                     )
                     .appearanceText(Appearance.caption)
-                    Button("Open r\(latest)") { Task { await model.load(allowCached: false) } }
-                        .appearanceText(Appearance.label).frame(minHeight: 44)
+                    Button {
+                        Task { await model.load(allowCached: false) }
+                    } label: {
+                        Text("Open r\(latest)").appearanceText(Appearance.label)
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
                         .disabled(model.isComparing || model.isSavingViewed)
                         .accessibilityIdentifier("openLatestRevision")
                 }

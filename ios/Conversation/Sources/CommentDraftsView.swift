@@ -26,12 +26,14 @@ struct CommentDraftsView: View {
             if let draft = model.editing {
                 CommentDraftEditor(model: model, draft: draft)
                 HStack {
-                    Button("All drafts") { model.showList() }.accessibilityIdentifier("allDrafts")
-                        .frame(minHeight: 44)
+                    // The frame sits in each label so the whole 44-point row is the target.
+                    Button { model.showList() } label: {
+                        Text("All drafts").frame(minHeight: 44).contentShape(Rectangle())
+                    }.accessibilityIdentifier("allDrafts")
                     Spacer()
-                    Button("Delete draft", role: .destructive) { confirmDelete = true }
-                        .accessibilityIdentifier("deleteDraft")
-                        .frame(minHeight: 44)
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Text("Delete draft").frame(minHeight: 44).contentShape(Rectangle())
+                    }.accessibilityIdentifier("deleteDraft")
                 }.appearanceText(Appearance.label).frame(minHeight: 44).padding(.horizontal, 20)
             } else {
                 list

@@ -33,6 +33,25 @@ struct ReviewBlocked: Decodable, Sendable {
         }
     }
 }
+// Whether the newest revision merges into its target, checked by the hub before approval.
+enum ReviewMergeable: Decodable, Sendable, Equatable {
+    case clean
+    case conflict(paths: [String])
+    case unknown
+
+    private enum Keys: String, CodingKey { case kind, paths }
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: Keys.self)
+        switch try container.decode(String.self, forKey: .kind) {
+        case "clean": self = .clean
+        case "conflict":
+            self = .conflict(
+                paths: try container.decodeIfPresent([String].self, forKey: .paths) ?? [])
+        default: self = .unknown
+        }
+    }
+}
+
 struct ReviewStackEntry: Decodable, Identifiable, Sendable {
     let id: String
     let name: String

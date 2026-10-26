@@ -26,7 +26,7 @@ final class KeepCommentDraftsTests: XCTestCase {
             app.buttons["connectHub"].tap()
         }
         try openReview(app)
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         XCTAssertTrue(app.scrollViews["draftList"].waitForExistence(timeout: 5))
         for _ in 0..<20 {
             let existing = app.buttons.matching(
@@ -50,7 +50,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         app.terminate()
         app.launch()
         try openReview(app)
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         let oldDraft = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "commentDraft-")
         ).firstMatch
@@ -73,7 +73,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         app.buttons["reviewFiles"].tap()
         XCTAssertTrue(app.buttons["reviewFile-1"].waitForExistence(timeout: 5))
         app.buttons["reviewFile-1"].tap()
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         XCTAssertTrue(app.scrollViews["draftList"].waitForExistence(timeout: 5))
         XCTAssertEqual(
             app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "commentDraft-")).count,
@@ -88,7 +88,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         ]
         app.launch()
         try openReview(app)
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         let rows = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "commentDraft-"))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
@@ -108,7 +108,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         app.terminate()
         app.launch()
         try openReview(app)
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(rows.count, 1)
         rows.firstMatch.tap()
@@ -131,7 +131,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         }
         XCTAssertTrue(open.exists && open.isHittable, app.debugDescription)
         open.tap()
-        XCTAssertTrue(app.buttons["reviewDrafts"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(app.buttons["reviewMore"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.textViews["unifiedDiff"].waitForExistence(timeout: 10))
     }
 
@@ -147,9 +147,7 @@ final class KeepCommentDraftsTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

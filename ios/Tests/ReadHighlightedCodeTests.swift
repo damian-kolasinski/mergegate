@@ -71,7 +71,7 @@ final class ReadHighlightedCodeTests: XCTestCase {
         XCTAssertFalse(app.buttons["loadSourceContext"].exists, "Expanded source must stay expanded.")
         XCTAssertEqual(app.staticTexts["reviewIdentity"].label, "mobile-smoke#2 · r1 → main")
         capture(app, "03 — Late hub highlighting with context retained")
-        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
+        try auditReviewAccessibility(app)
         // Return to the compact changed-code view for the in-thread demo.
         app.terminate()
         app.launch()

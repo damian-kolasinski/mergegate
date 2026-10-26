@@ -41,8 +41,7 @@ final class WebParityTests: XCTestCase {
             reveal(title, in: app)
             title.tap()
         }
-        XCTAssertTrue(app.buttons["reviewMore"].waitForExistence(timeout: 20), app.debugDescription)
-        app.buttons["reviewMore"].tap()
+        openReviewMenu(app, "Item details")
         let save = app.buttons["savePriority"]
         reveal(save, in: app)
         app.buttons["itemPriorityPicker"].tap()
@@ -94,14 +93,18 @@ final class WebParityTests: XCTestCase {
         XCTAssertTrue(app.buttons["reviewFiles"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["reviewFiles"].label.contains("README.md"))
         XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 5))
-        app.buttons["reviewFeedback"].tap()
-        XCTAssertTrue(app.buttons["sendFeedback"].waitForExistence(timeout: 10))
-        app.buttons["sendFeedback"].tap()
+        openCompletion(app)
+        let send = app.buttons["sendFeedback"]
+        XCTAssertTrue(send.waitForExistence(timeout: 10))
+        // The button enables once the sheet has loaded what it sends.
+        let enabled = NSPredicate(format: "isEnabled == true")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: enabled, object: send)], timeout: 15), .completed)
+        send.tap()
         XCTAssertTrue(app.staticTexts["feedbackSent"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["nextReview"].waitForExistence(timeout: 10))
         capture(app, "Parity — feedback and next review")
         app.buttons["closeFeedback"].tap()
-        app.buttons["reviewMore"].tap()
+        openReviewMenu(app, "Item details")
         let abandon = app.buttons["Abandon item…"]
         reveal(abandon, in: app)
         abandon.tap()
@@ -109,7 +112,9 @@ final class WebParityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["itemActionResult"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["itemActionResult"].label, "Abandoned")
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.staticTexts["reviewClosed"].waitForExistence(timeout: 10))
+        let state = app.staticTexts["reviewState"]
+        XCTAssertTrue(state.waitForExistence(timeout: 10))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Abandoned"), object: state)], timeout: 10), .completed)
         capture(app, "Parity — closed item")
         app.buttons["nextReview"].tap()
         XCTAssertTrue(app.staticTexts["reviewIdentity"].waitForExistence(timeout: 10))
@@ -129,20 +134,23 @@ final class WebParityTests: XCTestCase {
         ]
         app.launch()
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
+        // The other parity flow abandons this item, which then folds under Closed today.
+        let closedToday = app.descendants(matching: .any)["inboxClosedToday"].firstMatch
+        if closedToday.waitForExistence(timeout: 5) {
+            reveal(closedToday, in: app)
+            closedToday.tap()
+        }
         let review = app.buttons["openReview-mobile-smoke#3"]
         reveal(review, in: app)
         review.tap()
-        XCTAssertTrue(app.buttons["reviewMore"].waitForExistence(timeout: 15))
-        app.buttons["reviewMore"].tap()
+        openReviewMenu(app, "Item details")
         XCTAssertTrue(app.staticTexts["Native parity verification"].waitForExistence(timeout: 10))
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
         let save = app.buttons["savePriority"]
         reveal(save, in: app)
         XCTAssertTrue(save.waitForExistence(timeout: 10))
         // The category-changing audit loses virtualized List nodes. Measure the scaled control directly.
-        XCTAssertGreaterThan(save.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(save.frame.height, 44)
         capture(app, "Parity — dark accessibility item controls")
         let rules = app.buttons["Project rules"]
         reveal(rules, in: app)

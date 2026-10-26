@@ -9,7 +9,6 @@ struct ReviewScene<
 >: View {
     @State var model: ReviewViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let styling: any CodeStyling
     let hub: URL
     let drafts: (CommentDraftScope, CommentDraftLocation?, @escaping () -> Void) -> Drafts
@@ -22,28 +21,41 @@ struct ReviewScene<
     let fileConversations: (CommentDraftScope, String) -> FileConversations
     let feedback:
         (
-            CommentDraftScope, @escaping () async -> Void, @escaping () -> Void,
-            @escaping () -> Void,
-            @escaping () -> Void
+            CommentDraftScope, ReviewOutcome, Int, @escaping () async -> Void,
+            @escaping () -> Void, @escaping () -> Void, @escaping () -> Void
         ) -> Feedback
     let rules: (String, @escaping (String) -> Void) -> Rules
+    /// Comments drafted on this iPhone for a revision, which the next review sends.
+    let localDrafts: (CommentDraftScope) -> Int
     @State private var feedbackSent = false
     @State private var sourceFocus: SourceAnchor?
     @State private var sourceRequest = UUID()
     @State private var fileHeaderHeight: CGFloat = 0
+    @State private var mastheadHeight: CGFloat = 0
+    @State private var chromeHidden = false
+    @State private var scrollPhase: ScrollPhase = .idle
+    @State private var draftCount = 0
+    @State private var confirmingAbandon = false
+    @State private var notice: String?
+    @State private var mastheadAway = false
+    @State private var fileTop: Double?
     let openItem: (String) -> Void
     private enum Sheet: Identifiable {
-        case guide, files, feedback, details
+        case guide, files, details, rules
+        case feedback(ReviewOutcome)
+        case reasons(String)
         case demo(ReviewDemo)
         case drafts(CommentDraftLocation?)
         case conversations(ConversationLocation?)
         var id: String {
             switch self {
             case .details: "details"
+            case .rules: "rules"
             case .demo: "demo"
             case .guide: "guide"
             case .files: "files"
             case .feedback: "feedback"
+            case .reasons(let path): "reasons-\(path)"
             case .drafts: "drafts"
             case .conversations: "conversations"
             }
@@ -71,9 +83,11 @@ struct ReviewScene<
             }
         }
         .background(Appearance.page).foregroundStyle(Appearance.primary)
-        .navigationTitle("Review").navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
         // Returning triggers the inbox refresh, which must follow the pending write.
         .navigationBarBackButtonHidden(model.isSavingViewed || model.isComparing)
+        .toolbarVisibility(chromeHidden ? .hidden : .automatic, for: .navigationBar)
+        .animation(.easeInOut(duration: 0.2), value: chromeHidden)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await model.follow()
@@ -81,159 +95,167 @@ struct ReviewScene<
     }
 
     private func content(_ snapshot: ReviewSnapshot) -> some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(
-                    alignment: .leading, spacing: 0,
-                    pinnedViews: dynamicTypeSize.isAccessibilitySize ? [] : .sectionHeaders
-                ) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(snapshot.item.title).appearanceText(Appearance.heading)
-                            .accessibilityAddTraits(.isHeader)
-                        ReviewScopeBar(
+        let current = model.currentDetails ?? snapshot
+        let order = ReviewReadingOrder(snapshot)
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ReviewMasthead(snapshot: snapshot, current: current) {
+                        sheet = .details
+                    } comparison: {
+                        ReviewComparisonControl(
                             snapshot: snapshot, loading: model.isComparing,
                             disabled: model.isSavingViewed || model.cachedAt != nil,
-                            compare: { since in Task { await model.compare(since: since) } })
-                        ReviewUpdatesView(model: model, revision: snapshot.item.revision.number)
-                        ReviewStatusView(snapshot: model.currentDetails ?? snapshot) {
-                            sheet = .details
-                        }
-                        if let demo = (model.currentDetails ?? snapshot).demo {
-                            Button("Demo (\(demo.attachments.count)) · from r\(demo.revision)") {
-                                sheet = .demo(demo)
-                            }
-                            .frame(minHeight: 44).accessibilityIdentifier("reviewDemo")
-                        }
-                    }.padding(.horizontal, 20).padding(.vertical, 12).id("reviewTop")
+                            compare: { since in Task { await model.compare(since: since) } }
+                        ).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                    }
+                    ReviewUpdatesView(model: model, revision: snapshot.item.revision.number)
+                    if let notice {
+                        Text(notice).appearanceText(Appearance.caption)
+                            .foregroundStyle(Appearance.secondary)
+                            .accessibilityIdentifier("itemActionResult")
+                    }
                     if let failure = model.comparisonFailure {
-                        Text(failure).appearanceText(Appearance.caption).foregroundStyle(
-                            Appearance.error
+                        Text(failure).appearanceText(Appearance.caption)
+                            .foregroundStyle(Appearance.error)
+                            .accessibilityIdentifier("comparisonError")
+                    }
+                }.padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 12).id("reviewTop")
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        mastheadHeight = $0
+                    }
+                if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
+                    Section {
+                        ReviewFileReader(
+                            file: file, project: snapshot.item.project,
+                            sourceService: model.sourceService,
+                            highlightService: model.highlightService,
+                            item: snapshot.item.id, revision: snapshot.item.revision.number,
+                            styling: styling,
+                            contextLoaded: $model.contextLoaded, revealed: $model.revealed,
+                            onReady: {
+                                if !readerMoved { restoreOffset = fileTop ?? model.readingOffset }
+                                fileTop = nil
+                            },
+                            onComment: { anchor in
+                                sheet = .drafts(.init(path: file.path, anchor: anchor))
+                            },
+                            onReadConversations: { anchors in
+                                sheet = .conversations(.init(path: file.path, anchors: anchors))
+                            }, focus: sourceFocus, revealRequest: sourceRequest,
+                            revealTopInset: fileHeaderHeight,
+                            didReveal: { sourceFocus = nil }
+                        ).id(
+                            "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
                         )
-                        .padding(.horizontal, 20).padding(.bottom, 8)
-                        .accessibilityIdentifier("comparisonError")
-                    }
-                    if let index = snapshot.files.firstIndex(where: {
-                        $0.path == model.selectedPath
-                    }) {
-                        let file = snapshot.files[index]
-                        Section {
-                            ReviewFileReader(
-                                file: file, project: snapshot.item.project,
-                                sourceService: model.sourceService,
-                                highlightService: model.highlightService,
-                                item: snapshot.item.id, revision: snapshot.item.revision.number,
-                                styling: styling,
-                                contextLoaded: $model.contextLoaded, revealed: $model.revealed,
-                                onReady: {
-                                    if !readerMoved { restoreOffset = model.readingOffset }
-                                },
-                                onComment: { anchor in
-                                    sheet = .drafts(.init(path: file.path, anchor: anchor))
-                                },
-                                onReadConversations: { anchors in
-                                    sheet = .conversations(.init(path: file.path, anchors: anchors))
-                                }, focus: sourceFocus, revealRequest: sourceRequest,
-                                revealTopInset: dynamicTypeSize.isAccessibilitySize ? 0 : fileHeaderHeight,
-                                didReveal: { sourceFocus = nil }
-                            ).id(
-                                "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
-                            )
-                        } header: {
-                            fileControlsLayout {
-                                filePicker(file, index: index, count: snapshot.files.count)
-                                fileConversations(scope(snapshot), file.path).id(file.path)
-                            }
-                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
-                            .padding(.horizontal, 12).padding(.vertical, 4)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                                fileHeaderHeight = $0
-                            }
+                    } header: {
+                        ReviewFilePill(
+                            file: file, position: (order.position(of: file.path) ?? 0) + 1,
+                            count: order.files.count,
+                            previous: order.previous(before: file.path).map { path in { select(path) } },
+                            next: order.next(after: file.path).map { path in { select(path) } },
+                            openFiles: { sheet = .files },
+                            openInfo: { sheet = .reasons(file.path) }
+                        ) {
+                            fileConversations(scope(snapshot), file.path).id(file.path)
                         }
-                    } else {
-                        ContentUnavailableView(
-                            "No changed files", systemImage: "doc",
-                            description: Text("This item has no files to display."))
+                        .padding(.horizontal, 12).padding(.vertical, 4)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            fileHeaderHeight = $0
+                        }
                     }
+                } else {
+                    ContentUnavailableView(
+                        "No changed files", systemImage: "doc",
+                        description: Text("This item has no files to display."))
                 }
-            }
-            .accessibilityIdentifier("reviewScroll")
-            .scrollPosition($scrollPosition)
-            .onScrollGeometryChange(for: ReviewScrollGeometry.self) { geometry in
-                ReviewScrollGeometry(
-                    offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
-                    contentHeight: geometry.contentSize.height,
-                    viewportHeight: geometry.containerSize.height)
-            } action: { _, value in
-                visibleOffset = value.offset
-                // TextKit supplies its height after source context has been restored.
-                if let offset = restoreOffset,
-                    value.contentHeight >= offset + value.viewportHeight
-                {
-                    if abs(value.offset - offset) < 1 {
-                        restoreOffset = nil
-                    } else {
-                        scrollPosition.scrollTo(y: offset)
-                    }
-                }
-            }
-            .onChange(of: restoreOffset) { _, offset in
-                if let offset { scrollPosition.scrollTo(y: offset) }
-            }
-            .onScrollPhaseChange { previous, phase in
-                if phase == .interacting {
-                    readerMoved = true
-                    restoreOffset = nil
-                }
-                if phase == .idle && (previous == .interacting || previous == .decelerating) {
-                    model.reviewTime.input()
-                    model.readingOffset = visibleOffset
-                    model.rememberPosition()
-                }
-            }
-            .onChange(
-                of:
-                    "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(model.selectedPath ?? "")"
-            ) { _, _ in
-                readerMoved = sourceFocus != nil
-                restoreOffset = sourceFocus == nil ? model.readingOffset : nil
-                if sourceFocus == nil { scrollPosition.scrollTo(y: model.readingOffset) }
-            }
-            .onChange(of: model.contextLoaded) { _, _ in model.rememberPosition() }
-            .onChange(of: model.revealed) { _, _ in model.rememberPosition() }
-            .onDisappear { model.rememberPosition() }
-            .onChange(of: scenePhase) { _, phase in
-                if phase != .active { model.rememberPosition() }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if (model.currentDetails ?? snapshot).item.isClosed {
+        // Room for the floating bar, so the last lines scroll clear of it.
+        .contentMargins(.bottom, 96, for: .scrollContent)
+        .accessibilityIdentifier("reviewScroll")
+        .scrollPosition($scrollPosition)
+        .onScrollGeometryChange(for: ReviewScrollGeometry.self) { geometry in
+            ReviewScrollGeometry(
+                offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
+                raw: geometry.contentOffset.y,
+                contentHeight: geometry.contentSize.height,
+                viewportHeight: geometry.containerSize.height)
+        } action: { previous, value in
+            followChrome(value, previous: previous)
+            visibleOffset = value.offset
+            if mastheadAway != (value.offset > mastheadHeight * 0.6) {
+                mastheadAway = value.offset > mastheadHeight * 0.6
+            }
+            // TextKit supplies its height after source context has been restored.
+            if let offset = restoreOffset,
+                value.contentHeight >= offset + value.viewportHeight
+            {
+                if abs(value.offset - offset) < 1 {
+                    restoreOffset = nil
+                } else {
+                    scrollPosition.scrollTo(y: offset)
+                }
+            }
+        }
+        .onChange(of: restoreOffset) { _, offset in
+            if let offset { scrollPosition.scrollTo(y: offset) }
+        }
+        .onScrollPhaseChange { previous, phase in
+            scrollPhase = phase
+            if phase == .interacting {
+                readerMoved = true
+                restoreOffset = nil
+            }
+            if phase == .idle && (previous == .interacting || previous == .decelerating) {
+                model.reviewTime.input()
+                model.readingOffset = visibleOffset
+                model.rememberPosition()
+            }
+        }
+        .onChange(
+            of:
+                "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(model.selectedPath ?? "")"
+        ) { _, _ in
+            readerMoved = sourceFocus != nil
+            // A file opened fresh starts at its own top, below the item's header.
+            let offset = model.readingOffset == 0 ? Double(mastheadHeight) : model.readingOffset
+            // The new reader's onReady restores too; it must land on the same spot.
+            fileTop = sourceFocus == nil ? offset : nil
+            restoreOffset = sourceFocus == nil ? offset : nil
+            if sourceFocus == nil { scrollPosition.scrollTo(y: offset) }
+            chromeHidden = false
+        }
+        .onChange(of: model.contextLoaded) { _, _ in model.rememberPosition() }
+        .onChange(of: model.revealed) { _, _ in model.rememberPosition() }
+        .onDisappear { model.rememberPosition() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { model.rememberPosition() }
+        }
+        .overlay(alignment: .top) {
+            // Without the navigation bar, keep source from scrolling under the status bar.
+            if chromeHidden {
+                Color.clear.frame(height: 0)
+                    .background(Appearance.page, ignoresSafeAreaEdges: .top)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 6) {
+                if current.item.isClosed {
                     ReviewNextItem(after: snapshot.item.id, service: model.service) {
                         openItem($0)
                     }
                 }
-                if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
-                    ReviewViewedBar(
-                        file: file, viewed: snapshot.reviewCount - snapshot.remaining,
-                        total: snapshot.reviewCount,
-                        saving: model.isSavingViewed || model.isComparing,
-                        disabled: model.cachedAt != nil
-                            || !(model.currentDetails ?? snapshot).item.isReviewable,
-                        failure: model.viewedFailure,
-                        mark: { Task { await model.setViewed(path: file.path, viewed: !file.viewed) } },
-                        retry: { Task { await model.retryViewed() } }
-                    ) { completionActions(snapshot) }
-                } else {
-                    completionActions(snapshot).padding(.horizontal, 16).padding(.bottom, 8)
-                }
-            }
+                bar(snapshot, current: current, order: order)
+            }.padding(.horizontal, 12).padding(.bottom, 4)
+                .offset(y: chromeHidden ? 160 : 0)
+                .animation(.easeInOut(duration: 0.2), value: chromeHidden)
         }
         .task(
             id:
-                "\(scenePhase)-\((model.currentDetails ?? snapshot).item.state)-\(snapshot.item.revision.number)"
+                "\(scenePhase)-\(current.item.state)-\(snapshot.item.revision.number)"
         ) {
-            guard scenePhase == .active, (model.currentDetails ?? snapshot).item.isReviewable,
-                model.cachedAt == nil
+            guard scenePhase == .active, current.item.isReviewable, model.cachedAt == nil
             else {
                 await model.reviewTime.stop()
                 return
@@ -245,39 +267,67 @@ struct ReviewScene<
             }
             await model.reviewTime.stop(session: session)
         }
+        .task(id: "\(snapshot.item.revision.number)-\(sheet == nil)") {
+            if sheet == nil { draftCount = localDrafts(scope(snapshot)) }
+        }
         .onChange(of: sheet?.id) { _, _ in model.reviewTime.input() }
         .onChange(of: model.selectedPath) { _, _ in model.reviewTime.input() }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("\(snapshot.item.name) · r\(snapshot.item.revision.number)")
-                    .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                    .lineLimit(1)
-                    .accessibilityLabel(
-                        "\(snapshot.item.name) · r\(snapshot.item.revision.number) → \(snapshot.item.target)"
+                // The masthead names the item; once it scrolls away the title takes over.
+                if mastheadAway {
+                    Text(
+                        "\(snapshot.item.name) · +\(snapshot.item.revision.additions ?? 0) −\(snapshot.item.revision.deletions ?? 0)"
                     )
-                    .accessibilityIdentifier("reviewIdentity")
+                    .appearanceText(Appearance.caption).monospacedDigit()
+                    .foregroundStyle(Appearance.secondary).lineLimit(1)
+                }
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
                     sheet = .conversations(nil)
                 } label: {
                     Label("Conversations", systemImage: "bubble.left.and.bubble.right")
-                }.labelStyle(.iconOnly).tint(Appearance.brand).accessibilityIdentifier("reviewConversations")
+                }.accessibilityIdentifier("reviewConversations")
+                if let demo = current.demo {
+                    Button {
+                        sheet = .demo(demo)
+                    } label: {
+                        Label("Demo (\(demo.attachments.count))", systemImage: "play.rectangle")
+                    }.accessibilityIdentifier("reviewDemo")
+                }
+                ReviewMoreMenu(
+                    snapshot: snapshot, current: current,
+                    comparing: model.isComparing || model.cachedAt != nil,
+                    compare: { since in Task { await model.compare(since: since) } },
+                    open: { destination in
+                        switch destination {
+                        case .guide: sheet = .guide
+                        case .drafts: sheet = .drafts(nil)
+                        case .details: sheet = .details
+                        case .rules: sheet = .rules
+                        }
+                    },
+                    prioritize: { priority in
+                        act(.priority) { $0.priority = priority }
+                    },
+                    sync: { act(.sync) },
+                    requestChanges: { sheet = .feedback(.changesRequested) },
+                    abandon: { confirmingAbandon = true })
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    sheet = .drafts(nil)
-                } label: {
-                    Label("Comment drafts", systemImage: "text.bubble")
-                }.labelStyle(.iconOnly).tint(Appearance.brand).accessibilityIdentifier("reviewDrafts")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    sheet = .guide
-                } label: {
-                    Label("Review guide", systemImage: "book")
-                }.labelStyle(.iconOnly).tint(Appearance.brand).accessibilityIdentifier("reviewGuide")
-            }
+        }
+        .tint(Appearance.brand)
+        .confirmationDialog(
+            "Abandon \(snapshot.item.name) without merging?", isPresented: $confirmingAbandon,
+            titleVisibility: .visible
+        ) {
+            Button("Abandon item", role: .destructive) { act(.abandon) }
+        } message: {
+            Text(
+                current.item.backend == "github"
+                    ? "Closes its GitHub pull request, deletes its branch and drops its diffs."
+                    : "Drops the item's diffs. Add a reason under Item details to tell the agent why."
+            )
         }
         .sheet(item: $sheet, onDismiss: { Task { await model.refreshCurrent() } }) { selection in
             Group {
@@ -292,6 +342,13 @@ struct ReviewScene<
                             sheet = nil
                             openItem($0)
                         }, rules: rules)
+                case .rules:
+                    NavigationStack {
+                        rules(snapshot.item.project) { item in
+                            sheet = nil
+                            openItem(item)
+                        }.toolbar { Button("Done") { sheet = nil } }
+                    }
                 case .demo(let demo):
                     ReviewDemoScene(
                         demo: demo, service: model.sourceService, close: { sheet = nil },
@@ -303,15 +360,12 @@ struct ReviewScene<
                         { model.reviewTime.input() }
                     ) { sheet = nil }
                 case .drafts(let location):
-                    drafts(
-                        .init(
-                            hub: hub, item: snapshot.item.id, name: snapshot.item.name,
-                            revision: snapshot.item.revision.number), location
-                    ) { sheet = nil }
-                case .feedback:
+                    drafts(scope(snapshot), location) { sheet = nil }
+                case .feedback(let outcome):
                     VStack(spacing: 0) {
                         feedback(
-                            scope(snapshot), { await model.reviewTime.settle() },
+                            scope(snapshot), outcome, snapshot.remaining,
+                            { await model.reviewTime.settle() },
                             { model.reviewTime.input() },
                             { feedbackSent = true }
                         ) { sheet = nil }
@@ -328,13 +382,15 @@ struct ReviewScene<
                     ) { sheet = nil }
                 case .files:
                     ReviewFilesScene(
-                        files: snapshot.files, selectedPath: model.selectedPath,
+                        snapshot: snapshot, selectedPath: model.selectedPath,
                         close: { sheet = nil }
-                    ) {
-                        path in
-                        sourceFocus = nil
-                        model.selectedPath = path
+                    ) { path in
+                        select(path)
                         sheet = nil
+                    }
+                case .reasons(let path):
+                    if let file = snapshot.files.first(where: { $0.path == path }) {
+                        ReviewFileReasons(file: file) { sheet = nil }
                     }
                 }
             }.onReceive(
@@ -345,41 +401,92 @@ struct ReviewScene<
             ) { _ in model.reviewTime.input() }
         }
     }
-    private var fileControlsLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-            : AnyLayout(HStackLayout(spacing: 0))
+
+    private func bar(_ snapshot: ReviewSnapshot, current: ReviewSnapshot, order: ReviewReadingOrder)
+        -> some View
+    {
+        let file = snapshot.files.first { $0.path == model.selectedPath }
+        let busy = model.isSavingViewed || model.isComparing
+        return ReviewBar(
+            file: file, viewed: snapshot.reviewCount - snapshot.remaining,
+            total: snapshot.reviewCount, saving: busy,
+            disabled: model.cachedAt != nil || !current.item.isReviewable,
+            failure: model.viewedFailure,
+            primary: ReviewPrimaryAction(
+                // An older revision on screen can't be approved; reopening loads the newer one.
+                snapshot: snapshot,
+                reviewable: current.item.isReviewable && model.cachedAt == nil
+                    && (model.latestRevision ?? snapshot.item.revision.number)
+                        == snapshot.item.revision.number,
+                order: order, selected: model.selectedPath,
+                drafts: draftCount + current.hubDraftCount),
+            canComplete: current.item.isReviewable,
+            mark: {
+                guard let file else { return }
+                Task { await model.setViewed(path: file.path, viewed: !file.viewed) }
+            },
+            retry: { Task { await model.retryViewed() } },
+            perform: { action in perform(action, order: order) },
+            complete: { outcome in
+                feedbackSent = false
+                sheet = .feedback(outcome)
+            })
     }
 
-    private func filePicker(_ file: ReviewFile, index: Int, count: Int) -> some View {
-        ReviewFilePicker(file: file, position: index + 1, count: count) {
-            sheet = .files
+    private func perform(_ action: ReviewPrimaryAction, order: ReviewReadingOrder) {
+        switch action {
+        case .viewedAndNext:
+            guard let path = model.selectedPath else { return }
+            Task {
+                await model.setViewed(path: path, viewed: true)
+                guard model.viewedFailure == nil, case .loaded(let after) = model.state,
+                    let next = ReviewReadingOrder(after).nextUnviewed(after: path)
+                else { return }
+                select(next)
+            }
+        case .nextUnviewed(let path): select(path)
+        case .send:
+            feedbackSent = false
+            sheet = .feedback(.comment)
+        case .approve:
+            feedbackSent = false
+            sheet = .feedback(.approved)
         }
     }
 
-    private func completionActions(_ snapshot: ReviewSnapshot) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                feedbackSent = false
-                sheet = .feedback
-            } label: {
-                Text("Complete review").appearanceText(Appearance.label)
-                    .foregroundStyle(Appearance.onFill)
-                    .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: true)
-                    .frame(minHeight: 44)
-            }.buttonStyle(.glassProminent).tint(Appearance.brand)
-            .disabled(
-                model.isSavingViewed || model.isComparing
-                    || !(model.currentDetails ?? snapshot).item.isReviewable
-            ).accessibilityIdentifier("reviewFeedback")
-            Button {
-                sheet = .details
-            } label: {
-                Label("Item details and actions", systemImage: "ellipsis.circle")
-                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-            }.buttonStyle(.glass).tint(Appearance.brand)
-                .accessibilityIdentifier("reviewMore")
-                .disabled(model.isSavingViewed || model.isComparing)
+    private func select(_ path: String) {
+        sourceFocus = nil
+        model.selectedPath = path
+    }
+
+    // Hide the bars while reading down a file, as Safari does, and bring them back on any
+    // scroll up, near the top or at the end. Only the reader's own scrolling counts, so a
+    // layout change can't toggle them.
+    private func followChrome(_ value: ReviewScrollGeometry, previous: ReviewScrollGeometry) {
+        // UIKit's offset ignores the inset the bar itself adds or removes, so toggling the bar
+        // can't feed back into this decision mid-drag.
+        let delta = value.raw - previous.raw
+        if value.offset < mastheadHeight
+            || value.offset + value.viewportHeight >= value.contentHeight - 24
+        {
+            chromeHidden = false
+        } else if scrollPhase == .interacting || scrollPhase == .decelerating {
+            if delta > 8 { chromeHidden = true } else if delta < -8 { chromeHidden = false }
+        }
+    }
+
+    private func act(
+        _ action: ReviewActionsModel.Action, prepare: @escaping (ReviewActionsModel) -> Void = { _ in }
+    ) {
+        Task {
+            let actions = ReviewActionsModel(
+                service: model.service, item: model.item,
+                beforeLeaving: { await model.reviewTime.settle() })
+            await actions.load()
+            prepare(actions)
+            await actions.send(action)
+            notice = actions.error ?? actions.result
+            await model.refreshCurrent()
         }
     }
 
@@ -408,6 +515,7 @@ struct ReviewScene<
         sourceRequest = UUID()
         readerMoved = true
         restoreOffset = nil
+        chromeHidden = false
         sheet = nil
     }
 
@@ -416,5 +524,4 @@ struct ReviewScene<
             hub: hub, item: snapshot.item.id, name: snapshot.item.name,
             revision: snapshot.item.revision.number)
     }
-
 }

@@ -112,9 +112,7 @@ final class FollowConversationsTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

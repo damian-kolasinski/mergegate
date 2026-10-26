@@ -24,17 +24,16 @@ struct ReviewFileReader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Size, tier and ranking live in the file pill and its ⓘ; only exceptions stay here.
+            if hasNotes {
             VStack(alignment: .leading, spacing: 6) {
                 if let oldPath = file.oldPath {
                     Text("From \(oldPath)").appearanceText(Appearance.caption)
                 }
-                if let comparison = file.interdiff {
+                if let comparison = file.interdiff, comparison != .changed {
                     Text(comparison.label).appearanceText(Appearance.label)
                         .foregroundStyle(Appearance.secondary)
                 }
-                Text(metadata).appearanceText(Appearance.caption).foregroundStyle(
-                    Appearance.secondary)
-                ReviewFileReasons(file: file)
                 if file.isLFSPointer {
                     Text("Git LFS pointer · The actual file is stored outside this repository.")
                         .appearanceText(Appearance.caption)
@@ -57,6 +56,7 @@ struct ReviewFileReader: View {
             }.padding(.horizontal, 20).padding(.vertical, 10).frame(
                 maxWidth: .infinity, alignment: .leading)
             Divider()
+            }
             if showingPreview {
                 ReviewFilePreview(file: file, project: project, service: sourceService)
             } else {
@@ -92,15 +92,9 @@ struct ReviewFileReader: View {
         }.onChange(of: revealRequest) { _, request in if request != nil { showingPreview = false } }
     }
 
-    private var metadata: String {
-        var parts = [file.change, file.tier == .trusted ? "Trusted" : "Review"]
-        if let additions = file.additions, let deletions = file.deletions {
-            parts.append("+\(additions) −\(deletions)")
-        }
-        if let old = file.oldMode, let new = file.newMode, old != new {
-            parts.append("\(old) → \(new)")
-        }
-        return parts.joined(separator: " · ")
+    private var hasNotes: Bool {
+        file.oldPath != nil || (file.interdiff.map { $0 != .changed } ?? false) || file.isLFSPointer
+            || file.oldMode == "160000" || file.newMode == "160000" || file.previewKind != nil
     }
 
     private func message(_ title: String, _ detail: String) -> some View {

@@ -7,7 +7,7 @@ struct CommentDraftEditor: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(draft.location.path).appearanceText(Appearance.label).textSelection(.enabled)
+                Text(draft.location.path).appearanceText(Appearance.label)
                     .accessibilityLabel("File \(draft.location.path)")
                 Text(draft.location.label).appearanceText(Appearance.caption)
                     .foregroundStyle(Appearance.secondary).accessibilityIdentifier("draftAnchor")

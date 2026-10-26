@@ -98,9 +98,7 @@ final class ResolveDecisionsTests: XCTestCase {
         XCTAssertEqual(app.staticTexts["decisionResult"].label, "Rejection accepted")
         capture(app, "06 Rejection accepted — dark mode")
         app.swipeDown()
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
         app.navigationBars["Resolve rejection"].buttons.element(boundBy: 0).tap()
         tap(app.buttons["closeDecisionDetails"], app)
         try await verify(address, questions: 0, rejections: 0)
