@@ -11,11 +11,11 @@ final class InboxViewModel {
     private(set) var cachedAt: Date?
     let cache: InboxCache?
     var project: String?
-    var filter: InboxFilter = .all
     private(set) var generation = 0
     private(set) var triage: [String: InboxTriage] = [:]
     private(set) var triageErrors: [String: String] = [:]
-    var groups: [InboxGroup] { snapshot?.groups(project: project, filter: filter) ?? [] }
+    var groups: [InboxGroup] { snapshot?.groups(project: project) ?? [] }
+    var closed: [InboxItem] { snapshot?.closed(project: project) ?? [] }
     let service: InboxWebService
     let events: ServerEvents
     private var refreshVersion = 0
@@ -27,7 +27,10 @@ final class InboxViewModel {
     }
 
     func loadTriage(_ item: InboxItem) async {
-        guard cachedAt == nil, !item.isClosed, triage[item.id] == nil else { return }
+        // Only owed decisions need the item's detail; rows show everything else from the inbox.
+        guard cachedAt == nil, !item.isClosed, item.needsDecision, triage[item.id] == nil else {
+            return
+        }
         let requestedGeneration = generation
         do {
             let detail = try await service.triage(item: item.id)

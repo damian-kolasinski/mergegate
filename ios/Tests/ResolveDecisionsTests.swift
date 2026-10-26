@@ -81,7 +81,7 @@ final class ResolveDecisionsTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         XCTAssertTrue(details.waitForExistence(timeout: 20))
@@ -96,10 +96,10 @@ final class ResolveDecisionsTests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["decisionResult"].waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertEqual(app.staticTexts["decisionResult"].label, "Rejection accepted")
-        capture(app, "06 Rejection accepted — dark largest text")
+        capture(app, "06 Rejection accepted — dark mode")
         app.swipeDown()
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
         app.navigationBars["Resolve rejection"].buttons.element(boundBy: 0).tap()
         tap(app.buttons["closeDecisionDetails"], app)

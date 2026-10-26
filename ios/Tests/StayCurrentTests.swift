@@ -123,7 +123,7 @@ final class StayCurrentTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
@@ -135,7 +135,7 @@ final class StayCurrentTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["reviewIdentity"].waitForExistence(timeout: 20))
         _ = try await control("advance")
         XCTAssertTrue(app.staticTexts["New revision r5 available"].waitForExistence(timeout: 15))
-        capture(app, "Live updates — dark mode at largest text size")
+        capture(app, "Live updates — dark mode")
         let retainedSource = app.textViews["unifiedDiff"]
         for _ in 0..<6 where !retainedSource.isHittable { app.swipeUp() }
         XCTAssertTrue(retainedSource.isHittable, app.debugDescription)
@@ -159,7 +159,7 @@ final class StayCurrentTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
     }
 

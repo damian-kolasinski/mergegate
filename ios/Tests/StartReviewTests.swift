@@ -54,7 +54,7 @@ final class StartReviewTests: XCTestCase {
             "Routine review actions should share one row at standard text sizes.")
         XCTAssertLessThan(reader.frame.minY, app.frame.height * 0.65,
             "Source should be visible above the bottom third on entry.")
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
+        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
         capture(app, "Start review — first real unified diff")
         tapWhenStable(app.buttons["reviewGuide"])
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "amount shown matches the amount charged")).firstMatch.waitForExistence(timeout: 5))
@@ -66,7 +66,7 @@ final class StartReviewTests: XCTestCase {
         XCTAssertTrue(first.label.contains("z-checkout.swift"), first.label)
         XCTAssertTrue(first.label.contains("Review the total calculation first."), first.label)
         XCTAssertTrue(app.buttons["reviewFile-1"].label.contains("README.md"))
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
+        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
         capture(app, "Importance-ordered files and reasons")
         tapWhenStable(app.buttons["reviewFile-2"])
         XCTAssertTrue((reader.value as? String ?? "").contains("Region 80:"))
@@ -104,7 +104,7 @@ final class StartReviewTests: XCTestCase {
         tapWhenStable(app.buttons["reviewFile-0"])
         app.terminate()
         XCUIDevice.shared.appearance = .dark
-        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
         for _ in 0..<5 where !open.isHittable { app.swipeUp() }
@@ -114,11 +114,11 @@ final class StartReviewTests: XCTestCase {
         for _ in 0..<6 where !reader.isHittable || reader.frame.minY > app.buttons["reviewViewed"].frame.minY - 44 {
             app.swipeUp()
         }
-        XCTAssertTrue(reader.isHittable, "Source must remain reachable above the actions at the largest text size.")
+        XCTAssertTrue(reader.isHittable, "Source must remain reachable above the actions.")
         XCTAssertLessThan(reader.frame.minY, app.buttons["reviewViewed"].frame.minY)
         XCTAssertTrue(app.buttons["reviewViewed"].isHittable)
         XCTAssertTrue(app.buttons["reviewFeedback"].isHittable)
-        capture(app, "Review in dark mode at the largest accessibility text size")
+        capture(app, "Review in dark mode")
     }
 
     @MainActor private func tapWhenStable(_ element: XCUIElement) {

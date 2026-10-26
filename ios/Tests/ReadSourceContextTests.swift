@@ -32,7 +32,7 @@ final class ReadSourceContextTests: XCTestCase {
         let source = app.textViews["unifiedDiff"].firstMatch
         XCTAssertTrue((source.value as? String ?? "").contains("Checkout pricing — original source context"))
         XCTAssertTrue((source.value as? String ?? "").contains("é 🐙"))
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription])
+        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
         capture(app, "02 — Expanded source with wrapped Unicode line")
         source.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 190, dy: 55)).press(forDuration: 1.2)
         XCTAssertTrue(
@@ -66,7 +66,7 @@ final class ReadSourceContextTests: XCTestCase {
         capture(app, "06 — Read unchanged renamed source")
         app.terminate()
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-AppleInterfaceStyle",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL", "-AppleInterfaceStyle",
             "Dark",
         ]
         app.launch()

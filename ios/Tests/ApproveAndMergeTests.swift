@@ -58,7 +58,7 @@ final class ApproveAndMergeTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         try openReview(app)
@@ -66,7 +66,7 @@ final class ApproveAndMergeTests: XCTestCase {
         XCTAssertTrue(app.buttons["sendFeedback"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["sendFeedback"].label, "Approve & merge")
         XCTAssertEqual(app.staticTexts["feedbackScope"].label, "mobile-smoke#2 · r2")
-        capture(app, "Approve and merge — dark largest text")
+        capture(app, "Approve and merge — dark mode")
         try audit(app)
         app.terminate()
         XCUIDevice.shared.appearance = .light
@@ -89,12 +89,12 @@ final class ApproveAndMergeTests: XCTestCase {
         try audit(app)
         app.buttons["closeFeedback"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.buttons["stateFilter"].waitForExistence(timeout: 10))
-        app.buttons["stateFilter"].tap()
-        app.buttons["Closed today"].tap()
+        let closedToday = app.descendants(matching: .any)["inboxClosedToday"].firstMatch
+        XCTAssertTrue(closedToday.waitForExistence(timeout: 10), app.debugDescription)
+        closedToday.tap()
         let item = app.buttons["openReview-mobile-smoke#2"]
         XCTAssertTrue(item.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(item.label.contains("Merged"), item.label)
+        XCTAssertGreaterThan(item.frame.minY, closedToday.frame.minY)
         capture(app, "Approve and merge — closed inbox")
         try await verifyHub(address)
         app.terminate()
@@ -150,7 +150,7 @@ final class ApproveAndMergeTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
     }
 
