@@ -29,17 +29,25 @@ final class ReReviewRevisionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("r2"))
         XCTAssertEqual(app.buttons["reviewComparison"].label, "Compare: Since r1")
         XCTAssertEqual(app.staticTexts["reviewViewedProgress"].label, "1 of 2 viewed")
-        XCTAssertTrue(app.staticTexts["Changed again"].exists)
         let reader = app.textViews["unifiedDiff"]
         XCTAssertTrue(reader.waitForExistence(timeout: 10))
         XCTAssertTrue((reader.value as? String ?? "").contains("let delivery = 15"))
         try audit(app)
         capture(app, "Re-review — since last review")
+        app.buttons["reviewFileReasons"].tap()
+        XCTAssertTrue(
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Changed again"))
+                .firstMatch.waitForExistence(timeout: 5))
+        app.buttons["closeFileReasons"].tap()
         app.buttons["reviewFiles"].tap()
+        // Files unchanged since the compared revision fold into their own group, as on the web.
+        let unchanged = app.descendants(matching: .any)["reviewUnchangedFiles"].firstMatch
+        XCTAssertTrue(unchanged.waitForExistence(timeout: 5))
+        unchanged.tap()
         XCTAssertTrue(app.buttons["reviewFile-1"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["reviewFile-1"].label.contains("Viewed"))
-        XCTAssertTrue(app.buttons["reviewFile-1"].label.contains("Unchanged"))
-        XCTAssertTrue(app.buttons["reviewFile-2"].label.contains("Change dropped"))
+        XCTAssertTrue(app.buttons["reviewFile-1"].label.contains("unchanged since r1"))
+        XCTAssertTrue(app.buttons["reviewFile-2"].label.contains("dropped"))
         capture(app, "Re-review — unchanged policy retains viewed state")
         app.buttons["reviewFile-1"].tap()
         XCTAssertEqual(app.buttons["reviewViewed"].value as? String, "Viewed")
@@ -90,7 +98,7 @@ final class ReReviewRevisionTests: XCTestCase {
         XCTAssertTrue(reader.isHittable, "Source remains reachable.")
         XCTAssertLessThanOrEqual(reader.frame.maxY, app.buttons["reviewViewed"].frame.minY)
         capture(app, "Re-review — dark mode")
-        try audit(app, largeText: true)
+        try audit(app)
     }
 
     @MainActor private func waitForComparison(_ app: XCUIApplication, _ label: String) {
@@ -112,27 +120,7 @@ final class ReReviewRevisionTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication, largeText: Bool = false) throws {
-        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription]) { issue in
-            guard issue.auditType == .contrast, let element = issue.element,
-                element.elementType == .staticText,
-                app.scrollViews["reviewScroll"].staticTexts.matching(NSPredicate(format: "label == %@", element.label)).count > 0
-            else { return false }
-            // XCTest includes obscured scroll labels. A label with no hittable rendered
-            // area has no contrast to measure; visible labels still require measured contrast.
-            let top = app.navigationBars.firstMatch.frame.maxY
-            let bottom = app.buttons["reviewViewed"].frame.minY - 12
-            let viewport = CGRect(x: app.frame.minX, y: top, width: app.frame.width, height: max(0, bottom - top))
-            guard element.isHittable, viewport.contains(element.frame) else { return true }
-            let rendered = element.screenshot()
-            let ratio = InboxRenderedContrast.measure(rendered.image)
-            XCTContext.runActivity(named: "Visible review label contrast: \(ratio ?? 0)") { activity in
-                let attachment = XCTAttachment(screenshot: rendered)
-                attachment.lifetime = .keepAlways
-                activity.add(attachment)
-            }
-            // WCAG requires 3:1 for large text; the largest Dynamic Type category exceeds 18pt.
-            return ratio.map { $0 >= (largeText ? 3 : 4.5) } ?? false
-        }
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

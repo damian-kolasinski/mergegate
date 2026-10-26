@@ -3,6 +3,8 @@ import SwiftUI
 
 struct FeedbackScene: View {
     @State var model: FeedbackViewModel
+    /// Review files still unviewed in the reader, which approving would merge unread.
+    var unreviewed = 0
     let close: () -> Void
     @State private var confirmResend = false
     @State private var confirmEdit = false
@@ -27,7 +29,7 @@ struct FeedbackScene: View {
                             ? (model.approval?.title
                                 ?? (model.sentVerdict == .changesRequested
                                     ? "Changes requested" : "Feedback sent"))
-                            : (model.verdict == .approved ? "Approve & merge" : "Send feedback")
+                            : model.verdict.title
                     )
                     .appearanceText(Appearance.heading).accessibilityAddTraits(.isHeader)
                     .fixedSize(horizontal: false, vertical: true)
@@ -50,15 +52,25 @@ struct FeedbackScene: View {
                         }
                     } else {
                         Picker("Review outcome", selection: $model.verdict) {
-                            ForEach(FeedbackVerdict.allCases) { verdict in
-                                Text(verdict.title).tag(verdict)
-                            }
-                        }.pickerStyle(.menu).appearanceText(Appearance.label).frame(minHeight: 44)
-                            .disabled(model.frozen || model.busy).accessibilityIdentifier("feedbackVerdict")
+                            Text("Comment").tag(FeedbackVerdict.comment)
+                            Text("Request changes").tag(FeedbackVerdict.changesRequested)
+                            Text("Approve").tag(FeedbackVerdict.approved)
+                        }.pickerStyle(.segmented).disabled(model.frozen || model.busy)
+                            .accessibilityIdentifier("feedbackVerdict")
                         if model.verdict == .approved, let target = model.approvalTarget {
-                            Text("r\(model.scope.revision) → \(target)")
-                                .appearanceText(Appearance.label).accessibilityIdentifier("approvalTarget")
-                            Text("Summary optional.")
+                            // This sheet is the confirmation: it names the exact revision and target.
+                            Text("Squash r\(model.scope.revision) onto \(target)?")
+                                .appearanceText(Appearance.rowHeading)
+                                .accessibilityIdentifier("approvalTarget")
+                            if unreviewed > 0 {
+                                Text("\(unreviewed) \(unreviewed == 1 ? "file" : "files") not reviewed yet.")
+                                    .appearanceText(Appearance.label)
+                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                    .foregroundStyle(Appearance.onTintWarning)
+                                    .background(Appearance.tintWarning, in: Capsule())
+                                    .accessibilityIdentifier("approvalUnreviewed")
+                            }
+                            Text("Summary optional. This changes the target branch.")
                                 .appearanceText(Appearance.body).fixedSize(horizontal: false, vertical: true)
                         } else {
                             Text(
@@ -128,8 +140,12 @@ struct FeedbackScene: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {
                     Button {
-                        if model.verdict == .approved && !model.uncertain {
+                        if model.verdict == .approved && model.frozen && !model.uncertain {
+                            // A retained approval can return through any entry point; confirm it.
                             confirmApproval = true
+                        } else if model.verdict == .approved && !model.uncertain {
+                            let target = model.approvalTarget
+                            Task { await model.send(confirmedTarget: target) }
                         } else {
                             Task { await model.send() }
                         }
@@ -138,7 +154,13 @@ struct FeedbackScene: View {
                             if model.busy { ProgressView() }
                             Text(
                                 model.uncertain
-                                    ? "Check delivery" : model.frozen ? "Retry sending" : model.verdict.title)
+                                    ? "Check delivery"
+                                    : model.frozen
+                                        ? model.verdict == .approved
+                                            ? "Retry approve & merge" : "Retry sending"
+                                        : model.verdict == .approved
+                                            ? "Approve & merge into \(model.approvalTarget ?? "target")"
+                                            : model.verdict.title)
                         }.appearanceText(Appearance.label)
                             .foregroundStyle(model.canSend ? Appearance.onFill : Appearance.primary)
                             .frame(maxWidth: .infinity, minHeight: 44)

@@ -41,10 +41,16 @@ struct MergegateApp: App {
                             ProjectRulesBuilder.build(
                                 hub: hub.url, project: project, openItem: openItem)
                         },
-                        feedback: { scope, settle, activity, sent, close in
+                        localDrafts: { scope in
+                            // Blank drafts stay on the phone and are never sent, so they don't count.
+                            (try? FeedbackDraftStore().load(scope: scope))?.filter {
+                                !$0.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            }.count ?? 0
+                        },
+                        feedback: { scope, outcome, unreviewed, settle, activity, sent, close in
                             ReviewSubmissionBuilder.build(
-                                scope: scope, drafts: { try FeedbackDraftStore() },
-                                beforeSend: settle,
+                                scope: scope, outcome: outcome, unreviewed: unreviewed,
+                                drafts: { try FeedbackDraftStore() }, beforeSend: settle,
                                 onActivity: activity, onSent: sent, close: close)
                         })
                 }

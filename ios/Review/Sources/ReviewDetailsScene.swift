@@ -94,7 +94,7 @@ struct ReviewDetailsScene<Rules: View>: View {
                             }
                         }
                         .pickerStyle(.menu).accessibilityIdentifier("itemPriorityPicker")
-                        TextField("Note (optional)", text: $model.note, axis: .vertical)
+                        TextField("Note (optional)", text: $model.note, axis: .vertical).lineLimit(3...6)
                         Button {
                             Task { await model.send(.priority) }
                         } label: {
@@ -115,7 +115,7 @@ struct ReviewDetailsScene<Rules: View>: View {
                             }
                             TextField(
                                 "Reason for abandoning (optional)", text: $model.reason,
-                                axis: .vertical)
+                                axis: .vertical).lineLimit(3...6)
                             Button("Abandon item…", role: .destructive) { confirmingAbandon = true }
                                 .frame(
                                     minHeight: 44)

@@ -29,7 +29,7 @@ final class SendFeedbackTests: XCTestCase {
         capture(app, "Feedback — File reader")
         try comment(app, y: 69, body: "Should delivery be included in the receipt?")
         try comment(app, y: 90, body: "Keep the charged total consistent with the receipt.")
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["feedbackScope"].label, "mobile-smoke#2 · r1")
         XCTAssertTrue(app.staticTexts["2 local comments"].exists)
@@ -42,7 +42,7 @@ final class SendFeedbackTests: XCTestCase {
         app.terminate()
         app.launch()
         try openReview(app)
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertEqual(
             app.textViews["feedbackSummary"].value as? String,
@@ -85,7 +85,7 @@ final class SendFeedbackTests: XCTestCase {
         capture(app, "Feedback — hub confirmed receipt")
         try audit(app)
         app.buttons["closeFeedback"].tap()
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         XCTAssertTrue(app.staticTexts["No comment drafts"].waitForExistence(timeout: 5))
         app.buttons["closeDrafts"].tap()
         app.buttons["reviewConversations"].tap()
@@ -100,7 +100,7 @@ final class SendFeedbackTests: XCTestCase {
         ]
         app.launch()
         try openReview(app)
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertFalse(
             (app.textViews["feedbackSummary"].value as? String ?? "").contains("Check delivery"))
@@ -174,9 +174,7 @@ final class SendFeedbackTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

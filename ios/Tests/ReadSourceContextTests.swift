@@ -32,7 +32,7 @@ final class ReadSourceContextTests: XCTestCase {
         let source = app.textViews["unifiedDiff"].firstMatch
         XCTAssertTrue((source.value as? String ?? "").contains("Checkout pricing — original source context"))
         XCTAssertTrue((source.value as? String ?? "").contains("é 🐙"))
-        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription])
+        try auditReviewAccessibility(app)
         capture(app, "02 — Expanded source with wrapped Unicode line")
         source.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 190, dy: 55)).press(forDuration: 1.2)
         XCTAssertTrue(
@@ -73,6 +73,14 @@ final class ReadSourceContextTests: XCTestCase {
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
         for _ in 0..<5 where !open.isHittable { app.swipeUp() }
         open.tap()
+        // Reopening restores the last file read; this part reads the first one again.
+        let files = app.buttons["reviewFiles"]
+        XCTAssertTrue(files.waitForExistence(timeout: 20))
+        if !files.label.hasPrefix("File 1 of") {
+            files.tap()
+            XCTAssertTrue(app.buttons["reviewFile-0"].waitForExistence(timeout: 5))
+            app.buttons["reviewFile-0"].tap()
+        }
         XCTAssertTrue(app.buttons["loadSourceContext"].waitForExistence(timeout: 20))
         app.buttons["loadSourceContext"].tap()
         let expand = app.buttons["expandContext-0"]

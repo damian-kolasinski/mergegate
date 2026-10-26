@@ -27,18 +27,16 @@ final class ApproveAndMergeTests: XCTestCase {
         app.buttons["connectHub"].tap()
         try openReview(app)
         capture(app, "Approve and merge — File reader")
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app, "Approve & merge")
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
-        app.buttons["feedbackVerdict"].tap()
-        app.buttons["Approve & merge"].tap()
-        XCTAssertTrue(app.buttons["sendFeedback"].isEnabled)
-        XCTAssertEqual(app.staticTexts["approvalTarget"].label, "r1 → main")
-        capture(app, "Approve and merge — feedback preview")
-        try audit(app)
-        app.buttons["sendFeedback"].tap()
-        let confirm = app.buttons["Approve & merge into main"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        let confirm = app.buttons["sendFeedback"]
+        XCTAssertTrue(confirm.isEnabled)
+        // The sheet is the confirmation: it names the exact revision, target and unread files.
+        XCTAssertEqual(app.staticTexts["approvalTarget"].label, "Squash r1 onto main?")
+        XCTAssertEqual(confirm.label, "Approve & merge into main")
+        XCTAssertTrue(app.staticTexts["approvalUnreviewed"].exists)
         capture(app, "Approve and merge — exact revision confirmation")
+        try audit(app)
         // The host controller submits real CLI work while the confirmation is open.
         _ = try await control("advance", method: "POST")
         confirm.tap()
@@ -49,11 +47,9 @@ final class ApproveAndMergeTests: XCTestCase {
         app.buttons["closeFeedback"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         try openReview(app)
-        app.buttons["reviewFeedback"].tap()
-        XCTAssertTrue(app.buttons["feedbackVerdict"].waitForExistence(timeout: 10))
-        app.buttons["feedbackVerdict"].tap()
-        app.buttons["Approve & merge"].tap()
-        XCTAssertEqual(app.staticTexts["approvalTarget"].label, "r2 → main")
+        openCompletion(app, "Approve & merge")
+        XCTAssertTrue(app.staticTexts["approvalTarget"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["approvalTarget"].label, "Squash r2 onto main?")
         capture(app, "Approve and merge — current revision")
         app.terminate()
         XCUIDevice.shared.appearance = .dark
@@ -62,9 +58,9 @@ final class ApproveAndMergeTests: XCTestCase {
         ]
         app.launch()
         try openReview(app)
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app, "Approve & merge")
         XCTAssertTrue(app.buttons["sendFeedback"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons["sendFeedback"].label, "Approve & merge")
+        XCTAssertEqual(app.buttons["sendFeedback"].label, "Approve & merge into main")
         XCTAssertEqual(app.staticTexts["feedbackScope"].label, "mobile-smoke#2 · r2")
         capture(app, "Approve and merge — dark mode")
         try audit(app)
@@ -73,10 +69,8 @@ final class ApproveAndMergeTests: XCTestCase {
         app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         try openReview(app)
-        app.buttons["reviewFeedback"].tap()
-        XCTAssertTrue(app.buttons["sendFeedback"].waitForExistence(timeout: 10))
-        app.buttons["sendFeedback"].tap()
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        openCompletion(app, "Approve & merge")
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
         capture(app, "Approve and merge — confirm r2 into main")
         confirm.tap()
         XCTAssertTrue(
@@ -149,9 +143,7 @@ final class ApproveAndMergeTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

@@ -94,7 +94,7 @@ final class StayCurrentTests: XCTestCase {
             app.staticTexts["New revision r3 available"].waitForExistence(timeout: 20),
             app.debugDescription)
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("r1"))
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         let draft = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "commentDraft-")
         ).firstMatch
@@ -158,9 +158,7 @@ final class StayCurrentTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ])
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

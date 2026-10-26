@@ -68,7 +68,7 @@ final class ResumeOfflineTests: XCTestCase {
             abs(restoredSource.frame.minY - onlineSourceY), 160,
             "The saved scroll offset should survive source relayout and the offline notice.")
         capture(app, "Offline 03 — restored source context highlighting and position")
-        app.buttons["reviewDrafts"].tap()
+        openReviewMenu(app, "Comment drafts")
         let draft = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "commentDraft-")
         ).firstMatch
@@ -78,7 +78,7 @@ final class ResumeOfflineTests: XCTestCase {
         app.textViews["draftBody"].tap()
         app.textViews["draftBody"].typeText(" Edited offline.")
         app.buttons["closeDrafts"].tap()
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 5))
         app.textViews["feedbackSummary"].tap()
         app.textViews["feedbackSummary"].typeText("Offline summary stays with r1.")
@@ -91,7 +91,7 @@ final class ResumeOfflineTests: XCTestCase {
             app.buttons["openLatestRevision"].waitForExistence(timeout: 25), app.debugDescription)
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("r1"))
         capture(app, "Offline 05 — reconnect finds r2 and keeps r1 work")
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 5))
         XCTAssertEqual(
             app.textViews["feedbackSummary"].value as? String, "Offline summary stays with r1.")
@@ -104,7 +104,7 @@ final class ResumeOfflineTests: XCTestCase {
         app.buttons["openLatestRevision"].tap()
         XCTAssertTrue(app.staticTexts["reviewIdentity"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("r2"))
-        app.buttons["reviewFeedback"].tap()
+        openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 5))
         app.textViews["feedbackSummary"].tap()
         app.textViews["feedbackSummary"].typeText("Current revision checked after reconnect.")
@@ -155,7 +155,7 @@ final class ResumeOfflineTests: XCTestCase {
         }
         XCTAssertTrue(open.isHittable, app.debugDescription)
         open.tap()
-        XCTAssertTrue(app.buttons["reviewDrafts"].waitForExistence(timeout: 25), app.debugDescription)
+        XCTAssertTrue(app.buttons["reviewMore"].waitForExistence(timeout: 25), app.debugDescription)
         XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 10))
     }
 
@@ -170,48 +170,7 @@ final class ResumeOfflineTests: XCTestCase {
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription,
-        ]) { issue in
-            if issue.auditType == .contrast, let element = issue.element,
-                element.elementType == .staticText || element.elementType == .button
-            {
-                let scroll = app.scrollViews["reviewScroll"]
-                let top = app.navigationBars.firstMatch.frame.maxY
-                let bottom = app.buttons["reviewViewed"].frame.minY
-                let visible = CGRect(
-                    x: scroll.frame.minX, y: top, width: scroll.frame.width, height: bottom - top)
-                let belongsToReader = scroll.descendants(matching: element.elementType).matching(
-                    NSPredicate(format: "label == %@", element.label)
-                )
-                .allElementsBoundByIndex.contains { $0.frame == element.frame }
-                // The audit reports scrolled text behind the navigation glass and bottom bar.
-                // Its pixels are occluded; audit the title at the top and the detail fully in view.
-                if belongsToReader && !visible.contains(element.frame) {
-                    XCTContext.runActivity(named: "Occluded reader text contrast") { activity in
-                        let report = XCTAttachment(string: issue.detailedDescription)
-                        report.lifetime = .keepAlways
-                        activity.add(report)
-                    }
-                    return true
-                }
-            }
-            guard issue.auditType == .contrast, let element = issue.element,
-                element.elementType == .staticText, element.identifier == "offlineReviewDetail"
-            else { return false }
-            // XCTest can misclassify large text; require contrast in its actual rendered crop.
-            let screenshot = element.screenshot()
-            let ratio = InboxRenderedContrast.measure(screenshot.image)
-            XCTContext.runActivity(
-                named:
-                    "Offline detail contrast: \(ratio.map { String(format: "%.2f:1", $0) } ?? "unmeasurable")"
-            ) { activity in
-                let crop = XCTAttachment(screenshot: screenshot)
-                crop.lifetime = .keepAlways
-                activity.add(crop)
-            }
-            return ratio.map { $0 >= 4.5 } ?? false
-        }
+        try auditReviewAccessibility(app)
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

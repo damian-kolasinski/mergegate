@@ -21,11 +21,11 @@ public enum ReviewBuilder {
             ) -> Conversations,
         @ViewBuilder fileConversations: @escaping (CommentDraftScope, String) -> FileConversations,
         @ViewBuilder rules: @escaping (String, @escaping (String) -> Void) -> Rules,
+        localDrafts: @escaping (CommentDraftScope) -> Int,
         @ViewBuilder feedback:
             @escaping (
-                CommentDraftScope, @escaping () async -> Void, @escaping () -> Void,
-                @escaping () -> Void,
-                @escaping () -> Void
+                CommentDraftScope, ReviewOutcome, Int, @escaping () async -> Void,
+                @escaping () -> Void, @escaping () -> Void, @escaping () -> Void
             ) -> Feedback
     ) -> some View {
         ReviewScene(
@@ -35,7 +35,7 @@ public enum ReviewBuilder {
                 item: item),
             styling: styling, hub: hub.url, drafts: drafts, conversations: conversations,
             fileConversations: fileConversations, feedback: feedback, rules: rules,
-            openItem: openItem)
+            localDrafts: localDrafts, openItem: openItem)
     }
 
     @MainActor static func model(service: ReviewWebService, item: String) -> ReviewViewModel {
