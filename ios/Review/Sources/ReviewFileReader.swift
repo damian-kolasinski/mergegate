@@ -18,6 +18,7 @@ struct ReviewFileReader: View {
 
     var focus: SourceAnchor? = nil
     var revealRequest: UUID? = nil
+    var revealTopInset: CGFloat = 0
     var didReveal: (() -> Void)? = nil
     @State private var showingPreview = false
 
@@ -73,7 +74,8 @@ struct ReviewFileReader: View {
                         styling: styling,
                         contextLoaded: $contextLoaded, revealed: $revealed, onReady: onReady,
                         onComment: onComment, onReadConversations: onReadConversations,
-                        focus: focus, revealRequest: revealRequest, didReveal: didReveal
+                        focus: focus, revealRequest: revealRequest,
+                        revealTopInset: revealTopInset, didReveal: didReveal
                     )
                 case .binary:
                     message("Binary file", "A unified text diff is unavailable for this file.")

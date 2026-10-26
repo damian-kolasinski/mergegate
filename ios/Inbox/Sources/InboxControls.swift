@@ -5,8 +5,8 @@ struct InboxControls: View {
     @Bindable var model: InboxViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("\(model.project ?? "All projects") · \(needs.count) \(needs.count == 1 ? "item needs" : "items need") you · \(workingCount) in progress")
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(needs.count) \(needs.count == 1 ? "item needs" : "items need") you · \(workingCount) in progress")
                 .appearanceText(Appearance.body).foregroundStyle(Appearance.secondary)
                 .accessibilityIdentifier("inboxSummary")
             ScrollView(.horizontal) { chips }.scrollIndicators(.hidden).scrollClipDisabled()
@@ -43,6 +43,7 @@ struct InboxControls: View {
                 .foregroundStyle(model.filter == filter ? Appearance.onFill : Appearance.primary)
                 .accessibilityIdentifier("inboxActionLabel")
                 .padding(.horizontal, 4).frame(minHeight: 44)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .buttonBorderShape(.capsule).tint(Appearance.brand)
         .accessibilityAddTraits(model.filter == filter ? .isSelected : [])

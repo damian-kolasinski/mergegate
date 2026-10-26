@@ -29,7 +29,7 @@ struct InboxDecisionCard: View {
             }
             if let decision = triage?.decisions.first {
                 Text(decision.preview).appearanceText(Appearance.body)
-                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3).fixedSize(horizontal: false, vertical: true)
             } else if error == nil {
                 Text(
                     triage == nil
@@ -40,14 +40,14 @@ struct InboxDecisionCard: View {
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 6) {
-                        reviewButton
                         if triage?.decisions.isEmpty == false { detailsButton }
+                        reviewButton
                     }
                 } else {
                     HStack {
-                        reviewButton
-                        Spacer(minLength: 8)
                         if triage?.decisions.isEmpty == false { detailsButton }
+                        Spacer(minLength: 8)
+                        reviewButton
                     }
                 }
             }
@@ -78,15 +78,15 @@ struct InboxDecisionCard: View {
 
     private var detailsButton: some View {
         Button(action: openDecisions) {
-            Label(
+            Text(
                 (triage?.decisions.count ?? 0) > 1
-                    ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details",
-                systemImage: "arrow.up.right"
+                    ? "Read \(triage?.decisions.count ?? 0) decisions" : "Read details"
             )
-            .appearanceText(Appearance.label).foregroundStyle(Appearance.primary)
+            .appearanceText(Appearance.label).foregroundStyle(Appearance.onFill)
             .accessibilityIdentifier("inboxDecisionDetailsLabel")
-            .padding(.horizontal, 12).frame(minHeight: 44)
-        }.buttonStyle(.glass).tint(Appearance.brand).accessibilityHint(decisionLabel)
+            .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: true)
+            .padding(.horizontal, 4).frame(minHeight: 44)
+        }.buttonStyle(.glassProminent).tint(Appearance.brand).accessibilityHint(decisionLabel)
             .accessibilityIdentifier("decisionDetails-\(item.id)")
     }
 }

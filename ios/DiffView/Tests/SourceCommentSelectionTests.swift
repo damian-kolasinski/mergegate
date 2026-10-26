@@ -41,6 +41,34 @@ struct SourceCommentSelectionTests {
         #expect(reveals == 1)
     }
 
+    @Test @MainActor func upwardSourceJumpClearsPinnedReadingControls() throws {
+        let scroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
+        let reader = SourceTextView.reader()
+        let document = DiffText.document(
+            [.init(header: "", lines: (1...200).map {
+                .init(kind: .added, oldLine: nil, newLine: UInt32($0), text: "Source line \($0)")
+            })], traits: UITraitCollection())
+        reader.install(document.text, selection: document.selection)
+        reader.frame = CGRect(
+            origin: .zero,
+            size: reader.sizeThatFits(CGSize(width: 320, height: CGFloat.greatestFiniteMagnitude)))
+        scroll.addSubview(reader)
+        scroll.contentSize = reader.bounds.size
+        scroll.contentOffset.y = reader.bounds.height - scroll.bounds.height
+        reader.revealTopInset = 88
+        let range = try #require(document.comments.range(
+            for: .init(side: .new, startLine: 20, endLine: 20, quote: "")))
+        reader.pendingReveal = range
+        reader.setNeedsLayout()
+        reader.layoutIfNeeded()
+        let start = try #require(reader.position(from: reader.beginningOfDocument, offset: range.location))
+        let end = try #require(reader.position(from: start, offset: range.length))
+        let textRange = try #require(reader.textRange(from: start, to: end))
+        let revealed = reader.convert(reader.firstRect(for: textRange), to: scroll)
+        #expect(revealed.minY >= scroll.bounds.minY + reader.revealTopInset)
+        #expect(revealed.maxY <= scroll.bounds.maxY)
+    }
+
     @Test @MainActor func anchorsUseSourceLinesAndWholeUnicodeRowsRatherThanWrappedRows() throws {
         let long = String(repeating: "e\u{301} 🐙 long source ", count: 30)
         let doc = DiffText.document(

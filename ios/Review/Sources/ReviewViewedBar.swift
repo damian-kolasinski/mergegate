@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ReviewViewedBar: View {
+struct ReviewViewedBar<Completion: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let file: ReviewFile
     let viewed: Int
@@ -10,6 +10,7 @@ struct ReviewViewedBar: View {
     let failure: ReviewViewedFailure?
     let mark: () -> Void
     let retry: () -> Void
+    @ViewBuilder let completion: () -> Completion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -24,34 +25,43 @@ struct ReviewViewedBar: View {
             }
             layout {
                 control
-                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
-                progress
-            }.padding(.horizontal, 20).padding(.bottom, 8)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                completion()
+            }.padding(.horizontal, 16).padding(.bottom, 8)
         }.background(Appearance.surface).tint(Appearance.brand)
     }
 
     private var layout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
-            : AnyLayout(HStackLayout(spacing: 16))
+            : AnyLayout(HStackLayout(spacing: 8))
     }
 
     @ViewBuilder private var control: some View {
         if file.interdiff == .dropped {
-            Text("Dropped change · no viewed mark").appearanceText(Appearance.caption)
-                .foregroundStyle(Appearance.secondary).frame(minHeight: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dropped change · no viewed mark").appearanceText(Appearance.caption)
+                    .foregroundStyle(Appearance.secondary)
+                progress
+            }.frame(minHeight: 44)
         } else if file.tier == .trusted {
-            Label("Trusted · counts as viewed", systemImage: "checkmark.shield")
-                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                .frame(minHeight: 44).accessibilityIdentifier("trustedViewed")
+            VStack(alignment: .leading, spacing: 2) {
+                Label("Trusted · counts as viewed", systemImage: "checkmark.shield")
+                    .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                    .accessibilityIdentifier("trustedViewed")
+                progress
+            }.frame(minHeight: 44)
         } else {
             Button(action: mark) {
-                HStack(spacing: 8) {
-                    if saving { ProgressView().accessibilityLabel("Saving viewed state") }
-                    Label(
-                        file.viewed ? "Viewed" : "Mark viewed",
-                        systemImage: file.viewed ? "checkmark.circle.fill" : "circle")
-                }.appearanceText(Appearance.body).frame(minHeight: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        if saving { ProgressView().accessibilityLabel("Saving viewed state") }
+                        Label(
+                            file.viewed ? "Viewed" : "Mark viewed",
+                            systemImage: file.viewed ? "checkmark.circle.fill" : "circle")
+                    }.appearanceText(Appearance.label)
+                    progress
+                }.fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
             }.disabled(saving || disabled).accessibilityIdentifier("reviewViewed")
                 .accessibilityValue(file.viewed ? "Viewed" : "Not viewed")
                 .accessibilityHint(file.viewed ? "Mark this file as not viewed" : "Mark this file as viewed")

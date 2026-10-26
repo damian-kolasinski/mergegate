@@ -36,6 +36,7 @@ final class SourceTextView: UITextView {
     var revealedAnchor: SourceAnchor?
     var revealedRequest: UUID?
     var pendingReveal: NSRange?
+    var revealTopInset: CGFloat = 0
     var didReveal: (() -> Void)?
 
     override func layoutSubviews() {
@@ -51,8 +52,11 @@ final class SourceTextView: UITextView {
         while let view = ancestor {
             if let scroll = view as? UIScrollView, scroll.isScrollEnabled {
                 pendingReveal = nil
-                scroll.scrollRectToVisible(
-                    convert(rect, to: scroll).insetBy(dx: 0, dy: -20), animated: false)
+                var target = convert(rect, to: scroll).insetBy(dx: 0, dy: -20)
+                // Pinned reading controls cover content without changing UIKit's scroll insets.
+                target.origin.y -= revealTopInset
+                target.size.height += revealTopInset
+                scroll.scrollRectToVisible(target, animated: false)
                 if let didReveal { Task { @MainActor in didReveal() } }
                 return
             }

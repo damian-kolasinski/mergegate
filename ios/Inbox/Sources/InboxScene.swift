@@ -13,6 +13,7 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
     @State private var rulesProject: String?
     @State private var decisionItem: DecisionPresentation?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingHub = false
     @State private var path: [String] = []
 
@@ -63,7 +64,6 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
                                 .frame(minHeight: 44)
                             }.accessibilityIdentifier("pendingRules-\(pending.project)")
                         }
-                        if let week = snapshot.weekly { InboxWeekView(week: week) }
                         if model.groups.isEmpty {
                             ContentUnavailableView(
                                 snapshot.isEmpty ? "Inbox is clear" : "No matching items",
@@ -93,16 +93,25 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
                             } header: {
                                 HStack(alignment: .firstTextBaseline) {
                                     Text(group.title.uppercased())
-                                    Spacer(minLength: 8)
-                                    Text(
-                                        "\(group.items.count) \(group.items.count == 1 ? "item" : "items")"
-                                    )
+                                    if !dynamicTypeSize.isAccessibilitySize {
+                                        Spacer(minLength: 8)
+                                        Text(
+                                            "\(group.items.count) \(group.items.count == 1 ? "item" : "items")"
+                                        )
+                                    }
                                 }.appearanceText(Appearance.caption).foregroundStyle(
                                     Appearance.secondary
                                 )
-                                .padding(.horizontal, 6).padding(.top, 8).accessibilityAddTraits(
-                                    .isHeader)
+                                .padding(.horizontal, 6).padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Appearance.page)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("\(group.title), \(group.items.count) \(group.items.count == 1 ? "item" : "items")")
+                                .accessibilityAddTraits(.isHeader)
                             }
+                        }
+                        if let week = snapshot.weekly {
+                            InboxWeekView(week: week)
                         }
                     } else if model.isLoading {
                         ProgressView("Loading inbox…").frame(maxWidth: .infinity)
@@ -124,28 +133,6 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Hub", systemImage: "arrow.triangle.branch") { showingHub = true }
                         .accessibilityLabel("Hub settings").accessibilityIdentifier("hubSettings")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker("Project", selection: $model.project) {
-                            Text("All projects").tag(String?.none)
-                            ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
-                                Text(project).tag(Optional(project))
-                            }
-                        }
-                        ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
-                            Button("\(project) rules") { rulesProject = project }
-                        }
-                    } label: {
-                        Label(
-                            model.project ?? "All projects",
-                            systemImage: "line.3.horizontal.decrease"
-                        )
-                        .labelStyle(.iconOnly)
-                    }.accessibilityLabel("Project").accessibilityValue(
-                        model.project ?? "All projects"
-                    )
-                    .accessibilityIdentifier("projectFilter")
                 }
             }
             .refreshable { await model.refresh() }
@@ -190,34 +177,45 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
         }
     }
 
+    private var filterLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(HStackLayout(spacing: 12))
+    }
+
     private var footer: some View {
-        HStack(spacing: 12) {
-            Label(hub.url.host ?? "Hub", systemImage: "network")
-                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary).lineLimit(
-                    1
-                )
-                .accessibilityIdentifier("inboxHubLabel")
-            Spacer(minLength: 0)
+        filterLayout {
+            Menu {
+                Picker("Project", selection: $model.project) {
+                    Text("All projects").tag(String?.none)
+                    ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
+                        Text(project).tag(Optional(project))
+                    }
+                }
+                ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
+                    Button("\(project) rules") { rulesProject = project }
+                }
+            } label: {
+                Label(model.project ?? "All projects", systemImage: "folder")
+                    .appearanceText(Appearance.caption)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .frame(minHeight: 44)
+            }.accessibilityLabel("Project").accessibilityValue(model.project ?? "All projects")
+                .accessibilityIdentifier("projectFilter")
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
             Menu {
                 Picker("State", selection: $model.filter) {
                     ForEach(InboxFilter.allCases) { filter in Text(filter.rawValue).tag(filter) }
                 }
             } label: {
-                Label(stateLabel, systemImage: "chevron.down").appearanceText(Appearance.caption)
+                Label(model.filter.rawValue, systemImage: "chevron.down").appearanceText(Appearance.caption)
                     .accessibilityIdentifier("inboxStateLabel")
                     .frame(minHeight: 44)
             }.accessibilityLabel("State").accessibilityValue(model.filter.rawValue)
                 .accessibilityIdentifier("stateFilter")
         }.padding(.horizontal, 16).padding(.vertical, 6)
-            .glassEffect(.regular, in: .capsule)
-            .padding(.horizontal, 16).padding(.bottom, 8)
-    }
-
-    private var stateLabel: String {
-        switch model.filter {
-        case .all, .decisions, .review: "Other states"
-        default: model.filter.rawValue
-        }
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
+            .padding(.horizontal, 16).padding(.bottom, 8).tint(Appearance.brand)
     }
 
     private var hubSettings: some View {

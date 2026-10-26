@@ -29,6 +29,14 @@ final class TriageInboxTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(app.staticTexts["1 of 2 review files remaining"].exists)
         XCTAssertTrue(app.staticTexts["1 of 1 review files remaining"].waitForExistence(timeout: 10))
+        let decisionAction = app.buttons["decisionDetails-mobile-smoke#2"]
+        let reviewAction = app.buttons["openReview-mobile-smoke#2"]
+        XCTAssertTrue(decisionAction.isHittable, "The first pending decision must be actionable without scrolling.")
+        XCTAssertLessThan(decisionAction.frame.minX, reviewAction.frame.minX)
+        XCTAssertGreaterThanOrEqual(decisionAction.frame.height, 44)
+        let history = app.disclosureTriangles["inboxWeekly"]
+        if history.exists { XCTAssertGreaterThan(history.frame.minY, decisionAction.frame.maxY) }
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "Updated .*T.*Z")).firstMatch.exists)
         try auditInboxAccessibility(app)
         capture(app, "Decision desk — large title and Liquid Glass")
         let title = app.staticTexts["Your next move"].firstMatch
@@ -86,6 +94,17 @@ final class TriageInboxTests: XCTestCase {
         app.buttons["reviewGuide"].tap()
         XCTAssertTrue(app.staticTexts["No review guide"].waitForExistence(timeout: 5))
         capture(app, "Question item — open its real review without a guide")
+        app.terminate()
+        XCUIDevice.shared.appearance = .dark
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.buttons["projectFilter"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["projectFilter"].isHittable)
+        XCTAssertTrue(app.buttons["stateFilter"].isHittable)
+        for _ in 0..<6 where !decisionAction.isHittable { app.swipeUp() }
+        XCTAssertTrue(decisionAction.isHittable, "Decision actions must remain reachable at the largest text size.")
+        try auditInboxAccessibility(app)
+        capture(app, "Decision desk — dark mode at the largest text size")
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
