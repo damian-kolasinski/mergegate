@@ -4,6 +4,8 @@ import SwiftUI
 struct CommentDraftScene: View {
     let scope: CommentDraftScope
     let location: CommentDraftLocation?
+    /// An existing draft to edit, as from its card in the reader.
+    var draftID: UUID? = nil
     let close: () -> Void
     @State private var model: CommentDraftViewModel?
     @State private var failure: String?
@@ -30,8 +32,12 @@ struct CommentDraftScene: View {
 
     private func open() {
         do {
-            model = try CommentDraftViewModel(
+            let model = try CommentDraftViewModel(
                 scope: scope, store: CommentDraftStore(), location: location)
+            if let draftID, let draft = model.drafts.first(where: { $0.id == draftID }) {
+                model.edit(draft)
+            }
+            self.model = model
             failure = nil
         } catch { failure = error.localizedDescription }
     }

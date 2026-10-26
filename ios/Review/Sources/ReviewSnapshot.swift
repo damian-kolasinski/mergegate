@@ -40,6 +40,8 @@ struct ReviewSnapshot: Decodable, Sendable {
     // The operator's comments and replies saved on the hub, which the next review sends.
     var drafts: [ReviewHubDraft]? = nil
     var draft_replies: [ReviewHubDraft]? = nil
+    var comments: [ReviewComment]? = nil
+    var replies: [ReviewReply]? = nil
 
     let last_reviewed: UInt32?
     let interdiffs: [UInt32]

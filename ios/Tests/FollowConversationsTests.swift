@@ -34,8 +34,12 @@ final class FollowConversationsTests: XCTestCase {
         XCTAssertTrue(open.isHittable, app.debugDescription)
         open.tap()
         XCTAssertTrue(app.buttons["fileConversations"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.textViews["unifiedDiff"].waitForExistence(timeout: 10))
-        capture(app, "Conversations — File reader")
+        XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 10))
+        // Sent threads sit under the lines they are about, as on the web.
+        let question = app.descendants(matching: .any)["inlineThread-c_1"].firstMatch
+        XCTAssertTrue(question.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["inlineThread-c_2"].firstMatch.exists)
+        capture(app, "Conversations — File reader with threads inline")
         app.buttons["fileConversations"].tap()
         XCTAssertTrue(
             app.buttons["conversation-c_1"].waitForExistence(timeout: 10), app.debugDescription)
@@ -56,6 +60,10 @@ final class FollowConversationsTests: XCTestCase {
         capture(app, "Conversations — question and sent operator reply")
         try audit(app)
         app.navigationBars["Thread"].buttons["Conversations"].tap()
+        // What waits on the operator comes first; the rest folds, as in the web's panel.
+        let rest = app.buttons["conversationEverythingElse"]
+        XCTAssertTrue(rest.waitForExistence(timeout: 5))
+        if !app.buttons["conversation-c_2"].exists { rest.tap() }
         app.buttons["conversation-c_2"].tap()
         XCTAssertTrue(app.staticTexts["threadStatus"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["threadStatus"].label, "Rejected")
@@ -63,8 +71,11 @@ final class FollowConversationsTests: XCTestCase {
         capture(app, "Conversations — rejection with its reason")
         app.buttons["closeConversations"].tap()
         // Select the removed source line; the native action narrows to its side and coordinates.
-        let reader = app.textViews["unifiedDiff"]
-        reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: 69)).press(
+        // Cards split the hunk; the removed line is the second of the block holding it.
+        let reader = app.textViews.matching(
+            NSPredicate(format: "identifier == %@ AND value CONTAINS %@", "unifiedDiff", "let total = subtotal")
+        ).firstMatch
+        reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: 30)).press(
             forDuration: 1.2)
         let menu = app.menuItems["Conversations"]
         let button = app.buttons["Conversations"]
@@ -77,6 +88,8 @@ final class FollowConversationsTests: XCTestCase {
         app.buttons["closeConversations"].tap()
         app.buttons["reviewConversations"].tap()
         let policy = app.buttons["conversation-c_4"]
+        XCTAssertTrue(app.buttons["conversationEverythingElse"].waitForExistence(timeout: 10))
+        if !app.buttons["conversation-c_3"].exists { app.buttons["conversationEverythingElse"].tap() }
         XCTAssertTrue(app.buttons["conversation-c_3"].waitForExistence(timeout: 10))
         for _ in 0..<4 {
             if policy.exists && policy.isHittable { break }

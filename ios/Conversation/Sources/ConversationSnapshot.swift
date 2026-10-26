@@ -143,6 +143,18 @@ struct ConversationThread: Identifiable, Sendable {
         }
     }
 
+    /// An agent question, an unsettled rejection of a GitHub comment, or a GitHub comment
+    /// awaiting the vote that decides whether the agent gets it, as the inbox counts them.
+    var needsYou: Bool {
+        let last = replies.last
+        if last?.author == "agent", last?.status == "question" { return true }
+        guard let external = comment.external else { return false }
+        if last?.author == "agent", last?.status == "rejected", external.agreed_reply != last?.id {
+            return true
+        }
+        return external.pending && external.vote == nil && external.summary != true
+    }
+
     var status: String {
         guard let answer = replies.last(where: { $0.author == "agent" && $0.status != nil }) else {
             return comment.external?.status ?? "Awaiting reply"

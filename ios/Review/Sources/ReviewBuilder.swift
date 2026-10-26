@@ -7,7 +7,8 @@ import SwiftUI
 public enum ReviewBuilder {
     @MainActor
     public static func build<
-        Drafts: View, Conversations: View, FileConversations: View, Feedback: View, Rules: View
+        Drafts: View, Conversations: View, FileConversations: View, Feedback: View, Rules: View,
+        Annotations: View, Summary: View
     >(
         hub: ConnectedHub, item: String, styling: any CodeStyling,
         openItem: @escaping (String) -> Void,
@@ -20,6 +21,11 @@ public enum ReviewBuilder {
                 @escaping () -> Void
             ) -> Conversations,
         @ViewBuilder fileConversations: @escaping (CommentDraftScope, String) -> FileConversations,
+        @ViewBuilder annotations:
+            @escaping (
+                CommentDraftScope, String, Int, @escaping (SourceAnnotations) -> AnyView
+            ) -> Annotations,
+        @ViewBuilder summary: @escaping (CommentDraftScope, @escaping () -> Void) -> Summary,
         @ViewBuilder rules: @escaping (String, @escaping (String) -> Void) -> Rules,
         localDrafts: @escaping (CommentDraftScope) -> Int,
         @ViewBuilder feedback:
@@ -34,7 +40,8 @@ public enum ReviewBuilder {
                     transport: URLSessionTransport(), url: hub.url, cache: ReviewCache()),
                 item: item),
             styling: styling, hub: hub.url, drafts: drafts, conversations: conversations,
-            fileConversations: fileConversations, feedback: feedback, rules: rules,
+            fileConversations: fileConversations, annotations: annotations, summary: summary,
+            feedback: feedback, rules: rules,
             localDrafts: localDrafts, openItem: openItem)
     }
 

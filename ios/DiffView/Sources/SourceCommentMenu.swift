@@ -22,4 +22,9 @@ extension SourceTextView: UITextViewDelegate {
         }
         return UIMenu(children: actions + suggestedActions)
     }
+
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        // Only the operator's own selecting counts; restoring or revealing a range sets it too.
+        if isFirstResponder { reportSelection() }
+    }
 }

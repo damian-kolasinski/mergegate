@@ -15,6 +15,8 @@ struct ReviewBar: View {
     let canComplete: Bool
     let mark: () -> Void
     let retry: () -> Void
+    /// Opens the comment on the whole review.
+    let comment: () -> Void
     let perform: (ReviewPrimaryAction) -> Void
     let complete: (ReviewOutcome) -> Void
 
@@ -31,6 +33,9 @@ struct ReviewBar: View {
             }
             HStack(spacing: 6) {
                 viewedControl
+                Button(action: comment) {
+                    Image(systemName: "text.bubble").font(.title3).frame(width: 44, height: 44)
+                }.accessibilityLabel("Review comment").accessibilityIdentifier("reviewComment")
                 Spacer(minLength: 4)
                 if let primary {
                     Button {

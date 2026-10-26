@@ -3,6 +3,22 @@ import Networking
 import SwiftUI
 
 public enum ReviewSubmissionBuilder {
+    /// The whole-review comment, kept with the feedback the next review sends.
+    @MainActor
+    public static func summary(
+        scope: CommentDraftScope, drafts: @escaping () throws -> any FeedbackDrafts,
+        close: @escaping () -> Void
+    ) -> some View {
+        SummaryRoot(scope: scope, drafts: drafts, close: close)
+    }
+
+    /// Whether a whole-review comment waits to be sent with the next review.
+    @MainActor
+    public static func hasSummary(scope: CommentDraftScope) -> Bool {
+        let summary = (try? SwiftDataFeedbackOutbox().load(scope: scope))?.summary ?? ""
+        return !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     @MainActor
     public static func build(
         scope: CommentDraftScope, outcome: ReviewOutcome? = nil, unreviewed: Int = 0,

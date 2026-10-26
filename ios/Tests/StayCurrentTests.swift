@@ -42,7 +42,7 @@ final class StayCurrentTests: XCTestCase {
         }
         XCTAssertTrue(open.isHittable, app.debugDescription)
         open.tap()
-        XCTAssertTrue(app.textViews["unifiedDiff"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 20))
         app.buttons["loadSourceContext"].tap()
         XCTAssertTrue(
             app.staticTexts["All source context is already visible"].waitForExistence(timeout: 10))
@@ -61,7 +61,7 @@ final class StayCurrentTests: XCTestCase {
             app.buttons["conversation-c_2"].waitForExistence(timeout: 15), app.debugDescription)
         capture(app, "Live updates — sent review comments arrive in the open list")
         app.buttons["closeConversations"].tap()
-        let reader = app.textViews["unifiedDiff"]
+        let reader = app.textViews["unifiedDiff"].firstMatch
         reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: 69)).press(
             forDuration: 1.2)
         let menu = app.menuItems["Comment"]
@@ -136,7 +136,7 @@ final class StayCurrentTests: XCTestCase {
         _ = try await control("advance")
         XCTAssertTrue(app.staticTexts["New revision r5 available"].waitForExistence(timeout: 15))
         capture(app, "Live updates — dark mode")
-        let retainedSource = app.textViews["unifiedDiff"]
+        let retainedSource = app.textViews["unifiedDiff"].firstMatch
         for _ in 0..<6 where !retainedSource.isHittable { app.swipeUp() }
         XCTAssertTrue(retainedSource.isHittable, app.debugDescription)
         for _ in 0..<3 { app.scrollViews["reviewScroll"].swipeUp() }

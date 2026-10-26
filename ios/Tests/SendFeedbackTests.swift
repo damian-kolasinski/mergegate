@@ -28,7 +28,8 @@ final class SendFeedbackTests: XCTestCase {
         try openReview(app)
         capture(app, "Feedback — File reader")
         try comment(app, y: 69, body: "Should delivery be included in the receipt?")
-        try comment(app, y: 90, body: "Keep the charged total consistent with the receipt.")
+        try comment(
+            app, y: 90, body: "Keep the charged total consistent with the receipt.", text: "é 🐙")
         openCompletion(app)
         XCTAssertTrue(app.textViews["feedbackSummary"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["feedbackScope"].label, "mobile-smoke#2 · r1")
@@ -54,8 +55,9 @@ final class SendFeedbackTests: XCTestCase {
             forDuration: 0.05,
             thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.4)),
             withVelocity: .slow, thenHoldForDuration: 0.1)
-        let firstComment = app.staticTexts["Should delivery be included in the receipt?"]
-        let lastComment = app.staticTexts["Keep the charged total consistent with the receipt."]
+        // The comments also sit inline under their lines, behind the sheet; read the sheet's.
+        let firstComment = visibleText(app, "Should delivery be included in the receipt?")
+        let lastComment = visibleText(app, "Keep the charged total consistent with the receipt.")
         for _ in 0..<4 {
             let top = app.staticTexts["feedbackScope"].frame.maxY + 20
             let bottom = app.buttons["sendFeedback"].frame.minY - 20
@@ -155,12 +157,27 @@ final class SendFeedbackTests: XCTestCase {
         }
         XCTAssertTrue(open.isHittable, app.debugDescription)
         open.tap()
-        XCTAssertTrue(app.textViews["unifiedDiff"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 20))
     }
 
-    @MainActor private func comment(_ app: XCUIApplication, y: CGFloat, body: String) throws {
-        let reader = app.textViews["unifiedDiff"]
-        reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: y)).press(
+    /// Long-presses the source line at `y` in the first block, or, once a draft's card has split
+    /// the hunk below an earlier line, the same line at the top of the block holding `text`.
+    @MainActor private func comment(
+        _ app: XCUIApplication, y: CGFloat, body: String, text: String? = nil
+    ) throws {
+        let first = app.textViews["unifiedDiff"].firstMatch
+        var reader = first
+        var offset = y
+        if let text {
+            let holding = app.textViews.matching(
+                NSPredicate(format: "identifier == %@ AND value CONTAINS %@", "unifiedDiff", text)
+            ).firstMatch
+            if holding.exists, holding.frame != first.frame {
+                reader = holding
+                offset = 14
+            }
+        }
+        reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: offset)).press(
             forDuration: 1.2)
         let menu = app.menuItems["Comment"]
         XCTAssertTrue(
@@ -175,6 +192,11 @@ final class SendFeedbackTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try auditReviewAccessibility(app)
+    }
+
+    @MainActor private func visibleText(_ app: XCUIApplication, _ label: String) -> XCUIElement {
+        let matches = app.staticTexts.matching(NSPredicate(format: "label == %@", label))
+        return matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch
     }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

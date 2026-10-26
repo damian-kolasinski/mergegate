@@ -1,4 +1,5 @@
 import CodeStylingInterface
+import ConversationInterface
 import DiffDocumentInterface
 import DiffView
 import SwiftUI
@@ -21,7 +22,38 @@ struct ReviewSourceReader: View {
     var revealRequest: UUID? = nil
     var revealTopInset: CGFloat = 0
     var didReveal: (() -> Void)? = nil
+    var annotations: SourceAnnotations = .none
+    var onSelectLines: ((SourceAnchor?) -> Void)? = nil
     @Environment(\.scenePhase) private var scenePhase
+
+    /// A submitted hunk, cut after each line a thread or draft ends on, with its cards between.
+    @ViewBuilder private func annotated(_ hunk: DiffHunk, id: String) -> some View {
+        // An interdiff's Before side replays the earlier revision; cards there would sit
+        // under the wrong lines, as the web also leaves them off.
+        let sides = file.interdiff?.sourceSides ?? [.old, .new]
+        let segments = ReviewAnnotatedLines.split(
+            hunk, marks: annotations.marks.filter { sides.contains($0.side) })
+        // Reveal once the cards are in, in the one block holding the target's first line;
+        // cards arriving later would push it away.
+        let target = segments.firstIndex { segment in
+            focus.map { ReviewAnnotatedLines.shows(segment.hunk, start: $0) } ?? false
+        }
+        ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+            UnifiedDiffView(
+                hunks: [segment.hunk], maximumLine: maximumLine, styling: styling,
+                sourceSides: sides,
+                onComment: onComment, onReadConversations: onReadConversations,
+                onSelectLines: onSelectLines,
+                focus: annotations.ready && index == target ? focus : nil,
+                revealRequest: revealRequest,
+                revealTopInset: revealTopInset, didReveal: didReveal
+            )
+            // A short segment would otherwise center, moving its gutter off the others'.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(index == 0 ? id : "\(id)-\(index)")
+            ForEach(segment.marks, id: \.self) { mark in annotations.card(mark) }
+        }
+    }
     @State private var highlights = ReviewHighlightModel()
     private var paintedHunks: [DiffHunk] { highlights.painting?.paint(hunks) ?? hunks }
     @State private var model = ReviewSourceModel()
@@ -75,15 +107,7 @@ struct ReviewSourceReader: View {
                         .background(Appearance.surface)
                     }
                     if gap.id < hunks.count {
-                        UnifiedDiffView(
-                            hunks: [paintedHunks[gap.id]], maximumLine: maximumLine,
-                            styling: styling,
-                            sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
-                            onComment: onComment, onReadConversations: onReadConversations,
-                            focus: focus, revealRequest: revealRequest,
-                            revealTopInset: revealTopInset, didReveal: didReveal
-                        )
-                        .id("reviewHunk-\(gap.id)")
+                        annotated(paintedHunks[gap.id], id: "reviewHunk-\(gap.id)")
                     }
                 }
             } else {
@@ -115,14 +139,7 @@ struct ReviewSourceReader: View {
                 }
                 if !hunks.isEmpty {
                     ForEach(Array(paintedHunks.enumerated()), id: \.offset) { index, hunk in
-                        UnifiedDiffView(
-                            hunks: [hunk], maximumLine: maximumLine, styling: styling,
-                            sourceSides: file.interdiff?.sourceSides ?? [.old, .new],
-                            onComment: onComment,
-                            onReadConversations: onReadConversations, focus: focus,
-                            revealRequest: revealRequest, revealTopInset: revealTopInset, didReveal: didReveal
-                        )
-                        .id("reviewHunk-\(index)")
+                        annotated(hunk, id: "reviewHunk-\(index)")
                     }
                 }
             }

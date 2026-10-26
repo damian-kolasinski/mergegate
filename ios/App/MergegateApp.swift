@@ -37,15 +37,25 @@ struct MergegateApp: App {
                         fileConversations: { scope, path in
                             ConversationBuilder.fileThreads(scope: scope, path: path)
                         },
+                        annotations: { scope, path, refresh, content in
+                            ConversationBuilder.annotations(
+                                scope: scope, path: path, refresh: refresh, content: content)
+                        },
+                        summary: { scope, close in
+                            ReviewSubmissionBuilder.summary(
+                                scope: scope, drafts: { try FeedbackDraftStore() }, close: close)
+                        },
                         rules: { project, openItem in
                             ProjectRulesBuilder.build(
                                 hub: hub.url, project: project, openItem: openItem)
                         },
                         localDrafts: { scope in
-                            // Blank drafts stay on the phone and are never sent, so they don't count.
-                            (try? FeedbackDraftStore().load(scope: scope))?.filter {
+                            // Blank drafts stay on the phone and are never sent, so they don't
+                            // count; a review comment waiting to be sent does.
+                            ((try? FeedbackDraftStore().load(scope: scope))?.filter {
                                 !$0.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            }.count ?? 0
+                            }.count ?? 0)
+                                + (ReviewSubmissionBuilder.hasSummary(scope: scope) ? 1 : 0)
                         },
                         feedback: { scope, outcome, unreviewed, settle, activity, sent, close in
                             ReviewSubmissionBuilder.build(
