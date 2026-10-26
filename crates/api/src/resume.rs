@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::feedback::Event;
 use crate::item::Item;
 use crate::review::{Comment, Reply, Verdict};
 
@@ -17,6 +18,10 @@ pub struct Resume {
     pub review: Option<LastReview>,
     /// The sent comments the agent hasn't settled, oldest first.
     pub open: Vec<Thread>,
+    /// The notice that asks for another revision while it still stands, as
+    /// a conflict with the target; none from an older hub.
+    #[serde(default)]
+    pub pending: Option<Event>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

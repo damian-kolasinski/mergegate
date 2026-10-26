@@ -56,7 +56,7 @@ It leaves the clone's own `<target>` branch where it was, as it may hold the ope
 
 ## Picking up an item again
 
-A session that ended mid-review loses nothing: `mg resume app#3` prints what a new session needs (the item, its branch and worktree, the last review and every comment still open) and marks nothing delivered, so the next `mg wait` still returns the events the old session missed. A wait the old session left running takes them instead, even after that session is gone: end it first, as [references/waiting.md](references/waiting.md) describes under "When a wait ends early".
+A session that ended mid-review loses nothing: `mg resume app#3` prints what a new session needs (the item, its branch and worktree, the last review, every comment still open and any notice still asking for a revision, such as a merge conflict) and marks nothing delivered, so the next `mg wait` still returns the events the old session missed. A wait the old session left running takes them instead, even after that session is gone: end it first, as [references/waiting.md](references/waiting.md) describes under "When a wait ends early".
 
 ## Reporting product failures
 

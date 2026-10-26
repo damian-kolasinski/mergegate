@@ -8,7 +8,7 @@ use api::review::{Author, ReplyStatus, Verdict};
 use serde::Serialize;
 
 use crate::client::{Client, segment};
-use crate::feedback_cmd::heading;
+use crate::feedback_cmd::{event, heading};
 use crate::item_name;
 use crate::output::{CliError, Outcome};
 
@@ -81,6 +81,19 @@ fn prompt(resume: &Resume) -> String {
         }
     }
 
+    // A wait delivers it with the rest, so a session whose wait printed
+    // where nobody read it learns of a conflict only here.
+    if let Some(notice) = &resume.pending {
+        out.push_str(&format!(
+            "\nStill standing on r{}, until a new revision answers it:\n\n",
+            item.revision.number
+        ));
+        for line in event(notice).lines() {
+            out.push_str(format!("  {line}").trim_end());
+            out.push('\n');
+        }
+    }
+
     out.push_str(&format!("\n{}", next(resume)));
     out.push_str(&format!(
         "\n\n--- How to work with mergegate ---\n\n{}",
@@ -148,7 +161,11 @@ fn next(resume: &Resume) -> String {
             if !resume.open.is_empty() {
                 steps.push("reply to every comment above with `mg reply`".to_owned());
             }
-            if state == ItemState::ChangesRequested {
+            if resume.pending.is_some() {
+                steps.push(
+                    "rebase as the notice above says and `mg submit` from the worktree".to_owned(),
+                );
+            } else if state == ItemState::ChangesRequested {
                 steps.push("`mg submit` the changes from the worktree".to_owned());
             }
             steps.push(format!("wait with `mg wait {id}`"));
