@@ -1,7 +1,9 @@
 import { type JSX, Show } from "solid-js";
+import type { Blocked } from "../api/Blocked";
 import type { BotReview } from "../api/BotReview";
 import type { Item } from "../api/Item";
 import type { ItemState } from "../api/ItemState";
+import type { Mergeable } from "../api/Mergeable";
 import type { Priority } from "../api/Priority";
 import type { StackEntry } from "../api/StackEntry";
 import type { Failure } from "../app/hub";
@@ -17,6 +19,7 @@ import { PriorityBadge } from "../priority/priority";
 import { BotReviews } from "./bot-reviews";
 import { Counts } from "./counts";
 import styles from "./header.module.css";
+import { MergeableBadge } from "./mergeable";
 import { StackTrail } from "./stack";
 
 /**
@@ -41,6 +44,9 @@ export function ItemHeader(props: {
   behind: boolean;
   /** Review bots' say on the pull request, beside its link. */
   bots: readonly BotReview[];
+  mergeable: Mergeable;
+  /** Why it can't merge, which says a conflict in place of `mergeable`. */
+  blocked: Blocked | null;
   /** At the end of the second line, which the Conversation list hangs below. */
   children?: JSX.Element;
 }) {
@@ -57,6 +63,11 @@ export function ItemHeader(props: {
           r{props.item.revision.number}
         </Badge>
         <Badge tone={stateTone[props.state]}>{stateLabel[props.state]}</Badge>
+        <MergeableBadge
+          mergeable={props.mergeable}
+          blocked={props.blocked}
+          target={props.item.target}
+        />
         <PriorityBadge
           priority={props.priority}
           note={props.note}

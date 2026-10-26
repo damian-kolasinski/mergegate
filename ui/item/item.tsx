@@ -14,6 +14,7 @@ import type { Demo as DemoData } from "../api/Demo";
 import type { Item } from "../api/Item";
 import type { ItemDiff } from "../api/ItemDiff";
 import type { ItemState } from "../api/ItemState";
+import type { Mergeable } from "../api/Mergeable";
 import type { Review as SentReview } from "../api/Review";
 import { type Failure, failureOf, getJson, onHubEvent } from "../app/hub";
 import { useKeys } from "../app/keys";
@@ -100,6 +101,11 @@ export function ItemScreen(props: { id: string }) {
   const [blocked, setBlocked] = createSignal<Blocked | null>(null, {
     equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
   });
+  // Whether it merges cleanly, which the watch finds as the target moves.
+  const [mergeable, setMergeable] = createSignal<Mergeable>(
+    { kind: "unknown" },
+    { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) },
+  );
   // Whether an agent will read what's sent: the item's, not the revision's,
   // so a refetch of any revision updates it.
   const [agent, setAgent] = createSignal<AgentPresence | null>(null);
@@ -147,6 +153,7 @@ export function ItemScreen(props: { id: string }) {
     setDemo(next.demo);
     setLatest(next.item);
     setBlocked(next.blocked);
+    setMergeable(next.mergeable);
     setAgent(next.agent);
     setBots(next.bots);
   };
@@ -183,6 +190,7 @@ export function ItemScreen(props: { id: string }) {
       } else if (next.item.revision.number === shown?.item.revision.number) {
         setDemo(next.demo);
         setBlocked(next.blocked);
+        setMergeable(next.mergeable);
         // The items it's stacked with move without the operator acting
         // here: a parent's revision leaves it behind, its merge lands this.
         const moved = ({ stack, behind }: ItemDiff) =>
@@ -245,6 +253,7 @@ export function ItemScreen(props: { id: string }) {
               diff={current()}
               latest={latest() ?? current().item}
               blocked={blocked()}
+              mergeable={mergeable()}
               agent={agent()}
               bots={bots()}
               demo={demo()}
@@ -282,6 +291,8 @@ function Review(props: {
   latest: Item;
   /** Why the revision on screen can't merge, as the hub last said. */
   blocked: Blocked | null;
+  /** Whether the newest revision merges cleanly, as the hub last said. */
+  mergeable: Mergeable;
   agent: AgentPresence | null;
   bots: readonly BotReview[];
   demo: DemoData | null;
@@ -617,6 +628,8 @@ function Review(props: {
           stack={props.diff.stack}
           behind={props.diff.behind}
           bots={props.bots}
+          mergeable={props.mergeable}
+          blocked={props.blocked}
         >
           <Show when={props.demo}>
             {(demo) => (

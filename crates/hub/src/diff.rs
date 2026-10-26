@@ -22,7 +22,8 @@ use serde::Deserialize;
 use crate::reply::Failure;
 use crate::server::AppState;
 use crate::{
-    attachments, conversation, external, highlights, items, merge, presence, projects, rules,
+    attachments, conflicts, conversation, external, highlights, items, merge, presence, projects,
+    rules,
 };
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
@@ -67,6 +68,7 @@ async fn show(
                     return Ok(None);
                 };
                 let blocked = merge::blocked(store, &diff.item, known.landing_now())?;
+                let mergeable = conflicts::mergeable(store, &known, &diff.item)?;
                 let agent = presence::of(store, &known.presence, &known.wakes, &diff.item)?;
                 let spans = diff
                     .files
@@ -87,7 +89,7 @@ async fn show(
                 let behind = diff.item.state.is_open() && item::behind(store, &diff.item)?;
                 Ok(Some((
                     diff,
-                    blocked,
+                    (blocked, mergeable),
                     spans,
                     demo,
                     changed,
@@ -98,17 +100,19 @@ async fn show(
             .await
             .map_err(items::failure)?
     };
-    let (diff, blocked, spans, demo, changed, agent, (stack, behind)) = found.ok_or_else(|| {
-        Failure::new(
-            StatusCode::NOT_FOUND,
-            "item_not_found",
-            format!("no item {id}"),
-            Some("mg inbox".into()),
-        )
-    })?;
+    let (diff, (blocked, mergeable), spans, demo, changed, agent, (stack, behind)) = found
+        .ok_or_else(|| {
+            Failure::new(
+                StatusCode::NOT_FOUND,
+                "item_not_found",
+                format!("no item {id}"),
+                Some("mg inbox".into()),
+            )
+        })?;
     Ok(Json(api::diff::ItemDiff {
         item: items::to_api(&diff.item),
         blocked,
+        mergeable,
         demo: demo.map(|demo| attachments::demo_to_api(&diff.item.id, demo)),
         since: diff.since,
         last_reviewed: diff.last_reviewed,

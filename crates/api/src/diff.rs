@@ -5,7 +5,7 @@ use crate::attachment::Demo;
 use crate::bot::BotReview;
 use crate::highlight::Span;
 use crate::item::{ChangedSince, Item, ItemState};
-use crate::merge::Blocked;
+use crate::merge::{Blocked, Mergeable};
 use crate::review::Conversation;
 use crate::rules::Tier;
 
@@ -17,6 +17,10 @@ pub struct ItemDiff {
     pub item: Item,
     /// Set while the newest revision's merge is held or conflicts.
     pub blocked: Option<Blocked>,
+    /// Whether the newest revision merges cleanly into the target, before
+    /// it's approved.
+    #[serde(default)]
+    pub mergeable: Mergeable,
     /// Null when no revision has attachments.
     pub demo: Option<Demo>,
     /// The revision `files` show the changes since; null for all changes.

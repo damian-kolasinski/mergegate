@@ -21,7 +21,7 @@ use mergegate_core::store::{Shared, StoreError};
 use crate::guard::Caller;
 use crate::reply::Failure;
 use crate::server::AppState;
-use crate::{merge, priority, projects, rules};
+use crate::{conflicts, merge, priority, projects, rules};
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -187,6 +187,7 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                     .iter()
                     .map(|item| {
                         let blocked = merge::blocked(store, item, landing)?;
+                        let mergeable = conflicts::mergeable(store, &known, item)?;
                         let demo = !store.attachments(&item.id)?.is_empty();
                         let changed = interdiff::changed_since_review(store, item)?;
                         let waiting = inbox.waiting.get(&item.id).copied().unwrap_or_default();
@@ -198,6 +199,7 @@ async fn inbox(State(state): State<Arc<AppState>>) -> Result<Json<api::item::Inb
                             .map(|p| name_of(store, p))
                             .transpose()?;
                         entry.behind = behind;
+                        entry.mergeable = mergeable;
                         Ok(entry)
                     })
                     .collect()
@@ -302,6 +304,7 @@ fn inbox_entry(
         created_at: item.created_at.clone(),
         updated_at: item.updated_at().to_owned(),
         blocked,
+        mergeable: api::merge::Mergeable::Unknown,
         link: link(&item.backend),
         demo,
         changed_since: changed.map(changed_to_api),

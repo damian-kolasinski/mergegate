@@ -278,6 +278,7 @@ function flagged(item: InboxItem): boolean {
       item.changed_since ||
       item.parent ||
       item.blocked ||
+      unblockedConflict(item) ||
       item.demo,
   );
 }
@@ -406,6 +407,18 @@ function Entry(props: {
               </span>
             )}
           </Show>
+          <Show when={unblockedConflict(props.item)}>
+            {(conflict) => (
+              <span
+                class={styles.flag}
+                title={`Conflicts in ${conflict().paths.join(", ")}`}
+              >
+                <Badge tone="warning" solid>
+                  Conflicts with {props.item.target}
+                </Badge>
+              </span>
+            )}
+          </Show>
           <Show when={props.item.demo}>
             <span class={styles.flag} title="Has screenshots or recordings">
               <Badge tone="brand">▶ demo</Badge>
@@ -468,6 +481,14 @@ function trusted(item: InboxItem): string | undefined {
  */
 function changedCount(changed: ChangedSince): string {
   return changed.approved && !changed.files ? "" : `${changed.files} `;
+}
+
+/** A conflict with the target that no merge-blocked flag already says. */
+function unblockedConflict(item: InboxItem) {
+  const mergeable = item.mergeable;
+  return mergeable.kind === "conflict" && item.blocked?.kind !== "conflict"
+    ? mergeable
+    : undefined;
 }
 
 function blockedLabel(blocked: Blocked, target: string): string {
