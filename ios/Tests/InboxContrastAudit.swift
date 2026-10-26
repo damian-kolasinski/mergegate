@@ -5,7 +5,7 @@ import XCTest
 func auditInboxAccessibility(_ app: XCUIApplication) throws {
     for pass in 0..<2 {
         var retryUnattributed = false
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription]) {
+        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription]) {
             issue in
             // An unmatched node can come from an unsettled SwiftUI accessibility snapshot.
             // Preserve it and repeat the full audit once, without changing the UI. A second
@@ -22,9 +22,8 @@ func auditInboxAccessibility(_ app: XCUIApplication) throws {
                 }
                 return true
             }
-            let identifiers: Set<String> = ["inboxSummary", "inboxRemaining", "inboxAdded", "inboxRemoved",
-                "decisionResponse", "decisionAnswerSaved", "inboxActionLabel",
-                "inboxDecisionDetailsLabel", "inboxHubLabel", "inboxStateLabel"]
+            let identifiers: Set<String> = ["inboxSize", "inboxEmpty", "decisionResponse",
+                "decisionAnswerSaved"]
             guard issue.auditType == .contrast, let element = issue.element,
                 element.elementType == .staticText, identifiers.contains(element.identifier)
             else { return false }

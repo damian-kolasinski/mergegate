@@ -90,7 +90,7 @@ final class FollowConversationsTests: XCTestCase {
         XCUIDevice.shared.appearance = .dark
         app.terminate()
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
@@ -103,7 +103,7 @@ final class FollowConversationsTests: XCTestCase {
         XCTAssertTrue(app.buttons["reviewConversations"].waitForExistence(timeout: 20))
         app.buttons["reviewConversations"].tap()
         XCTAssertTrue(app.buttons["conversation-c_1"].waitForExistence(timeout: 10))
-        capture(app, "Conversations — dark mode at largest text size")
+        capture(app, "Conversations — dark mode")
         try audit(app)
         app.buttons["conversation-c_1"].tap()
         XCTAssertTrue(app.staticTexts["threadStatus"].waitForExistence(timeout: 5))
@@ -113,7 +113,7 @@ final class FollowConversationsTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
     }
 

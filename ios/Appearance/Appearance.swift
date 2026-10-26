@@ -33,6 +33,31 @@ enum Appearance {
             ? UIColor(red: 0.200000, green: 0.031373, blue: 0.031373, alpha: 1)
             : UIColor(red: 1.000000, green: 0.898039, blue: 0.898039, alpha: 1)
     })
+    static let tintWarning = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.227451, green: 0.184314, blue: 0.078431, alpha: 1)
+            : UIColor(red: 0.984314, green: 0.945098, blue: 0.862745, alpha: 1)
+    })
+    static let tintNeutral = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.227451, green: 0.239216, blue: 0.250980, alpha: 1)
+            : UIColor(red: 0.921569, green: 0.937255, blue: 0.949020, alpha: 1)
+    })
+    static let onTintWarning = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.949020, green: 0.752941, blue: 0.333333, alpha: 1)
+            : UIColor(red: 0.301961, green: 0.223529, blue: 0.043137, alpha: 1)
+    })
+    static let onTintNeutral = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.823529, green: 0.839216, blue: 0.850980, alpha: 1)
+            : UIColor(red: 0.227451, green: 0.239216, blue: 0.250980, alpha: 1)
+    })
+    static let warning = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.949020, green: 0.752941, blue: 0.333333, alpha: 1)
+            : UIColor(red: 0.501961, green: 0.372549, blue: 0.070588, alpha: 1)
+    })
     static let onTintBrand = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.600000, green: 0.831373, blue: 1.000000, alpha: 1)

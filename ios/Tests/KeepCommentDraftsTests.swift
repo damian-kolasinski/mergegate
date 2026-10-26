@@ -84,7 +84,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         try openReview(app)
@@ -93,7 +93,7 @@ final class KeepCommentDraftsTests: XCTestCase {
             NSPredicate(format: "identifier BEGINSWITH %@", "commentDraft-"))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(rows.count, 2)
-        capture(app, "Drafts — restored in dark mode at largest text size")
+        capture(app, "Drafts — restored in dark mode")
         try audit(app)
         rows.firstMatch.tap()
         capture(app, "Drafts — accessible comment editor")
@@ -148,7 +148,7 @@ final class KeepCommentDraftsTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
     }
 

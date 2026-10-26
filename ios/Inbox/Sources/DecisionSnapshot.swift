@@ -19,7 +19,7 @@ struct DecisionSnapshot: Decodable, Sendable {
 
     var decisions: [InboxTriage.Decision] {
         InboxTriage(
-            item: .init(revision: item.revision), files: [], comments: comments, replies: replies
+            item: .init(revision: item.revision), comments: comments, replies: replies
         ).decisions
     }
 }

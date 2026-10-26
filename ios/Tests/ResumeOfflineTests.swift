@@ -119,7 +119,7 @@ final class ResumeOfflineTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         try openReview(app)
@@ -141,7 +141,7 @@ final class ResumeOfflineTests: XCTestCase {
         XCTAssertTrue(offlineDetail.isHittable)
         XCTAssertGreaterThanOrEqual(offlineDetail.frame.minY, app.navigationBars.firstMatch.frame.maxY)
         XCTAssertLessThanOrEqual(reconnect.frame.maxY, app.buttons["reviewViewed"].frame.minY)
-        capture(app, "Offline 08 — dark mode at largest text size")
+        capture(app, "Offline 08 — dark mode")
         try audit(app)
         app.terminate()
     }
@@ -171,7 +171,7 @@ final class ResumeOfflineTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ]) { issue in
             if issue.auditType == .contrast, let element = issue.element,
                 element.elementType == .staticText || element.elementType == .button

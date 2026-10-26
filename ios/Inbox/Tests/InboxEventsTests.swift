@@ -5,13 +5,12 @@ import Testing
 @testable import Inbox
 
 struct InboxEventsTests {
-    @Test @MainActor func newItemsAndReconnectRefreshButKeepFiltersAndLastResponse() async {
+    @Test @MainActor func newItemsAndReconnectRefreshButKeepProjectAndLastResponse() async {
         let transport = LiveInboxTransport()
         let model = InboxViewModel(
             service: .init(transport: transport, url: URL(string: "http://my-mac")!))
         await model.refresh()
         model.project = "sample"
-        model.filter = .review
         await transport.advance()
         await model.receive(.data(#"{"type":"highlights.changed"}"#))
         await model.receive(.data("bad frame"))
@@ -19,7 +18,6 @@ struct InboxEventsTests {
         await model.receive(.data(#"{"type":"inbox.changed"}"#))
         #expect(model.snapshot?.needsYou.count == 2)
         #expect(model.project == "sample")
-        #expect(model.filter == .review)
         await model.receive(.disconnected)
         #expect(model.isReconnecting)
         await transport.fail()

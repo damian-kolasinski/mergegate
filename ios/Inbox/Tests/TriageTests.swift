@@ -27,8 +27,6 @@ struct TriageTests {
          "draft_replies":[{"comment":"q","author":"operator","body":"Unsent answer"}]}
         """.utf8)
         let triage = try JSONDecoder().decode(InboxTriage.self, from: data)
-        #expect(triage.remainingFiles == 1)
-        #expect(triage.reviewFiles == 2)
         #expect(triage.decisions.map(\.id) == ["q", "rejected", "vote"])
         #expect(triage.decisions.map(\.kind) == ["Question", "Disagreement", "Vote needed"])
         #expect(triage.decisions.first?.comment == "Keep the old format?")
@@ -36,24 +34,26 @@ struct TriageTests {
     }
 
     @Test
-    func filtersKeepDecisionsAheadOfReviewAndPreserveHubOrder() throws {
+    func sectionsFollowTheWebAndKeepHubOrder() throws {
         let snapshot = try JSONDecoder().decode(InboxSnapshot.self, from: Data("""
         {"needs_you":[
           {"id":"alpha#1","name":"alpha#71","title":"Review","state":"needs_review","revision":1,"review_files":2,"additions":1,"deletions":0},
-          {"id":"beta#2","name":"beta#18","title":"Question","state":"changes_requested","revision":2,"review_files":1,"questions":1,"additions":1,"deletions":0},
-          {"id":"alpha#3","name":"alpha#72","title":"Disputed","state":"changes_requested","revision":1,"review_files":1,"rejections":1,"additions":1,"deletions":0}],
+          {"id":"beta#2","name":"beta#18","title":"Question","state":"changes_requested","revision":2,"review_files":1,"questions":1,"additions":1,"deletions":0}],
          "with_agents":[{"id":"beta#4","name":"beta#19","title":"Working","state":"changes_requested","revision":1,"review_files":1,"additions":1,"deletions":0}],
-         "merging":[],"closed":[]}
+         "merging":[],
+         "closed":[{"id":"alpha#5","name":"alpha#70","title":"Done","state":"merged","revision":1,"review_files":1,"additions":1,"deletions":0}]}
         """.utf8))
         #expect(snapshot.projects == ["alpha", "beta"])
-        let all = snapshot.groups(project: nil, filter: .all)
-        #expect(all.map(\.title) == ["Decide next", "Review next", "In progress"])
-        #expect(all[0].items.map(\.id) == ["beta#2", "alpha#3"])
-        #expect(snapshot.groups(project: "alpha", filter: .needsYou).flatMap(\.items).map(\.id) == ["alpha#3", "alpha#1"])
-        #expect(snapshot.groups(project: nil, filter: .decisions).flatMap(\.items).map(\.id) == ["beta#2", "alpha#3"])
-        #expect(snapshot.groups(project: "alpha", filter: .review).flatMap(\.items).map(\.id) == ["alpha#1"])
-        #expect(snapshot.groups(project: "alpha", filter: .working).isEmpty)
-        #expect(snapshot.groups(project: nil, filter: .closed).isEmpty)
+        let all = snapshot.groups(project: nil)
+        #expect(all.map(\.section) == [.needsYou, .withAgents])
+        #expect(all[0].items.map(\.id) == ["alpha#1", "beta#2"])
+        #expect(snapshot.closed(project: nil).map(\.id) == ["alpha#5"])
+        // Needs you stays, empty, so it can say why; With agents has nothing for alpha.
+        let alpha = snapshot.groups(project: "alpha")
+        #expect(alpha.map(\.section) == [.needsYou])
+        #expect(snapshot.groups(project: "beta").first?.items.map(\.id) == ["beta#2"])
+        #expect(snapshot.groups(project: "gamma").map(\.section) == [.needsYou])
+        #expect(snapshot.groups(project: "gamma").first?.items.isEmpty == true)
     }
 
     @Test @MainActor
@@ -67,13 +67,11 @@ struct TriageTests {
         #expect(model.triageErrors[item.id]?.contains("newer revision") == true)
         await transport.setRevision(1)
         await model.loadTriage(item)
-        #expect(model.triage[item.id]?.remainingFiles == 0)
+        #expect(model.triage[item.id] != nil)
         #expect(model.triageErrors[item.id] == nil)
         model.project = "removed-project"
-        model.filter = .working
         await model.refresh()
         #expect(model.project == nil)
-        #expect(model.filter == .working)
         #expect(model.triage.isEmpty)
     }
 }
@@ -92,13 +90,13 @@ private actor TriageTransport: HTTPTransport {
     func get(_ url: URL) async throws -> Data {
         if url.path == "/api/inbox" {
             return Data("""
-            {"needs_you":[{"id":"sample#1","name":"sample#9","title":"Test","state":"needs_review","revision":1,"review_files":0,"additions":0,"deletions":0}],"with_agents":[],"merging":[],"closed":[]}
+            {"needs_you":[{"id":"sample#1","name":"sample#9","title":"Test","state":"changes_requested","revision":1,"questions":1,"review_files":0,"additions":0,"deletions":0}],"with_agents":[],"merging":[],"closed":[]}
             """.utf8)
         }
         #expect(url.path == "/api/items/sample#1")
         #expect(url.fragment == nil)
         return Data("""
-        {"item":{"revision":{"number":\(revision)}},"files":[],"comments":[],"replies":[]}
+        {"item":{"revision":{"number":\(revision)}},"comments":[],"replies":[]}
         """.utf8)
     }
 }

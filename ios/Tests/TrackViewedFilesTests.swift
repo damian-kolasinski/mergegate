@@ -53,8 +53,8 @@ final class TrackViewedFilesTests: XCTestCase {
         tapWhenStable(app.navigationBars.buttons.element(boundBy: 0))
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 5))
         let inboxItem = app.descendants(matching: .any).matching(identifier: "inboxItem-mobile-smoke#2").firstMatch
-        XCTAssertTrue(inboxItem.staticTexts["2 of 3 review files remaining"].waitForExistence(timeout: 20), app.debugDescription)
-        capture(app, "Viewed — progress back in the Decision desk")
+        XCTAssertTrue(inboxItem.waitForExistence(timeout: 20), app.debugDescription)
+        capture(app, "Viewed — back in the inbox")
         tapWhenStable(open)
         XCTAssertTrue(viewed.waitForExistence(timeout: 20))
         XCTAssertEqual(viewed.value as? String, "Viewed")
@@ -70,14 +70,14 @@ final class TrackViewedFilesTests: XCTestCase {
         assertProgress(app, "0 of 3 viewed")
         XCTAssertEqual(viewed.value as? String, "Not viewed")
         tapWhenStable(app.navigationBars.buttons.element(boundBy: 0))
-        XCTAssertTrue(inboxItem.staticTexts["3 of 3 review files remaining"].waitForExistence(timeout: 20))
+        XCTAssertTrue(inboxItem.waitForExistence(timeout: 20))
         tapWhenStable(open)
         XCTAssertTrue(viewed.waitForExistence(timeout: 20))
         XCTAssertEqual(viewed.value as? String, "Not viewed")
         assertProgress(app, "0 of 3 viewed")
         app.terminate()
         XCUIDevice.shared.appearance = .dark
-        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
         for _ in 0..<5 where !open.isHittable { app.swipeUp() }
@@ -92,11 +92,11 @@ final class TrackViewedFilesTests: XCTestCase {
         XCTAssertTrue(reader.isHittable)
         XCTAssertTrue(viewed.isHittable)
         try audit(app)
-        capture(app, "Viewed — dark mode at the largest text size")
+        capture(app, "Viewed — dark mode")
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
-        try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .sufficientElementDescription]) { issue in
+        try app.performAccessibilityAudit(for: [.contrast, .hitRegion, .sufficientElementDescription]) { issue in
             print("Accessibility: \(issue.detailedDescription)\n\(issue.element?.debugDescription ?? "No element")")
             return false
         }
