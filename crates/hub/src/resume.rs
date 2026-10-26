@@ -10,7 +10,9 @@ use axum::routing::get;
 use axum::{Json, Router};
 use mergegate_core::item::ItemId;
 use mergegate_core::resume::{self, Resume};
+use mergegate_core::store::StoreError;
 
+use crate::feedback::{self, Related};
 use crate::reply::Failure;
 use crate::server::AppState;
 use crate::{comments, items, replies, reviews};
@@ -29,11 +31,18 @@ async fn show(
     let found = {
         let id = id.clone();
         state
-            .blocking(move |store, _| resume::resume(store, &id))
+            .blocking(move |store, _| {
+                let Some(found) = resume::resume(store, &id)? else {
+                    return Ok(None);
+                };
+                let related =
+                    feedback::relate(store, found.pending.iter().map(|e| (&found.item, e)))?;
+                Ok(Some((found, related)))
+            })
             .await
-            .map_err(|e| items::failure(e.into()))?
+            .map_err(|e: StoreError| items::failure(e.into()))?
     };
-    let found = found.ok_or_else(|| {
+    let (found, related) = found.ok_or_else(|| {
         Failure::new(
             StatusCode::NOT_FOUND,
             "item_not_found",
@@ -41,11 +50,15 @@ async fn show(
             Some("mg inbox".into()),
         )
     })?;
-    Ok(Json(to_api(found)))
+    Ok(Json(to_api(found, &related)))
 }
 
-fn to_api(found: Resume) -> api::resume::Resume {
+fn to_api(found: Resume, related: &Related) -> api::resume::Resume {
     let newest = found.item.revision.number;
+    let item = &found.item;
+    let pending = found
+        .pending
+        .map(|event| feedback::event_to_api(&item.id, item, event, related));
     api::resume::Resume {
         item: items::to_api(&found.item),
         worktree: found.worktree,
@@ -67,5 +80,6 @@ fn to_api(found: Resume) -> api::resume::Resume {
                     .collect(),
             })
             .collect(),
+        pending,
     }
 }

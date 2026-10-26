@@ -90,6 +90,15 @@ fn a_closed_item_takes_no_reply() {
 }
 
 #[test]
+fn a_refusal_names_the_item_by_its_pull_request() {
+    let mut store = reviewed();
+    store.set_pull(&id("app#1"), 42);
+    store.set_state(&id("app#1"), ItemState::Merged);
+    let err = reply(&mut store, on(1, ReplyStatus::Addressed, "")).unwrap_err();
+    assert_eq!(err.to_string(), "app#42 is closed");
+}
+
+#[test]
 fn an_addressed_reply_is_addressed_in_the_next_revision() {
     let addressed = Reply {
         id: 1,

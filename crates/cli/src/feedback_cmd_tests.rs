@@ -92,7 +92,7 @@ fn nothing_new_after_an_earlier_read_says_how_to_see_its_events() {
         nothing_new(&empty(9), None),
         "no new feedback on app#1; an earlier read took all its events, through cursor 9. \
          If this session never acted on them, `mg resume app#1` shows the last review and \
-         the comments still waiting on you"
+         the comments still waiting on you, with any conflict to rebase"
     );
 }
 

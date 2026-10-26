@@ -80,11 +80,12 @@ impl Verdict {
 }
 
 /// Reviews and drafts are taken while the item is with the operator or its
-/// agent.
+/// agent. A refusal names the item as agents know it, by its pull request on
+/// GitHub, rather than by an ID they never see.
 pub(crate) fn reviewable(item: &Item) -> Result<(), ReviewError> {
     match item.state {
         ItemState::NeedsReview | ItemState::ChangesRequested => Ok(()),
-        ItemState::Merging => Err(ReviewError::Merging(item.id.clone())),
-        ItemState::Merged | ItemState::Abandoned => Err(ReviewError::Closed(item.id.clone())),
+        ItemState::Merging => Err(ReviewError::Merging(item.name())),
+        ItemState::Merged | ItemState::Abandoned => Err(ReviewError::Closed(item.name())),
     }
 }

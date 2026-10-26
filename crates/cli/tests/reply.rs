@@ -152,6 +152,27 @@ fn replies_answer_only_sent_comments_and_say_why() {
 }
 
 #[test]
+fn a_closed_items_comments_take_no_reply_and_say_where_it_goes() {
+    let (env, _repo) = reviewed();
+    env.mg(&["--json", "abandon", "app#1", "--reason", "Moved to app#2."])
+        .assert_code(0);
+    let run = env.mg(&["--json", "reply", "c_1", "--status", "addressed"]);
+    assert_ne!(run.code, 0, "{run:?}");
+    let error = &run.json()["error"];
+    assert_eq!(
+        (&error["code"], &error["message"]),
+        (&json!("item_closed"), &json!("app#1 is closed"))
+    );
+    assert!(
+        error["hint"]
+            .as_str()
+            .unwrap()
+            .contains("that item's guide"),
+        "{error}"
+    );
+}
+
+#[test]
 fn f7_the_operators_replies_go_out_with_the_next_review() {
     let (env, _repo) = reviewed();
     env.mg(&[

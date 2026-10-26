@@ -9,8 +9,10 @@ pub enum ReviewError {
     NoItem(ItemId),
     #[error("{id} has no revision {revision}")]
     NoRevision { id: ItemId, revision: u32 },
+    /// By the item's name.
     #[error("{0} is closed")]
     Closed(ItemId),
+    /// By the item's name.
     #[error("{0} is merging")]
     Merging(ItemId),
     #[error("{id} r{newest} came after r{revision}; request changes on r{newest}")]

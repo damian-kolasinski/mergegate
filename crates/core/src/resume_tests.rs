@@ -1,6 +1,7 @@
 use super::*;
 use crate::agent::Agent;
-use crate::fake::{FakeGit, FakeStore};
+use crate::fake::{FakeGit, FakeStore, commit};
+use crate::feedback::{Notice, Source};
 use crate::review::{
     CommentId, ReplyStatus, Side, SubmitReview, Verdict, WriteDraft, WriteReply, reply, submit,
     write_draft,
@@ -74,4 +75,68 @@ fn an_unknown_item_has_none() {
     let store = FakeStore::with_item(1);
     let other = ItemId::parse("app#2").unwrap();
     assert_eq!(resume(&store, &other).unwrap(), None);
+}
+
+fn notify(store: &mut FakeStore, revision: u32, state: ItemState, kind: NoticeKind) {
+    let notice = Notice {
+        revision,
+        source: Source::Operator,
+        kind,
+    };
+    store.notify(&id(), state, notice).unwrap();
+}
+
+fn conflict() -> NoticeKind {
+    NoticeKind::MergeConflict {
+        target_commit: commit(7),
+        paths: vec!["README.md".into()],
+    }
+}
+
+/// `app#2`, which `app#1` is stacked on, moved to `onto`, or merged without
+/// `app#1`.
+fn parent(onto: u8, merged: bool) -> NoticeKind {
+    NoticeKind::ParentUpdated {
+        parent: ItemId::parse("app#2").unwrap(),
+        merged,
+        onto: commit(onto),
+        upstream: commit(1),
+    }
+}
+
+/// The notice `mg resume` would have the agent rebase by.
+fn pending(store: &FakeStore) -> Option<NoticeKind> {
+    let found = resume(store, &id()).unwrap().unwrap();
+    found.pending.map(|event| match event.kind {
+        EventKind::Notice(notice) => notice.kind,
+        other => panic!("not a notice: {other:?}"),
+    })
+}
+
+#[test]
+fn holds_the_conflict_its_newest_revision_has_yet_to_answer() {
+    let mut store = FakeStore::with_item(2);
+    notify(&mut store, 1, ItemState::ChangesRequested, conflict());
+    assert_eq!(pending(&store), None, "r2 answered r1's");
+    notify(&mut store, 2, ItemState::ChangesRequested, conflict());
+    assert_eq!(pending(&store), Some(conflict()));
+    store.set_state(&id(), ItemState::Abandoned);
+    assert_eq!(pending(&store), None, "a closed item asks for none");
+}
+
+#[test]
+fn a_parents_newer_notice_replaces_the_rebase_its_older_one_asked_for() {
+    let mut store = FakeStore::with_item(1);
+    notify(&mut store, 1, ItemState::NeedsReview, parent(8, false));
+    notify(&mut store, 1, ItemState::NeedsReview, parent(9, true));
+    assert_eq!(pending(&store), Some(parent(9, true)));
+}
+
+#[test]
+fn an_approved_item_rebases_only_once_its_parent_merged_without_it() {
+    let mut store = FakeStore::with_item(1);
+    notify(&mut store, 1, ItemState::Merging, parent(8, false));
+    assert_eq!(pending(&store), None, "it lands with its parent");
+    notify(&mut store, 1, ItemState::Merging, parent(9, true));
+    assert_eq!(pending(&store), Some(parent(9, true)));
 }

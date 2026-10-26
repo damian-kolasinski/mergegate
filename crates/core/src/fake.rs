@@ -925,6 +925,19 @@ impl FakeStore {
         item.closed_at = closed_at;
     }
 
+    /// Moves `id` to pull request `number` of `acme/app` on GitHub, which
+    /// names it `app#<number>`.
+    pub fn set_pull(&mut self, id: &ItemId, number: u64) {
+        let item = self.items.iter_mut().find(|i| i.id == *id).unwrap();
+        item.backend = ItemBackend::Github {
+            repo: GithubRepo::parse("acme/app").unwrap(),
+            pull: Pull {
+                number,
+                url: format!("https://github.com/acme/app/pull/{number}"),
+            },
+        };
+    }
+
     fn now(&mut self) -> String {
         self.clock += 1;
         format!("2026-01-01T00:00:{:02}Z", self.clock)

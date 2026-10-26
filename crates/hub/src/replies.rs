@@ -9,7 +9,9 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use mergegate_core::review::{self, Author, Reply, ReplyError, ReplyStatus, WriteReply};
+use mergegate_core::review::{
+    self, Author, Reply, ReplyError, ReplyStatus, ReviewError, WriteReply,
+};
 
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -56,6 +58,18 @@ fn failure(e: ReplyError, comment: &str) -> Failure {
     use StatusCode as S;
     let message = e.to_string();
     let (status, code, hint) = match e {
+        // A closed item's comments wait on nobody, so there is nothing to
+        // settle; an agent that carried the change into another item says
+        // so where the operator reads that item.
+        E::Review(ReviewError::Closed(_)) => (
+            S::CONFLICT,
+            "item_closed",
+            Some(
+                "a closed item's comments need no reply; if another item carries the change, \
+                 name the comment in that item's guide"
+                    .to_owned(),
+            ),
+        ),
         // An item that takes no review takes no replies either.
         E::Review(e) => return reviews::failure(e),
         E::NoComment(_) => (

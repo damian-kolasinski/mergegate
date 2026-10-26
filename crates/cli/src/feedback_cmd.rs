@@ -60,7 +60,7 @@ fn nothing_new(feedback: &Feedback, since: Option<u64>) -> String {
     format!(
         "no new feedback on {name}; an earlier read took all its events, through cursor {}. \
          If this session never acted on them, `mg resume {name}` shows the last review and \
-         the comments still waiting on you",
+         the comments still waiting on you, with any conflict to rebase",
         feedback.cursor
     )
 }

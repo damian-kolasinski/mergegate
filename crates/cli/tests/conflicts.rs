@@ -120,6 +120,22 @@ fn f9_a_target_moved_outside_the_hub_sends_the_conflict_before_review() {
     });
     let waiting = inbox(&env);
     assert_eq!(ids(&waiting["with_agents"]), ["app#1"]);
+
+    // Delivered, yet a session that lost the wait's output still finds it.
+    let resumed = env.mg(&["resume", "app#1"]).assert_code(0).stdout;
+    let short = &target[..12];
+    assert!(
+        resumed.contains(&format!(
+            "Still standing on r1, until a new revision answers it:\n\n  \
+             [1] merge.conflict app#1 r1: merging conflicts with the target at {short}\n    \
+             src/login.rs\n\n    Rebase and submit again:\n      git fetch mergegate\n"
+        )),
+        "{resumed}"
+    );
+    assert!(
+        resumed.contains("rebase as the notice above says and `mg submit` from the worktree"),
+        "{resumed}"
+    );
     assert_eq!(waiting["with_agents"][0]["blocked"], conflict);
 
     // Once per revision: the target moving on again tells nobody.
@@ -150,6 +166,8 @@ fn f9_a_target_moved_outside_the_hub_sends_the_conflict_before_review() {
     assert_eq!(ids(&back["needs_you"]), ["app#1"]);
     assert_eq!(back["needs_you"][0]["blocked"], Value::Null);
     assert_eq!(log(&env).len(), 1);
+    let resumed = env.mg(&["--json", "resume", "app#1"]).assert_code(0).json();
+    assert_eq!(resumed["pending"], Value::Null);
 }
 
 #[test]
