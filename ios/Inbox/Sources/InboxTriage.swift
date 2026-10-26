@@ -6,10 +6,6 @@ struct InboxTriage: Decodable, Sendable {
         struct Revision: Decodable, Sendable { let number: UInt32 }
         let revision: Revision
     }
-    struct File: Decodable, Sendable {
-        let viewed: Bool
-        let tier: String
-    }
     struct Comment: Decodable, Sendable {
         struct External: Decodable, Sendable {
             let pending: Bool
@@ -48,12 +44,9 @@ struct InboxTriage: Decodable, Sendable {
     }
 
     let item: Item
-    let files: [File]
     let comments: [Comment]
     let replies: [Reply]
 
-    var remainingFiles: Int { files.filter { $0.tier == "review" && !$0.viewed }.count }
-    var reviewFiles: Int { files.filter { $0.tier == "review" }.count }
 
     // Only sent replies count; an unsent operator draft cannot answer a question.
     var decisions: [Decision] {

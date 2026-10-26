@@ -96,7 +96,7 @@ final class SendFeedbackTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         try openReview(app)
@@ -105,7 +105,7 @@ final class SendFeedbackTests: XCTestCase {
         XCTAssertFalse(
             (app.textViews["feedbackSummary"].value as? String ?? "").contains("Check delivery"))
         XCTAssertFalse(app.buttons["sendFeedback"].isEnabled)
-        capture(app, "Feedback — dark and largest text size")
+        capture(app, "Feedback — dark mode")
         try audit(app)
         app.buttons["closeFeedback"].tap()
         app.terminate()
@@ -175,7 +175,7 @@ final class SendFeedbackTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
     }
 

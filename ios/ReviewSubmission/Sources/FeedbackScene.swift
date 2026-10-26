@@ -44,7 +44,7 @@ struct FeedbackScene: View {
                         } else {
                             Text(
                                 model.sentVerdict == .changesRequested
-                                    ? "Return to the inbox to follow this item in In progress. Your feedback is in Conversations."
+                                    ? "Return to the inbox to follow this item in With agents. Your feedback is in Conversations."
                                     : "Your comments are now in Conversations."
                             ).appearanceText(Appearance.body)
                         }
@@ -63,7 +63,7 @@ struct FeedbackScene: View {
                         } else {
                             Text(
                                 model.verdict == .changesRequested
-                                    ? "Describe what needs to change. Requesting changes returns this revision to In progress."
+                                    ? "Describe what needs to change. Requesting changes returns this revision to With agents."
                                     : "Send comments and a summary for this revision."
                             )
                             .appearanceText(Appearance.body).fixedSize(horizontal: false, vertical: true)

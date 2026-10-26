@@ -13,127 +13,73 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
     @State private var rulesProject: String?
     @State private var decisionItem: DecisionPresentation?
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingHub = false
+    @State private var showingClosed = false
     @State private var path: [String] = []
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(spacing: 0) {
-                List {
-                    if let date = model.cachedAt {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("Offline · saved inbox", systemImage: "wifi.slash")
-                            Text(
-                                "Saved \(date.formatted(date: .abbreviated, time: .shortened)). Open a previously read review to continue."
-                            )
-                            Button("Reconnect") { Task { await model.refresh() } }.frame(
-                                minHeight: 44)
-                        }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                            .accessibilityIdentifier("inboxOffline")
-                    } else if model.isReconnecting {
-                        Label(
-                            "Reconnecting… Showing the last inbox.",
-                            systemImage: "wifi.exclamationmark"
-                        )
-                        .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
-                        .accessibilityIdentifier("inboxReconnecting")
+            List {
+                status
+                if let snapshot = model.snapshot {
+                    ForEach(snapshot.rules ?? [], id: \.project) { pending in
+                        Button {
+                            rulesProject = pending.project
+                        } label: {
+                            InboxBadge(
+                                label:
+                                    "\(pending.project) · \(pending.changes) rule \(pending.changes == 1 ? "change" : "changes") to approve",
+                                tone: .warning)
+                        }.buttonStyle(.borderless).listRowSeparator(.hidden)
+                            .listRowBackground(Appearance.page)
+                            .accessibilityIdentifier("pendingRules-\(pending.project)")
                     }
-                    if let snapshot = model.snapshot {
-                        InboxControls(snapshot: snapshot, model: model).padding(.top, 12).padding(
-                            .bottom, 8
-                        )
-                        .listRowSeparator(.hidden).listRowBackground(Appearance.page)
-                    }
-                    if let error = model.error, model.cachedAt == nil {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Couldn’t refresh inbox").appearanceText(Appearance.rowHeading)
-                            Text(error).foregroundStyle(Appearance.error)
-                            Button("Retry") { Task { await model.refresh() } }.frame(minHeight: 44)
-                        }
-                    }
-                    if let snapshot = model.snapshot {
-                        ForEach(snapshot.rules ?? [], id: \.project) { pending in
-                            Button {
-                                rulesProject = pending.project
-                            } label: {
-                                Label(
-                                    "\(pending.project): \(pending.changes) rule changes waiting for you",
-                                    systemImage: "line.3.horizontal.decrease"
-                                )
-                                .frame(minHeight: 44)
-                            }.accessibilityIdentifier("pendingRules-\(pending.project)")
-                        }
-                        if model.groups.isEmpty {
-                            ContentUnavailableView(
-                                snapshot.isEmpty ? "Inbox is clear" : "No matching items",
-                                systemImage: "tray",
-                                description: Text(
-                                    "Choose another project or state, or pull to refresh."))
-                        }
-                        ForEach(model.groups) { group in
-                            Section {
-                                ForEach(group.items) { item in
-                                    InboxRow(
-                                        item: item, triage: model.triage[item.id],
-                                        error: model.triageErrors[item.id]
-                                    ) {
-                                        Task { await model.loadTriage(item) }
-                                    } openReview: {
-                                        path.append(item.id)
-                                    } openDecisions: {
-                                        if let triage = model.triage[item.id] {
-                                            decisionItem = DecisionPresentation(
-                                                item: item, triage: triage)
-                                        }
-                                    }.task(id: model.generation) { await model.loadTriage(item) }
-                                        .listRowSeparator(.hidden).listRowBackground(
-                                            Appearance.page)
-                                }
-                            } header: {
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(group.title.uppercased())
-                                    if !dynamicTypeSize.isAccessibilitySize {
-                                        Spacer(minLength: 8)
-                                        Text(
-                                            "\(group.items.count) \(group.items.count == 1 ? "item" : "items")"
-                                        )
-                                    }
-                                }.appearanceText(Appearance.caption).foregroundStyle(
-                                    Appearance.secondary
-                                )
-                                .padding(.horizontal, 6).padding(.vertical, 8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Appearance.page)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("\(group.title), \(group.items.count) \(group.items.count == 1 ? "item" : "items")")
-                                .accessibilityAddTraits(.isHeader)
+                    ForEach(model.groups) { group in
+                        Section {
+                            if group.items.isEmpty {
+                                Text(emptyNeedsYou).appearanceText(Appearance.body)
+                                    .foregroundStyle(Appearance.secondary)
+                                    .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                                    .accessibilityIdentifier("inboxEmpty")
                             }
+                            ForEach(group.items) { item in row(item) }
+                        } header: {
+                            header(group.section.rawValue, count: group.items.count)
                         }
-                        if let week = snapshot.weekly {
-                            InboxWeekView(week: week)
-                        }
-                    } else if model.isLoading {
-                        ProgressView("Loading inbox…").frame(maxWidth: .infinity)
                     }
+                    if !model.closed.isEmpty {
+                        DisclosureGroup(isExpanded: $showingClosed) {
+                            ForEach(model.closed) { item in row(item) }
+                        } label: {
+                            // On the label: a group's identifier would replace its rows'.
+                            Text("Closed today (\(model.closed.count))")
+                                .appearanceText(Appearance.label)
+                                .foregroundStyle(Appearance.secondary).frame(minHeight: 44)
+                                .accessibilityIdentifier("inboxClosedToday")
+                        }.listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                    }
+                    if let week = snapshot.weekly {
+                        InboxWeekView(week: week).listRowSeparator(.hidden)
+                            .listRowBackground(Appearance.page)
+                    }
+                } else if model.isLoading {
+                    ProgressView("Loading inbox…").frame(maxWidth: .infinity)
+                        .listRowBackground(Appearance.page)
                 }
-                .listStyle(.plain).listSectionSpacing(12)
-                .environment(\.defaultMinListRowHeight, 0)
-                .listRowSpacing(6)
-                .scrollContentBackground(.hidden)
-                .scrollEdgeEffectHidden(for: .bottom)
-                .appearanceText(Appearance.body).foregroundStyle(Appearance.primary)
-                .background(Appearance.page)
-                footer
             }
+            .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 0)
+            .scrollContentBackground(.hidden)
+            .appearanceText(Appearance.body).foregroundStyle(Appearance.primary)
             .background(Appearance.page)
-            .navigationTitle("Your next move")
+            .navigationTitle("Inbox")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Hub", systemImage: "arrow.triangle.branch") { showingHub = true }
                         .accessibilityLabel("Hub settings").accessibilityIdentifier("hubSettings")
                 }
+                ToolbarItem(placement: .topBarTrailing) { projectMenu }
             }
             .refreshable { await model.refresh() }
             .task(id: scenePhase) {
@@ -169,7 +115,6 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
                         }
                         .toolbar {
                             Button("Done") { rulesProject = nil }.appearanceText(Appearance.label)
-                                .frame(minWidth: 44, minHeight: 44)
                         }
                     }
                 }
@@ -177,45 +122,93 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
         }
     }
 
-    private var filterLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-            : AnyLayout(HStackLayout(spacing: 12))
+    @ViewBuilder private var status: some View {
+        if let date = model.cachedAt {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Offline · saved inbox", systemImage: "wifi.slash")
+                Text(
+                    "Saved \(date.formatted(date: .abbreviated, time: .shortened)). Open a previously read review to continue."
+                )
+                Button("Reconnect") { Task { await model.refresh() } }.buttonStyle(.borderless)
+            }.appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                .accessibilityIdentifier("inboxOffline")
+        } else if model.isReconnecting {
+            Label("Reconnecting… Showing the last inbox.", systemImage: "wifi.exclamationmark")
+                .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
+                .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                .accessibilityIdentifier("inboxReconnecting")
+        }
+        if let error = model.error, model.cachedAt == nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Couldn’t refresh inbox").appearanceText(Appearance.rowHeading)
+                Text(error).foregroundStyle(Appearance.error)
+                Button("Retry") { Task { await model.refresh() } }.buttonStyle(.borderless)
+            }.listRowSeparator(.hidden).listRowBackground(Appearance.page)
+        }
     }
 
-    private var footer: some View {
-        filterLayout {
-            Menu {
-                Picker("Project", selection: $model.project) {
-                    Text("All projects").tag(String?.none)
-                    ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
-                        Text(project).tag(Optional(project))
-                    }
+    private func row(_ item: InboxItem) -> some View {
+        InboxRow(
+            item: item, error: model.triageErrors[item.id], offline: model.cachedAt != nil
+        ) {
+            Task { await model.loadTriage(item) }
+        } openReview: {
+            path.append(item.id)
+        } openDecisions: {
+            Task {
+                await model.loadTriage(item)
+                if let triage = model.triage[item.id] {
+                    decisionItem = DecisionPresentation(item: item, triage: triage)
                 }
+            }
+        }
+        .task(id: model.generation) { await model.loadTriage(item) }
+        .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+    }
+
+    private func header(_ title: String, count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title.uppercased()).tracking(0.6)
+            Spacer(minLength: 8)
+            Text("\(count)").monospacedDigit()
+        }.appearanceText(Appearance.caption).fontWeight(.semibold)
+            .foregroundStyle(Appearance.secondary)
+            .padding(.horizontal, 4).padding(.top, 10).padding(.bottom, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Appearance.page)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(title), \(count) \(count == 1 ? "item" : "items")")
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    // The web's wording for an empty Needs you.
+    private var emptyNeedsYou: String {
+        let working = model.groups.filter { $0.section != .needsYou }.map(\.items.count)
+            .reduce(0, +)
+        return working == 0
+            ? "Nothing to review. Items show up here when an agent runs mg submit."
+            : "All caught up — agents are working on \(working) \(working == 1 ? "item" : "items")."
+    }
+
+    private var projectMenu: some View {
+        Menu {
+            Picker("Project", selection: $model.project) {
+                Text("All projects").tag(String?.none)
+                ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
+                    Text(project).tag(Optional(project))
+                }
+            }
+            Section("Rules") {
                 ForEach(model.snapshot?.projects ?? [], id: \.self) { project in
                     Button("\(project) rules") { rulesProject = project }
                 }
-            } label: {
-                Label(model.project ?? "All projects", systemImage: "folder")
-                    .appearanceText(Appearance.caption)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                    .frame(minHeight: 44)
-            }.accessibilityLabel("Project").accessibilityValue(model.project ?? "All projects")
-                .accessibilityIdentifier("projectFilter")
-            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
-            Menu {
-                Picker("State", selection: $model.filter) {
-                    ForEach(InboxFilter.allCases) { filter in Text(filter.rawValue).tag(filter) }
-                }
-            } label: {
-                Label(model.filter.rawValue, systemImage: "chevron.down").appearanceText(Appearance.caption)
-                    .accessibilityIdentifier("inboxStateLabel")
-                    .frame(minHeight: 44)
-            }.accessibilityLabel("State").accessibilityValue(model.filter.rawValue)
-                .accessibilityIdentifier("stateFilter")
-        }.padding(.horizontal, 16).padding(.vertical, 6)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
-            .padding(.horizontal, 16).padding(.bottom, 8).tint(Appearance.brand)
+            }
+        } label: {
+            Text(model.project ?? "All projects").appearanceText(Appearance.label).lineLimit(1)
+        }.accessibilityLabel("Project").accessibilityValue(model.project ?? "All projects")
+            .accessibilityIdentifier("projectFilter")
     }
 
     private var hubSettings: some View {
@@ -224,7 +217,7 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
                 Section("Hub") { Text(hub.url.absoluteString).textSelection(.enabled) }
                 Section("Device") { Text(hub.deviceName) }
                 Button("Forget hub", role: .destructive) { disconnect() }
-                    .frame(minHeight: 44).accessibilityIdentifier("forgetHub")
+                    .accessibilityIdentifier("forgetHub")
             }.appearanceText(Appearance.body)
                 .navigationTitle("Connected hub")
                 .toolbar { Button("Done") { showingHub = false } }

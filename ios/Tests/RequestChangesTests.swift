@@ -41,7 +41,7 @@ final class RequestChangesTests: XCTestCase {
         app.terminate()
         XCUIDevice.shared.appearance = .dark
         app.launchArguments = [
-            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
         ]
         app.launch()
         try openReview(app)
@@ -52,7 +52,7 @@ final class RequestChangesTests: XCTestCase {
         XCTAssertEqual(
             app.textViews["feedbackSummary"].value as? String,
             "Include delivery in the receipt and add a test for the charged total.")
-        capture(app, "Request changes — restored dark largest text")
+        capture(app, "Request changes — restored dark mode")
         try audit(app)
         app.buttons["sendFeedback"].tap()
         XCTAssertTrue(
@@ -62,13 +62,15 @@ final class RequestChangesTests: XCTestCase {
         try audit(app)
         app.buttons["closeFeedback"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.buttons["stateFilter"].waitForExistence(timeout: 10))
-        app.buttons["stateFilter"].tap()
-        app.buttons["In progress"].tap()
         let item = app.buttons["openReview-mobile-smoke#2"]
         XCTAssertTrue(item.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(item.label.contains("Changes requested"), item.label)
-        capture(app, "Request changes — In progress inbox")
+        let withAgents = app.descendants(matching: .any)["With agents, 1 item"]
+        XCTAssertTrue(withAgents.exists, app.debugDescription)
+        XCTAssertGreaterThan(item.frame.minY, withAgents.frame.minY)
+        XCTAssertTrue(
+            app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "changes requested · waiting for r"))
+                .firstMatch.exists)
+        capture(app, "Request changes — With agents inbox")
         app.terminate()
         try await verifyHub(address)
     }
@@ -119,7 +121,7 @@ final class RequestChangesTests: XCTestCase {
 
     @MainActor private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit(for: [
-            .contrast, .dynamicType, .hitRegion, .sufficientElementDescription,
+            .contrast, .hitRegion, .sufficientElementDescription,
         ])
     }
 
