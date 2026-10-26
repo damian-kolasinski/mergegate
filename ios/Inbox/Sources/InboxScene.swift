@@ -35,17 +35,17 @@ struct InboxScene<Review: View, Feedback: View, Rules: View>: View {
                             .accessibilityIdentifier("pendingRules-\(pending.project)")
                     }
                     ForEach(model.groups) { group in
-                        Section {
-                            if group.items.isEmpty {
-                                Text(emptyNeedsYou).appearanceText(Appearance.body)
-                                    .foregroundStyle(Appearance.secondary)
-                                    .listRowSeparator(.hidden).listRowBackground(Appearance.page)
-                                    .accessibilityIdentifier("inboxEmpty")
-                            }
-                            ForEach(group.items) { item in row(item) }
-                        } header: {
-                            header(group.section.rawValue, count: group.items.count)
+                        // A regular row scrolls with its cards instead of pinning over them.
+                        header(group.section.rawValue, count: group.items.count)
+                            .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        if group.items.isEmpty {
+                            Text(emptyNeedsYou).appearanceText(Appearance.body)
+                                .foregroundStyle(Appearance.secondary)
+                                .listRowSeparator(.hidden).listRowBackground(Appearance.page)
+                                .accessibilityIdentifier("inboxEmpty")
                         }
+                        ForEach(group.items) { item in row(item) }
                     }
                     if !model.closed.isEmpty {
                         DisclosureGroup(isExpanded: $showingClosed) {

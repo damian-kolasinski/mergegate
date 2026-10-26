@@ -12,7 +12,6 @@ struct InboxRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Decision flags are buttons of their own, so only these two lines open the review.
             Button(action: openReview) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
@@ -69,6 +68,9 @@ struct InboxRow: View {
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Appearance.surface, in: RoundedRectangle(cornerRadius: 14))
+        // Child buttons keep their actions; padding and passive badges open the review.
+        .contentShape(Rectangle())
+        .onTapGesture(perform: openReview)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("inboxItem-\(item.id)")
     }

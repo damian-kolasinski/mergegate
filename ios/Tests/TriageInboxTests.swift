@@ -48,6 +48,24 @@ final class TriageInboxTests: XCTestCase {
         try auditInboxAccessibility(app)
         capture(app, "Inbox — web sections and rows")
         XCTAssertTrue(app.staticTexts["Inbox"].firstMatch.exists)
+        // Exercise blank card space, outside the title button and decision target.
+        let card = app.descendants(matching: .any)["inboxItem-mobile-smoke#2"].firstMatch
+        for point in [
+            CGVector(dx: 0.02, dy: 0.5), CGVector(dx: 0.98, dy: 0.5),
+            CGVector(dx: 0.5, dy: 0.98),
+        ] {
+            card.coordinate(withNormalizedOffset: point).tap()
+            XCTAssertTrue(app.buttons["reviewFiles"].waitForExistence(timeout: 20), app.debugDescription)
+            XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("mobile-smoke#2"))
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(decisionAction.waitForExistence(timeout: 5))
+        }
+        app.descendants(matching: .any)["inboxItem-mobile-smoke#3"].firstMatch
+            .staticTexts["changes requested · waiting for r2"].tap()
+        XCTAssertTrue(app.buttons["reviewFiles"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("mobile-smoke#3"))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(decisionAction.waitForExistence(timeout: 5))
         decisionAction.tap()
         XCTAssertTrue(app.staticTexts["Keep compatibility with the previous response format."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Which clients still need the legacy format?"].exists)
@@ -61,6 +79,12 @@ final class TriageInboxTests: XCTestCase {
         app.descendants(matching: .any)["inboxClosedToday"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Retire the old endpoint"].waitForExistence(timeout: 5))
         capture(app, "Closed today unfolded")
+        // Expand history so the list is long enough to scroll the first group offscreen.
+        app.descendants(matching: .any)["inboxWeekly"].firstMatch.tap()
+        app.swipeUp()
+        XCTAssertFalse(needsYou.isHittable, "Section headers scroll away instead of covering cards.")
+        capture(app, "Inbox — section headers scroll with cards")
+        app.swipeDown()
         app.buttons["projectFilter"].tap()
         app.buttons["companion"].tap()
         XCTAssertTrue(app.staticTexts["Retire the old endpoint"].waitForExistence(timeout: 5))
