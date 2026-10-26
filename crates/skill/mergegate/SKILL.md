@@ -57,3 +57,20 @@ It leaves the clone's own `<target>` branch where it was, as it may hold the ope
 ## Picking up an item again
 
 A session that ended mid-review loses nothing: `mg resume app#3` prints what a new session needs (the item, its branch and worktree, the last review and every comment still open) and marks nothing delivered, so the next `mg wait` still returns the events the old session missed. A wait the old session left running takes them instead, even after that session is gone: end it first, as [references/waiting.md](references/waiting.md) describes under "When a wait ends early".
+
+## Reporting product failures
+
+Use `mg diagnostics logs --since 30m --json` for operational evidence;
+`--details` also includes sanitized warning/error text. `mg diagnostics collect --out diagnostics.zip` saves a private local archive, including when the local
+hub cannot start. A connected machine needs the hub owner's access.
+
+When the user asks to report a mergegate bug, write a summary and select relevant
+log excerpts into UTF-8 files. `mg report prepare --title "Problem" --body summary.txt --logs selected-logs.txt --out issue-report` creates a sanitized draft
+and ZIP without publishing. Review the generated report and ZIP for sensitive
+content. `mg report send --from issue-report` explicitly creates a public issue
+in the mergegate repository using this machine's gh login. Send only with the
+user's authorization to publish the report. Return the issue URL and ZIP path;
+the author can attach the ZIP manually. Known credentials and private paths are
+redacted, but prose redaction is heuristic and needs inspection. A failed send
+preserves the draft. Check GitHub before `--retry`; it reconciles by report ID
+without creating another issue if the list has not caught up. See each command's `--help` for limits and options.

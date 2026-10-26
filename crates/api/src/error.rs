@@ -11,6 +11,9 @@ pub struct ErrorBody {
     /// The command or action that fixes the error, when there is one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
+    /// Correlates a failed request with the hub's local telemetry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

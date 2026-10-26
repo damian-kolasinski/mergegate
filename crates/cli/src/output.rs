@@ -89,6 +89,7 @@ impl CliError {
                 code: code.into(),
                 message: message.into(),
                 hint: None,
+                request_id: None,
             },
         }
     }
@@ -149,6 +150,9 @@ fn render(json: bool, result: Result<Outcome, CliError>) -> (String, String, u8)
                 (to_json(&ErrorEnvelope { error: body }), String::new(), exit)
             } else {
                 let mut err = format!("error: {}", body.message);
+                if let Some(request_id) = body.request_id {
+                    err.push_str(&format!("\nrequest: {request_id}"));
+                }
                 if let Some(hint) = body.hint {
                     err.push_str(&format!("\nhint: {hint}"));
                 }

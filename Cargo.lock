@@ -2197,6 +2197,7 @@ dependencies = [
  "clap",
  "libc",
  "mergegate-api",
+ "mergegate-backend-github",
  "mergegate-core",
  "mergegate-git",
  "mergegate-hub",
@@ -2207,6 +2208,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "ureq",
+ "zip",
 ]
 
 [[package]]

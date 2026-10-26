@@ -13,7 +13,7 @@ workspace = true
 api.workspace = true
 backend-github.workspace = true
 crc32fast = "1.5.2"
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json", "query"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json", "query", "matched-path"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 git.workspace = true
 highlight.workspace = true

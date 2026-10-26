@@ -22,6 +22,7 @@ pub mod merge;
 pub mod module;
 pub mod project;
 pub mod remap;
+pub mod report;
 pub mod resume;
 pub mod review;
 pub mod review_time;

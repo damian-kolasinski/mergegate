@@ -22,12 +22,16 @@ impl Failure {
         message: impl Into<String>,
         hint: Option<String>,
     ) -> Self {
+        if status.is_server_error() {
+            tracing::error!(event_code = "request_failed", error_code = code);
+        }
         Self {
             status,
             body: ErrorBody {
                 code: code.into(),
                 message: message.into(),
                 hint,
+                request_id: None,
             },
         }
     }

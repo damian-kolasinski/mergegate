@@ -189,6 +189,11 @@ impl Client {
         };
         let mut response = response.map_err(lost)?;
         let status = response.status();
+        let request_id = response
+            .headers()
+            .get("x-mergegate-request-id")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let body = response.body_mut().read_to_string().map_err(lost)?;
         let unexpected = || {
             CliError::new(
@@ -205,10 +210,13 @@ impl Client {
             return Ok(Reply::Decide(envelope.needs_decision));
         }
         match serde_json::from_str::<ErrorEnvelope>(&body) {
-            Ok(envelope) => Err(CliError {
-                exit: exit::ERROR,
-                body: envelope.error,
-            }),
+            Ok(mut envelope) => {
+                envelope.error.request_id = request_id;
+                Err(CliError {
+                    exit: exit::ERROR,
+                    body: envelope.error,
+                })
+            }
             Err(_) => Err(unexpected()),
         }
     }

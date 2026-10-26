@@ -13,6 +13,8 @@ workspace = true
 
 [dependencies]
 api.workspace = true
+backend-github.workspace = true
+zip = { version = "9.0.5", default-features = false }
 clap = { version = "4.6.7", features = ["derive"] }
 git.workspace = true
 hub.workspace = true
