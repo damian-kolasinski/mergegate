@@ -29,7 +29,7 @@ final class ReReviewRevisionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["reviewIdentity"].label.contains("r2"))
         XCTAssertEqual(app.buttons["reviewComparison"].label, "Compare: Since r1")
         XCTAssertEqual(app.staticTexts["reviewViewedProgress"].label, "1 of 2 viewed")
-        let reader = app.textViews["unifiedDiff"]
+        let reader = app.textViews["unifiedDiff"].firstMatch
         XCTAssertTrue(reader.waitForExistence(timeout: 10))
         XCTAssertTrue((reader.value as? String ?? "").contains("let delivery = 15"))
         try audit(app)

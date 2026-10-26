@@ -14,6 +14,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
     private let sourceSides: [SourceAnchor.Side]
     private let onComment: ((SourceAnchor) -> Void)?
     private let onReadConversations: (([SourceAnchor]) -> Void)?
+    private let onSelectLines: ((SourceAnchor?) -> Void)?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
 
@@ -22,6 +23,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
         sourceSides: [SourceAnchor.Side] = [.old, .new],
         onComment: ((SourceAnchor) -> Void)? = nil,
         onReadConversations: (([SourceAnchor]) -> Void)? = nil,
+        onSelectLines: ((SourceAnchor?) -> Void)? = nil,
         focus: SourceAnchor? = nil, revealRequest: UUID? = nil, revealTopInset: CGFloat = 0, didReveal: (() -> Void)? = nil
     ) {
         self.didReveal = didReveal
@@ -34,6 +36,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
         self.maximumLine = maximumLine
         self.onComment = onComment
         self.onReadConversations = onReadConversations
+        self.onSelectLines = onSelectLines
     }
 
     public func makeUIView(context: Context) -> UITextView {
@@ -61,6 +64,7 @@ public struct UnifiedDiffView: UIViewRepresentable {
         (view as? SourceTextView)?.sourceSides = sourceSides
         (view as? SourceTextView)?.onComment = onComment
         (view as? SourceTextView)?.onReadConversations = onReadConversations
+        (view as? SourceTextView)?.onSelectLines = onSelectLines
         (view as? SourceTextView)?.didReveal = didReveal
         (view as? SourceTextView)?.revealTopInset = revealTopInset
         if let focus, let source = view as? SourceTextView,

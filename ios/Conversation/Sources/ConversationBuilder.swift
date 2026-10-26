@@ -23,6 +23,16 @@ public enum ConversationBuilder {
                 scope: scope, path: path, service: .init(transport: URLSessionTransport())))
     }
 
+    /// Wraps a file's reader in what its conversations add to it: where cards go, and the cards.
+    /// `refresh` changes when local drafts may have changed.
+    @MainActor
+    public static func annotations<Content: View>(
+        scope: CommentDraftScope, path: String, refresh: Int,
+        @ViewBuilder content: @escaping (SourceAnnotations) -> Content
+    ) -> some View {
+        FileAnnotations(scope: scope, path: path, refresh: refresh, content: content)
+    }
+
     @MainActor
     public static func drafts(
         scope: CommentDraftScope, location: CommentDraftLocation?, close: @escaping () -> Void

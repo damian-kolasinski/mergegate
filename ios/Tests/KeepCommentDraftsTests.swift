@@ -64,7 +64,7 @@ final class KeepCommentDraftsTests: XCTestCase {
         XCTAssertTrue(editedBody.contains("Should delivery be included here?"))
         XCTAssertTrue(editedBody.contains("Check the charged total."))
         app.buttons["closeDrafts"].tap()
-        try comment(app, y: 90)
+        try comment(app, y: 90, text: "é 🐙")
         XCTAssertEqual(app.staticTexts["draftAnchor"].label, "After · Line 3", app.debugDescription)
         XCTAssertTrue(app.staticTexts["draftQuote"].label.contains("é 🐙"))
         app.textViews["draftBody"].tap()
@@ -132,12 +132,25 @@ final class KeepCommentDraftsTests: XCTestCase {
         XCTAssertTrue(open.exists && open.isHittable, app.debugDescription)
         open.tap()
         XCTAssertTrue(app.buttons["reviewMore"].waitForExistence(timeout: 20), app.debugDescription)
-        XCTAssertTrue(app.textViews["unifiedDiff"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 10))
     }
 
-    @MainActor private func comment(_ app: XCUIApplication, y: CGFloat) throws {
-        let reader = app.textViews["unifiedDiff"]
-        reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: y)).press(
+    /// Long-presses the source line at `y` in the first block, or, once a card has split the
+    /// hunk below an earlier line, the same line at the top of the block holding `text`.
+    @MainActor private func comment(_ app: XCUIApplication, y: CGFloat, text: String? = nil) throws {
+        let first = app.textViews["unifiedDiff"].firstMatch
+        var reader = first
+        var offset = y
+        if let text {
+            let holding = app.textViews.matching(
+                NSPredicate(format: "identifier == %@ AND value CONTAINS %@", "unifiedDiff", text)
+            ).firstMatch
+            if holding.exists, holding.frame != first.frame {
+                reader = holding
+                offset = 14
+            }
+        }
+        reader.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 165, dy: offset)).press(
             forDuration: 1.2)
         let menu = app.menuItems["Comment"]
         let button = app.buttons["Comment"]

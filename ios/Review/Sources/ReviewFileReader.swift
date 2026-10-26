@@ -1,4 +1,5 @@
 import CodeStylingInterface
+import ConversationInterface
 import DiffDocumentInterface
 import SwiftUI
 
@@ -20,6 +21,8 @@ struct ReviewFileReader: View {
     var revealRequest: UUID? = nil
     var revealTopInset: CGFloat = 0
     var didReveal: (() -> Void)? = nil
+    var annotations: SourceAnnotations = .none
+    var onSelectLines: ((SourceAnchor?) -> Void)? = nil
     @State private var showingPreview = false
 
     var body: some View {
@@ -75,7 +78,8 @@ struct ReviewFileReader: View {
                         contextLoaded: $contextLoaded, revealed: $revealed, onReady: onReady,
                         onComment: onComment, onReadConversations: onReadConversations,
                         focus: focus, revealRequest: revealRequest,
-                        revealTopInset: revealTopInset, didReveal: didReveal
+                        revealTopInset: revealTopInset, didReveal: didReveal,
+                        annotations: annotations, onSelectLines: onSelectLines
                     )
                 case .binary:
                     message("Binary file", "A unified text diff is unavailable for this file.")

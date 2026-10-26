@@ -28,6 +28,17 @@ final class ResolveDecisionsTests: XCTestCase {
         let details = app.buttons["decisionDetails-app#1"]
         XCTAssertTrue(details.waitForExistence(timeout: 30), app.debugDescription)
         capture(app, "01 Decision desk — question and two rejections")
+        // In the reader the question sits on its line with its answer one tap away; the GitHub
+        // comments have no source line, so they wait in the conversations sheet, counted on its
+        // button with the question.
+        app.buttons["openReview-app#1"].tap()
+        let answer = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "inlineAnswer-"))
+            .firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.buttons["reviewConversations"].label, "Conversations, 3 need you")
+        capture(app, "01b Reader — question inline, conversations counted")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(details.waitForExistence(timeout: 20))
         details.tap()
         tap(app.buttons["resolve-c_1"], app)
         let editor = app.textViews["decisionText"]

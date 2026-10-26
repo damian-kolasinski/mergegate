@@ -148,6 +148,7 @@ let project = Project(
                     "MG_IOS_TEST_DECISIONS": "$(MG_IOS_TEST_DECISIONS)",
                     "MG_IOS_TEST_FEEDBACK": "$(MG_IOS_TEST_FEEDBACK)",
                     "MG_IOS_TEST_REQUEST_CHANGES": "$(MG_IOS_TEST_REQUEST_CHANGES)",
+                    "MG_IOS_TEST_INLINE": "$(MG_IOS_TEST_INLINE)",
                 ]), configuration: .debug, expandVariableFromTarget: "Mergegate"
             ), runAction: .runAction(configuration: .debug)
         )

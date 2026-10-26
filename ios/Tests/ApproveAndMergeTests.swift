@@ -139,7 +139,7 @@ final class ApproveAndMergeTests: XCTestCase {
         }
         XCTAssertTrue(open.isHittable, app.debugDescription)
         open.tap()
-        XCTAssertTrue(app.textViews["unifiedDiff"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.textViews["unifiedDiff"].firstMatch.waitForExistence(timeout: 20))
     }
 
     @MainActor private func audit(_ app: XCUIApplication) throws {

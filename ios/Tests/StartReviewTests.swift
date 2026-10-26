@@ -43,7 +43,7 @@ final class StartReviewTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["All changes → main"].exists)
         XCTAssertEqual(app.staticTexts["reviewViewedProgress"].label, "0 of 4 viewed")
         XCTAssertTrue(app.descendants(matching: .any)["reviewStats"].firstMatch.label.contains("0 of 4 reviewed"))
-        let reader = app.textViews["unifiedDiff"]
+        let reader = app.textViews["unifiedDiff"].firstMatch
         XCTAssertTrue(reader.waitForExistence(timeout: 5))
         XCTAssertTrue((reader.value as? String ?? "").contains("subtotal + delivery"), app.debugDescription)
         XCTAssertTrue((reader.value as? String ?? "").contains("@@ -0,0 +1,8 @@"))

@@ -38,7 +38,7 @@ final class TrackViewedFilesTests: XCTestCase {
         assertProgress(app, "1 of 3 viewed")
         XCTAssertEqual(viewed.value as? String, "Viewed")
         XCTAssertTrue(app.descendants(matching: .any)["reviewStats"].firstMatch.label.contains("1 of 3 reviewed"))
-        XCTAssertTrue((app.textViews["unifiedDiff"].value as? String ?? "").contains("subtotal + delivery"))
+        XCTAssertTrue((app.textViews["unifiedDiff"].firstMatch.value as? String ?? "").contains("subtotal + delivery"))
         try audit(app)
         capture(app, "Viewed — confirmed by the real hub")
         tapWhenStable(app.buttons["reviewFiles"])
@@ -93,7 +93,7 @@ final class TrackViewedFilesTests: XCTestCase {
         XCTAssertTrue(viewed.isHittable)
         tapWhenStable(viewed)
         assertProgress(app, "1 of 3 viewed")
-        let reader = app.textViews["unifiedDiff"]
+        let reader = app.textViews["unifiedDiff"].firstMatch
         let source = app.scrollViews.firstMatch
         for _ in 0..<3 { source.swipeUp() }
         XCTAssertTrue(reader.isHittable)

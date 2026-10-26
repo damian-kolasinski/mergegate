@@ -5,7 +5,8 @@ import DiffView
 import SwiftUI
 
 struct ReviewScene<
-    Drafts: View, Conversations: View, FileConversations: View, Feedback: View, Rules: View
+    Drafts: View, Conversations: View, FileConversations: View, Feedback: View, Rules: View,
+    Annotations: View, Summary: View
 >: View {
     @State var model: ReviewViewModel
     @Environment(\.scenePhase) private var scenePhase
@@ -19,6 +20,10 @@ struct ReviewScene<
             @escaping () -> Void
         ) -> Conversations
     let fileConversations: (CommentDraftScope, String) -> FileConversations
+    /// Wraps a file's reader in its threads and drafts; the Int changes when drafts may have.
+    let annotations:
+        (CommentDraftScope, String, Int, @escaping (SourceAnnotations) -> AnyView) -> Annotations
+    let summary: (CommentDraftScope, @escaping () -> Void) -> Summary
     let feedback:
         (
             CommentDraftScope, ReviewOutcome, Int, @escaping () async -> Void,
@@ -39,9 +44,12 @@ struct ReviewScene<
     @State private var notice: String?
     @State private var mastheadAway = false
     @State private var fileTop: Double?
+    /// Source lines picked in the gutter or by selection, which the comment pill offers.
+    @State private var pickedLines: CommentDraftLocation?
+    @State private var draftsVersion = 0
     let openItem: (String) -> Void
     private enum Sheet: Identifiable {
-        case guide, files, details, rules
+        case guide, files, details, rules, summary
         case feedback(ReviewOutcome)
         case reasons(String)
         case demo(ReviewDemo)
@@ -51,6 +59,7 @@ struct ReviewScene<
             switch self {
             case .details: "details"
             case .rules: "rules"
+            case .summary: "summary"
             case .demo: "demo"
             case .guide: "guide"
             case .files: "files"
@@ -126,7 +135,8 @@ struct ReviewScene<
                     }
                 if let file = snapshot.files.first(where: { $0.path == model.selectedPath }) {
                     Section {
-                        ReviewFileReader(
+                        annotations(scope(snapshot), file.path, draftsVersion) { notes in
+                        AnyView(ReviewFileReader(
                             file: file, project: snapshot.item.project,
                             sourceService: model.sourceService,
                             highlightService: model.highlightService,
@@ -144,8 +154,13 @@ struct ReviewScene<
                                 sheet = .conversations(.init(path: file.path, anchors: anchors))
                             }, focus: sourceFocus, revealRequest: sourceRequest,
                             revealTopInset: fileHeaderHeight,
-                            didReveal: { sourceFocus = nil }
-                        ).id(
+                            didReveal: { sourceFocus = nil },
+                            annotations: notes,
+                            onSelectLines: { anchor in
+                                pickedLines = anchor.map { .init(path: file.path, anchor: $0) }
+                            }
+                        ))
+                        }.id(
                             "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(file.path)"
                         )
                     } header: {
@@ -218,6 +233,7 @@ struct ReviewScene<
                 "\(snapshot.item.revision.number)-\(snapshot.since.map(String.init) ?? "all")-\(model.selectedPath ?? "")"
         ) { _, _ in
             readerMoved = sourceFocus != nil
+            pickedLines = nil
             // A file opened fresh starts at its own top, below the item's header.
             let offset = model.readingOffset == 0 ? Double(mastheadHeight) : model.readingOffset
             // The new reader's onReady restores too; it must land on the same spot.
@@ -245,6 +261,17 @@ struct ReviewScene<
                     ReviewNextItem(after: snapshot.item.id, service: model.service) {
                         openItem($0)
                     }
+                }
+                if let picked = pickedLines {
+                    Button {
+                        sheet = .drafts(picked)
+                        pickedLines = nil
+                    } label: {
+                        Label("Comment on \(picked.summary)", systemImage: "plus.bubble")
+                            .appearanceText(Appearance.label).foregroundStyle(Appearance.onFill)
+                            .padding(.horizontal, 6).frame(minHeight: 44)
+                    }.buttonStyle(.glassProminent).tint(Appearance.brand)
+                        .accessibilityIdentifier("commentOnLines")
                 }
                 bar(snapshot, current: current, order: order)
             }.padding(.horizontal, 12).padding(.bottom, 4)
@@ -287,7 +314,21 @@ struct ReviewScene<
                 Button {
                     sheet = .conversations(nil)
                 } label: {
-                    Label("Conversations", systemImage: "bubble.left.and.bubble.right")
+                    // What waits on the operator, as the inbox counts it.
+                    // Toolbars drop a label's title, so the count is drawn beside the icon.
+                    HStack(spacing: 4) {
+                        Image(
+                            systemName: current.needsYou > 0
+                                ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+                        if current.needsYou > 0 {
+                            Text("\(current.needsYou)").appearanceText(Appearance.label)
+                                .monospacedDigit()
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        current.needsYou > 0
+                            ? "Conversations, \(current.needsYou) need you" : "Conversations")
                 }.accessibilityIdentifier("reviewConversations")
                 if let demo = current.demo {
                     Button {
@@ -329,7 +370,13 @@ struct ReviewScene<
                     : "Drops the item's diffs. Add a reason under Item details to tell the agent why."
             )
         }
-        .sheet(item: $sheet, onDismiss: { Task { await model.refreshCurrent() } }) { selection in
+        .sheet(
+            item: $sheet,
+            onDismiss: {
+                draftsVersion += 1
+                Task { await model.refreshCurrent() }
+            }
+        ) { selection in
             Group {
                 switch selection {
                 case .details:
@@ -376,6 +423,8 @@ struct ReviewScene<
                             }
                         }
                     }
+                case .summary:
+                    summary(scope(snapshot)) { sheet = nil }
                 case .guide:
                     ReviewGuideScene(
                         guide: snapshot.guide, onActivity: { model.reviewTime.input() }
@@ -426,6 +475,7 @@ struct ReviewScene<
                 Task { await model.setViewed(path: file.path, viewed: !file.viewed) }
             },
             retry: { Task { await model.retryViewed() } },
+            comment: { sheet = .summary },
             perform: { action in perform(action, order: order) },
             complete: { outcome in
                 feedbackSent = false
@@ -523,5 +573,16 @@ struct ReviewScene<
         .init(
             hub: hub, item: snapshot.item.id, name: snapshot.item.name,
             revision: snapshot.item.revision.number)
+    }
+}
+
+extension CommentDraftLocation {
+    /// The pill's short name for the picked lines, as "After · L15–16".
+    fileprivate var summary: String {
+        let side = anchor.side == .old ? "Before" : "After"
+        let lines =
+            anchor.startLine == anchor.endLine
+            ? "L\(anchor.startLine)" : "L\(anchor.startLine)–\(anchor.endLine)"
+        return "\(side) · \(lines)"
     }
 }

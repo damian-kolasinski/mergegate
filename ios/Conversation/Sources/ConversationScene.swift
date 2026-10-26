@@ -7,6 +7,28 @@ struct ConversationScene: View {
     let close: () -> Void
     var showSource: (ConversationLocation) -> Void = { _ in }
     var onActivity: () -> Void = {}
+    @State private var showingRest = false
+
+    private func group(_ title: String, count: Int) -> some View {
+        Text("\(title.uppercased()) · \(count)").appearanceText(Appearance.caption)
+            .fontWeight(.semibold).foregroundStyle(Appearance.secondary)
+            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func row(_ thread: ConversationThread) -> some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                ConversationThreadScene(
+                    model: model, threadID: thread.id, showSource: showSource,
+                    onActivity: onActivity)
+            } label: {
+                ConversationThreadRow(thread: thread)
+            }.buttonStyle(.plain).accessibilityIdentifier("conversation-\(thread.id)")
+            Divider()
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,16 +80,29 @@ struct ConversationScene: View {
                                 description: Text("No sent threads match this scope."))
                         }
                         ConversationHubDrafts(model: model)
-                        ForEach(model.threads) { thread in
-                            NavigationLink {
-                                ConversationThreadScene(
-                                    model: model, threadID: thread.id, showSource: showSource,
-                                    onActivity: onActivity)
+                        // The web panel's groups: what waits on the operator, then the rest.
+                        let needsYou = model.threads.filter(\.needsYou)
+                        let rest = model.threads.filter { !$0.needsYou }
+                        if !needsYou.isEmpty {
+                            group("Needs you", count: needsYou.count)
+                            ForEach(needsYou) { thread in row(thread) }
+                        }
+                        if !rest.isEmpty {
+                            Button {
+                                showingRest.toggle()
                             } label: {
-                                ConversationThreadRow(thread: thread)
-                            }.buttonStyle(.plain).accessibilityIdentifier(
-                                "conversation-\(thread.id)")
-                            Divider()
+                                HStack {
+                                    group("Everything else", count: rest.count)
+                                    Image(
+                                        systemName: showingRest || needsYou.isEmpty
+                                            ? "chevron.down" : "chevron.right"
+                                    ).foregroundStyle(Appearance.secondary).padding(.trailing, 20)
+                                }.frame(minHeight: 44).contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .accessibilityIdentifier("conversationEverythingElse")
+                            if showingRest || needsYou.isEmpty {
+                                ForEach(rest) { thread in row(thread) }
+                            }
                         }
                     }
                 }.onScrollPhaseChange { _, phase in

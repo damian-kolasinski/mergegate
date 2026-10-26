@@ -18,6 +18,15 @@ struct SourceSelection {
 final class SourceTextView: UITextView {
     static func reader() -> SourceTextView {
         let view = SourceTextView(usingTextLayoutManager: true)
+        // UIKit's TextKit 2 factory initializer doesn't run Swift's property initializers, so the
+        // stored properties start zero-filled; set the ones read before UnifiedDiffView sets them.
+        view.sourceSelection = SourceSelection(text: "", ranges: [])
+        view.commentSelection = SourceCommentSelection(rows: [])
+        view.sourceSides = [.old, .new]
+        // Zero-filled optionals of these types read as values, not nil.
+        view.pendingReveal = nil
+        view.revealedRequest = nil
+        view.revealedAnchor = nil
         view.isScrollEnabled = false
         view.isEditable = false
         view.isSelectable = true
@@ -28,8 +37,9 @@ final class SourceTextView: UITextView {
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityIdentifier = "unifiedDiff"
         view.accessibilityHint =
-            "Select source text to copy, comment, or read conversations on those lines."
+            "Tap a line number to select that line, then another to extend. Select source text to copy, comment, or read conversations on those lines."
         view.delegate = view
+        view.installGutterTap()
         return view
     }
 
@@ -70,6 +80,14 @@ final class SourceTextView: UITextView {
     var onComment: ((SourceAnchor) -> Void)?
 
     var onReadConversations: (([SourceAnchor]) -> Void)?
+    var onSelectLines: ((SourceAnchor?) -> Void)?
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer.name == "gutterTap" {
+            return gutterRow(at: gestureRecognizer.location(in: self)) != nil
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
 
     func install(_ text: NSAttributedString, selection: SourceSelection) {
         sourceSelection = selection
