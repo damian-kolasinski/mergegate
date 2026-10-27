@@ -39,7 +39,7 @@ struct HubConnectionScene<Content: View>: View {
                             .submitLabel(.go)
                             .onSubmit { Task { await model.connect() } }
                             .disabled(isConnecting)
-                        Text("On your hub’s machine, run mg hub set listen tailnet to find the address.")
+                        Text("On your hub’s machine, run mg hub set listen tailnet, then enter the link mg hub status prints.")
                             .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                     }
                     if let error = model.error {

@@ -27,11 +27,20 @@ fn start_status_stop() {
     assert_eq!(started["home"], home);
     let url = format!("http://{}", env.hub_addr());
     assert_eq!(started["url"], url.as_str());
+    let port = env.hub_addr().rsplit_once(':').unwrap().1.to_owned();
+    let ui = format!("http://localhost:{port}/#/");
+    assert_eq!(started["ui_url"], ui.as_str());
 
     let status = env.mg(&["--json", "hub", "status"]).assert_code(0).json();
     assert_eq!(status["running"], true);
     assert_eq!(status["pid"], started["pid"]);
     assert_eq!(status["schema_version"], hub::SCHEMA_VERSION);
+    assert_eq!(status["ui_url"], ui.as_str());
+    let text = env.mg(&["hub", "status"]).assert_code(0).stdout;
+    assert!(
+        text.contains(&format!("open the review UI: {ui}")),
+        "{text}"
+    );
 
     let stopped = env.mg(&["--json", "hub", "stop"]).assert_code(0).json();
     assert_eq!(

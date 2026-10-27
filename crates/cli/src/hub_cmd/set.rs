@@ -1,6 +1,7 @@
 use api::settings::{SetSetting, Settings};
 use hub::Home;
 
+use super::ui_link::UiLink;
 use crate::client::{self, Client};
 use crate::output::{CliError, Outcome};
 
@@ -22,7 +23,10 @@ fn listen(settings: &Settings) -> String {
         tailnet.and_then(|t| t.problem.as_deref()),
     ) {
         (Some(url), _) => {
-            format!("listen tailnet: listening at {url}\non another machine: mg connect {url}")
+            format!(
+                "listen tailnet: listening at {url}\non another machine: mg connect {url}\n{}",
+                UiLink::tailnet(url).text()
+            )
         }
         (None, Some(problem)) => {
             format!("listen tailnet: not listening yet, retrying: {problem}")
