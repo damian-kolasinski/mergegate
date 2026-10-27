@@ -1,7 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import type { Abandon as AbandonBody } from "../api/Abandon";
 import type { Item } from "../api/Item";
-import { type Failure, failureOf, postJson } from "../app/hub";
+import { type Failure, failureOf, HubError, postJson } from "../app/hub";
 import { Button, ErrorNote, Meta, Mono, TextArea } from "../design-system";
 import styles from "./abandon.module.css";
 import { leaveReview } from "./review-time";
@@ -23,20 +23,32 @@ export function Abandon(props: {
   onAbandoned: (item: Item) => void;
 }) {
   const [sending, setSending] = createSignal(false);
+  // Which of the two abandons is being sent.
+  const [leaving, setLeaving] = createSignal(false);
   const [failure, setFailure] = createSignal<Failure>();
+  // GitHub can't close the pull request, as when the repository is gone:
+  // the operator may close the item here alone instead.
+  const [unreachable, setUnreachable] = createSignal(false);
 
-  const abandon = () => {
+  const abandon = (leaveGithub = false) => {
     if (sending()) return;
     const body: AbandonBody = {
       source: "operator",
       reason: props.reason.trim() || null,
+      leave_github: leaveGithub,
     };
     setSending(true);
+    setLeaving(leaveGithub);
     setFailure(undefined);
     const url = `/api/items/${encodeURIComponent(props.item)}/abandon`;
     // The time up to the abandon counts, and the hub takes none after it.
     leaveReview(() => postJson<Item>(url, body))
-      .then(props.onAbandoned, (error: unknown) => setFailure(failureOf(error)))
+      .then(props.onAbandoned, (error: unknown) => {
+        setFailure(failureOf(error));
+        setUnreachable(
+          error instanceof HubError && error.code === "github_no_access",
+        );
+      })
       .finally(() => setSending(false));
   };
 
@@ -60,9 +72,18 @@ export function Abandon(props: {
         value={props.reason}
         disabled={sending()}
         onInput={(reason) => props.onReason(reason)}
-        onSubmit={abandon}
+        onSubmit={() => abandon()}
         ref={(element) => requestAnimationFrame(() => element.focus())}
       />
+      <Show when={unreachable() && props.pullRequest}>
+        {(pull) => (
+          <Meta>
+            If GitHub no longer has the repository, abandon {props.name} here
+            only: PR {pull().label} and <Mono>{pull().branch}</Mono> stay as
+            they are on GitHub.
+          </Meta>
+        )}
+      </Show>
       <div class={styles.actions}>
         <Show when={failure()}>
           {(failure) => <ErrorNote failure={failure()} />}
@@ -70,13 +91,26 @@ export function Abandon(props: {
         <Button disabled={sending()} onClick={() => props.onCancel()}>
           Cancel
         </Button>
+        <Show when={unreachable()}>
+          <Button
+            variant="danger"
+            disabled={sending()}
+            busy={sending() && leaving()}
+            onClick={() => abandon(true)}
+          >
+            {sending() && leaving()
+              ? "Abandoning…"
+              : "Abandon in mergegate only"}
+          </Button>
+        </Show>
         <Button
           variant="danger"
-          busy={sending()}
+          disabled={sending()}
+          busy={sending() && !leaving()}
           keyHint="⌘↩"
-          onClick={abandon}
+          onClick={() => abandon()}
         >
-          {sending() ? "Abandoning…" : `Abandon ${props.name}`}
+          {sending() && !leaving() ? "Abandoning…" : `Abandon ${props.name}`}
         </Button>
       </div>
     </form>

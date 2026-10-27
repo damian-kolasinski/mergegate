@@ -13,12 +13,16 @@ pub struct Abandon {
     pub id: ItemId,
     pub source: Source,
     pub reason: Option<String>,
+    /// Closes the item without touching GitHub: for one whose repository or
+    /// pull request GitHub no longer has, which would fail the abandon.
+    pub leave_github: bool,
 }
 
 /// Any open item can be abandoned, a held merge included. Its agent learns
 /// who abandoned it and why from an `item.abandoned` event. A `github`
 /// item's pull request is closed and its branch deleted first; the item stays
-/// open if GitHub fails, so nothing is left behind there unnoticed.
+/// open if GitHub fails, so nothing is left behind there unnoticed, unless
+/// asked to leave GitHub as it is.
 ///
 /// The item stacked on it goes back to its agent with `parent.abandoned`,
 /// and its pull request keeps the branch it's based on until it moves: GitHub
@@ -29,14 +33,21 @@ pub fn abandon<S: ItemStore + DiffStore + HighlightStore + FeedbackStore>(
     github: &impl Github,
     request: Abandon,
 ) -> Result<Item, ItemError> {
-    let Abandon { id, source, reason } = request;
+    let Abandon {
+        id,
+        source,
+        reason,
+        leave_github,
+    } = request;
     let item = store
         .item(&id)?
         .ok_or_else(|| ItemError::NoItem(id.clone()))?;
     if !item.state.is_open() {
         return Err(ItemError::Closed(id));
     }
-    if let ItemBackend::Github { repo, pull } = &item.backend {
+    if let ItemBackend::Github { repo, pull } = &item.backend
+        && !leave_github
+    {
         github.close_pull(repo, pull.number)?;
         if store.child(&id)?.is_none() {
             github.delete_branch(repo, &item.branch)?;

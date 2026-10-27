@@ -79,6 +79,11 @@ pub struct Abandon {
     pub source: Source,
     #[serde(default)]
     pub reason: Option<String>,
+    /// Closes the item without closing its pull request or deleting its
+    /// branch on GitHub, as when GitHub no longer has the repository. Only
+    /// the operator may.
+    #[serde(default)]
+    pub leave_github: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

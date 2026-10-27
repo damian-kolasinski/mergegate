@@ -331,6 +331,7 @@ fn an_abandoned_parent_hands_its_child_back_and_bars_its_approval() {
             id: id("app#1"),
             source: Source::Operator,
             reason: None,
+            leave_github: false,
         },
     )
     .unwrap();

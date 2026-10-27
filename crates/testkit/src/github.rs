@@ -235,6 +235,12 @@ impl FakeGithub {
         self.state().repos.insert(repo.into(), false);
     }
 
+    /// Deletes `repo` from GitHub, pull requests and all: its API answers
+    /// 404 from now on.
+    pub fn delete_repo(&self, repo: &str) {
+        self.shared.delete_repo(repo);
+    }
+
     /// Merges fail with `reason`, as branch protection makes them; `None`
     /// lets them through again.
     pub fn refuse_merges(&self, reason: Option<&str>) {
@@ -407,6 +413,11 @@ impl Shared {
 
     fn repo_path(&self, repo: &str) -> PathBuf {
         self.repos.join(format!("{repo}.git"))
+    }
+
+    fn delete_repo(&self, repo: &str) {
+        self.state().repos.remove(repo);
+        std::fs::remove_dir_all(self.repo_path(repo)).unwrap();
     }
 
     /// What pull request `pull` of `repo` is at: its branch's head, or the

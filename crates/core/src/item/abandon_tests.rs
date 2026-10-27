@@ -59,6 +59,7 @@ fn abandoning(item: &str, source: Source, reason: Option<&str>) -> Abandon {
         id: id(item),
         source,
         reason: reason.map(Into::into),
+        leave_github: false,
     }
 }
 
@@ -252,8 +253,8 @@ fn refuses_a_closed_item_and_an_unknown_one() {
     assert_eq!(err.to_string(), "no item app#9");
 }
 
-#[test]
-fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
+/// On GitHub as `acme/app`, `app#1` on `login` at c2.
+fn github_item() -> (FakeStore, FakeGit, FakeGithub, GithubRepo) {
     let mut store = FakeStore::default();
     let acme = GithubRepo::parse("acme/app").unwrap();
     store
@@ -286,6 +287,12 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
         on: None,
     };
     submit(&mut store, &git, &github, request).unwrap();
+    (store, git, github, acme)
+}
+
+#[test]
+fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
+    let (mut store, git, github, acme) = github_item();
     // The item still closes on the repository it was opened on.
     store
         .update_project(&Project {
@@ -314,6 +321,46 @@ fn closes_a_github_items_pull_request_and_deletes_its_branch_first() {
     .unwrap();
     assert_eq!(github.pulls()[0].state, PullState::Closed);
     assert_eq!(github.deleted(), [(acme, "login".to_owned())]);
+}
+
+#[test]
+fn leaving_github_closes_an_item_github_no_longer_has() {
+    let (mut store, git, github, _) = github_item();
+    // The repository was deleted, pull request and all.
+    let gone = FakeGithub::default();
+    let err = abandon(
+        &mut store,
+        &git,
+        &gone,
+        abandoning("app#1", Source::Operator, None),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ItemError::Github(_)), "{err:?}");
+    assert!(store.item(&id("app#1")).unwrap().unwrap().state.is_open());
+
+    let item = abandon(
+        &mut store,
+        &git,
+        &gone,
+        Abandon {
+            leave_github: true,
+            ..abandoning("app#1", Source::Operator, Some("Repository deleted."))
+        },
+    )
+    .unwrap();
+    assert_eq!(item.state, ItemState::Abandoned);
+    assert!(gone.deleted().is_empty());
+    assert_eq!(github.pulls()[0].state, PullState::Open);
+    assert_eq!(
+        events(&store, "app#1")[0].kind,
+        EventKind::Notice(Notice {
+            revision: 1,
+            source: Source::Operator,
+            kind: NoticeKind::Abandoned {
+                reason: Some("Repository deleted.".into()),
+            },
+        })
+    );
 }
 
 /// On GitHub, `app#1` on `login` at c2 and `app#2` on `profile` at c3,

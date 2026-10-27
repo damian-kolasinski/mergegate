@@ -85,6 +85,7 @@ fn handle(stream: TcpStream, shared: &Shared) -> std::io::Result<()> {
         Some(path) => rest::handle(shared, &request, path),
         None if request.path == "/_fake/pulls" => rest::open_elsewhere(shared, &request),
         None if request.path == "/_fake/merges" => rest::hold_merges(shared, &request),
+        None if request.path == "/_fake/repos/delete" => rest::delete_repo(shared, &request),
         None if request.path.starts_with("/_fake/pulls/") => rest::control(shared, &request),
         None if request.path == "/_fake/reactions" => {
             reactions::control(&mut shared.state(), &request)

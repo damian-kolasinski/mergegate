@@ -364,6 +364,17 @@ pub(super) fn control(shared: &Shared, request: &Request) -> Response {
     act_elsewhere(shared, repo, number, action)
 }
 
+/// `POST /_fake/repos/delete` with `{repo}`: deletes it from GitHub, as
+/// [`FakeGithub::delete_repo`](super::FakeGithub::delete_repo) does.
+pub(super) fn delete_repo(shared: &Shared, request: &Request) -> Response {
+    let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+    let Some(repo) = body["repo"].as_str() else {
+        return Response::empty(400);
+    };
+    shared.delete_repo(repo);
+    Response::empty(204)
+}
+
 fn message(status: u16, message: &str) -> Response {
     Response::json(status, &json!({ "message": message }))
 }

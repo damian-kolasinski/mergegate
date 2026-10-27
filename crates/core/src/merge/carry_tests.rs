@@ -301,6 +301,7 @@ fn abandoning_takes_the_approval_back() {
         id: id(),
         source: Source::Operator,
         reason: None,
+        leave_github: false,
     };
     abandon(&mut store, &git, &FakeGithub::default(), request).unwrap();
     assert_eq!(standing_approval(&store, &id()).unwrap(), None);

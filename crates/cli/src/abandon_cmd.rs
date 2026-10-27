@@ -13,6 +13,7 @@ pub fn run(item: String, reason: Option<String>) -> Result<Outcome, CliError> {
     let request = Abandon {
         source: Source::Agent,
         reason,
+        leave_github: false,
     };
     let item = item_name::find(&client, &item)?;
     let path = format!("/api/items/{}/abandon", client::segment(&item.id));

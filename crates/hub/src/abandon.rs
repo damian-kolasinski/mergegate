@@ -29,10 +29,21 @@ async fn abandon(
     let Json(request) = request?;
     let id = ItemId::parse(&id)
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))?;
+    // Leaving a pull request open on GitHub is the operator's call, once
+    // they've seen GitHub fail to close it; `mg abandon` never asks for it.
+    if request.leave_github && request.source != api::feedback::Source::Operator {
+        return Err(Failure::new(
+            StatusCode::FORBIDDEN,
+            "operator_only",
+            "only the operator can abandon an item without closing it on GitHub".to_owned(),
+            None,
+        ));
+    }
     let request = Abandon {
         id,
         source: feedback::source_from_api(request.source),
         reason: request.reason,
+        leave_github: request.leave_github,
     };
     // Not while a merge is landing, which may move what's stacked on it.
     let (item, child) = state

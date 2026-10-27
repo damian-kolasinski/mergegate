@@ -561,6 +561,27 @@ fn f14_abandoning_closes_the_pull_request() {
 }
 
 #[test]
+fn f14_the_operator_abandons_an_item_whose_repository_github_deleted() {
+    let github = FakeGithub::start();
+    let (env, _repo) = submitted(&github);
+    github.delete_repo(ACME);
+    let abandon = |body: Value| send(&env, "POST", "/api/items/app%231/abandon", &body);
+
+    let reply = abandon(json!({ "source": "operator" }));
+    assert_eq!(reply.status, 502, "{}", reply.body);
+    assert_eq!(error_code(&json_of(&reply)), "github_no_access");
+    // Only the operator may leave a pull request open on GitHub.
+    let reply = abandon(json!({ "source": "agent", "leave_github": true }));
+    assert_eq!(reply.status, 403, "{}", reply.body);
+    assert_eq!(error_code(&json_of(&reply)), "operator_only");
+    assert_eq!(item(&env)["state"], "needs_review");
+
+    let reply = abandon(json!({ "source": "operator", "leave_github": true }));
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    assert_eq!(json_of(&reply)["state"], "abandoned");
+}
+
+#[test]
 fn f14_abandoning_waits_for_github() {
     let github = FakeGithub::start();
     let (env, repo) = submitted(&github);

@@ -13,6 +13,9 @@ final class ReviewActionsModel {
     var reason = ""
     var error: String?
     var result: String?
+    /// GitHub couldn't close the pull request, as when the repository is gone;
+    /// the operator may abandon the item in mergegate only instead.
+    private(set) var githubUnreachable = false
     private var version = 0
     private let beforeLeaving: () async -> Void
 
@@ -36,18 +39,20 @@ final class ReviewActionsModel {
             }
             snapshot = value
             error = nil
+            githubUnreachable = false
         } catch {
             if !Task.isCancelled && request == version { self.error = error.localizedDescription }
         }
     }
 
-    enum Action { case priority, sync, abandon, retryMerge, cancelMerge }
+    enum Action { case priority, sync, abandon, abandonLeavingGithub, retryMerge, cancelMerge }
     func send(_ action: Action) async {
         guard !busy, snapshot != nil else { return }
         busy = true
         version += 1
         error = nil
         result = nil
+        githubUnreachable = false
         defer { busy = false }
         do {
             // Item state can change while a confirmation is open. Reconcile before another attempt.
@@ -86,7 +91,7 @@ final class ReviewActionsModel {
                         endpoint.appending(path: "sync"), body: Data("{}".utf8)))
                 result =
                     "\(value.new) new, \(value.edited) edited, \(value.released) sent to the agent"
-            case .abandon:
+            case .abandon, .abandonLeavingGithub:
                 if current.item.isClosed {
                     result = "Item already \(current.item.state)"
                     return
@@ -95,13 +100,22 @@ final class ReviewActionsModel {
                 struct Body: Encodable {
                     let source = "operator"
                     let reason: String?
+                    let leave_github: Bool
                 }
                 let reason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-                let saved = try await JSONDecoder().decode(
-                    ReviewSnapshot.Item.self,
-                    from: service.transport.post(
-                        endpoint.appending(path: "abandon"),
-                        body: JSONEncoder().encode(Body(reason: reason.isEmpty ? nil : reason))))
+                let body = Body(
+                    reason: reason.isEmpty ? nil : reason,
+                    leave_github: action == .abandonLeavingGithub)
+                let saved: ReviewSnapshot.Item
+                do {
+                    saved = try await JSONDecoder().decode(
+                        ReviewSnapshot.Item.self,
+                        from: service.transport.post(
+                            endpoint.appending(path: "abandon"), body: JSONEncoder().encode(body)))
+                } catch let failure as HTTPFailure where failure.code == "github_no_access" {
+                    githubUnreachable = true
+                    throw failure
+                }
                 guard saved.id == item, saved.state == "abandoned" else {
                     throw ReviewActionIssue(
                         message: "Abandon was not confirmed. Refresh before retrying.")
