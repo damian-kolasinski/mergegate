@@ -2,6 +2,7 @@ use hub::Home;
 
 use super::probe::{live_pid, probe};
 use super::report::HubStatus;
+use super::ui_link;
 use crate::output::{CliError, Outcome};
 
 pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
@@ -12,8 +13,10 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
         None => text,
     };
     if let Some(running) = probe(home) {
+        let link = ui_link::of(&running);
         let status = HubStatus {
             connected: connected.clone(),
+            ui_url: Some(link.url.clone()),
             ..running.status(home)
         };
         let mut text = format!("hub running at {}", running.describe());
@@ -27,6 +30,7 @@ pub(super) fn run(home: &Home) -> Result<Outcome, CliError> {
         for warning in &status.warnings {
             text.push_str(&format!("\nwarning: {warning}"));
         }
+        text.push_str(&format!("\n{}", link.text()));
         return Ok(Outcome::done(&status, note(text)));
     }
     let unresponsive = home.is_locked();

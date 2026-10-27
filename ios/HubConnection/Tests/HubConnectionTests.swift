@@ -14,10 +14,15 @@ struct HubConnectionTests {
         #expect(try HubAddress(address).url.host != nil)
     }
 
+    @Test
+    func acceptsTheReviewUILinkAsTheHub() throws {
+        #expect(try HubAddress("http://my-mac:7800/#/").url == URL(string: "http://my-mac:7800"))
+    }
+
     @Test(arguments: [
         "", "my-mac:7800", "ftp://my-mac", "http://100.63.1.1", "http://192.168.1.1", "http://example.com",
         "https://100.64.1.1.example.com", "http://my-mac/api", "http://user:pass@my-mac", "http://my-mac?x=1",
-        "http://my-mac#fragment", "http://my-mac:0", "http://-my-mac",
+        "http://my-mac#fragment", "http://my-mac/#/item/1", "http://my-mac:0", "http://-my-mac",
     ])
     func rejectsInvalidAddress(_ address: String) {
         #expect(throws: (any Error).self) { try HubAddress(address) }

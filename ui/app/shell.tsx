@@ -1,6 +1,7 @@
 import { type JSX, Show } from "solid-js";
 import { hubConnected } from "./hub";
 import { KeyHelpOverlay } from "./key-help";
+import { OpenOnPhone } from "./phone";
 import styles from "./shell.module.css";
 import { HubVersion } from "./version";
 
@@ -36,6 +37,7 @@ export function Shell(props: {
         <span class={styles.help}>
           <kbd>?</kbd> shortcuts
         </span>
+        <OpenOnPhone />
       </header>
       <main class={styles.main}>{props.children}</main>
       <KeyHelpOverlay />

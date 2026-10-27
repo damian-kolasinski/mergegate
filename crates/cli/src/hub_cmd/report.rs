@@ -19,6 +19,10 @@ pub(super) struct HubStatus {
     pub stopped: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// Where the operator opens the review UI: the tailnet's address while
+    /// the hub listens there, else this machine's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ui_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]

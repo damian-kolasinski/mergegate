@@ -26,6 +26,7 @@ mod languages;
 mod lifecycle;
 mod merge;
 mod names;
+mod phone_link;
 mod presence;
 mod priority;
 mod projects;

@@ -6,6 +6,7 @@ use super::probe::{Running, probe};
 use super::report::{HubStatus, diagnostics_hint, unresponsive};
 use super::service::{self, Loaded, Role};
 use super::spawn::Spawned;
+use super::ui_link;
 use super::{POLL, io_error};
 use crate::output::{CliError, Outcome, exit};
 
@@ -110,8 +111,10 @@ pub(super) fn run(home: Home, foreground: bool, port: u16) -> Result<Outcome, Cl
 }
 
 fn outcome(home: &Home, running: &Running, started: bool, warnings: Vec<String>) -> Outcome {
+    let link = ui_link::of(running);
     let mut status = HubStatus {
         started: Some(started),
+        ui_url: Some(link.url.clone()),
         ..running.status(home)
     };
     status.warnings.extend(warnings);
@@ -131,6 +134,7 @@ fn outcome(home: &Home, running: &Running, started: bool, warnings: Vec<String>)
     for warning in &status.warnings {
         text.push_str(&format!("\nwarning: {warning}"));
     }
+    text.push_str(&format!("\n{}", link.text()));
     Outcome::done(&status, text)
 }
 

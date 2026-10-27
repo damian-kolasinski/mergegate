@@ -6,17 +6,25 @@ struct HubAddress {
 
     init(_ text: String) throws {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let parts = URLComponents(string: text),
+        guard var parts = URLComponents(string: text),
             ["http", "https"].contains(parts.scheme?.lowercased() ?? ""),
             let host = parts.host, !host.isEmpty,
             parts.user == nil, parts.password == nil,
-            parts.query == nil, parts.fragment == nil,
+            parts.query == nil,
+            // `#/` is the web inbox, as `mg hub status` prints the review UI's link.
+            parts.fragment == nil || parts.fragment == "/",
             parts.path.isEmpty || parts.path == "/",
             parts.port.map({ (1...65535).contains($0) }) ?? true,
-            Self.isTailnetHost(host), let url = parts.url
+            Self.isTailnetHost(host)
         else {
             throw AddressError()
         }
+        if parts.fragment != nil {
+            // Stored as the bare address users typed before, which keys the caches.
+            parts.fragment = nil
+            parts.path = ""
+        }
+        guard let url = parts.url else { throw AddressError() }
         self.url = url
     }
 
@@ -43,6 +51,6 @@ struct HubAddress {
 
 private struct AddressError: LocalizedError {
     var errorDescription: String? {
-        "Enter the hub URL shown by mg hub set listen tailnet, such as http://my-mac:7800."
+        "Enter the review UI link shown by mg hub status, such as http://my-mac:7800/#/."
     }
 }

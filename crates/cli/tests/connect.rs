@@ -101,6 +101,10 @@ fn f2_listen_tailnet_prints_where_to_connect() {
         out.contains(&format!("on another machine: mg connect {url}")),
         "{out}"
     );
+    let ui = format!("{url}/#/");
+    assert!(out.contains(&format!("open the review UI: {ui}")), "{out}");
+    let status = hub.mg(&["--json", "hub", "status"]).assert_code(0).json();
+    assert_eq!(status["ui_url"], ui.as_str());
 
     // The setting outlives the hub.
     hub.mg(&["hub", "stop"]).assert_code(0);

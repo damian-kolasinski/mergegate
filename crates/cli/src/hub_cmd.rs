@@ -2,6 +2,7 @@
 
 mod devices;
 pub(crate) mod probe;
+mod qr;
 mod report;
 pub(crate) mod service;
 mod set;
@@ -9,6 +10,7 @@ mod spawn;
 mod start;
 mod status;
 mod stop;
+mod ui_link;
 pub(crate) mod upgrade;
 
 use std::io;

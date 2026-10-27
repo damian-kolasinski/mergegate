@@ -122,7 +122,7 @@ Then, in a repository, tell your agent:
 
 > Set up mergegate for this repo.
 
-It runs `mg project add`, `mg init` and `mg doctor`, and asks you the choices that are yours, such as whether to use the `github` or `local` backend. From then on, any agent working in that repo submits through mergegate. Open **http://127.0.0.1:7800** to review.
+It runs `mg project add`, `mg init` and `mg doctor`, and asks you the choices that are yours, such as whether to use the `github` or `local` backend. From then on, any agent working in that repo submits through mergegate. Open **http://localhost:7800/#/** to review. Once `mg hub set listen tailnet` is on, `mg hub status` prints the hub's tailnet link, as in `http://my-mac:7800/#/`, with a QR code a phone on the tailnet opens, and the UI's **Open on phone** button shows the page you're on as one.
 
 The commands an agent uses most:
 
