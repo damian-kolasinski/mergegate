@@ -169,6 +169,30 @@ test("a pull request closed on GitHub abandons the item", async ({
   await expect(screen.getByRole("region", { name: "Abandoned" })).toBeVisible();
 });
 
+test("the operator abandons an item whose repository GitHub deleted", async ({
+  page,
+  github,
+}) => {
+  const app = github.hub.githubProject("app", github.github);
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${github.hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("Needs review")).toBeVisible();
+  await github.github.deleteRepo();
+
+  await screen.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: "Abandon…" }).click();
+  const confirm = page.getByRole("form", { name: "Abandon" });
+  await confirm.getByRole("button", { name: "Abandon app#1" }).click();
+  await expect(confirm).toContainText("doesn't exist on GitHub");
+  await expect(screen.getByText("Needs review")).toBeVisible();
+
+  await confirm
+    .getByRole("button", { name: "Abandon in mergegate only" })
+    .click();
+  await expect(screen.getByRole("region", { name: "Abandoned" })).toBeVisible();
+});
+
 test("an item on the local backend has no pull request", async ({
   page,
   hub,

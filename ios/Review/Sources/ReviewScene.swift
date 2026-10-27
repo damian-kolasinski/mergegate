@@ -41,6 +41,8 @@ struct ReviewScene<
     @State private var scrollPhase: ScrollPhase = .idle
     @State private var draftCount = 0
     @State private var confirmingAbandon = false
+    /// GitHub couldn't close the pull request the abandon tried to.
+    @State private var abandonUnreachable: String?
     @State private var notice: String?
     @State private var mastheadAway = false
     @State private var fileTop: Double?
@@ -370,6 +372,16 @@ struct ReviewScene<
                     : "Drops the item's diffs. Add a reason under Item details to tell the agent why."
             )
         }
+        .confirmationDialog(
+            "Abandon \(snapshot.item.name) in mergegate only?",
+            isPresented: confirmingLeaveGithub, titleVisibility: .visible
+        ) {
+            Button("Abandon in mergegate only", role: .destructive) {
+                act(.abandonLeavingGithub)
+            }
+        } message: {
+            Text(leaveGithubMessage)
+        }
         .sheet(
             item: $sheet,
             onDismiss: {
@@ -525,6 +537,18 @@ struct ReviewScene<
         }
     }
 
+    private var confirmingLeaveGithub: Binding<Bool> {
+        Binding(
+            get: { abandonUnreachable != nil },
+            set: { if !$0 { abandonUnreachable = nil } })
+    }
+
+    private var leaveGithubMessage: String {
+        let failure = abandonUnreachable ?? ""
+        return failure
+            + " If GitHub no longer has the repository, its pull request and branch stay as they are there."
+    }
+
     private func act(
         _ action: ReviewActionsModel.Action, prepare: @escaping (ReviewActionsModel) -> Void = { _ in }
     ) {
@@ -536,6 +560,7 @@ struct ReviewScene<
             prepare(actions)
             await actions.send(action)
             notice = actions.error ?? actions.result
+            if actions.githubUnreachable { abandonUnreachable = actions.error }
             await model.refreshCurrent()
         }
     }

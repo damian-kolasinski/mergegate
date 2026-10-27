@@ -136,6 +136,14 @@ struct ReviewDetailsScene<Rules: View>: View {
                         }
                         if let error = model.error {
                             Text(error).foregroundStyle(Appearance.error)
+                            if model.githubUnreachable {
+                                Text(
+                                    "If GitHub no longer has the repository, abandon the item in mergegate only: its pull request and branch stay as they are there."
+                                )
+                                Button("Abandon in mergegate only", role: .destructive) {
+                                    Task { await model.send(.abandonLeavingGithub) }
+                                }.frame(minHeight: 44)
+                            }
                             Button("Refresh item") { Task { await model.load() } }.frame(
                                 minHeight: 44)
                         }

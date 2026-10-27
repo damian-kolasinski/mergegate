@@ -124,6 +124,16 @@ export class FakeGithub {
       throw new Error(`fake-github answered ${response.status}`);
   }
 
+  /** Deletes `acme/app` from GitHub, pull requests and all. */
+  async deleteRepo() {
+    const response = await fetch(`${this.web}/_fake/repos/delete`, {
+      method: "POST",
+      body: JSON.stringify({ repo: "acme/app" }),
+    });
+    if (!response.ok)
+      throw new Error(`fake-github answered ${response.status}`);
+  }
+
   stop() {
     // Closing stdin is how it's told to stop.
     this.process.stdin?.end();

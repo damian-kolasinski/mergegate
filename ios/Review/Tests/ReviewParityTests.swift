@@ -24,6 +24,21 @@ struct ReviewParityTests {
         #expect(model.result == "Item already abandoned")
         #expect(await transport.abandons == 1)
     }
+    @Test @MainActor func abandonLeavesGithubOnlyAfterGithubLostTheRepository() async throws {
+        let transport = ActionsTransport()
+        await transport.deleteRepo()
+        let model = ReviewActionsModel(
+            service: .init(transport: transport, url: URL(string: "http://hub")!), item: "sample#1")
+        await model.load()
+        await model.send(.abandon)
+        #expect(model.error != nil)
+        #expect(model.githubUnreachable)
+        #expect(model.snapshot?.item.state == "needs_review")
+        await model.send(.abandonLeavingGithub)
+        #expect(model.result == "Abandoned")
+        #expect(!model.githubUnreachable)
+        #expect(await transport.leftGithub == [false, true])
+    }
     @Test @MainActor func mergeRecoveryRefusesRetryAfterHeldStateMoved() async throws {
         let transport = ActionsTransport()
         await transport.block("held")
@@ -81,8 +96,12 @@ private actor ActionsTransport: HTTPTransport {
     var note: String? = "Urgent"
     var lost = false
     var abandons = 0
+    var repoGone = false
+    /// Each abandon's `leave_github`.
+    var leftGithub: [Bool] = []
     var merges = 0
     func loseAbandonResponse() { lost = true }
+    func deleteRepo() { repoGone = true }
     func block(_ value: String) { blocked = value }
     func get(_ url: URL) async throws -> Data { try data() }
     func post(_ url: URL, body: Data) async throws -> Data {
@@ -96,6 +115,14 @@ private actor ActionsTransport: HTTPTransport {
             note = value["note"] as? String
             return try itemData()
         case "abandon":
+            let value = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+            let leaveGithub = value["leave_github"] as? Bool ?? false
+            leftGithub.append(leaveGithub)
+            if repoGone && !leaveGithub {
+                throw HTTPFailure(
+                    status: 502, code: "github_no_access",
+                    message: "acme/app doesn't exist on GitHub")
+            }
             abandons += 1
             state = "abandoned"
             if lost {
