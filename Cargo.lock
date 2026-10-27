@@ -2103,6 +2103,7 @@ dependencies = [
  "mergegate-rules-toml",
  "mergegate-store-sqlite",
  "mergegate-tailscale",
+ "qrcode",
  "serde",
  "serde_json",
  "tempfile",
