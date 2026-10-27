@@ -2031,7 +2031,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-api"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2040,7 +2040,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-backend-github"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "base64 0.22.1",
  "mergegate-core",
@@ -2051,7 +2051,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-core"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "gix-imara-diff",
  "globset",
@@ -2061,7 +2061,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-git"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "gix",
  "mergegate-core",
@@ -2071,7 +2071,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-highlight"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "flate2",
  "mergegate-core",
@@ -2087,7 +2087,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-hub"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "axum",
  "crc32fast",
@@ -2116,7 +2116,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-judge-command"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "mergegate-core",
  "serde",
@@ -2126,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-judge-jev"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "mergegate-core",
  "serde_json",
@@ -2135,7 +2135,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-lang-release"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "mergegate-core",
  "mergegate-testkit",
@@ -2148,7 +2148,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-rules-toml"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "mergegate-core",
  "serde",
@@ -2158,11 +2158,11 @@ dependencies = [
 
 [[package]]
 name = "mergegate-skill"
-version = "0.9.0"
+version = "0.10.0"
 
 [[package]]
 name = "mergegate-store-sqlite"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "crc32fast",
  "mergegate-core",
@@ -2174,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-tailscale"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "mergegate-core",
  "serde",
@@ -2183,7 +2183,7 @@ dependencies = [
 
 [[package]]
 name = "mergegate-testkit"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "base64 0.22.1",
  "rusqlite",
@@ -2193,7 +2193,7 @@ dependencies = [
 
 [[package]]
 name = "mg"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "clap",
  "libc",
