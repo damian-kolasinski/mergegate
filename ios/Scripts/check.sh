@@ -11,6 +11,7 @@ action=test
 if [ "$mode" = lint ]; then action=build; fi
 args=()
 if [ -n "${MG_IOS_TEST_HUB_URL:-}" ]; then args+=("MG_IOS_TEST_HUB_URL=$MG_IOS_TEST_HUB_URL"); fi
+if [ -n "${MG_IOS_TEST_DEMO:-}" ]; then args+=("MG_IOS_TEST_DEMO=$MG_IOS_TEST_DEMO"); fi
 if [ -n "${MG_IOS_TEST_PARITY:-}" ]; then args+=("MG_IOS_TEST_PARITY=$MG_IOS_TEST_PARITY"); fi
 if [ -n "${MG_IOS_TEST_TRIAGE:-}" ]; then args+=("MG_IOS_TEST_TRIAGE=$MG_IOS_TEST_TRIAGE"); fi
 if [ -n "${MG_IOS_TEST_REVIEW:-}" ]; then args+=("MG_IOS_TEST_REVIEW=$MG_IOS_TEST_REVIEW"); fi

@@ -22,6 +22,8 @@ Tap a line number to pick that line, and tap another on the same side to extend 
 
 Threads and drafts sit inline under the line they end on, as on the web: hunks split there and a card follows. A card that waits on the operator carries its decision, one tap each: **👍 Send to agent** or **👎 Dismiss** for a GitHub comment awaiting a vote, **Accept** or **Override…** for a rejection, **Answer** for a question; tapping a card opens its thread, and a local draft's card opens it for editing. The navigation bar's conversations button shows how many wait on the operator, and its sheet groups **Needs you** ahead of a folded **Everything else**, like the web's panel. The file’s **Conversations** control opens sent threads for that file, showing source side/lines, comment previews, reply counts, and current status. Select source text and choose **Conversations** in the native menu to filter threads to those lines; unchanged context searches both old and new source coordinates. The navigation bar opens all item threads, including whole-item and outdated comments. Each thread shows its original quote, full comment and sent replies in order, authors, times, and question/rejection/addressed/override status. External comments retain their GitHub author, delivery/vote state, and file identity even when they have no source anchor. Earlier comments use hub-provided placement onto the displayed revision; changed, outdated, and later-revision anchors are labeled explicitly. Opening a sheet fetches authoritative conversations with `onto=<displayed revision>`; pull to refresh and Retry preserve the last readable response on failure. Reading threads keeps the diff, selection, expanded context, viewed state, and local drafts intact. Pending question answers and external rejection decisions are available from the inbox.
 
+Demo attachments open full-screen. Videos retain their aspect ratio; viewer overlays fade after three seconds of playback and return on tap or pause. Playback and seeking controls fade together with the viewer actions, and VoiceOver keeps the viewer actions visible. Images initially fit within the viewport at no more than one source pixel per display pixel, with pinch zoom, double-tap zoom/reset, and panning. Attachment changes reset the image view and pause the previous video.
+
 ## Verification
 
 From the repository root:
@@ -344,3 +346,14 @@ The hierarchy and adaptation criteria follow Apple's [Layout guidance](https://d
 
 
 Validation used `.claude/scripts/check.sh lint ios` and focused `test ios` runs. The build, 15 Inbox behavior tests, 33 Review behavior tests, the rendered-contrast measurement test, and four focused source-selection tests (including an upward jump below pinned controls) passed. The iPhone 17 Pro and iPhone SE flows passed their interaction/layout assertions, including real file navigation, long-diff scrolling, touch targets, and dark mode at the largest text size. Native contrast audits still flag unchanged status/metadata captions in the glass-header run and Complete review on iPhone SE. Inbox contrast reports also occur on the unmodified baseline; additional largest-text checks exposed the sticky-heading overlap fixed above. These unresolved native contrast reports remain failures and require follow-up inspection; no audit exemptions were added.
+
+For the full-screen demo flow, use a fresh smoke hub and the generated media fixture (`ffmpeg` is needed only to create the test clip):
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-demo
+python3 ios/Scripts/demo-fixture.py /tmp/mergegate-ios-demo
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_DEMO=1 .claude/scripts/check.sh test ios -- -only-testing:ReviewTests/ReviewDemoImageTests -only-testing:MergegateUITests/WatchDemoTests
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-demo
+```
+
+The UI flow verifies natural-size portrait rendering, real pinch zoom, full-screen video, controls fading during playback, tap-to-reveal, and returning to the pinned review. Screenshots remain in the xcresult. Native behavior checks cover aspect ratio, small images without upscaling, panning, and refitting after rotation.

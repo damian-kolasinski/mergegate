@@ -55,7 +55,6 @@ struct ReviewScene<
         case guide, files, details, rules, summary
         case feedback(ReviewOutcome)
         case reasons(String)
-        case demo(ReviewDemo)
         case drafts(CommentDraftLocation?)
         case conversations(ConversationLocation?)
         var id: String {
@@ -63,7 +62,6 @@ struct ReviewScene<
             case .details: "details"
             case .rules: "rules"
             case .summary: "summary"
-            case .demo: "demo"
             case .guide: "guide"
             case .files: "files"
             case .feedback: "feedback"
@@ -73,6 +71,11 @@ struct ReviewScene<
             }
         }
     }
+    private struct DemoPresentation: Identifiable {
+        let demo: ReviewDemo
+        var id: UInt32 { demo.revision }
+    }
+    @State private var demoPresentation: DemoPresentation?
     @State private var sheet: Sheet?
     @State private var scrollPosition = ScrollPosition()
     @State private var visibleOffset: Double = 0
@@ -95,6 +98,11 @@ struct ReviewScene<
             }
         }
         .background(Appearance.page).foregroundStyle(Appearance.primary)
+        .fullScreenCover(item: $demoPresentation) { selection in
+            ReviewDemoScene(
+                demo: selection.demo, service: model.sourceService,
+                close: { demoPresentation = nil }, onActivity: { model.reviewTime.input() })
+        }
         .navigationBarTitleDisplayMode(.inline)
         // Returning triggers the inbox refresh, which must follow the pending write.
         .navigationBarBackButtonHidden(model.isSavingViewed || model.isComparing)
@@ -337,7 +345,7 @@ struct ReviewScene<
                 }.accessibilityIdentifier("reviewConversations")
                 if let demo = current.demo {
                     Button {
-                        sheet = .demo(demo)
+                        demoPresentation = DemoPresentation(demo: demo)
                     } label: {
                         Label("Demo (\(demo.attachments.count))", systemImage: "play.rectangle")
                     }.accessibilityIdentifier("reviewDemo")
@@ -411,10 +419,6 @@ struct ReviewScene<
                             openItem(item)
                         }.toolbar { Button("Done") { sheet = nil } }
                     }
-                case .demo(let demo):
-                    ReviewDemoScene(
-                        demo: demo, service: model.sourceService, close: { sheet = nil },
-                        onActivity: { model.reviewTime.input() })
                 case .conversations(let location):
                     conversations(
                         scope(snapshot), location,
