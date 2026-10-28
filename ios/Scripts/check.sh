@@ -28,6 +28,8 @@ if [ -n "${MG_IOS_TEST_APPROVAL:-}" ]; then args+=("MG_IOS_TEST_APPROVAL=$MG_IOS
 if [ -n "${MG_IOS_TEST_LIVE_UPDATES:-}" ]; then args+=("MG_IOS_TEST_LIVE_UPDATES=$MG_IOS_TEST_LIVE_UPDATES"); fi
 if [ -n "${MG_IOS_TEST_OFFLINE:-}" ]; then args+=("MG_IOS_TEST_OFFLINE=$MG_IOS_TEST_OFFLINE"); fi
 if [ -n "${MG_IOS_TEST_CONTROL_URL:-}" ]; then args+=("MG_IOS_TEST_CONTROL_URL=$MG_IOS_TEST_CONTROL_URL"); fi
+if [ -n "${MG_IOS_TEST_INLINE:-}" ]; then args+=("MG_IOS_TEST_INLINE=$MG_IOS_TEST_INLINE"); fi
+if [ -n "${MG_IOS_TEST_SCROLL:-}" ]; then args+=("MG_IOS_TEST_SCROLL=$MG_IOS_TEST_SCROLL"); fi
 if ! xcodebuild "$action" -workspace Mergegate.xcworkspace -scheme Mergegate \
   -destination "${MG_IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2}" \
   -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO \

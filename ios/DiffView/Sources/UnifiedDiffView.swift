@@ -39,37 +39,60 @@ public struct UnifiedDiffView: UIViewRepresentable {
         self.onSelectLines = onSelectLines
     }
 
-    public func makeUIView(context: Context) -> UITextView {
-        SourceTextView.reader()
+    /// The inputs of the last rendered document. Scrolling the review updates this view as its
+    /// chrome hides and returns; rebuilding a long file's text each time stalls those frames.
+    public final class Coordinator {
+        fileprivate struct Inputs: Equatable {
+            let hunks: [DiffHunk]
+            let maximumLine: UInt32
+            let dynamicTypeSize: DynamicTypeSize
+            let colorScheme: ColorScheme
+            let styling: ObjectIdentifier?
+        }
+        fileprivate var inputs: Inputs?
     }
 
-    public func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context)
+    public func makeCoordinator() -> Coordinator { Coordinator() }
+
+    public func makeUIView(context: Context) -> UIScrollView {
+        SourceScrollView()
+    }
+
+    public func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIScrollView, context: Context)
         -> CGSize?
     {
         guard let width = proposal.width else { return nil }
         return uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
     }
 
-    public func updateUIView(_ view: UITextView, context: Context) {
+    public func updateUIView(_ view: UIScrollView, context: Context) {
+        guard let source = (view as? SourceScrollView)?.reader else { return }
         // Environment reads refresh resolved colors and scaled fonts when the reader stays open.
-        _ = dynamicTypeSize
-        let traits = UITraitCollection(traitsFrom: [
-            view.traitCollection,
-            UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light),
-        ])
-        let document = DiffText.document(
-            hunks, traits: traits, maximumLine: maximumLine, styling: styling)
-        (view as? SourceTextView)?.install(document.text, selection: document.selection)
-        (view as? SourceTextView)?.commentSelection = document.comments
-        (view as? SourceTextView)?.sourceSides = sourceSides
-        (view as? SourceTextView)?.onComment = onComment
-        (view as? SourceTextView)?.onReadConversations = onReadConversations
-        (view as? SourceTextView)?.onSelectLines = onSelectLines
-        (view as? SourceTextView)?.didReveal = didReveal
-        (view as? SourceTextView)?.revealTopInset = revealTopInset
-        if let focus, let source = view as? SourceTextView,
+        let inputs = Coordinator.Inputs(
+            hunks: hunks, maximumLine: maximumLine, dynamicTypeSize: dynamicTypeSize,
+            colorScheme: colorScheme, styling: styling.map { ObjectIdentifier(type(of: $0)) })
+        if context.coordinator.inputs != inputs {
+            let traits = UITraitCollection(traitsFrom: [
+                view.traitCollection,
+                UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light),
+                // Fonts follow the size the cache keys on, not whatever UIKit holds yet.
+                UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize)),
+            ])
+            let document = DiffText.document(
+                hunks, traits: traits, maximumLine: maximumLine, styling: styling)
+            source.install(document.text, selection: document.selection)
+            source.commentSelection = document.comments
+            context.coordinator.inputs = inputs
+        }
+        source.sourceSides = sourceSides
+        source.onComment = onComment
+        source.onReadConversations = onReadConversations
+        source.onSelectLines = onSelectLines
+        source.didReveal = didReveal
+        source.revealTopInset = revealTopInset
+        if let focus,
             source.revealedAnchor != focus || source.revealedRequest != revealRequest,
-            let range = document.comments.range(for: focus)
+            let range = source.commentSelection.range(for: focus)
         {
             source.revealedAnchor = focus
             source.revealedRequest = revealRequest
