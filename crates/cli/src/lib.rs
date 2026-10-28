@@ -137,7 +137,8 @@ enum Command {
         files: Vec<PathBuf>,
     },
     /// Wait until the item has feedback for its agent, print it and mark it
-    /// delivered; in a Codex session, read once without waiting
+    /// delivered; in Claude Code, say it came and leave it to mg feedback; in
+    /// a Codex session, read once without waiting
     Wait {
         /// The item, as in app#42; on GitHub, by its pull request's number
         item: String,
@@ -145,9 +146,9 @@ enum Command {
         #[arg(long = "for", value_enum, default_value = "any")]
         wake: wait_cmd::Wake,
         /// Seconds to wait before exiting with 75; 0 waits until there is
-        /// feedback
-        #[arg(long, default_value_t = wait_cmd::TIMEOUT)]
-        timeout: u64,
+        /// feedback. Defaults to 540, and to 0 in Claude Code
+        #[arg(long)]
+        timeout: Option<u64>,
         /// Read the events after this cursor, even delivered ones; they are
         /// marked delivered unless one up to the cursor still waits
         #[arg(long)]

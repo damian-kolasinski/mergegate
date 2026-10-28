@@ -261,6 +261,94 @@ fn f3_wait_in_codex_returns_what_is_new() {
     assert_eq!(feedback["events"][0]["summary"], "Fix it.");
 }
 
+const CLAUDE_CODE: &[(&str, &str)] = &[("CLAUDECODE", "1")];
+
+#[test]
+fn f3_wait_in_claude_code_waits_without_a_timeout_and_leaves_the_events() {
+    let (env, _repo) = submitted();
+    let run = std::thread::scope(|scope| {
+        let waiting = scope.spawn(|| env.mg_with_env(&["wait", "app#1"], CLAUDE_CODE));
+        std::thread::sleep(Duration::from_millis(1500));
+        review(&env, "changes_requested", "Fix it.");
+        waiting.join().unwrap()
+    });
+    assert_eq!(
+        run.assert_code(0).stdout.trim(),
+        "app#1 has new events: [1] review.submitted. Nothing is marked delivered; \
+         read and act on them with: mg feedback app#1"
+    );
+
+    // Lost or read, the wait took nothing: mg feedback prints and delivers.
+    let feedback = env
+        .mg_with_env(&["--json", "feedback", "app#1"], CLAUDE_CODE)
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["events"][0]["summary"], "Fix it.");
+    let again = env.mg(&["--json", "feedback", "app#1"]).assert_code(0);
+    assert_eq!(again.json()["events"], json!([]));
+}
+
+#[test]
+fn f3_wait_in_claude_code_names_the_pending_events_in_json() {
+    let (env, _repo) = submitted();
+    review(&env, "comment", "First look.");
+    let arrived = env
+        .mg_with_env(&["--json", "wait", "app#1", "--since", "0"], CLAUDE_CODE)
+        .assert_code(0)
+        .json();
+    assert_eq!(
+        arrived,
+        json!({
+            "item": "app#1",
+            "name": "app#1",
+            "state": "needs_review",
+            "pending": [{ "cursor": 1, "type": "review.submitted" }],
+            "read": "mg feedback app#1 --since 0",
+        })
+    );
+}
+
+#[test]
+fn f3_wait_in_claude_code_keeps_a_timeout_it_is_given() {
+    let (env, _repo) = submitted();
+    env.mg_with_env(&["wait", "app#1", "--timeout", "1"], CLAUDE_CODE)
+        .assert_code(75);
+}
+
+#[test]
+fn f3_wait_in_claude_code_ends_with_its_session() {
+    let (env, _repo) = submitted();
+    let mut ended = std::process::Command::new("true").spawn().unwrap();
+    let pid = ended.id().to_string();
+    ended.wait().unwrap();
+    let started = Instant::now();
+    let run = env
+        .mg_with_env(
+            &["wait", "app#1"],
+            &[("CLAUDECODE", "1"), ("CLAUDE_PID", pid.as_str())],
+        )
+        .assert_code(129);
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(
+        run.stdout.contains("SIGHUP stopped the wait on app#1"),
+        "{run:?}"
+    );
+}
+
+#[test]
+fn f3_wait_in_claude_code_leaves_a_close_to_mg_feedback() {
+    let (env, _repo) = submitted();
+    env.mg(&["--json", "abandon", "app#1"]).assert_code(0);
+    let arrived = env
+        .mg_with_env(&["wait", "app#1"], CLAUDE_CODE)
+        .assert_code(0);
+    assert!(arrived.stdout.contains("item.abandoned"), "{arrived:?}");
+    env.mg_with_env(&["feedback", "app#1"], CLAUDE_CODE)
+        .assert_code(0);
+    env.mg_with_env(&["wait", "app#1"], CLAUDE_CODE)
+        .assert_code(3);
+}
+
 #[test]
 fn f3_wait_wakes_when_the_operator_submits() {
     let (env, _repo) = submitted();
