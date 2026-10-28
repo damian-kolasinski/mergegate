@@ -116,10 +116,10 @@ struct InlineCards: View {
                         }
                     }
                     Text(thread.comment.body).appearanceText(Appearance.body)
-                        .lineLimit(thread.needsYou ? 4 : 2).multilineTextAlignment(.leading)
+                        .lineLimit(thread.needsYou ? nil : 2).multilineTextAlignment(.leading)
                     if let reply = thread.replies.last, reply.author == "agent", !reply.body.isEmpty {
                         Text("Agent: \(reply.body)").appearanceText(Appearance.caption)
-                            .foregroundStyle(Appearance.secondary).lineLimit(2)
+                            .foregroundStyle(Appearance.secondary).lineLimit(thread.needsYou ? nil : 2)
                             .multilineTextAlignment(.leading)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -129,23 +129,28 @@ struct InlineCards: View {
     }
 
     @ViewBuilder private func actions(_ thread: ConversationThread) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { decisionButtons(thread) }
+            VStack(alignment: .leading, spacing: 8) { decisionButtons(thread) }
+        }
+    }
+
+    @ViewBuilder private func decisionButtons(_ thread: ConversationThread) -> some View {
         let last = thread.replies.last
-        HStack(spacing: 8) {
-            if last?.author == "agent", last?.status == "question" {
-                action("Answer", id: "inlineAnswer-\(thread.id)") {
-                    editor = ConversationEditorModel(
-                        kind: .reply(comment: thread.id, id: nil), text: "",
-                        service: model.editingService)
-                }
-            } else if last?.author == "agent", last?.status == "rejected", let last {
-                action("Accept", id: "inlineAccept-\(thread.id)") { decide(thread, .agree(last.id)) }
-                action("Override…", id: "inlineOverride-\(thread.id)") { overriding = thread }
-            } else {
-                action("👍 Send to agent", id: "inlineSendToAgent-\(thread.id)") {
-                    decide(thread, .vote("up"))
-                }
-                action("👎 Dismiss", id: "inlineDismiss-\(thread.id)") { decide(thread, .vote("down")) }
+        if last?.author == "agent", last?.status == "question" {
+            action("Answer", id: "inlineAnswer-\(thread.id)") {
+                editor = ConversationEditorModel(
+                    kind: .reply(comment: thread.id, id: nil), text: "",
+                    service: model.editingService)
             }
+        } else if last?.author == "agent", last?.status == "rejected", let last {
+            action("Accept", id: "inlineAccept-\(thread.id)") { decide(thread, .agree(last.id)) }
+            action("Override…", id: "inlineOverride-\(thread.id)") { overriding = thread }
+        } else {
+            action("👍 Send to agent", id: "inlineSendToAgent-\(thread.id)") {
+                decide(thread, .vote("up"))
+            }
+            action("👎 Dismiss", id: "inlineDismiss-\(thread.id)") { decide(thread, .vote("down")) }
         }
     }
 
@@ -163,9 +168,8 @@ struct InlineCards: View {
 
     private func action(_ title: String, id: String, perform: @escaping () -> Void) -> some View {
         Button(action: perform) {
-            Text(title).appearanceText(Appearance.label).padding(.horizontal, 12)
-                .frame(minHeight: 44)
-        }.buttonStyle(.glass).accessibilityIdentifier(id)
+            Text(title)
+        }.buttonStyle(AppearanceButtonStyle()).accessibilityIdentifier(id)
     }
 
     private func badge(_ title: String, tone: Color, text: Color) -> some View {
@@ -179,9 +183,9 @@ struct InlineCards: View {
     {
         VStack(alignment: .leading, spacing: 6, content: content)
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Appearance.surface, in: RoundedRectangle(cornerRadius: 12))
+            .background(Appearance.surface, in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: 12).strokeBorder(
+                RoundedRectangle(cornerRadius: Appearance.controlRadius).strokeBorder(
                     dashed ? Appearance.brand : Appearance.border,
                     style: StrokeStyle(lineWidth: dashed ? 1 : 0.5, dash: dashed ? [4, 3] : [])))
     }

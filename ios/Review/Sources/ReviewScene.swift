@@ -32,6 +32,7 @@ struct ReviewScene<
     let rules: (String, @escaping (String) -> Void) -> Rules
     /// Comments drafted on this iPhone for a revision, which the next review sends.
     let localDrafts: (CommentDraftScope) -> Int
+    @State private var reviewBarHeight: CGFloat = 76
     @State private var feedbackSent = false
     @State private var sourceFocus: SourceAnchor?
     @State private var sourceRequest = UUID()
@@ -189,7 +190,7 @@ struct ReviewScene<
             }
         }
         // Room for the floating bar, so the last lines scroll clear of it.
-        .contentMargins(.bottom, 96, for: .scrollContent)
+        .contentMargins(.bottom, reviewBarHeight + 20, for: .scrollContent)
         .accessibilityIdentifier("reviewScroll")
         .scrollPosition($scrollPosition)
         .onScrollGeometryChange(for: ReviewScrollGeometry.self) { geometry in
@@ -270,14 +271,16 @@ struct ReviewScene<
                         pickedLines = nil
                     } label: {
                         Label("Comment on \(picked.summary)", systemImage: "plus.bubble")
-                            .appearanceText(Appearance.label).foregroundStyle(Appearance.onFill)
-                            .padding(.horizontal, 6).frame(minHeight: 44)
-                    }.buttonStyle(.glassProminent).tint(Appearance.brand)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }.buttonStyle(AppearanceButtonStyle(prominent: true)).tint(Appearance.brand)
                         .accessibilityIdentifier("commentOnLines")
                 }
                 bar(snapshot, current: current, order: order)
             }.padding(.horizontal, 12).padding(.bottom, 4)
-                .offset(y: chromeHidden ? 160 : 0)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    reviewBarHeight = $0
+                }
+                .offset(y: chromeHidden ? reviewBarHeight + 24 : 0)
                 .animation(.easeInOut(duration: 0.2), value: chromeHidden)
         }
         .task(

@@ -16,8 +16,8 @@ struct CommentDraftsView: View {
                     model.persist()
                     if !model.hasUnsavedChanges { close() }
                 }
-                .appearanceText(Appearance.label).frame(minWidth: 44, minHeight: 44)
-                .buttonStyle(.glass).accessibilityIdentifier("closeDrafts")
+                .appearanceText(Appearance.label).frame(minWidth: 28)
+                .buttonStyle(AppearanceButtonStyle()).accessibilityIdentifier("closeDrafts")
             }.padding(.horizontal, 20).padding(.top, 12)
             Text("\(model.scope.name) · r\(model.scope.revision)")
                 .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)

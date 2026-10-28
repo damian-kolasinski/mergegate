@@ -46,7 +46,7 @@ struct SourceCommentSelectionTests {
         let reader = SourceTextView.reader()
         let document = DiffText.document(
             [.init(header: "", lines: (1...200).map {
-                .init(kind: .added, oldLine: nil, newLine: UInt32($0), text: "Source line \($0)")
+                .init(kind: .added, oldLine: nil, newLine: UInt32($0), text: "Source line \($0)" + String(repeating: " long source", count: 30))
             })], traits: UITraitCollection())
         reader.install(document.text, selection: document.selection)
         reader.frame = CGRect(
@@ -55,12 +55,15 @@ struct SourceCommentSelectionTests {
         scroll.addSubview(reader)
         scroll.contentSize = reader.bounds.size
         scroll.contentOffset.y = reader.bounds.height - scroll.bounds.height
+        reader.layoutIfNeeded()
+        reader.setContentOffset(CGPoint(x: 180, y: 0), animated: false)
         reader.revealTopInset = 88
         let range = try #require(document.comments.range(
             for: .init(side: .new, startLine: 20, endLine: 20, quote: "")))
         reader.pendingReveal = range
         reader.setNeedsLayout()
         reader.layoutIfNeeded()
+        #expect(reader.contentOffset.x == 0)
         let start = try #require(reader.position(from: reader.beginningOfDocument, offset: range.location))
         let end = try #require(reader.position(from: start, offset: range.length))
         let textRange = try #require(reader.textRange(from: start, to: end))

@@ -10,8 +10,7 @@ struct SourceConversationsView: View {
             showing = true
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Label("Conversations", systemImage: "bubble.left.and.bubble.right")
-                    .labelStyle(.iconOnly)
+                Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 18))
                 if model.loading {
                     ProgressView()
                 } else if model.error != nil {
@@ -20,8 +19,8 @@ struct SourceConversationsView: View {
                     Text("\(model.threads.count)")
                 }
             }.appearanceText(Appearance.caption)
-                .padding(.horizontal, 16).frame(minWidth: 44, minHeight: 44)
-                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 8).frame(minWidth: 44, minHeight: 44)
+                .fixedSize(horizontal: true, vertical: false).contentShape(Rectangle())
         }.tint(Appearance.brand).accessibilityLabel("File conversations")
             .accessibilityValue(model.loading ? "Loading" : model.error != nil ? "Retry" : "\(model.threads.count)")
             .accessibilityIdentifier("fileConversations")

@@ -67,7 +67,7 @@ final class ReadHighlightedCodeTests: XCTestCase {
         }
         XCTAssertTrue(changed, "Real grammar installation must repaint the open source through SSE.")
         XCTAssertEqual(source.value as? String, original)
-        XCTAssertEqual(source.frame, originalFrame, "Syntax colors must preserve wrapping and reading position.")
+        XCTAssertEqual(source.frame, originalFrame, "Syntax colors must preserve line layout and reading position.")
         XCTAssertFalse(app.buttons["loadSourceContext"].exists, "Expanded source must stay expanded.")
         XCTAssertEqual(app.staticTexts["reviewIdentity"].label, "mobile-smoke#2 · r1 → main")
         capture(app, "03 — Late hub highlighting with context retained")

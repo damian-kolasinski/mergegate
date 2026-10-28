@@ -25,32 +25,51 @@ struct ReviewBar: View {
             if let failure {
                 HStack(spacing: 8) {
                     Text("Couldn’t update \(failure.change.path): \(failure.message)")
-                        .foregroundStyle(Appearance.error).lineLimit(2)
+                        .foregroundStyle(Appearance.error).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("viewedError")
                     Button("Retry", action: retry).disabled(saving || disabled)
                         .accessibilityIdentifier("retryViewed")
                 }.appearanceText(Appearance.caption).padding(.horizontal, 12)
             }
-            HStack(spacing: 6) {
-                viewedControl
-                Button(action: comment) {
-                    Image(systemName: "text.bubble").font(.title3).frame(width: 44, height: 44)
-                }.accessibilityLabel("Review comment").accessibilityIdentifier("reviewComment")
-                Spacer(minLength: 4)
-                if let primary {
-                    Button {
-                        perform(primary)
-                    } label: {
-                        Text(primary.title).appearanceText(Appearance.label)
-                            .foregroundStyle(Appearance.onFill).padding(.horizontal, 4)
-                            .frame(minHeight: 44)
-                    }.buttonStyle(.glassProminent).tint(Appearance.brand)
-                        .disabled(saving).accessibilityIdentifier("reviewPrimary")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    viewedControl
+                    commentControl
+                    Spacer(minLength: 4)
+                    primaryControl.fixedSize(horizontal: true, vertical: false)
+                    if canComplete { outcomes }
                 }
-                if canComplete { outcomes }
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        viewedControl
+                        Spacer(minLength: 4)
+                        commentControl
+                        if canComplete { outcomes }
+                    }
+                    primaryControl.frame(maxWidth: .infinity)
+                }
             }
-        }.padding(6).glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
+        }.padding(6)
+            .background(Appearance.page, in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
+            .overlay(RoundedRectangle(cornerRadius: Appearance.controlRadius).strokeBorder(Appearance.border))
             .tint(Appearance.brand)
+    }
+
+    private var commentControl: some View {
+        Button(action: comment) {
+            Image(systemName: "text.bubble").font(.system(size: 20)).frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).foregroundStyle(Appearance.brand)
+            .accessibilityLabel("Review comment").accessibilityIdentifier("reviewComment")
+    }
+
+    @ViewBuilder private var primaryControl: some View {
+        if let primary {
+            Button { perform(primary) } label: {
+                Text(primary.title).frame(maxWidth: .infinity)
+            }.buttonStyle(AppearanceButtonStyle(prominent: true))
+                .disabled(saving).accessibilityIdentifier("reviewPrimary")
+        }
     }
 
     @ViewBuilder private var viewedControl: some View {
@@ -66,7 +85,7 @@ struct ReviewBar: View {
                             ProgressView().accessibilityLabel("Saving viewed state")
                         } else {
                             Image(systemName: file.viewed ? "checkmark.circle.fill" : "circle")
-                                .font(.title2)
+                                .font(.system(size: 22))
                         }
                     }.frame(width: 44, height: 44).contentShape(Rectangle())
                 }.disabled(saving || disabled)
@@ -77,7 +96,7 @@ struct ReviewBar: View {
                     .accessibilityIdentifier("reviewViewed")
             } else {
                 Image(systemName: file?.tier == .trusted ? "checkmark.shield" : "minus.circle")
-                    .font(.title2).foregroundStyle(Appearance.secondary)
+                    .font(.system(size: 22)).foregroundStyle(Appearance.secondary)
                     .frame(width: 44, height: 44)
                     .accessibilityLabel(
                         file?.tier == .trusted
@@ -96,7 +115,7 @@ struct ReviewBar: View {
             }
             Button("Approve & merge", systemImage: "checkmark.seal") { complete(.approved) }
         } label: {
-            Image(systemName: "chevron.down").font(.body.weight(.semibold))
+            Image(systemName: "chevron.down").font(.system(size: 16, weight: .semibold))
                 .frame(width: 44, height: 44)
         }.accessibilityLabel("Review outcomes").accessibilityIdentifier("reviewOutcomes")
             .disabled(saving)

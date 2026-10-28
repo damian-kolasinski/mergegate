@@ -25,7 +25,7 @@ struct ConversationThreadView: View {
                     if let quote = thread.comment.quote, !quote.isEmpty {
                         Text(quote).font(.system(.body, design: .monospaced))
                             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Appearance.surface, in: RoundedRectangle(cornerRadius: 8))
+                            .background(Appearance.surface, in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
                             .accessibilityIdentifier("threadQuote")
                     }
                 }

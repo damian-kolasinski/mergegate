@@ -18,6 +18,11 @@ enum Appearance {
             ? UIColor(red: 0.321569, green: 0.337255, blue: 0.349020, alpha: 1)
             : UIColor(red: 0.721569, green: 0.737255, blue: 0.749020, alpha: 1)
     })
+    static let controlBorder = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.517647, green: 0.537255, blue: 0.549020, alpha: 1)
+            : UIColor(red: 0.517647, green: 0.537255, blue: 0.549020, alpha: 1)
+    })
     static let tintBrand = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.019608, green: 0.125490, blue: 0.200000, alpha: 1)
@@ -114,6 +119,7 @@ enum Appearance {
     static let caption = TextStyle(size: 12, lineHeight: 16, weight: .regular, relativeTo: .caption, tracking: 0.0)
     static let label = TextStyle(size: 14, lineHeight: 14, weight: .medium, relativeTo: .subheadline, tracking: 0.03)
     static let code = TextStyle(size: 13, lineHeight: 20, weight: .regular, relativeTo: .body, tracking: 0.0)
+    static let controlRadius: CGFloat = 4
 
     struct TextStyle {
         let size: CGFloat
@@ -144,7 +150,45 @@ private struct AppearanceText: ViewModifier {
     }
 }
 
+struct AppearanceButtonStyle: ButtonStyle {
+    var prominent = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .appearanceText(Appearance.label)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minWidth: 44, minHeight: 44)
+            .foregroundStyle(prominent && isEnabled ? Appearance.onFill : Appearance.primary)
+            .background(prominent && isEnabled ? Appearance.brand : Appearance.page,
+                        in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
+            .overlay(RoundedRectangle(cornerRadius: Appearance.controlRadius)
+                .strokeBorder(prominent && isEnabled ? Appearance.brand : Appearance.controlBorder))
+            .opacity(configuration.isPressed ? 0.75 : isEnabled ? 1 : 0.6)
+            .contentShape(Rectangle())
+    }
+}
+
+private struct AppearanceMonospaced: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+
+    init(_ style: Appearance.TextStyle) {
+        _size = ScaledMetric(wrappedValue: style.size, relativeTo: style.relativeTo)
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, design: .monospaced))
+    }
+}
+
 extension View {
+    func appearanceMono(_ style: Appearance.TextStyle) -> some View {
+        modifier(AppearanceMonospaced(style))
+    }
+
     func appearanceText(_ style: Appearance.TextStyle) -> some View {
         modifier(AppearanceText(style))
     }

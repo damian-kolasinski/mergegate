@@ -13,7 +13,7 @@ struct ReviewMarkdown: View {
                     ScrollView(.horizontal) {
                         Text(text).font(.system(.body, design: .monospaced)).textSelection(.enabled)
                             .padding(12)
-                    }.background(Appearance.surface, in: RoundedRectangle(cornerRadius: 8))
+                    }.background(Appearance.surface, in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
                 case .text(let text):
                     Text(inline(text)).appearanceText(Appearance.body).textSelection(.enabled)
                 case .rule: Divider()

@@ -9,7 +9,7 @@ struct ReviewFileReasons: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text(file.path).font(.system(size: 14, design: .monospaced).weight(.semibold))
+                Text(file.path).appearanceMono(Appearance.body).fontWeight(.semibold)
                     .textSelection(.enabled)
                 Text(metadata).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                 if let reason = file.reason { part("Guide", reason) }

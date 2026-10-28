@@ -33,7 +33,7 @@ final class ReadSourceContextTests: XCTestCase {
         XCTAssertTrue((source.value as? String ?? "").contains("Checkout pricing — original source context"))
         XCTAssertTrue((source.value as? String ?? "").contains("é 🐙"))
         try auditReviewAccessibility(app)
-        capture(app, "02 — Expanded source with wrapped Unicode line")
+        capture(app, "02 — Expanded source with horizontally scrolling Unicode line")
         source.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 190, dy: 55)).press(forDuration: 1.2)
         XCTAssertTrue(
             app.menuItems["Copy"].waitForExistence(timeout: 5) || app.buttons["Copy"].exists, app.debugDescription)
