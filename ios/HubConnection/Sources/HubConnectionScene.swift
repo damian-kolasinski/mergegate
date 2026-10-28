@@ -52,10 +52,9 @@ struct HubConnectionScene<Content: View>: View {
                         HStack {
                             if isConnecting { ProgressView() }
                             Text(isConnecting ? "Connecting…" : "Connect to hub")
-                        }.frame(maxWidth: .infinity, minHeight: 44)
-                            .foregroundStyle(Appearance.onFill)
+                        }.frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent).appearanceText(Appearance.label)
+                    .buttonStyle(AppearanceButtonStyle(prominent: true)).appearanceText(Appearance.label)
                     .disabled(isConnecting || model.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("connectHub")
                 }.padding(24)

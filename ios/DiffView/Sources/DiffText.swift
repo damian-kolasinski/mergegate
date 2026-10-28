@@ -34,9 +34,9 @@ enum DiffText {
         let characterWidth = ("0" as NSString).size(withAttributes: [.font: font]).width
         let sourceIndent = numberWidth + characterWidth * 3
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineBreakMode = .byClipping
         paragraph.lineSpacing = max(0, Appearance.code.lineHeight - font.lineHeight)
-        // Wrapped source stays in its column; display gutters never become source characters.
+        // Display gutters never become source characters.
         paragraph.headIndent = sourceIndent
         paragraph.tabStops = [
             NSTextTab(textAlignment: .right, location: numberWidth),
@@ -44,13 +44,15 @@ enum DiffText {
             NSTextTab(textAlignment: .left, location: sourceIndent),
         ]
         paragraph.defaultTabInterval = characterWidth * 4
+        let headerParagraph = NSMutableParagraphStyle()
+        headerParagraph.lineBreakMode = .byClipping
         for hunk in hunks {
             if !hunk.header.isEmpty {
                 result.append(
                     NSAttributedString(
                         string: hunk.header + "\n",
                         attributes: [
-                            .font: gutterFont,
+                            .font: gutterFont, .paragraphStyle: headerParagraph,
                             .foregroundColor: UIColor(Appearance.secondary).resolvedColor(with: traits),
                         ]))
             }

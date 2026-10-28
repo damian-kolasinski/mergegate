@@ -47,13 +47,13 @@ struct ReviewSummaryScene: View {
                 }
                 Spacer(minLength: 12)
                 Button(action: close) {
-                    Text("Done").appearanceText(Appearance.label).frame(minWidth: 44, minHeight: 44)
-                }.buttonStyle(.glass).disabled(!model.summarySaved)
+                    Text("Done").appearanceText(Appearance.label).frame(minWidth: 28)
+                }.buttonStyle(AppearanceButtonStyle()).disabled(!model.summarySaved)
                     .accessibilityIdentifier("closeReviewComment")
             }
             TextEditor(text: $model.summary).appearanceText(Appearance.body)
                 .scrollContentBackground(.hidden).padding(8)
-                .background(Appearance.surface, in: RoundedRectangle(cornerRadius: 10))
+                .background(Appearance.surface, in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
                 .focused($focused).disabled(model.frozen)
                 .accessibilityLabel("Review comment").accessibilityIdentifier("reviewComment")
             Text(

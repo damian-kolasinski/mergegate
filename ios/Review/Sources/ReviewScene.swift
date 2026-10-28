@@ -32,6 +32,7 @@ struct ReviewScene<
     let rules: (String, @escaping (String) -> Void) -> Rules
     /// Comments drafted on this iPhone for a revision, which the next review sends.
     let localDrafts: (CommentDraftScope) -> Int
+    @State private var reviewBarHeight: CGFloat = 76
     @State private var feedbackSent = false
     @State private var sourceFocus: SourceAnchor?
     @State private var sourceRequest = UUID()
@@ -54,7 +55,6 @@ struct ReviewScene<
         case guide, files, details, rules, summary
         case feedback(ReviewOutcome)
         case reasons(String)
-        case demo(ReviewDemo)
         case drafts(CommentDraftLocation?)
         case conversations(ConversationLocation?)
         var id: String {
@@ -62,7 +62,6 @@ struct ReviewScene<
             case .details: "details"
             case .rules: "rules"
             case .summary: "summary"
-            case .demo: "demo"
             case .guide: "guide"
             case .files: "files"
             case .feedback: "feedback"
@@ -72,6 +71,11 @@ struct ReviewScene<
             }
         }
     }
+    private struct DemoPresentation: Identifiable {
+        let demo: ReviewDemo
+        var id: UInt32 { demo.revision }
+    }
+    @State private var demoPresentation: DemoPresentation?
     @State private var sheet: Sheet?
     @State private var scrollPosition = ScrollPosition()
     @State private var visibleOffset: Double = 0
@@ -94,6 +98,11 @@ struct ReviewScene<
             }
         }
         .background(Appearance.page).foregroundStyle(Appearance.primary)
+        .fullScreenCover(item: $demoPresentation) { selection in
+            ReviewDemoScene(
+                demo: selection.demo, service: model.sourceService,
+                close: { demoPresentation = nil }, onActivity: { model.reviewTime.input() })
+        }
         .navigationBarTitleDisplayMode(.inline)
         // Returning triggers the inbox refresh, which must follow the pending write.
         .navigationBarBackButtonHidden(model.isSavingViewed || model.isComparing)
@@ -189,7 +198,7 @@ struct ReviewScene<
             }
         }
         // Room for the floating bar, so the last lines scroll clear of it.
-        .contentMargins(.bottom, 96, for: .scrollContent)
+        .contentMargins(.bottom, reviewBarHeight + 20, for: .scrollContent)
         .accessibilityIdentifier("reviewScroll")
         .scrollPosition($scrollPosition)
         .onScrollGeometryChange(for: ReviewScrollGeometry.self) { geometry in
@@ -270,14 +279,16 @@ struct ReviewScene<
                         pickedLines = nil
                     } label: {
                         Label("Comment on \(picked.summary)", systemImage: "plus.bubble")
-                            .appearanceText(Appearance.label).foregroundStyle(Appearance.onFill)
-                            .padding(.horizontal, 6).frame(minHeight: 44)
-                    }.buttonStyle(.glassProminent).tint(Appearance.brand)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }.buttonStyle(AppearanceButtonStyle(prominent: true)).tint(Appearance.brand)
                         .accessibilityIdentifier("commentOnLines")
                 }
                 bar(snapshot, current: current, order: order)
             }.padding(.horizontal, 12).padding(.bottom, 4)
-                .offset(y: chromeHidden ? 160 : 0)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    reviewBarHeight = $0
+                }
+                .offset(y: chromeHidden ? reviewBarHeight + 24 : 0)
                 .animation(.easeInOut(duration: 0.2), value: chromeHidden)
         }
         .task(
@@ -334,7 +345,7 @@ struct ReviewScene<
                 }.accessibilityIdentifier("reviewConversations")
                 if let demo = current.demo {
                     Button {
-                        sheet = .demo(demo)
+                        demoPresentation = DemoPresentation(demo: demo)
                     } label: {
                         Label("Demo (\(demo.attachments.count))", systemImage: "play.rectangle")
                     }.accessibilityIdentifier("reviewDemo")
@@ -408,10 +419,6 @@ struct ReviewScene<
                             openItem(item)
                         }.toolbar { Button("Done") { sheet = nil } }
                     }
-                case .demo(let demo):
-                    ReviewDemoScene(
-                        demo: demo, service: model.sourceService, close: { sheet = nil },
-                        onActivity: { model.reviewTime.input() })
                 case .conversations(let location):
                     conversations(
                         scope(snapshot), location,

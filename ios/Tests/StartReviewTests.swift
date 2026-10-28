@@ -131,6 +131,34 @@ final class StartReviewTests: XCTestCase {
         XCTAssertTrue(app.buttons["reviewViewed"].isHittable)
         XCTAssertTrue(app.buttons["reviewPrimary"].isHittable)
         capture(app, "Review in dark mode")
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.buttons["hubSettings"].waitForExistence(timeout: 20))
+        capture(app, "Inbox at largest accessibility text size")
+        for _ in 0..<8 where !open.isHittable { app.swipeUp() }
+        tapWhenStable(open)
+        XCTAssertTrue(reader.waitForExistence(timeout: 20))
+        let largePrimary = app.buttons["reviewPrimary"]
+        XCTAssertTrue(largePrimary.isHittable)
+        XCTAssertTrue(app.frame.contains(largePrimary.frame), "The full primary action must remain on screen.")
+        XCTAssertTrue(app.buttons["reviewOutcomes"].isHittable)
+        XCTAssertGreaterThanOrEqual(largePrimary.frame.height, 44)
+        capture(app, "Review at largest accessibility text size")
+        for _ in 0..<8 where !app.buttons["reviewFileReasons"].isHittable
+            || !app.buttons["reviewNextFile"].isHittable { app.swipeUp() }
+        XCTAssertTrue(app.buttons["reviewFiles"].isHittable)
+        XCTAssertTrue(app.buttons["reviewFileReasons"].isHittable)
+        XCTAssertTrue(app.buttons["reviewNextFile"].isHittable)
+        let largeViewed = app.buttons["reviewViewed"]
+        let largeComment = app.buttons["reviewComment"]
+        XCTAssertLessThanOrEqual(largeViewed.frame.maxX, largeComment.frame.minX,
+            "Large text must not make the viewed control overlap the comment action.")
+        capture(app, "Source and file controls at largest accessibility text size")
+        openCompletion(app)
+        XCTAssertTrue(app.buttons["feedbackVerdict"].waitForExistence(timeout: 10))
+        capture(app, "Feedback at largest accessibility text size")
+        tapWhenStable(app.buttons["closeFeedback"])
     }
 
     @MainActor private func tapWhenStable(_ element: XCUIElement) {

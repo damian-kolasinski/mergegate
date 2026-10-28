@@ -113,6 +113,7 @@
   --text-tint-error: var(--ramp-red-700);
   --text-added: var(--ramp-green-600);
   --text-removed: var(--ramp-red-600);
+  --radius-small: 4px;
 }
 
 @media (prefers-color-scheme: dark) {

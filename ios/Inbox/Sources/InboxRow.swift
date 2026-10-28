@@ -14,23 +14,25 @@ struct InboxRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Button(action: openReview) {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Text(item.name).font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Appearance.secondary)
-                        if let priority = item.priority { InboxPriorityBadge(priority: priority) }
-                        Spacer(minLength: 8)
-                        size
-                        TimelineView(.everyMinute) { context in
-                            if let age = item.age(now: context.date) {
-                                Text(age).appearanceText(Appearance.caption).monospacedDigit()
-                                    .foregroundStyle(Appearance.secondary)
-                            }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            identity
+                            Spacer(minLength: 8)
+                            size
                         }
-                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
-                            .foregroundStyle(Appearance.secondary).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            identity
+                            size
+                        }
                     }
-                    Text(title).appearanceText(Appearance.rowHeading).lineLimit(2)
+                    Text(item.title).appearanceText(Appearance.rowHeading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
+                    if let note = item.note, !note.isEmpty {
+                        Text(note).appearanceText(Appearance.body).foregroundStyle(Appearance.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("openReview-\(item.id)")
                 .accessibilityHint("Open review")
@@ -42,7 +44,7 @@ struct InboxRow: View {
                             badges(decisions)
                         } else {
                             Button(action: openDecisions) {
-                                HStack(spacing: 4) {
+                                InboxFlowLayout {
                                     badges(decisions)
                                     Image(systemName: "chevron.right")
                                         .font(.caption2.weight(.semibold))
@@ -67,7 +69,7 @@ struct InboxRow: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Appearance.surface, in: RoundedRectangle(cornerRadius: 14))
+        .background(Appearance.surface, in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
         // Child buttons keep their actions; padding and passive badges open the review.
         .contentShape(Rectangle())
         .onTapGesture(perform: openReview)
@@ -78,25 +80,31 @@ struct InboxRow: View {
     private var decisions: [InboxFlag] { item.flags.filter(\.opensDecisions) }
 
     private func badges(_ flags: [InboxFlag]) -> some View {
-        HStack(spacing: 4) {
+        InboxFlowLayout {
             ForEach(flags) { flag in
                 InboxBadge(label: flag.label, tone: flag.tone, solid: flag.solid)
             }
         }
     }
 
-    private var title: AttributedString {
-        var title = AttributedString(item.title)
-        if let note = item.note {
-            var suffix = AttributedString(" · \(note)")
-            suffix.foregroundColor = Appearance.secondary
-            title += suffix
+    private var identity: some View {
+        HStack(spacing: 6) {
+            Text(item.name).appearanceMono(Appearance.caption)
+                .foregroundStyle(Appearance.secondary)
+            if let priority = item.priority { InboxPriorityBadge(priority: priority) }
+            TimelineView(.everyMinute) { context in
+                if let age = item.age(now: context.date) {
+                    Text(age).appearanceText(Appearance.caption).monospacedDigit()
+                        .foregroundStyle(Appearance.secondary)
+                }
+            }
+            Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                .foregroundStyle(Appearance.secondary).accessibilityHidden(true)
         }
-        return title
     }
 
     private var size: some View {
-        HStack(spacing: 6) {
+        InboxFlowLayout {
             if item.additions > 0 {
                 Text("+\(item.additions)").foregroundStyle(Appearance.added)
                     .accessibilityLabel("\(item.additions) added lines")
@@ -108,7 +116,7 @@ struct InboxRow: View {
             if let files = item.filesLabel {
                 Text(files).foregroundStyle(Appearance.secondary)
             }
-        }.appearanceText(Appearance.caption).monospacedDigit().fixedSize()
+        }.appearanceText(Appearance.caption).monospacedDigit()
             .accessibilityElement(children: .combine).accessibilityIdentifier("inboxSize")
     }
 }

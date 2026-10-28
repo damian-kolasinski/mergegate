@@ -133,6 +133,7 @@ let project = Project(
                 arguments: .arguments(environmentVariables: [
                     "MG_IOS_TEST_HUB_URL": "$(MG_IOS_TEST_HUB_URL)",
                     "MG_IOS_TEST_PARITY": "$(MG_IOS_TEST_PARITY)",
+                    "MG_IOS_TEST_DEMO": "$(MG_IOS_TEST_DEMO)",
                     "MG_IOS_TEST_TRIAGE": "$(MG_IOS_TEST_TRIAGE)",
                     "MG_IOS_TEST_REVIEW": "$(MG_IOS_TEST_REVIEW)",
                     "MG_IOS_TEST_SOURCE": "$(MG_IOS_TEST_SOURCE)",

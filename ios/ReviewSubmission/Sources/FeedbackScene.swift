@@ -18,7 +18,7 @@ struct FeedbackScene: View {
                     .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("feedbackScope")
                 Spacer(minLength: 12)
                 Button("Done", action: close).appearanceText(Appearance.label)
-                    .frame(minWidth: 44, minHeight: 44).buttonStyle(.glass)
+                    .frame(minWidth: 28).buttonStyle(AppearanceButtonStyle())
                     .disabled(model.busy || !model.summarySaved).accessibilityIdentifier("closeFeedback")
             }.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 12)
             Divider()
@@ -55,7 +55,7 @@ struct FeedbackScene: View {
                             Text("Comment").tag(FeedbackVerdict.comment)
                             Text("Request changes").tag(FeedbackVerdict.changesRequested)
                             Text("Approve").tag(FeedbackVerdict.approved)
-                        }.pickerStyle(.segmented).disabled(model.frozen || model.busy)
+                        }.pickerStyle(.menu).buttonStyle(AppearanceButtonStyle()).disabled(model.frozen || model.busy)
                             .accessibilityIdentifier("feedbackVerdict")
                         if model.verdict == .approved, let target = model.approvalTarget {
                             // This sheet is the confirmation: it names the exact revision and target.
@@ -162,9 +162,8 @@ struct FeedbackScene: View {
                                             ? "Approve & merge into \(model.approvalTarget ?? "target")"
                                             : model.verdict.title)
                         }.appearanceText(Appearance.label)
-                            .foregroundStyle(model.canSend ? Appearance.onFill : Appearance.primary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }.buttonStyle(.glassProminent).disabled(!model.canSend)
+                            .frame(maxWidth: .infinity)
+                    }.buttonStyle(AppearanceButtonStyle(prominent: true)).disabled(!model.canSend)
                         .accessibilityIdentifier("sendFeedback")
                     if model.frozen && !model.uncertain && !model.busy {
                         Button("Edit feedback") { confirmEdit = true }.frame(minHeight: 44)

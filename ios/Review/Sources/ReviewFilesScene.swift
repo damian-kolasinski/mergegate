@@ -88,7 +88,7 @@ struct ReviewFilesScene: View {
                     .frame(width: 12)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group.kind == .folder ? "\(group.name)/" : group.name)
-                        .font(.system(size: 13, design: .monospaced).weight(.semibold))
+                        .appearanceMono(Appearance.code).fontWeight(.semibold)
                         .lineLimit(1).truncationMode(.middle)
                     if !group.sub.isEmpty {
                         Text(group.sub).appearanceText(Appearance.caption)
@@ -98,7 +98,7 @@ struct ReviewFilesScene: View {
                 Spacer(minLength: 6)
                 size(group.additions, group.deletions)
                 score(group.peak)
-            }.padding(.leading, CGFloat(depth) * 14).frame(minHeight: 36).contentShape(Rectangle())
+            }.padding(.leading, CGFloat(depth) * 14).frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).listRowBackground(Appearance.page)
             .accessibilityLabel("\(group.name), \(folded.contains(group.key) ? "folded" : "open")")
     }
@@ -120,7 +120,7 @@ struct ReviewFilesScene: View {
                     if test { Text("↳ ").foregroundStyle(Appearance.secondary) }
                     Text(dot.map { String(name[..<$0]) } ?? name)
                     if let dot { Text(name[dot...]).foregroundStyle(Appearance.secondary) }
-                }.font(.system(size: 13, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                }.appearanceMono(Appearance.code).lineLimit(1).truncationMode(.middle)
                 if let tag { ReviewBadge(label: tag, tone: .neutral) }
                 if let status = status(file) {
                     Text(status).appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
@@ -129,7 +129,7 @@ struct ReviewFilesScene: View {
                 Spacer(minLength: 6)
                 size(file.additions ?? 0, file.deletions ?? 0)
                 score(file.importance)
-            }.padding(.leading, CGFloat(depth) * 14).frame(minHeight: 40).contentShape(Rectangle())
+            }.padding(.leading, CGFloat(depth) * 14).frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain)
             .listRowBackground(file.path == selectedPath ? Appearance.tintBrand : Appearance.page)
             .accessibilityElement(children: .ignore)

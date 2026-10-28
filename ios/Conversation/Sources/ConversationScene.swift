@@ -37,7 +37,7 @@ struct ConversationScene: View {
                     .appearanceText(Appearance.caption).foregroundStyle(Appearance.secondary)
                 Spacer(minLength: 12)
                 Button("Done", action: close).appearanceText(Appearance.label)
-                    .frame(minWidth: 44, minHeight: 44).buttonStyle(.glass)
+                    .frame(minWidth: 28).buttonStyle(AppearanceButtonStyle())
                     .accessibilityIdentifier("closeConversations")
             }.padding(.horizontal, 20).padding(.top, 12)
             NavigationStack {

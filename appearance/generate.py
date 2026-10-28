@@ -28,7 +28,7 @@ import UIKit
 
 enum Appearance {
 '''
-for name,key in {'page':'background-page','surface':'background-subtle','border':'border-inactive','tintBrand':'background-tint-brand','tintSuccess':'background-tint-success','tintError':'background-tint-error','tintWarning':'background-tint-warning','tintNeutral':'background-tint-neutral','onTintWarning':'text-tint-warning','onTintNeutral':'text-tint-neutral','warning':'background-warning','onTintBrand':'text-tint-brand','onTintSuccess':'text-tint-success','onTintError':'text-tint-error','primary':'text-primary','secondary':'text-secondary','brand':'background-brand','onFill':'text-on-fill','error':'text-error','added':'text-added','removed':'text-removed'}.items():
+for name,key in {'page':'background-page','surface':'background-subtle','border':'border-inactive','controlBorder':'border-strong','tintBrand':'background-tint-brand','tintSuccess':'background-tint-success','tintError':'background-tint-error','tintWarning':'background-tint-warning','tintNeutral':'background-tint-neutral','onTintWarning':'text-tint-warning','onTintNeutral':'text-tint-neutral','warning':'background-warning','onTintBrand':'text-tint-brand','onTintSuccess':'text-tint-success','onTintError':'text-tint-error','primary':'text-primary','secondary':'text-secondary','brand':'background-brand','onFill':'text-on-fill','error':'text-error','added':'text-added','removed':'text-removed'}.items():
     swift += f'''    static let {name} = Color(uiColor: UIColor {{ traits in
         traits.userInterfaceStyle == .dark
             ? UIColor({rgb(resolved('dark',key))}, alpha: 1)
@@ -40,6 +40,7 @@ for name,key,style in [('heading','type-h3','title3'),('rowHeading','type-h4','h
     weight={'400':'regular','500':'medium','600':'semibold'}[match[1]]
     tracking=tokens['light']['tracking-heading'] if name in ['heading','rowHeading'] else tokens['light']['tracking-label'] if name=='label' else '0em'
     swift+=f'    static let {name} = TextStyle(size: {match[2]}, lineHeight: {match[3]}, weight: .{weight}, relativeTo: .{style}, tracking: {float(tracking[:-2])})\n'
+swift += f'    static let controlRadius: CGFloat = {tokens["light"]["radius-small"][:-2]}\n'
 swift += '''
     struct TextStyle {
         let size: CGFloat
@@ -70,7 +71,45 @@ private struct AppearanceText: ViewModifier {
     }
 }
 
+struct AppearanceButtonStyle: ButtonStyle {
+    var prominent = false
+    @Environment(\\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .appearanceText(Appearance.label)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minWidth: 44, minHeight: 44)
+            .foregroundStyle(prominent && isEnabled ? Appearance.onFill : Appearance.primary)
+            .background(prominent && isEnabled ? Appearance.brand : Appearance.page,
+                        in: RoundedRectangle(cornerRadius: Appearance.controlRadius))
+            .overlay(RoundedRectangle(cornerRadius: Appearance.controlRadius)
+                .strokeBorder(prominent && isEnabled ? Appearance.brand : Appearance.controlBorder))
+            .opacity(configuration.isPressed ? 0.75 : isEnabled ? 1 : 0.6)
+            .contentShape(Rectangle())
+    }
+}
+
+private struct AppearanceMonospaced: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+
+    init(_ style: Appearance.TextStyle) {
+        _size = ScaledMetric(wrappedValue: style.size, relativeTo: style.relativeTo)
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, design: .monospaced))
+    }
+}
+
 extension View {
+    func appearanceMono(_ style: Appearance.TextStyle) -> some View {
+        modifier(AppearanceMonospaced(style))
+    }
+
     func appearanceText(_ style: Appearance.TextStyle) -> some View {
         modifier(AppearanceText(style))
     }

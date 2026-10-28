@@ -12,8 +12,8 @@ struct ReviewMasthead<Comparison: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text(item.name).font(.system(size: 12, design: .monospaced))
+            ReviewChips {
+                Text(item.name).appearanceMono(Appearance.caption)
                     .foregroundStyle(Appearance.secondary)
                     .accessibilityLabel("\(item.name) · r\(item.revision.number) → \(item.target)")
                     .accessibilityIdentifier("reviewIdentity")
@@ -25,8 +25,8 @@ struct ReviewMasthead<Comparison: View>: View {
             }
             Text(item.title).appearanceText(Appearance.heading).accessibilityAddTraits(.isHeader)
             if let branch = item.branch {
-                Text("\(branch) → \(item.target)").font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Appearance.secondary).lineLimit(1).truncationMode(.middle)
+                Text("\(branch) → \(item.target)").appearanceMono(Appearance.caption)
+                    .foregroundStyle(Appearance.secondary).fixedSize(horizontal: false, vertical: true)
             }
             stats
             ReviewChips {
@@ -62,7 +62,7 @@ struct ReviewMasthead<Comparison: View>: View {
         let additions = revision.additions ?? snapshot.files.reduce(0) { $0 + ($1.additions ?? 0) }
         let deletions = revision.deletions ?? snapshot.files.reduce(0) { $0 + ($1.deletions ?? 0) }
         let files = revision.files.map(Int.init) ?? snapshot.files.count
-        return HStack(spacing: 6) {
+        return ReviewChips {
             Text("+\(additions)").foregroundStyle(Appearance.added)
             Text("−\(deletions)").foregroundStyle(Appearance.removed)
             Text("· \(files) \(files == 1 ? "file" : "files") ·").foregroundStyle(Appearance.secondary)
@@ -71,7 +71,7 @@ struct ReviewMasthead<Comparison: View>: View {
             if snapshot.trustedCount > 0 {
                 Text("· \(snapshot.trustedCount) trusted").foregroundStyle(Appearance.secondary)
             }
-        }.appearanceText(Appearance.caption).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+        }.appearanceText(Appearance.caption).monospacedDigit()
             .accessibilityElement(children: .combine).accessibilityIdentifier("reviewStats")
     }
 
@@ -105,7 +105,7 @@ struct ReviewBadge: View {
     var solid = false
 
     var body: some View {
-        Text(label).appearanceText(Appearance.caption).fontWeight(.semibold).lineLimit(1)
+        Text(label).appearanceText(Appearance.caption).fontWeight(.semibold).fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .foregroundStyle(foreground).background(background, in: Capsule())
     }
@@ -150,7 +150,7 @@ struct ReviewChips: Layout {
         for row in arrange(subviews, width: bounds.width) {
             var x = bounds.minX
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
+                let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
                 subviews[index].place(
                     at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
                     proposal: ProposedViewSize(size))
@@ -170,7 +170,7 @@ struct ReviewChips: Layout {
         var rows: [Row] = []
         var row = Row()
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
             if size == .zero { continue }
             if !row.indices.isEmpty && row.width + spacing + size.width > width {
                 rows.append(row)

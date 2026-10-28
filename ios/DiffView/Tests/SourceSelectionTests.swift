@@ -29,7 +29,7 @@ struct SourceSelectionTests {
         view.copy(nil)
     }
 
-    @Test @MainActor func wrappedSelectionCopiesSourceWithoutInsertedDisplayBreaks() {
+    @Test @MainActor func longLineSelectionCopiesSourceWithoutInsertedDisplayBreaks() {
         let source = String(repeating: "long_identifier_🐙", count: 30)
         let document = DiffText.document(
             [
@@ -41,10 +41,8 @@ struct SourceSelectionTests {
                     ])
             ], traits: UITraitCollection())
         #expect(document.selection.copy(in: NSRange(location: 0, length: document.text.length)) == source + "\nlast")
-        let view = SourceTextView(usingTextLayoutManager: true)
-        view.isScrollEnabled = false
-        view.textContainer.lineBreakMode = .byCharWrapping
+        let view = SourceTextView.reader()
         view.attributedText = document.text
-        #expect(view.sizeThatFits(CGSize(width: 200, height: CGFloat.greatestFiniteMagnitude)).height > 300)
+        #expect(view.sizeThatFits(CGSize(width: 200, height: CGFloat.greatestFiniteMagnitude)).height < 100)
     }
 }

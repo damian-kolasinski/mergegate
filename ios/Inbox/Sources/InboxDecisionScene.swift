@@ -60,9 +60,9 @@ struct InboxDecisionScene<Feedback: View>: View {
                         .accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 12)
                     Button { dismiss() } label: {
-                        Text("Done").appearanceText(Appearance.label).frame(minWidth: 44, minHeight: 44)
+                        Text("Done").appearanceText(Appearance.label).frame(minWidth: 28)
                             .contentShape(Rectangle())
-                    }.buttonStyle(.glass).tint(Appearance.brand)
+                    }.buttonStyle(AppearanceButtonStyle()).tint(Appearance.brand)
                         .accessibilityIdentifier("closeDecisionDetails")
                 }.padding(.horizontal, 24).padding(.top, 12).background(Appearance.page)
             }

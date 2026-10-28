@@ -55,9 +55,8 @@ struct DecisionEditorScene<Feedback: View>: View {
                         Button {
                             Task { await model.saveAnswer() }
                         } label: {
-                            Text("Save answer").appearanceText(Appearance.label)
-                                .frame(minHeight: 44)
-                        }.buttonStyle(.glass).foregroundStyle(Appearance.brand)
+                            Text("Save answer")
+                        }.buttonStyle(AppearanceButtonStyle()).foregroundStyle(Appearance.brand)
                             .disabled(
                                 !canAct
                                     || model.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -74,12 +73,8 @@ struct DecisionEditorScene<Feedback: View>: View {
                             Button {
                                 showingFeedback = true
                             } label: {
-                                Text("Review & send feedback").appearanceText(Appearance.label)
-                                    .foregroundStyle(
-                                        canAct ? Appearance.onFill : Appearance.primary
-                                    )
-                                    .frame(minHeight: 44)
-                            }.buttonStyle(.glassProminent).disabled(!canAct)
+                                Text("Review & send feedback")
+                            }.buttonStyle(AppearanceButtonStyle(prominent: true)).disabled(!canAct)
                                 .accessibilityIdentifier("sendDecisionFeedback")
                         }
                     } else {
@@ -90,17 +85,14 @@ struct DecisionEditorScene<Feedback: View>: View {
                         Button {
                             Task { await model.settle(override: true) }
                         } label: {
-                            Text("Override — must fix").appearanceText(Appearance.label)
-                                .foregroundStyle(canAct ? Appearance.onFill : Appearance.primary)
-                                .frame(minHeight: 44)
-                        }.buttonStyle(.glassProminent).disabled(!canAct)
+                            Text("Override — must fix")
+                        }.buttonStyle(AppearanceButtonStyle(prominent: true)).disabled(!canAct)
                             .accessibilityIdentifier("overrideDecision")
                         Button {
                             confirmingAcceptance = true
                         } label: {
-                            Text("Accept rejection").appearanceText(Appearance.label).frame(
-                                minHeight: 44)
-                        }.buttonStyle(.glass).foregroundStyle(Appearance.brand).disabled(!canAct)
+                            Text("Accept rejection")
+                        }.buttonStyle(AppearanceButtonStyle()).foregroundStyle(Appearance.brand).disabled(!canAct)
                             .accessibilityIdentifier("acceptDecision")
                     }
                 }

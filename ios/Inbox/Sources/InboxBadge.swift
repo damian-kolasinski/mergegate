@@ -7,7 +7,7 @@ struct InboxBadge: View {
 
     var body: some View {
         Text(label).appearanceText(Appearance.caption).fontWeight(solid ? .semibold : .medium)
-            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, tone == .plain ? 0 : 7).padding(.vertical, 2)
             .foregroundStyle(foreground)
             .background(background, in: Capsule())
@@ -71,7 +71,7 @@ struct InboxFlowLayout: Layout {
         for row in arrange(subviews, width: bounds.width) {
             var x = bounds.minX
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
+                let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
                 subviews[index].place(
                     at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
                     proposal: ProposedViewSize(size))
@@ -91,7 +91,7 @@ struct InboxFlowLayout: Layout {
         var rows: [Row] = []
         var row = Row()
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
             if !row.indices.isEmpty && row.width + spacing + size.width > width {
                 rows.append(row)
                 row = Row()

@@ -19,7 +19,7 @@ struct DiffTextTests {
         #expect(rendered.attribute(.backgroundColor, at: 20, effectiveRange: nil) != nil)
     }
 
-    @Test @MainActor func wrappedRowsKeepACompactGutterOutsideTheSourceColumn() throws {
+    @Test @MainActor func rowsKeepACompactGutterOutsideTheSourceColumn() throws {
         let rendered = DiffText.render(
             [
                 DiffHunk(
@@ -31,6 +31,7 @@ struct DiffTextTests {
             ], traits: UITraitCollection(preferredContentSizeCategory: .large))
         #expect(rendered.string == "\t120\t−\told\n\t8\t+\tnew\n")
         let style = try #require(rendered.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+        #expect(style.lineBreakMode == .byClipping)
         #expect(style.firstLineHeadIndent == 0)
         #expect(style.headIndent == style.tabStops.last?.location)
         #expect(style.headIndent > 0 && style.headIndent < 55)
