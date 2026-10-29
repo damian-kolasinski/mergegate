@@ -129,7 +129,7 @@ The UI test selects removed and added source, creates drafts through the real na
 - `ReviewSubmission` owns feedback preview, summary persistence, its delivery outbox, draft upload/reconciliation, review submission, and receipt recovery through the read-only operator event log. App injects Conversation’s draft adapter; features do not import one another’s implementation.
 - `DiffDocument` maps unified hunks and unchanged blob gaps into source-coordinate lines; `DiffDocumentInterface` exposes only those rendering values.
 - `CodeStyling` implements `CodeStylingInterface`, mapping neutral UTF-16 spans to native attributes; App injects the implementation into Review and DiffView.
-- `DiffView` renders those values with UIKit/TextKit 2, native selection with source-only Copy and source-coordinate Comment actions, wrapping, and feature-local generated appearance.
+- `DiffView` renders those values with UIKit/TextKit 2, native selection with source-only Copy and source-coordinate Comment actions, horizontal panning of long lines, and feature-local generated appearance.
 - `Networking` provides transport primitives: bounded URLSession GET/JSON PUT/POST/DELETE requests, hub error decoding, rejection of redirects, and a multiplexed reconnecting SSE byte stream. It owns no endpoint or feature refresh policy.
 - `Appearance/Appearance.swift` is generated from [shared tokens](../appearance/README.md) and compiled privately into features. DM Sans is registered by the app; semantic colors follow light/dark appearance and typography scales with Dynamic Type.
 
@@ -158,6 +158,18 @@ python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-inline
 ```
 
 The UI flow taps a line number, comments through the pill, finds the draft inline under its line and reopens it, writes a review comment, and checks the completion sheet carries both. Behavior tests cover gutter selection (pick, extend on one side, restart across sides, clear), splitting hunks at cards, and what counts as needing the operator; the conversations flow checks sent threads inline and the grouped sheet.
+
+For the scrolling flow, seed a long highlighted diff with wide lines on a fresh disposable hub:
+
+```sh
+python3 ios/Scripts/smoke-hub.py start /tmp/mergegate-ios-scroll
+python3 ios/Scripts/scroll-fixture.py /tmp/mergegate-ios-scroll --pack ~/.mergegate/languages/swift/0.7.1
+MG_IOS_TEST_HUB_URL=http://my-mac:PORT MG_IOS_TEST_SCROLL=1 \
+  .claude/scripts/check.sh test ios -- -only-testing:MergegateUITests/ScrollLongDiffTests
+python3 ios/Scripts/smoke-hub.py stop /tmp/mergegate-ios-scroll
+```
+
+The UI flow swipes the review vertically and the reader horizontally under XCTest's scrolling metric; a device also reports hitches, the simulator only durations. `--functions N` sizes the diff at about nine lines per function (default 30). XCTest snapshots the reader's whole text on every query, so keep the UI flow to the default size and profile larger diffs by driving the app directly. The reader measures its text once per install, since SwiftUI asks for its size many times per layout pass, and pans a non-scrolling text view as wide as its widest line, since a scrolling text view repaints its visible lines whenever its viewport moves; behavior tests cover both.
 
 For the feedback flow, seed both diff sides on a fresh disposable hub:
 
