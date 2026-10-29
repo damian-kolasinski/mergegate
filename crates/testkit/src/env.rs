@@ -108,6 +108,9 @@ impl Env {
             .env_remove("MG_LANGUAGES_URL")
             // `mg wait` doesn't block in a Codex session, which may run these.
             .env_remove("CODEX_THREAD_ID")
+            // Nor does it deliver in a Claude Code session.
+            .env_remove("CLAUDECODE")
+            .env_remove("CLAUDE_PID")
             .envs(self.vars.iter().map(|(k, v)| (k, v)))
             .env("PATH", self.path());
         cmd

@@ -43,7 +43,7 @@ fn leaves_the_delivered_cursor_to_the_hub() {
 
 #[test]
 fn resumes_after_the_cursor_it_read_after() {
-    let stopped = stopped("app#3", Wake::Operator, TIMEOUT, Some(12));
+    let stopped = stopped("app#3", Wake::Operator, None, Some(12));
     assert_eq!(stopped.resume, "mg wait app#3 --for operator --since 12");
     assert_eq!(stopped.cursor, Some(12));
 }
@@ -52,7 +52,7 @@ fn resumes_after_the_cursor_it_read_after() {
 fn resumes_a_plain_wait_with_the_same_command() {
     // The hub keeps the delivered cursor, and nothing was delivered.
     assert_eq!(
-        stopped("app#3", Wake::Any, TIMEOUT, None).resume,
+        stopped("app#3", Wake::Any, None, None).resume,
         "mg wait app#3"
     );
 }
@@ -62,7 +62,7 @@ fn resumes_with_the_timeout_it_was_given() {
     // A background wait rerun without `--timeout 0` would end after the
     // default and send its agent back for nothing.
     assert_eq!(
-        stopped("app#3", Wake::Any, 0, None).resume,
+        stopped("app#3", Wake::Any, Some(0), None).resume,
         "mg wait app#3 --timeout 0"
     );
 }
@@ -89,10 +89,17 @@ fn a_lost_hub_is_waited_out_and_a_refusal_is_not() {
 fn an_error_that_ends_the_wait_says_how_to_resume() {
     let e = resumable(
         CliError::new("hub_unavailable", "lost it").hint("mg hub status"),
-        &stopped("app#3", Wake::Any, TIMEOUT, Some(4)),
+        &stopped("app#3", Wake::Any, None, Some(4)),
     );
     assert_eq!(
         e.body.hint.as_deref(),
         Some("mg hub status; once that's fixed, resume with: mg wait app#3 --since 4")
     );
+}
+
+#[test]
+fn only_claude_code_waits_without_a_timeout() {
+    assert_eq!(Host::ClaudeCode.timeout(), 0);
+    assert_eq!(Host::Other.timeout(), TIMEOUT);
+    assert_eq!(Host::Codex.timeout(), TIMEOUT);
 }

@@ -8,7 +8,7 @@ No model is involved while mergegate waits: `mg wait` is one blocking command, a
 | be resumed by a shell command, as Codex is (see Codex below) | `mg submit --wake "<command that resumes you>"`, then end your turn | none |
 | neither | loop `mg wait app#3 --timeout N`, N just under your tool-call time limit | one short turn per timeout |
 
-`mg wait` returns once the item has events you haven't read, prints them and marks them delivered. It exits 75 when the timeout passes with none; run it again. Its default timeout is 540 seconds, below a host's ten-minute cap; choose a shorter `--timeout N` if your host's cap is lower. `--timeout 0` waits indefinitely, so use it only where the host keeps tracking commands that long. `--for operator` ends the wait only on an event from the operator, still returning everything new with it; without it, comments from GitHub end the wait too.
+`mg wait` returns once the item has events you haven't read, prints them and marks them delivered. It exits 75 when the timeout passes with none; run it again. Its default timeout is 540 seconds, below a host's ten-minute cap; choose a shorter `--timeout N` if your host's cap is lower. `--timeout 0` waits indefinitely, so use it only where the host keeps tracking commands that long. In Claude Code (`CLAUDECODE=1`) it waits without a timeout unless you give one, and when events come it names them and marks nothing delivered: `mg feedback app#3` prints and delivers them (see Claude Code below). `--for operator` ends the wait only on an event from the operator, still returning everything new with it; without it, comments from GitHub end the wait too.
 
 A merge or an abandon ends the wait too. Events still exit 0, even when one of them closed the item, so read them all: an `approved` review and the `item.merged` with its cleanup can come in one wait. Only once nothing new is left does a wait on a closed item exit 3, printing that it is merged or abandoned. `mg feedback` exits the same way.
 
@@ -24,11 +24,11 @@ Nothing is lost, since a wait marks events delivered only once it has printed th
 
 A hub that restarts, as on an upgrade, doesn't end a wait, even one started while the hub is down: it prints why on stderr, as in `reconnecting in 1s`, and connects again, until its timeout or, without one, for two minutes. If the hub is still down by then, the wait exits 69 with a hint naming the command that resumes it once the hub is back. A refused device or incompatible API still ends it immediately with the fix and resume command.
 
-A wait you no longer watch, left running by a session that ended or a host that lost track of it, takes the item's next events: it prints them where nobody reads and marks them delivered, so your next wait never sees them. It also keeps the hub from running your wake. End it before you wait again or rely on a wake: `pkill -f "mg wait app#3( |$)"`.
+A wait you no longer watch, left running by a session that ended or a host that lost track of it, takes the item's next events: it prints them where nobody reads and marks them delivered, so your next wait never sees them. In Claude Code a wait delivers nothing and ends within seconds of the session that started it, so none is left to take events. End it before you wait again or rely on a wake: `pkill -f "mg wait app#3( |$)"`.
 
 ## Cursors
 
-Each event has a cursor, and the line after the events names the newest one and the command that reads on after it: `cursor 12 (mg wait app#3 --since 12 continues after it)` from `mg wait`, keeping `--for operator` when the wait had it, and `mg feedback app#3 --since 12` from `mg feedback`. When the events closed the item nothing comes after them, so the line is only `cursor 12`, and a last line says so: `app#3 is merged`. Cursors count every item's events on the hub, so one item's cursors skip numbers: app#3's may be 4, 9 and 12. `--since N` returns the item's events after cursor N, never N itself: `mg feedback app#3 --since 0` replays them all, and `--since 12` only what comes after 12. A read with `--since` marks what it printed delivered, unless it started past an event you haven't read: then nothing is marked, so the next plain `mg wait` still returns that event.
+Each event has a cursor, and the line after the events (from `mg feedback` in Claude Code, where a wait prints none) names the newest one and the command that reads on after it: `cursor 12 (mg wait app#3 --since 12 continues after it)` from `mg wait`, keeping `--for operator` when the wait had it, and `mg feedback app#3 --since 12` from `mg feedback`. When the events closed the item nothing comes after them, so the line is only `cursor 12`, and a last line says so: `app#3 is merged`. Cursors count every item's events on the hub, so one item's cursors skip numbers: app#3's may be 4, 9 and 12. `--since N` returns the item's events after cursor N, never N itself: `mg feedback app#3 --since 0` replays them all, and `--since 12` only what comes after 12. A read with `--since` marks what it printed delivered, unless it started past an event you haven't read: then nothing is marked, so the next plain `mg wait` still returns that event.
 
 The events are what you have to act on: the operator's reviews and overrides, comments from GitHub, what happened to the merge, and the item closing, by your own `mg abandon` too. Your submits and replies are not events and get no cursor, so a replay shows how the review went from the operator's side, without your half; `mg resume app#3` shows the comments still waiting on you with your replies to them.
 
@@ -48,7 +48,13 @@ The latest submit that passes `--wake` sets it; `--wake ""` removes it. Read wha
 
 ## Claude Code
 
-Run `mg wait app#3` with the Bash tool's `run_in_background`: Claude Code tells the session when the command exits, and the turn that follows reads its output. On exit 75, run it again in the background. Keep the default 540-second timeout below Claude Code's cap; an indefinite wait can be killed by the host with no usable output. If it still ends early, recover as above and start a bounded wait again.
+Run `mg wait app#3` with the Bash tool's `run_in_background`: Claude Code tells the session when the command exits, and the turn that follows reads its output. There `mg wait` has no timeout: a background command costs nothing while it runs, but every exit starts a turn that rereads the whole session. When the item has events it prints one line naming them and exits 0:
+
+```text
+app#3 has new events: [7] review.submitted. Nothing is marked delivered; read and act on them with: mg feedback app#3
+```
+
+Run that `mg feedback` in the foreground and act on what it prints, then wait again in the background. Claude Code can lose a background command's output, as when a session is reattached. An exit such as `-1` with no output then loses nothing, since the wait delivered nothing: run `mg feedback app#3` all the same. With `--json` the line comes as an object whose `pending` lists each event's `cursor` and `type`, and whose `read` is the command to run. A `--timeout N` you pass still ends the wait with 75 after N seconds. Once the session's process (`CLAUDE_PID`) is gone, the wait stops as SIGHUP stops it, exiting 129 having delivered nothing.
 
 To be woken after your turn ends with no wait running, leave a wake that resumes your session headless:
 

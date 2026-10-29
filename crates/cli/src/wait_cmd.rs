@@ -1,7 +1,10 @@
 //! `mg wait`: blocks until an item has events for its agent, except in a
-//! Codex session. It outlasts a hub that restarts under it, and a signal
-//! that stops it says how to resume.
+//! Codex session. In Claude Code it waits without a timeout and leaves the
+//! events for `mg feedback`. It outlasts a hub that restarts under it, and a
+//! signal that stops it says how to resume.
 
+mod notify;
+mod session;
 mod stop;
 
 use std::time::{Duration, Instant};
@@ -44,7 +47,7 @@ impl Wake {
 }
 
 /// How long a wait lasts unless told otherwise.
-pub const TIMEOUT: u64 = 540;
+const TIMEOUT: u64 = 540;
 
 /// The longest one request waits; a longer wait asks again.
 const REQUEST: u64 = 3600;
@@ -68,10 +71,49 @@ const BACKOFF_MAX: Duration = Duration::from_secs(15);
 /// returns; there it reads once instead.
 const CODEX_THREAD: &str = "CODEX_THREAD_ID";
 
+/// Set to `1` in the commands a Claude Code session runs.
+const CLAUDE_CODE: &str = "CLAUDECODE";
+
+/// The agent host running the wait, which decides how it waits.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Host {
+    /// Reads once: Codex spends a model turn on every check of a running
+    /// command.
+    Codex,
+    /// Waits without a timeout, and says events came instead of delivering
+    /// them. A background command there costs nothing until it exits, but
+    /// each exit starts a model turn that rereads the session, so a timeout
+    /// only spends; and Claude Code can lose the command's output, which
+    /// must not take the events with it.
+    ClaudeCode,
+    Other,
+}
+
+impl Host {
+    fn detect() -> Self {
+        if std::env::var_os(CODEX_THREAD).is_some_and(|id| !id.is_empty()) {
+            Self::Codex
+        } else if std::env::var_os(CLAUDE_CODE).is_some_and(|v| v == "1") {
+            Self::ClaudeCode
+        } else {
+            Self::Other
+        }
+    }
+
+    /// The timeout of a wait not given one; 0 is none.
+    fn timeout(self) -> u64 {
+        match self {
+            Self::ClaudeCode => 0,
+            Self::Codex | Self::Other => TIMEOUT,
+        }
+    }
+}
+
+/// `timeout` is the one given on the command line, if any.
 pub fn run(
     item: String,
     wake: Wake,
-    timeout: u64,
+    timeout: Option<u64>,
     since: Option<u64>,
     json: bool,
 ) -> Result<Outcome, CliError> {
@@ -87,11 +129,16 @@ fn wait(
     watch: &stop::Watch,
     item: String,
     wake: Wake,
-    timeout: u64,
+    given: Option<u64>,
     mut since: Option<u64>,
 ) -> Result<Outcome, CliError> {
-    let at = |name: &str, since| stopped(name, wake, timeout, since);
-    let codex = std::env::var_os(CODEX_THREAD).is_some_and(|id| !id.is_empty());
+    let at = |name: &str, since| stopped(name, wake, given, since);
+    let host = Host::detect();
+    let codex = host == Host::Codex;
+    if host == Host::ClaudeCode {
+        session::watch();
+    }
+    let timeout = given.unwrap_or(host.timeout());
     // A timeout too long to add is as good as none.
     let deadline = if codex {
         Some(Instant::now())
@@ -101,7 +148,8 @@ fn wait(
             .flatten()
     };
     let mut retry = None;
-    if timeout == 0 && !codex {
+    // In Claude Code a lost wait delivered nothing, so nothing needs recovery.
+    if timeout == 0 && host == Host::Other {
         eprintln!(
             "mg wait: waiting on {item} without a timeout; if the host loses this command, \
              run mg feedback {item}, then mg resume {item} to recover any missed review"
@@ -158,6 +206,10 @@ fn wait(
         // and why with whatever came before. The hub also answers at its
         // deadline, with events that may not be the ones this waits for.
         if closed(feedback.state).is_some() || wake.by(&feedback.events) {
+            // A closed item with nothing new delivers nothing either way.
+            if host == Host::ClaudeCode && !feedback.events.is_empty() {
+                return Ok(notify::arrived(&feedback, since));
+            }
             return Ok(report(client, &feedback, since, wake.command()));
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
@@ -252,14 +304,15 @@ fn resumable(mut e: CliError, stopped: &Stopped) -> CliError {
 
 /// What a signal prints while the wait reads after `since`. Without it the
 /// wait reads after the delivered cursor, which the hub keeps, so the same
-/// command resumes it. A timeout other than the default carries over, so a
-/// wait run with `--timeout 0` resumes without one.
-fn stopped(name: &str, wake: Wake, timeout: u64, since: Option<u64>) -> Stopped {
+/// command resumes it. A timeout given on the command line carries over, so
+/// a wait run with `--timeout 0` resumes without one; without it, the resumed
+/// wait takes its host's default again.
+fn stopped(name: &str, wake: Wake, given: Option<u64>, since: Option<u64>) -> Stopped {
     let mut resume = format!("mg {} {name}", wake.command()[0]);
     for option in &wake.command()[1..] {
         resume.push_str(&format!(" {option}"));
     }
-    if timeout != TIMEOUT {
+    if let Some(timeout) = given {
         resume.push_str(&format!(" --timeout {timeout}"));
     }
     if let Some(since) = since {

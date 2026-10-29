@@ -137,6 +137,8 @@ fn f3_reading_the_events_first_leaves_nothing_to_wake_for() {
         .args(["wait", "app#1", "--timeout", "30"])
         .env("MERGEGATE_HOME", env.home())
         .env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDECODE")
+        .env_remove("CLAUDE_PID")
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
