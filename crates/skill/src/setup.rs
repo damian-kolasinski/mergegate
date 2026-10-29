@@ -132,7 +132,10 @@ fn apply(scope: &Scope, agents: &[Agent], mode: Mode, dry_run: bool) -> Vec<Step
             continue;
         }
         for former in scope.former_skills(agent).filter(|p| is_ours(p)) {
-            let change = removed(dry_run || folder::remove(&former).is_ok(), &former);
+            // Without a SKILL.md the agent no longer lists it, while wakes
+            // left with its script's path still run.
+            let retired = dry_run || folder::write(&former, &[wake_file()]).is_ok();
+            let change = removed(retired, &former);
             steps.push(Step {
                 agents: vec![agent],
                 kind: Kind::Skill,
@@ -215,7 +218,8 @@ pub fn remove(scope: &Scope, agents: &[Agent], dry_run: bool) -> Vec<Step> {
         });
     }
     for &agent in agents {
-        for former in scope.former_skills(agent).filter(|p| is_ours(p)) {
+        let formers = scope.former_skills(agent);
+        for former in formers.filter(|p| is_ours(p) || retired(p)) {
             let change = removed(dry_run || folder::remove(&former).is_ok(), &former);
             steps.push(Step {
                 agents: vec![agent],
@@ -278,10 +282,30 @@ fn write_skill(path: &Path, done: Change, dry_run: bool) -> Change {
     if dry_run {
         return done;
     }
-    match folder::write(path, &[("SKILL.md", &stub::text())]) {
+    match folder::write(path, &[("SKILL.md", &stub::text()), wake_file()]) {
         Ok(()) => done,
         Err(e) => Change::Failed(format!("writing {}: {e}", path.display())),
     }
+}
+
+fn wake_file() -> (&'static str, &'static str) {
+    (stub::WAKE_SCRIPT, stub::wake_script())
+}
+
+/// Whether `path` is a former copy setup retired: a folder holding only
+/// the wake script, as setup wrote it.
+fn retired(path: &Path) -> bool {
+    let only = |dir: &Path, name: &str| {
+        fs::read_dir(dir).is_ok_and(|entries| {
+            let names: Vec<_> = entries.flatten().map(|e| e.file_name()).collect();
+            names == [name]
+        })
+    };
+    let script = path.join(stub::WAKE_SCRIPT);
+    !path.is_symlink()
+        && only(path, "scripts")
+        && only(&path.join("scripts"), "codex_wake.py")
+        && fs::read_to_string(script).is_ok_and(|text| text == stub::wake_script())
 }
 
 fn removed(ok: bool, path: &Path) -> Change {

@@ -86,9 +86,41 @@ fn replaces_an_older_link_and_drops_the_former_codex_copy() {
     assert_eq!(steps[2].path.as_deref(), Some(former.as_path()));
     assert_eq!(steps[2].change, Change::Removed);
     assert!(!claude.is_symlink());
-    assert!(!former.exists() && !former.is_symlink());
+    // Codex no longer lists it, while a wake left with its script's path,
+    // as an older guide had Codex agents leave, still runs.
+    assert!(!former.is_symlink());
+    assert!(!former.join("SKILL.md").exists());
+    assert_eq!(
+        fs::read_to_string(former.join("scripts/codex_wake.py")).unwrap(),
+        stub::wake_script()
+    );
+    assert!(claude.join("scripts/codex_wake.py").is_file());
     // The link's target is the data directory's, which stays.
     assert!(data.join("SKILL.md").is_file());
+
+    // Removing takes the retired folder too.
+    remove(&scope, &[Agent::Codex], false);
+    assert!(!former.exists());
+}
+
+#[test]
+fn a_current_skill_linked_to_its_former_place_stays() {
+    let (dir, scope) = home();
+    let former = dir.path().join(".codex/skills/mergegate");
+    fs::create_dir_all(&former).unwrap();
+    fs::write(former.join("SKILL.md"), stub::text()).unwrap();
+    fs::create_dir_all(dir.path().join(".agents/skills")).unwrap();
+    symlink(&former, dir.path().join(".agents/skills/mergegate")).unwrap();
+    let steps = setup(&scope, &[Agent::Codex], false, false);
+    assert!(
+        steps.iter().all(|s| s.change != Change::Removed),
+        "{steps:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(former.join("SKILL.md")).unwrap(),
+        stub::text()
+    );
+    assert!(refresh(&scope).is_empty());
 }
 
 #[test]

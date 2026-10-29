@@ -46,14 +46,18 @@ impl Scope {
     }
 
     /// The places an older `mg` linked the skill for `agent`, except one
-    /// that is where it reads it now, as when the operator linked
-    /// `~/.codex/skills` to `~/.agents/skills`.
+    /// that is where it reads it now: when the operator linked
+    /// `~/.codex/skills` to `~/.agents/skills`, or the skill folder in one
+    /// to the other's.
     pub(crate) fn former_skills(&self, agent: Agent) -> impl Iterator<Item = PathBuf> + '_ {
-        let current = fs::canonicalize(self.base.join(agent.skills())).ok();
+        let resolved = |path: PathBuf| fs::canonicalize(path).ok();
+        let folders = resolved(self.base.join(agent.skills()));
+        let skill = resolved(self.skill(agent));
         agent.former_skills().iter().filter_map(move |dir| {
-            let folder = self.base.join(dir);
-            let same = current.is_some() && fs::canonicalize(&folder).ok() == current;
-            (!same).then(|| folder.join(NAME))
+            let former = self.base.join(dir).join(NAME);
+            let same_folders = folders.is_some() && resolved(self.base.join(dir)) == folders;
+            let same_skill = skill.is_some() && resolved(former.clone()) == skill;
+            (!same_folders && !same_skill).then_some(former)
         })
     }
 

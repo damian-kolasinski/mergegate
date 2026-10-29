@@ -116,7 +116,11 @@ fn the_skill_check_passes_once_set_up_and_warns_once_changed() {
     assert_eq!(skill["message"], "set up in Claude Code");
 
     let stub = env.user_home().join(".claude/skills/mergegate/SKILL.md");
-    std::fs::write(stub, "---\nname: mergegate\nolder\n").unwrap();
+    std::fs::write(
+        stub,
+        "---\nname: mergegate\nmetadata:\n  mergegate-stub: \"0\"\n---\n",
+    )
+    .unwrap();
     let skill = check(&doctor(&env, dir.path(), 0), "skill").clone();
     assert_eq!(skill["status"], "warn");
     assert_eq!(

@@ -34,15 +34,43 @@ pub fn text() -> String {
     )
 }
 
+/// How every whole skill an `mg` has shipped starts its description, which
+/// a skill the operator wrote under the same name wouldn't. A new
+/// description keeps this line or extends the check.
+const SHIPPED: &str = "description: Submit work for review through the operator's mergegate hub";
+
+/// What marks a stub, of any version.
+const MARKER: &str = "\n  mergegate-stub: \"";
+
 /// Whether `skill_md` is a `SKILL.md` some `mg` wrote: this stub, an older
 /// one, or the whole skill `mg skill install` writes.
 pub fn is_ours(skill_md: &str) -> bool {
-    skill_md.starts_with(&format!("---\nname: {NAME}\n"))
+    named(skill_md).is_some_and(|rest| rest.starts_with(SHIPPED) || skill_md.contains(MARKER))
 }
 
 /// Whether `skill_md` is a stub, of any version.
 pub(crate) fn is_stub(skill_md: &str) -> bool {
-    is_ours(skill_md) && skill_md.contains("\n  mergegate-stub: \"")
+    named(skill_md).is_some() && skill_md.contains(MARKER)
+}
+
+/// What follows the skill's name in `skill_md`'s frontmatter, if it names
+/// this skill.
+fn named(skill_md: &str) -> Option<&str> {
+    skill_md.strip_prefix(&format!("---\nname: {NAME}\n"))
+}
+
+/// Where in the skill folder an older guide had Codex agents point their
+/// wake, `python3 <folder>/scripts/codex_wake.py`. Every folder setup
+/// writes or retires keeps it there, so those wakes still run.
+pub(crate) const WAKE_SCRIPT: &str = "scripts/codex_wake.py";
+
+/// The script at [`WAKE_SCRIPT`], which hands over to `mg wakes codex`.
+pub(crate) fn wake_script() -> &'static str {
+    guide::FILES
+        .iter()
+        .find(|(path, _)| *path == WAKE_SCRIPT)
+        .map(|(_, text)| *text)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

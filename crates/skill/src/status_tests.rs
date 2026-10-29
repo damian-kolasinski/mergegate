@@ -47,11 +47,19 @@ fn tells_ours_from_theirs() {
     let path = dir.path().join("mergegate");
     fs::create_dir(&path).unwrap();
     assert_eq!(skill_state(&path), State::Foreign);
-    fs::write(path.join("SKILL.md"), "---\nname: mergegate\nolder\n").unwrap();
+    fs::write(
+        path.join("SKILL.md"),
+        "---\nname: mergegate\nmetadata:\n  mergegate-stub: \"0\"\n---\n",
+    )
+    .unwrap();
     assert_eq!(skill_state(&path), State::Outdated);
     fs::write(path.join("SKILL.md"), stub::text()).unwrap();
     assert_eq!(skill_state(&path), State::Current);
     fs::write(path.join("SKILL.md"), "---\nname: mine\n").unwrap();
+    assert_eq!(skill_state(&path), State::Foreign);
+    // The operator's own skill under the name is still theirs.
+    let mine = "---\nname: mergegate\ndescription: My notes\n---\n";
+    fs::write(path.join("SKILL.md"), mine).unwrap();
     assert_eq!(skill_state(&path), State::Foreign);
 }
 
