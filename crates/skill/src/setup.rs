@@ -159,7 +159,6 @@ fn apply(scope: &Scope, agents: &[Agent], mode: Mode, dry_run: bool) -> Vec<Step
         let change = match read_settings(&path) {
             Err(why) => Change::Failed(why),
             Ok(settings) => {
-                let missing = settings.is_none();
                 let mut settings = settings.unwrap_or(Json::Object(Vec::new()));
                 match (hook::state(&settings, agent), mode) {
                     (hook::HookState::Current, _) => Change::Unchanged,
@@ -172,7 +171,7 @@ fn apply(scope: &Scope, agents: &[Agent], mode: Mode, dry_run: bool) -> Vec<Step
                         match hook::install(&mut settings, agent) {
                             Err(why) => Change::Failed(why.into()),
                             Ok(()) if dry_run => done,
-                            Ok(()) => match write_settings(&path, &settings, missing) {
+                            Ok(()) => match write_settings(&path, &settings) {
                                 Ok(()) => done,
                                 Err(e) => Change::Failed(e.to_string()),
                             },
@@ -240,7 +239,7 @@ pub fn remove(scope: &Scope, agents: &[Agent], dry_run: bool) -> Vec<Step> {
                 Err(why) => Change::Failed(why.into()),
                 Ok(false) => Change::Absent,
                 Ok(true) if dry_run => Change::Removed,
-                Ok(true) => match write_settings(&path, &settings, false) {
+                Ok(true) => match write_settings(&path, &settings) {
                     Ok(()) => Change::Removed,
                     Err(e) => Change::Failed(e.to_string()),
                 },
@@ -316,13 +315,10 @@ fn removed(ok: bool, path: &Path) -> Change {
 }
 
 /// Swaps `settings` in for the file at `path`, through a link to it if it
-/// is one, as a dotfiles checkout keeps them, and with its permissions;
-/// `new` when there was no file, which gets the usual ones.
-fn write_settings(path: &Path, settings: &Json, new: bool) -> io::Result<()> {
-    let path = match new {
-        true => path.to_owned(),
-        false => fs::canonicalize(path)?,
-    };
+/// is one, as a dotfiles checkout keeps them, even an empty file's or one
+/// not written yet; with its permissions, or the usual ones for a new file.
+fn write_settings(path: &Path, settings: &Json) -> io::Result<()> {
+    let path = through_links(path)?;
     let dir = path.parent().ok_or(io::ErrorKind::InvalidInput)?;
     fs::create_dir_all(dir)?;
     let mode = match fs::metadata(&path) {
@@ -337,6 +333,28 @@ fn write_settings(path: &Path, settings: &Json, new: bool) -> io::Result<()> {
         .set_permissions(fs::Permissions::from_mode(mode))?;
     file.persist(&path).map_err(|e| e.error)?;
     Ok(())
+}
+
+/// The file `path` names once links are followed, though the last may
+/// point at nothing yet.
+fn through_links(path: &Path) -> io::Result<PathBuf> {
+    let mut path = path.to_owned();
+    // A cycle of links fails as the system fails one.
+    for _ in 0..40 {
+        match fs::read_link(&path) {
+            Ok(target) => {
+                let dir = path.parent().ok_or(io::ErrorKind::InvalidInput)?;
+                path = dir.join(target);
+            }
+            Err(e) if e.kind() == io::ErrorKind::InvalidInput => return Ok(path),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(path),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(io::Error::other(format!(
+        "{} links in a loop",
+        path.display()
+    )))
 }
 
 #[cfg(test)]

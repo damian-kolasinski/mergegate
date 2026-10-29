@@ -104,6 +104,48 @@ fn replaces_an_older_link_and_drops_the_former_codex_copy() {
 }
 
 #[test]
+fn a_former_folder_linked_to_another_agents_stays() {
+    let (dir, scope) = home();
+    fs::create_dir_all(dir.path().join(".claude/skills")).unwrap();
+    fs::create_dir_all(dir.path().join(".codex")).unwrap();
+    symlink(
+        dir.path().join(".claude/skills"),
+        dir.path().join(".codex/skills"),
+    )
+    .unwrap();
+    let steps = setup(&scope, &[Agent::Claude, Agent::Codex], false, false);
+    assert!(
+        steps.iter().all(|s| s.change != Change::Removed),
+        "{steps:?}"
+    );
+    let claude = dir.path().join(".claude/skills/mergegate/SKILL.md");
+    assert_eq!(fs::read_to_string(claude).unwrap(), stub::text());
+}
+
+#[test]
+fn settings_linked_to_an_empty_dotfile_stay_linked() {
+    let (dir, scope) = home();
+    let real = dir.path().join("dotfiles/settings.json");
+    fs::create_dir_all(real.parent().unwrap()).unwrap();
+    fs::write(&real, "").unwrap();
+    fs::create_dir_all(dir.path().join(".claude")).unwrap();
+    let link = dir.path().join(".claude/settings.json");
+    symlink(&real, &link).unwrap();
+    setup(&scope, &[Agent::Claude], false, false);
+    assert!(link.is_symlink());
+    assert!(fs::read_to_string(&real).unwrap().contains("session-start"));
+
+    // A link to a file not written yet stays a link too.
+    let codex = dir.path().join(".codex/hooks.json");
+    fs::create_dir_all(codex.parent().unwrap()).unwrap();
+    let later = dir.path().join("dotfiles/hooks.json");
+    symlink(&later, &codex).unwrap();
+    setup(&scope, &[Agent::Codex], false, false);
+    assert!(codex.is_symlink());
+    assert!(later.is_file());
+}
+
+#[test]
 fn a_current_skill_linked_to_its_former_place_stays() {
     let (dir, scope) = home();
     let former = dir.path().join(".codex/skills/mergegate");
