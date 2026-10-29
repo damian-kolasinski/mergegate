@@ -18,6 +18,7 @@ import {
   Row,
   Section,
 } from "../design-system";
+import { AgentsPrompt } from "./agents";
 import styles from "./inbox.module.css";
 import { WeeklyStats } from "./weekly";
 
@@ -114,6 +115,7 @@ export function InboxScreen() {
   // A failed refresh keeps the last inbox on screen, under the message.
   return (
     <div class={styles.inbox}>
+      <AgentsPrompt />
       <Show when={failure()}>
         {(current) => (
           <Show

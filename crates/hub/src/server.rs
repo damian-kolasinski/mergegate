@@ -21,11 +21,11 @@ use rules_toml::RulesToml;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, abandon, attachments, branches, comments, conflicts, conversation,
-    demo_zip, devices, diagnostics, diff, doctor, draft_replies, event_log, events, external,
-    feedback, git_http, guard, highlights, io, items, judge, languages, lifecycle, merge, names,
-    phone_link, presence, priority, projects, remote_wakes, replies, reply, resume, review_time,
-    reviews, rules, settings, tailnet, telemetry, ui, viewed, wake,
+    Home, HubError, HubInfo, abandon, agents, attachments, branches, comments, conflicts,
+    conversation, demo_zip, devices, diagnostics, diff, doctor, draft_replies, event_log, events,
+    external, feedback, git_http, guard, highlights, io, items, judge, languages, lifecycle, merge,
+    names, phone_link, presence, priority, projects, remote_wakes, replies, reply, resume,
+    review_time, reviews, rules, settings, tailnet, telemetry, ui, viewed, wake,
 };
 
 pub(crate) struct AppState {
@@ -262,6 +262,7 @@ pub(crate) async fn serve(
     });
     let app = Router::new()
         .merge(lifecycle::routes())
+        .merge(agents::routes())
         .merge(projects::routes())
         .merge(rules::routes())
         .merge(judge::routes())
@@ -326,6 +327,7 @@ pub(crate) async fn serve(
     telemetry::spawn("rules", rules::run(state.clone()));
     telemetry::spawn("conflicts", conflicts::run(state.clone()));
     telemetry::spawn("judge", judge::run(state.clone()));
+    telemetry::spawn("agents", agents::refresh(home.root().to_owned()));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {

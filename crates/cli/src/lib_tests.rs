@@ -175,7 +175,8 @@ fn the_skill_names_every_command() {
     let mut missing = Vec::new();
     let mut stack = vec![(Cli::command(), String::new())];
     while let Some((command, path)) = stack.pop() {
-        for sub in command.get_subcommands() {
+        // A hidden command is a hook's, not an agent's.
+        for sub in command.get_subcommands().filter(|sub| !sub.is_hide_set()) {
             let sub_path = format!("{path} {}", sub.get_name()).trim().to_owned();
             if sub.has_subcommands() {
                 stack.push((sub.clone(), sub_path));

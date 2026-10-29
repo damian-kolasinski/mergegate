@@ -1,6 +1,6 @@
 # Setting up mergegate
 
-The operator asks you to set mergegate up; you run every command. Anything that needs a choice comes back as `needs_decision` (exit 2): ask the operator, then rerun with their answer.
+The operator asks you to set mergegate up; you run every command. Anything that needs a choice comes back as `needs_decision` (exit 2): ask the operator, then rerun with their answer. Setting a repo up takes `mg project add` and `mg init` (below); `mg skill setup` first, if `mg doctor` says an agent isn't set up, lets every agent's session on the machine load this skill ("This skill", below).
 
 ## The hub
 
@@ -52,10 +52,18 @@ On another machine, clone the project from GitHub, or from the hub when it has n
 
 ## Checking
 
-`mg doctor` checks the hub and its service, git, every project and the language packs its files use, this skill, which `mg` is first on `PATH`, and the `mergegate` remote of the clone you run it in, and prints the fix for anything wrong. Run it after setup and whenever a command fails in a way you don't understand.
+`mg doctor` checks the hub and its service, git, every project and the language packs its files use, this skill in the agents found, which `mg` is first on `PATH`, and the `mergegate` remote of the clone you run it in, and prints the fix for anything wrong. Run it after setup and whenever a command fails in a way you don't understand.
 
 If `mg` answers with a usage line offering the options `-nR`, or opens an editor, the `mg` on `PATH` is `/usr/bin/mg`, a text editor macOS ships and some Linux distributions package. mergegate's is also installed as `mergegate`: run `mergegate doctor`, and ask the operator to run the fix its `path` check prints, which adds an `export PATH=...` to the profile their login shell reads (`~/.zprofile` for zsh), then to open a new login shell, or log in again where terminals start shells that aren't. Until they have, run `mergegate` wherever this skill says `mg`.
 
+## Merged branches
+
+While setting a repo up, ask the operator what to do with an item's branch after it merges: mergegate squash-merges, so git still sees the branch as unmerged. The default is `git fetch --prune mergegate`, `git switch --detach mergegate/<target>`, then `git branch -D <branch>`, which leaves the clone on the updated target. Record what you agree where you keep your standing instructions.
+
 ## This skill
 
-`mg skill install` writes this skill, matching the installed `mg`, to `$MERGEGATE_HOME/skill/mergegate` (or `--dir PATH` to write it to `PATH/mergegate`) and prints where. Copy or link the folder to wherever you load skills from. Rerun it after `mg` is upgraded; it replaces the folder. `mg doctor` also checks the copies in `~/.claude/skills` and `~/.codex/skills`, so a copy instead of a link shows when it falls behind. Those belong to the default data directory, `~/.mergegate`: run with another `MERGEGATE_HOME`, `mg doctor` checks only a copy linked to that one's folder, and a current copy there is enough for it.
+`mg skill setup` sets up the coding agents on this machine: Claude Code, Codex and OpenCode, each found by the folder it keeps its settings in (`~/.claude`, `~/.codex`, `~/.config/opencode`), or only those named with `--agent`. Into each it writes this skill's stub where the agent loads skills, `~/.claude/skills` for Claude Code and `~/.agents/skills` for Codex and OpenCode. The stub sends you to `mg skill show`, which prints the guide of the installed `mg`, so upgrading `mg` updates what you read. Into Claude Code and Codex it also adds a session hook, which runs `mergegate skill session-start` as each session starts, and again after a clear or a compaction: in a clone with a `mergegate` remote it names the project, the item open on the branch, and how to wait for a review in that agent; elsewhere it says nothing. Codex runs a new hook only once it is trusted: ask the operator to trust it with `/hooks` in Codex.
+
+Setup leaves the rest of each agent's settings as it was. It replaces what an older `mg` installed, and leaves a skill named mergegate that `mg` didn't write, as a conflict that `--force` replaces. A copy an older `mg` had linked into `~/.codex/skills` keeps only `scripts/codex_wake.py`, as each stub folder does, so wakes that older guides had Codex agents leave with that script's path still run, through `mg wakes codex`. `--project` sets up the current repository instead of the operator's account, and `--dry-run` only says what would change. `mg skill status` reports each agent, and `mg skill remove` removes only what an `mg` installed there, a copy of the whole skill included, and only the link where that copy was linked. Once `mg` is upgraded, the hub brings the stubs and hooks setup installed up to date as it restarts on the new `mg`, so nothing needs running again; it leaves a copy of the whole skill, which the operator may have edited, for `mg skill setup` to replace. `mg doctor` warns of an agent found but not set up, `mg connect` sets up the agents of the machine it connects, and the review UI offers the operator to set up the agents of the hub's machine.
+
+`mg skill show NAME` prints one of the guide's references: setup, authoring, waiting or operator. For an agent setup doesn't know, `mg skill install` writes the whole skill to `$MERGEGATE_HOME/skill/mergegate` (or `--dir PATH` to `PATH/mergegate`) and prints where: copy or link the folder to where that agent loads skills from, and run it again after `mg` is upgraded.

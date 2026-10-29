@@ -68,6 +68,12 @@ impl Env {
         self.home.path()
     }
 
+    /// `HOME` for every `mg`: where the agents `mg skill setup` sets up
+    /// keep their settings.
+    pub fn user_home(&self) -> &Path {
+        self.user.path()
+    }
+
     pub fn mg(&self, args: &[&str]) -> Run {
         self.mg_with_env(args, &[])
     }

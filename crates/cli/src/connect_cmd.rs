@@ -18,6 +18,8 @@ struct Connected {
     /// Whether `mg wakes run` runs as a service, starting the wake commands
     /// agents on this machine leave.
     wakes_service: bool,
+    /// What `mg skill setup` did for the agents found here.
+    agents: api::agent_setup::SetupReport,
 }
 
 #[derive(Serialize)]
@@ -76,12 +78,47 @@ pub fn run(hub: Option<String>, local: bool) -> Result<Outcome, CliError> {
                 false
             }
         };
+    // An agent here works through that hub, so it needs the skill as much
+    // as one on the hub's machine. Not from a data directory of its own, a
+    // test's or a second mg's, which isn't the mg agents run.
+    let steps = hub::agents::user_scope()
+        .filter(|_| service::applies())
+        .map(|scope| skill::setup(&scope, &scope.found(), false, false))
+        .unwrap_or_default();
+    text.push_str(&agents_text(&steps));
     let connected = Connected {
         url,
         device,
         wakes_service,
+        agents: hub::agents::report(false, &steps),
     };
     Ok(Outcome::done(&connected, text))
+}
+
+/// What setting up this machine's agents did, as lines after the rest.
+fn agents_text(steps: &[skill::Step]) -> String {
+    let mut text = String::new();
+    let mut set_up: Vec<&str> = steps
+        .iter()
+        .filter(|s| matches!(s.change, skill::Change::Installed | skill::Change::Updated))
+        .flat_map(|s| s.agents.iter().map(|a| a.label()))
+        .collect();
+    set_up.dedup();
+    if !set_up.is_empty() {
+        text.push_str(&format!(
+            "\nset up the mergegate skill in {}",
+            set_up.join(", ")
+        ));
+    }
+    for approval in steps.iter().filter_map(skill::Step::approval) {
+        text.push_str(&format!("\n{approval}"));
+    }
+    if steps.iter().any(|s| s.change.failed()) {
+        text.push_str(
+            "\nsetting up this machine's agents left something: mg skill setup says what",
+        );
+    }
+    text
 }
 
 /// `mac-mini`, `mac-mini:7801`, `100.64.0.1` or `http://mac-mini:7800/` as

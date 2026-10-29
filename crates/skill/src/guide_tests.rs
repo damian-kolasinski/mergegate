@@ -9,9 +9,9 @@ fn inlines_the_files_asked_for_and_names_the_rest() {
     assert!(text.contains("\n\n--- references/waiting.md ---\n\n# Waiting"));
     assert!(!text.contains("--- references/setup.md ---"));
     assert!(text.ends_with(
-        "\n\n--- Left out here: references/setup.md, references/authoring.md, \
-         references/operator.md; `mg skill install` writes the whole skill ---"
+        "\n\n--- Left out here: setup, authoring, operator; `mg skill show NAME` prints each ---"
     ));
+    assert!(!text.contains("](references/"), "{text}");
 }
 
 #[test]
@@ -50,6 +50,35 @@ fn names_itself_in_its_frontmatter() {
 #[test]
 fn the_body_drops_the_frontmatter() {
     assert!(body().starts_with("# mergegate\n"));
+}
+
+#[test]
+fn shows_the_guide_and_each_reference_by_name() {
+    assert_eq!(
+        references().collect::<Vec<_>>(),
+        ["setup", "authoring", "waiting", "operator"]
+    );
+    let guide = show(None).unwrap();
+    assert!(guide.starts_with("# mergegate\n"), "{guide}");
+    assert!(guide.contains("`mg skill show waiting`"), "{guide}");
+    let waiting = show(Some("waiting")).unwrap();
+    assert!(waiting.starts_with("# Waiting"), "{waiting}");
+    assert_eq!(show(Some("SKILL")), None);
+}
+
+#[test]
+fn every_link_names_its_target() {
+    for (path, text) in FILES {
+        assert!(
+            !commands_for_links(text).contains("]("),
+            "{path} keeps a link"
+        );
+    }
+}
+
+#[test]
+fn reads_the_description_from_the_frontmatter() {
+    assert!(description().starts_with("Submit work for review"));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # Waiting for feedback
 
-No model is involved while mergegate waits: `mg wait` is one blocking command, and you spend tokens only when it returns. Pick the cheapest way to wait that your environment supports:
+No model is involved while mergegate waits: `mg wait` is one blocking command, and you spend tokens only when it returns. Where `mg skill setup` added its session hook, a session in a mergegate clone starts by being told which way fits its agent. Pick the cheapest way to wait that your environment supports:
 
 | If you can… | Do this | Tokens while waiting |
 |---|---|---|
@@ -66,10 +66,10 @@ The shell expands `$CLAUDE_CODE_SESSION_ID`, your session's ID, as you submit. W
 
 ## Codex
 
-Never wait with `mg wait` in Codex, not even in the background: Codex checks on a running command with a model turn, so every check costs one. In a Codex session (`CODEX_THREAD_ID` set) `mg wait` doesn't wait: it returns what's new or exits 75 at once. Leave a wake that queues a message for your thread instead, then end your turn. This skill's `scripts/codex_wake.py` does it; from the worktree, with the skill folder's absolute path:
+Never wait with `mg wait` in Codex, not even in the background: Codex checks on a running command with a model turn, so every check costs one. In a Codex session (`CODEX_THREAD_ID` set) `mg wait` doesn't wait: it returns what's new or exits 75 at once. Leave a wake that queues a message for your thread instead, then end your turn. `mg wakes codex` does it; from the worktree:
 
 ```
-mg submit --wake "python3 /path/to/mergegate/scripts/codex_wake.py $CODEX_THREAD_ID"
+mg submit --wake "mg wakes codex $CODEX_THREAD_ID"
 ```
 
-The shell expands `$CODEX_THREAD_ID`, your thread's ID, as you submit. When the item has events, the script queues a message telling the thread to run `mg feedback {item}`. Where the Codex app runs, it also loads the thread in the app's background service, which only runs the threads a window shows, so the message starts a turn at once; elsewhere the `codex` session that has the thread open runs it, and a thread none has open gets it when next opened. The wake stays set: after acting on the events, end your turn again. The script finds `codex` on `PATH`, in `~/.local/bin` or in the Codex app; elsewhere, put `CODEX_BIN=/path/to/codex` before `python3` in the command.
+The shell expands `$CODEX_THREAD_ID`, your thread's ID, as you submit. When the item has events, `mg wakes codex` queues a message telling the thread to run `mg feedback {item}`. Where the Codex app runs, it also loads the thread in the app's background service, which only runs the threads a window shows, so the message starts a turn at once; elsewhere the `codex` session that has the thread open runs it, and a thread none has open gets it when next opened. The wake stays set: after acting on the events, end your turn again. It runs with `python3`, and finds `codex` on `PATH`, in `~/.local/bin` or in the Codex app; elsewhere, put `CODEX_BIN=/path/to/codex` before `mg` in the command.

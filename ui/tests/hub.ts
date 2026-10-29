@@ -20,9 +20,15 @@ import { FakeGithub } from "./github";
 export class Hub {
   readonly root = realpathSync(mkdtempSync(join(tmpdir(), "mg-ui-")));
   readonly url: string;
+  /**
+   * `HOME` for every `mg` and the hub, so nothing reads the user's own, such
+   * as the agents the inbox offers to set up.
+   */
+  readonly user = join(this.root, "user");
 
   /** `env` is set for every `mg`, and so for the hub, e.g. a fake GitHub's. */
   constructor(private readonly env: Record<string, string> = {}) {
+    mkdirSync(this.user);
     this.mg(["hub", "start", "--port", "0"]);
     const info = JSON.parse(
       readFileSync(join(this.root, "home", "hub.json"), "utf8"),
@@ -38,6 +44,7 @@ export class Hub {
         ...isolated(),
         ...this.env,
         MERGEGATE_HOME: join(this.root, "home"),
+        HOME: this.user,
       },
       encoding: "utf8",
     });
@@ -55,6 +62,7 @@ export class Hub {
         ...isolated(),
         ...this.env,
         MERGEGATE_HOME: join(this.root, "home"),
+        HOME: this.user,
       },
       stdio: "ignore",
     });

@@ -1,110 +1,65 @@
-//! Whether `mg skill install` wrote this `mg`'s skill to the home, and
-//! whether the copies agents load are this `mg`'s.
-
-use std::fs;
-use std::path::{Path, PathBuf};
+//! Whether the coding agents found on this machine have the skill stub and
+//! session hook `mg skill setup` installs, as this `mg` installs them.
 
 use api::doctor::{Check, CheckStatus};
+use skill::{AgentStatus, Item, State};
 
-/// Where Claude Code and Codex load the skill from, as the install prompt
-/// links it. Other places one installed with `--dir` went are the agent's
-/// to keep current.
-pub(super) fn loaded() -> Vec<PathBuf> {
-    let Some(home) = std::env::var_os("HOME") else {
-        return Vec::new();
-    };
-    [".claude", ".codex"]
-        .iter()
-        .map(|agent| {
-            Path::new(&home)
-                .join(agent)
-                .join("skills")
-                .join(::skill::NAME)
-        })
-        .collect()
-}
-
-/// Whether `root` is the home `mg` uses with `MERGEGATE_HOME` unset, the
-/// installed `mg`'s, which the copies agents load belong to.
-pub(super) fn is_default(root: &Path) -> bool {
-    hub::Home::default_root().is_ok_and(|default| same(&default, root))
-}
-
-/// Whether both paths name one file once links are followed.
-fn same(a: &Path, b: &Path) -> bool {
-    a == b || matches!((fs::canonicalize(a), fs::canonicalize(b)), (Ok(a), Ok(b)) if a == b)
-}
-
-/// `files` as `skill::FILES` lists them; `installed` is the home's folder,
-/// `default` whether that home is the default one, `loaded` where agents may
-/// load it from.
-pub(super) fn check(
-    installed: &Path,
-    default: bool,
-    loaded: &[PathBuf],
-    files: &[(&str, &str)],
-) -> Check {
-    let current = |path: &Path| {
-        files.iter().all(|(file, text)| {
-            fs::read(path.join(file)).is_ok_and(|on_disk| on_disk == text.as_bytes())
-        })
-    };
-    let check = |status, message: String, fix: Option<String>| Check {
+pub(super) fn check(status: &[AgentStatus]) -> Check {
+    let check = |status, message: String, fix: Option<&str>| Check {
         name: "skill".into(),
         status,
         message,
-        fix,
+        fix: fix.map(str::to_owned),
     };
-    let install = || Some("mg skill install".to_owned());
-    // Agents read that copy, whatever the home holds. From another home, as
-    // a dev or test hub's, only a copy linked to it is its to fix: any other
-    // is the default home's, and linking it here would hand every agent
-    // session a scratch home's skill.
-    let ours = |path: &Path| default || same(path, installed);
-    if let Some(stale) = loaded
+    let found: Vec<_> = status.iter().filter(|agent| agent.found).collect();
+    if found.is_empty() {
+        let known: Vec<_> = status.iter().map(|agent| agent.agent.label()).collect();
+        return check(
+            CheckStatus::Ok,
+            format!("found no agent to set up ({})", known.join(", ")),
+            None,
+        );
+    }
+    // Setup fixes what's missing or another mg's; a skill that isn't mg's,
+    // or settings it can't read, are the operator's to sort out.
+    let fixable = found.iter().any(|agent| {
+        [&agent.skill, &agent.hook]
+            .iter()
+            .any(|item| matches!(item.state, State::Missing | State::Outdated))
+    });
+    let unready: Vec<String> = found
         .iter()
-        .find(|path| path.exists() && !current(path) && ours(path))
-    {
-        let fix = match current(installed) {
-            true => Some(format!(
-                "ln -sfn {} {}",
-                installed.display(),
-                stale.display()
-            )),
-            false => install(),
-        };
-        return check(
-            CheckStatus::Warn,
-            format!("{} is from another mg", stale.display()),
-            fix,
-        );
-    }
-    if current(installed) {
+        .filter(|agent| !agent.ready())
+        .map(|agent| {
+            let wrong: Vec<String> = [("skill", &agent.skill), ("hook", &agent.hook)]
+                .into_iter()
+                .filter_map(|(kind, item)| wrong(item).map(|why| format!("{kind} {why}")))
+                .collect();
+            format!("{} ({})", agent.agent.label(), wrong.join(", "))
+        })
+        .collect();
+    if unready.is_empty() {
+        let labels: Vec<_> = found.iter().map(|agent| agent.agent.label()).collect();
         return check(
             CheckStatus::Ok,
-            format!("installed in {}", installed.display()),
+            format!("set up in {}", labels.join(", ")),
             None,
         );
     }
-    // A home other than the one the skill came from, as a dev hub's.
-    if let Some(found) = loaded.iter().find(|path| current(path)) {
-        return check(
-            CheckStatus::Ok,
-            format!("installed in {}", found.display()),
-            None,
-        );
-    }
-    match installed.exists() {
-        true => check(
-            CheckStatus::Warn,
-            format!("{} is from another mg", installed.display()),
-            install(),
-        ),
-        false => check(
-            CheckStatus::Warn,
-            format!("not installed in {}", installed.display()),
-            install(),
-        ),
+    check(
+        CheckStatus::Warn,
+        format!("not set up in {}", unready.join(", ")),
+        fixable.then_some("mg skill setup"),
+    )
+}
+
+fn wrong(item: &Item) -> Option<&'static str> {
+    match item.state {
+        State::Current | State::Unsupported => None,
+        State::Outdated => Some("from another mg"),
+        State::Missing => Some("missing"),
+        State::Foreign => Some("not mg's"),
+        State::Unreadable(_) => Some("unreadable"),
     }
 }
 
