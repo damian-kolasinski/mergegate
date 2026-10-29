@@ -67,9 +67,10 @@ fn without_a_hub_doctor_fails_and_says_how_to_start_it() {
         })
     );
     // The skill and PATH are checked without a hub; the rest needs one.
+    // With no agent installed, the skill has nowhere to go.
     assert_eq!(
         statuses(&doctor),
-        pairs(&[("hub", "fail"), ("skill", "warn"), ("path", "ok")])
+        pairs(&[("hub", "fail"), ("skill", "ok"), ("path", "ok")])
     );
 
     let Run { stdout, .. } = env.mg_at(dir.path(), &["doctor"]).assert_code(1);
@@ -82,6 +83,7 @@ fn without_a_hub_doctor_fails_and_says_how_to_start_it() {
 #[test]
 fn a_fresh_hub_passes_with_warnings_until_a_project_and_the_skill_are_added() {
     let env = env();
+    std::fs::create_dir(env.user_home().join(".claude")).unwrap();
     env.start_hub();
     let dir = elsewhere();
     let doctor = doctor(&env, dir.path(), 0);
@@ -99,28 +101,29 @@ fn a_fresh_hub_passes_with_warnings_until_a_project_and_the_skill_are_added() {
         ])
     );
     assert_eq!(check(&doctor, "projects")["fix"], "mg project add PATH");
-    assert_eq!(check(&doctor, "skill")["fix"], "mg skill install");
+    assert_eq!(check(&doctor, "skill")["fix"], "mg skill setup");
 }
 
 #[test]
-fn the_skill_check_passes_once_installed_and_warns_once_changed() {
+fn the_skill_check_passes_once_set_up_and_warns_once_changed() {
     let env = env();
+    std::fs::create_dir(env.user_home().join(".claude")).unwrap();
     env.start_hub();
     let dir = elsewhere();
-    env.mg(&["skill", "install"]).assert_code(0);
-    assert_eq!(check(&doctor(&env, dir.path(), 0), "skill")["status"], "ok");
+    env.mg(&["skill", "setup"]).assert_code(0);
+    let skill = check(&doctor(&env, dir.path(), 0), "skill").clone();
+    assert_eq!(skill["status"], "ok");
+    assert_eq!(skill["message"], "set up in Claude Code");
 
-    std::fs::write(env.home().join("skill/mergegate/SKILL.md"), "older").unwrap();
+    let stub = env.user_home().join(".claude/skills/mergegate/SKILL.md");
+    std::fs::write(stub, "---\nname: mergegate\nolder\n").unwrap();
     let skill = check(&doctor(&env, dir.path(), 0), "skill").clone();
     assert_eq!(skill["status"], "warn");
-    assert!(
-        skill["message"]
-            .as_str()
-            .unwrap()
-            .ends_with(" is from another mg"),
-        "{skill}"
+    assert_eq!(
+        skill["message"],
+        "not set up in Claude Code (skill from another mg)"
     );
-    assert_eq!(skill["fix"], "mg skill install");
+    assert_eq!(skill["fix"], "mg skill setup");
 }
 
 #[test]
@@ -196,7 +199,7 @@ fn a_lost_staging_repo_fails_until_its_fix_runs() {
             ("git", "ok"),
             ("project app", "fail"),
             ("languages", "ok"),
-            ("skill", "warn"),
+            ("skill", "ok"),
             ("path", "ok"),
         ])
     );

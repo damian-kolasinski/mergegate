@@ -247,7 +247,13 @@ pub fn main() -> ExitCode {
             return usage(e, json, &args);
         }
     };
-    let json = cli.json || json_env;
+    // An agent reads JSON on a hook's stdout as its own control format, so
+    // what the session hook prints stays text whatever `MG_JSON` says.
+    let hook = matches!(
+        cli.command,
+        Command::Skill(skill_cmd::SkillCommand::SessionStart { .. })
+    );
+    let json = (cli.json || json_env) && !hook;
     output::emit(json, dispatch(cli.command, json))
 }
 

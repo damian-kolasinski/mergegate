@@ -104,8 +104,7 @@ fn f14_resume_prints_the_item_its_last_review_and_the_open_comments() {
     );
     assert!(
         skill.trim_end().ends_with(
-            "\n--- Left out here: references/setup.md, references/operator.md; \
-             `mg skill install` writes the whole skill ---"
+            "\n--- Left out here: setup, operator; `mg skill show NAME` prints each ---"
         ),
         "{skill}"
     );

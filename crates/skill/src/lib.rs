@@ -1,67 +1,23 @@
-//! The mergegate agent skill, embedded so `mg skill install`
-//! writes the copy that matches the binary.
+//! The mergegate agent skill, and setting agents up with it: a stub where
+//! each agent loads skills, pointing at the guide this `mg` embeds, and a
+//! session hook in those that run one.
 
-/// The skill's folder name, which is also its `name`.
-pub const NAME: &str = "mergegate";
+mod agent;
+mod folder;
+mod guide;
+mod hook;
+mod json;
+mod setup;
+mod status;
+mod stub;
 
-/// Every file in the skill folder, by path relative to it.
-pub const FILES: &[(&str, &str)] = &[
-    ("SKILL.md", include_str!("../mergegate/SKILL.md")),
-    (
-        "references/setup.md",
-        include_str!("../mergegate/references/setup.md"),
-    ),
-    (
-        "references/authoring.md",
-        include_str!("../mergegate/references/authoring.md"),
-    ),
-    (
-        "references/waiting.md",
-        include_str!("../mergegate/references/waiting.md"),
-    ),
-    (
-        "references/operator.md",
-        include_str!("../mergegate/references/operator.md"),
-    ),
-    (
-        "scripts/codex_wake.py",
-        include_str!("../mergegate/scripts/codex_wake.py"),
-    ),
-];
+pub use agent::Agent;
+pub use guide::{FILES, NAME, body, description, inlined, references, show};
+pub use setup::{Change, Kind, Step, refresh, remove, setup};
+pub use status::{AgentStatus, Item, Scope, State, status};
+pub use stub::is_ours;
 
-/// `SKILL.md` without its frontmatter, then each of the references it links
-/// that `paths` names, under a `--- path ---` line, for prompts that inline
-/// the skill. A last line names the references left out, which its links
-/// still point at.
-pub fn inlined(paths: &[&str]) -> String {
-    let mut out = body().trim_end().to_owned();
-    let mut left = Vec::new();
-    let references = FILES[1..].iter().filter(|(path, _)| path.ends_with(".md"));
-    for (path, text) in references {
-        if paths.contains(path) {
-            out.push_str(&format!("\n\n--- {path} ---\n\n{}", text.trim_end()));
-        } else {
-            left.push(*path);
-        }
-    }
-    if !left.is_empty() {
-        out.push_str(&format!(
-            "\n\n--- Left out here: {}; `mg skill install` writes the whole skill ---",
-            left.join(", ")
-        ));
-    }
-    out
+/// Writes the whole skill folder, as `mg skill install` exports it.
+pub fn export(path: &std::path::Path) -> std::io::Result<()> {
+    folder::write(path, FILES)
 }
-
-/// `SKILL.md` without its frontmatter.
-pub fn body() -> &'static str {
-    let skill = FILES[0].1;
-    skill
-        .strip_prefix("---\n")
-        .and_then(|rest| rest.split_once("\n---\n"))
-        .map_or(skill, |(_, body)| body.trim_start())
-}
-
-#[cfg(test)]
-#[path = "lib_tests.rs"]
-mod tests;

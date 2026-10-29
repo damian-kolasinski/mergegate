@@ -20,6 +20,7 @@ highlight.workspace = true
 lang-release.workspace = true
 judge-command.workspace = true
 judge-jev.workspace = true
+skill.workspace = true
 mergegate-core.workspace = true
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 serde = { version = "1.0.229", features = ["derive"] }

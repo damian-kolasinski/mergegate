@@ -2101,6 +2101,7 @@ dependencies = [
  "mergegate-judge-jev",
  "mergegate-lang-release",
  "mergegate-rules-toml",
+ "mergegate-skill",
  "mergegate-store-sqlite",
  "mergegate-tailscale",
  "qrcode",
@@ -2159,6 +2160,11 @@ dependencies = [
 [[package]]
 name = "mergegate-skill"
 version = "0.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "mergegate-store-sqlite"

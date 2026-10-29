@@ -1,6 +1,7 @@
 //! Wire types shared by the CLI, the hub and the UI.
 
 pub mod agent;
+pub mod agent_setup;
 pub mod attachment;
 pub mod bot;
 pub mod decision;

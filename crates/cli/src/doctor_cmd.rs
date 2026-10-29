@@ -1,5 +1,5 @@
-//! `mg doctor`: whether the hub, its service, git, every project, the skill,
-//! the `mg` on PATH and this clone are ready to work.
+//! `mg doctor`: whether the hub, its service, git, every project, the
+//! agents' skill, the `mg` on PATH and this clone are ready to work.
 
 mod hub;
 mod path;
@@ -59,12 +59,9 @@ pub fn run() -> Result<Outcome, CliError> {
         let report: Report = client.get("/api/doctor")?;
         checks.extend(report.checks);
     }
-    checks.push(skill::check(
-        &home.root().join("skill").join(::skill::NAME),
-        skill::is_default(home.root()),
-        &skill::loaded(),
-        ::skill::FILES,
-    ));
+    if let Some(scope) = ::hub::agents::user_scope() {
+        checks.push(skill::check(&::skill::status(&scope)));
+    }
     checks.extend(path::check());
     if let Ok((running, client, _)) = &connected {
         checks.extend(remote::check(running, client)?);

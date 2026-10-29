@@ -2,7 +2,9 @@
 //! wake commands its agents left with `mg submit --wake`, which the hub hands
 //! over as their items get events from the operator. The hub's machine needs
 //! none: the hub runs those left there itself. `mg connect` installs it as a
-//! service.
+//! service. `mg wakes codex` is a wake command itself, for Codex agents.
+
+mod codex;
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -43,6 +45,12 @@ pub enum WakesCommand {
     /// Run the wake commands the hub hands this machine, until stopped or
     /// mg connect --local
     Run,
+    /// Wake Codex thread THREAD, as a wake command: queue it a message to
+    /// read the item's events, and start the turn that reads it
+    Codex {
+        /// The thread's ID, as `$CODEX_THREAD_ID` gives it
+        thread: String,
+    },
 }
 
 #[derive(Serialize)]
@@ -53,6 +61,7 @@ struct Stopped {
 pub fn run(command: WakesCommand) -> Result<Outcome, CliError> {
     match command {
         WakesCommand::Run => run_wakes(&crate::home()?),
+        WakesCommand::Codex { thread } => codex::run(thread),
     }
 }
 

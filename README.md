@@ -80,7 +80,7 @@ The hub is the only stateful component and the only part that talks to GitHub, u
 
 ## Which coding agents does mergegate support?
 
-Any agent that can run a shell command. mergegate ships one [Agent Skill](crates/skill/mergegate/SKILL.md), the `SKILL.md` format that Claude Code, OpenAI Codex, opencode and Cursor load natively, so there are no per-agent plugins. The skill tells the agent to submit through `mg` instead of `git push` or `gh pr create`, how to wait for feedback in the cheapest way its environment allows, and how to answer every comment. It also keeps agents out of the review UI and the hub's API: the UI is yours.
+Any agent that can run a shell command. mergegate ships one [Agent Skill](crates/skill/mergegate/SKILL.md), the `SKILL.md` format that Claude Code, OpenAI Codex, opencode and Cursor load natively, so there are no per-agent plugins; `mg skill setup` puts it in place for Claude Code, Codex and opencode. The skill tells the agent to submit through `mg` instead of `git push` or `gh pr create`, how to wait for feedback in the cheapest way its environment allows, and how to answer every comment. It also keeps agents out of the review UI and the hub's API: the UI is yours.
 
 The CLI is built for agents: every command takes `--json`, nothing ever prompts, and exit codes are stable. When a command needs a decision only you can make, it exits with a `needs_decision` question that the agent puts to you.
 
@@ -108,15 +108,10 @@ mergegate is agent-operated: you ask your agent, and it runs the commands. You r
 
 ```sh
 mg hub start        # run the hub as a user service (launchd or systemd)
-mg skill install    # write the agent skill and print where it is
+mg skill setup      # set up Claude Code, Codex and OpenCode, whichever are installed
 ```
 
-Link the printed skill folder into wherever your agent loads skills from, so each `mg skill install` updates it in place:
-
-```sh
-ln -sfn ~/.mergegate/skill/mergegate ~/.claude/skills/mergegate   # Claude Code
-ln -sfn ~/.mergegate/skill/mergegate ~/.codex/skills/mergegate    # Codex
-```
+`mg skill setup` puts a small skill where each agent loads skills from, which reads its guide from the installed `mg`, so upgrading `mg` updates what agents are told; nothing needs running again. In Claude Code and Codex it also adds a session hook that tells each session in a mergegate repo which item is open on its branch and how that agent should wait for your review. Codex runs a new hook once you trust it with `/hooks`. The inbox offers the same setup with one click, `mg skill status` shows what's installed, and `mg skill remove` takes it out again. For another agent, `mg skill install` writes the whole skill folder for you to link where it loads skills from.
 
 Then, in a repository, tell your agent:
 
