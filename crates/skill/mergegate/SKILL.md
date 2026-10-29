@@ -61,7 +61,7 @@ A session that ended mid-review loses nothing: `mg resume app#3` prints what a n
 ## Reporting product failures
 
 Use `mg diagnostics logs --since 30m --json` for operational evidence;
-`--details` also includes sanitized warning/error text. `mg diagnostics collect --out diagnostics.zip` saves a private local archive, including when the local
+`--details` also includes sanitized message text. `mg diagnostics collect --out diagnostics.zip` saves a private local archive, including when the local
 hub cannot start. A connected machine needs the hub owner's access.
 
 When the user asks to report a mergegate bug, write a summary and select relevant

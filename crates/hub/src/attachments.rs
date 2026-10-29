@@ -263,7 +263,12 @@ pub(crate) async fn prune(state: Arc<AppState>) {
         match state.blocking(|store, _| attachment::prune(store)).await {
             Ok(items) if items.is_empty() => {}
             Ok(items) => {
-                tracing::info!("pruned the attachments of {} closed items", items.len());
+                tracing::info!(
+                    event_code = "attachments_pruned",
+                    count = items.len() as u64,
+                    "pruned the attachments of {} closed items",
+                    items.len()
+                );
                 state.events.send(UiEvent::InboxChanged);
                 // An open review of one would show a strip of files now gone.
                 for id in items {

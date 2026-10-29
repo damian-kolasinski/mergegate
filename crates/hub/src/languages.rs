@@ -140,7 +140,11 @@ pub(crate) async fn refresh(state: Arc<AppState>) {
     match install_released(&state, names).await {
         Ok(packs) => {
             let names: Vec<&str> = packs.iter().map(|p| p.name.as_str()).collect();
-            tracing::info!("updated the language packs {}", names.join(", "));
+            tracing::info!(
+                event_code = "languages_updated",
+                "updated the language packs {}",
+                names.join(", ")
+            );
             changed(&state);
         }
         Err(e) => tracing::warn!("updating the language packs: {e}; mg lang update tries again"),

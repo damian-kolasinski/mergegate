@@ -312,6 +312,7 @@ pub(crate) async fn serve(
     home.write_info(&HubInfo { addr, pid })
         .map_err(io("writing hub.json"))?;
     tracing::info!(
+        event_code = "hub_listening",
         "hub listening on http://{addr}, data in {}",
         home.root().display()
     );
@@ -332,7 +333,7 @@ pub(crate) async fn serve(
                 _ = tokio::signal::ctrl_c() => {}
                 _ = sigterm.recv() => {}
             }
-            tracing::info!("hub stopping");
+            tracing::info!(event_code = "hub_stopping", "hub stopping");
             state.stopping.store(true, Ordering::Relaxed);
             state.events.stop();
             tailnet::apply(&state, Listen::Local).await;

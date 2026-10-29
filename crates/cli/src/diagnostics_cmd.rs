@@ -5,7 +5,7 @@ mod archive;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use api::diagnostics::Snapshot;
+use api::diagnostics::{Field, Snapshot};
 use clap::Subcommand;
 use serde_json::json;
 
@@ -16,7 +16,7 @@ use crate::output::{CliError, Outcome};
 pub enum DiagnosticsCommand {
     /// Read recent sanitized operational records; use --json to select evidence
     Logs {
-        /// Include sanitized warning/error text; inspect it before sharing
+        /// Include sanitized message text; inspect it before sharing
         #[arg(long)]
         details: bool,
         /// How far back to look: seconds, or 30m, 2h, 7d
@@ -118,11 +118,16 @@ pub(super) fn sanitize_snapshot(snapshot: &mut Snapshot, details: bool) {
                     | "elapsed_ms"
                     | "source_file"
                     | "source_line"
+                    | "api_fingerprint"
+                    // As earlier hubs named the fingerprint.
                     | "api_version"
+                    | "count"
             )
         });
         for value in record.fields.values_mut() {
-            *value = mergegate_core::report::sanitize(value);
+            if let Field::Text(text) = value {
+                *text = mergegate_core::report::sanitize(text);
+            }
         }
     }
 }

@@ -155,7 +155,10 @@ pub(crate) async fn apply(state: &Arc<AppState>, listen: Listen) {
             }
             if let Some(serve) = tasks.serve.take() {
                 serve.notify_one();
-                tracing::info!("hub stopped listening on the tailnet");
+                tracing::info!(
+                    event_code = "tailnet_stopped",
+                    "hub stopped listening on the tailnet"
+                );
             }
             tailnet.set(Listening::Off);
         }
@@ -247,7 +250,11 @@ async fn bind(state: &Arc<AppState>, tasks: &mut Tasks) -> Result<(), String> {
             tracing::error!("serving the tailnet failed: {e}");
         }
     });
-    tracing::info!("hub listening on the tailnet at {}", bound.url);
+    tracing::info!(
+        event_code = "tailnet_listening",
+        "hub listening on the tailnet at {}",
+        bound.url
+    );
     // Only a listener on the tailnet's address takes connections the
     // firewall filters, as `mg doctor` checks.
     if bound.ip.is_some() {

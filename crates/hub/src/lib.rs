@@ -103,6 +103,9 @@ pub fn run(home: Home, port: u16, version: &str) -> Result<(), HubError> {
     // too, which can run for minutes; serve set `stopping` for those that
     // can stop.
     runtime.shutdown_timeout(SHUTDOWN);
+    // Its absence before the next run's start marks a hub that crashed or
+    // was killed.
+    tracing::info!(event_code = "hub_stopped");
     served
 }
 
