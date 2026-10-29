@@ -8,15 +8,24 @@ pub struct Record {
     pub run_id: String,
     #[serde(default)]
     pub version: String,
-    /// Sanitized free-form warning/error text; extraction requires opt-in.
+    /// Sanitized free-form message text; extraction requires opt-in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
     pub sequence: u64,
     pub level: String,
     pub target: String,
     pub line: Option<u32>,
-    pub fields: BTreeMap<String, String>,
+    pub fields: BTreeMap<String, Field>,
     pub dropped: u64,
+}
+
+/// An operational field: counts and durations stay numbers. Older hubs wrote
+/// every value as text, which still reads, as `Text`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Field {
+    Number(u64),
+    Text(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

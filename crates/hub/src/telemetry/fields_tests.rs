@@ -4,7 +4,7 @@ use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::{Layer, Registry};
 
-use super::Fields;
+use super::{Fields, Value};
 
 struct Capture(Arc<Mutex<Fields>>);
 impl<S: Subscriber> Layer<S> for Capture {
@@ -34,9 +34,9 @@ fn only_operational_fields_enter_the_recorder() {
     });
     let fields = &captured.lock().unwrap().0;
     assert_eq!(fields.len(), 4, "{fields:?}");
-    assert_eq!(fields["event_code"], "request_failed");
-    assert_eq!(fields["status"], "500");
-    assert_eq!(fields["route"], "/api/items/{id}");
+    assert_eq!(fields["event_code"], Value::Text("request_failed".into()));
+    assert_eq!(fields["status"], Value::Number(500));
+    assert_eq!(fields["route"], Value::Text("/api/items/{id}".into()));
 }
 
 #[test]

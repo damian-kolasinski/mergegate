@@ -92,7 +92,12 @@ async fn poll(
         };
         if !starts.is_empty() || last {
             for wake in &starts {
-                tracing::info!("handing {} at cursor {} to {name}", wake.item, wake.cursor);
+                tracing::info!(
+                    event_code = "wake_handed_off",
+                    "handing {} at cursor {} to {name}",
+                    wake.item,
+                    wake.cursor
+                );
             }
             return Ok(Json(api::wake::Due {
                 wakes: starts.into_iter().filter_map(to_api).collect(),

@@ -191,6 +191,8 @@ async fn trusted(state: &Arc<AppState>, bound: &Bound, caller: Device) -> Result
                 ),
             };
             tracing::info!(
+                event_code = "device_refused",
+                error_code = code,
                 "refused {} ({}): {code}",
                 caller.name,
                 caller.owner.describe()

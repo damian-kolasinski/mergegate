@@ -275,7 +275,12 @@ async fn run_command(state: &AppState, wake: &DueWake) {
     let Some(worktree) = wake.worktree.as_deref() else {
         return;
     };
-    tracing::info!("waking {} at cursor {}: {command}", wake.item, wake.cursor);
+    tracing::info!(
+        event_code = "wake_started",
+        "waking {} at cursor {}: {command}",
+        wake.item,
+        wake.cursor
+    );
     // A file, not a pipe: the session it starts may outlive the hub and
     // write long after, and its stderr is unbounded.
     let log = state.wake_logs.join(format!("{}.log", wake.name));

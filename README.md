@@ -140,21 +140,28 @@ The commands an agent uses most:
 
 The hub keeps local operational telemetry in `~/.mergegate/telemetry/` (or
 `$MERGEGATE_HOME/telemetry/`). Five rotating JSONL files hold up to 10 MiB each.
-While the hub runs, maintenance removes records older than seven days once per
-minute, including from active files. Extraction always excludes expired records
+While the hub runs, maintenance removes records older than seven days once an
+hour, including from active files. Extraction always excludes expired records
 and returns at most the newest 2,048 records. A bounded background
 writer drops records rather than blocking hub requests when it cannot keep up;
 subsequent records include the dropped count. Nothing is uploaded automatically.
 
 Operational telemetry contains run and request IDs, timestamps, module/line locations,
-request route templates, status codes, durations, stable error codes, and worker
-lifecycle events. Default exports exclude free-form messages, request/response
-bodies, repository content, credentials, and subprocess output. Private local
-records also retain bounded, sanitized warning/error and panic text for debugging;
+request route templates, status codes, durations, stable event and error codes,
+and worker lifecycle events. Requests a client polls (`/api/health`, the inbox,
+name lookups) are recorded only when they fail or take over a second; a request
+that waits for news, such as `mg wait`'s, is recorded as a long poll, and one
+whose client goes away first as cancelled. Default exports exclude free-form
+messages, request/response bodies, repository content, credentials, and
+subprocess output. Private local records also retain each event's bounded,
+sanitized message and panic text for debugging;
 `mg diagnostics logs --details --json` explicitly includes it so relevant
 excerpts can be selected. Free-form redaction is heuristic. Failed CLI
 requests print a request ID that can be matched to the recorded events.
-Existing `hub.log` files are not included in diagnostic exports.
+
+The hub also writes its readable log, without per-request records, to stderr,
+which the hub's service sends to `~/.mergegate/hub.log`. That file is not
+included in diagnostic exports.
 
 ```sh
 mg diagnostics logs --since 30m --json

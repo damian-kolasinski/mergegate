@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use api::diagnostics::Field as Value;
 use tracing::field::{Field, Visit};
 
 #[derive(Default)]
-pub(super) struct Fields(pub BTreeMap<String, String>, pub Option<String>);
+pub(super) struct Fields(pub BTreeMap<String, Value>, pub Option<String>);
 
 struct Limited(String);
 
@@ -61,13 +62,20 @@ impl Fields {
                         .bytes()
                         .all(|c| c.is_ascii_alphanumeric() || b"._-+".contains(&c))
             }
-            "status" | "elapsed_ms" | "source_line" | "api_version" => {
-                value.bytes().all(|c| c.is_ascii_digit()) && value.len() <= 20
-            }
             _ => false,
         };
         if safe {
-            self.0.insert(field.name().into(), value.into());
+            self.0
+                .insert(field.name().into(), Value::Text(value.into()));
+        }
+    }
+
+    fn put_number(&mut self, field: &Field, value: u64) {
+        if matches!(
+            field.name(),
+            "status" | "elapsed_ms" | "source_line" | "api_fingerprint" | "count"
+        ) {
+            self.0.insert(field.name().into(), Value::Number(value));
         }
     }
 }
@@ -81,10 +89,12 @@ impl Visit for Fields {
         }
     }
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.put(field, &value.to_string());
+        self.put_number(field, value);
     }
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.put(field, &value.to_string());
+        if let Ok(value) = u64::try_from(value) {
+            self.put_number(field, value);
+        }
     }
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {

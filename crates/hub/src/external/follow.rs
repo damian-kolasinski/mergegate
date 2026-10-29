@@ -86,7 +86,10 @@ pub(super) async fn follow(state: &Arc<AppState>, id: &ItemId) -> Result<bool, I
         ItemState::Merged => "merged",
         _ => "abandoned",
     };
-    tracing::info!("{id} {how}: its pull request ended on GitHub");
+    tracing::info!(
+        event_code = "pull_request_ended",
+        "{id} {how}: its pull request ended on GitHub"
+    );
     merge::changed(state, id);
     let stacked: Vec<_> = stacked.into_iter().map(|i| i.id).collect();
     merge::stacked_changed(state, &stacked);

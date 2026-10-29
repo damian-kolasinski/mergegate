@@ -90,14 +90,16 @@ fn running_hub_records_requests_without_payloads_and_collects_after_shutdown() {
 fn collection_does_not_need_a_database_and_bounds_rotation() {
     let env = env().with_vars(vec![("MG_TELEMETRY_FILE_BYTES".into(), "1024".into())]);
     env.start_hub();
+    // Health checks are no longer recorded; listing projects is.
     for _ in 0..30 {
-        env.mg(&["hub", "status"]).assert_code(0);
+        env.mg(&["project", "show"]).assert_code(0);
     }
     env.mg(&["hub", "stop"]).assert_code(0);
     let files = fs::read_dir(env.home().join("telemetry"))
         .unwrap()
         .map(Result::unwrap)
         .collect::<Vec<_>>();
+    assert!(env.home().join("telemetry/hub.1.jsonl").exists());
     assert!(files.len() <= 5);
     assert!(files.iter().all(|f| f.metadata().unwrap().len() <= 1024));
     fs::write(env.home().join("hub.db"), b"broken database").unwrap();

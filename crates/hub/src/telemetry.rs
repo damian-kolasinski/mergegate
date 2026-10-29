@@ -1,4 +1,4 @@
-//! Bounded local evidence, with private error text excluded from default exports.
+//! Bounded local evidence, with private message text excluded from default exports.
 
 pub(crate) mod disk;
 mod fields;
@@ -79,12 +79,16 @@ pub(crate) fn init(home: &Home, version: &str) -> Guard {
         ),
     };
     use std::io::IsTerminal;
-    let console = std::io::stderr().is_terminal().then(|| {
-        tracing_subscriber::fmt::layer()
-            .with_writer(std::io::stderr)
-            .with_target(false)
-            .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
-    });
+    // The readable log a backgrounded hub's service sends to `hub.log`.
+    // Request records stay out of it: they are most of the volume and only
+    // useful as correlated evidence.
+    let console = tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
+        .with_target(false)
+        .with_filter(tracing_subscriber::filter::filter_fn(|meta| {
+            *meta.level() <= tracing::Level::INFO && meta.target() != requests::TARGET
+        }));
     let _ = tracing::subscriber::set_global_default(
         Registry::default()
             .with(recorder.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
@@ -115,7 +119,7 @@ pub(crate) fn init(home: &Home, version: &str) -> Guard {
     tracing::info!(
         event_code = "hub_starting",
         version,
-        api_version = api::API_VERSION
+        api_fingerprint = api::API_VERSION
     );
     Guard { stopping, done }
 }
@@ -154,11 +158,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Recorder {
             timestamp: now(),
             run_id: self.run_id.clone(),
             version: self.version.clone(),
-            detail: if *meta.level() <= tracing::Level::WARN {
-                own.1
-            } else {
-                None
-            },
+            detail: own.1,
             sequence: self.sequence.fetch_add(1, Ordering::Relaxed),
             level: meta.level().to_string(),
             target: meta.target().chars().take(128).collect(),
@@ -171,3 +171,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Recorder {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "telemetry_tests.rs"]
+mod tests;

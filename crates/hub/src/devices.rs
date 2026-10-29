@@ -83,7 +83,13 @@ async fn decide(
     // A denied device's open `mg wait` or UI stream ends now, not at its
     // next request.
     state.tailnet.readmit();
-    tracing::info!("{:?} {} ({})", access, record.name, record.owner);
+    tracing::info!(
+        event_code = "device_decided",
+        "{:?} {} ({})",
+        access,
+        record.name,
+        record.owner
+    );
     Ok(Json(api::device::Decided {
         name: record.name,
         owner: record.owner,

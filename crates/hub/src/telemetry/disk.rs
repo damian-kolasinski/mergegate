@@ -11,6 +11,9 @@ use api::diagnostics::Record;
 pub(crate) const FILES: usize = 5;
 pub(crate) const RETENTION: u64 = 7 * 24 * 60 * 60;
 const DEFAULT_BYTES: u64 = 10 * 1024 * 1024;
+/// Expiry is coarse: a record outliving the retention by up to an hour costs
+/// nothing, while rewriting a file every minute as its records age out does.
+const PRUNE_EVERY: u64 = 60 * 60;
 
 pub(super) fn run(
     directory: PathBuf,
@@ -37,7 +40,7 @@ pub(super) fn run(
             Err(RecvTimeoutError::Disconnected) => return,
         }
         let now = super::now();
-        if now.saturating_sub(pruned) >= 60 {
+        if now.saturating_sub(pruned) >= PRUNE_EVERY {
             let _ = disk.prune(now);
             pruned = now;
         }
@@ -61,11 +64,15 @@ impl Disk {
         let cutoff = now.saturating_sub(RETENTION);
         for index in 0..FILES {
             let path = path(&self.directory, index);
-            let file = match File::open(&path) {
+            let mut file = match File::open(&path) {
                 Ok(file) => file,
                 Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
                 Err(e) => return Err(e),
             };
+            if fresh(&file, cutoff)? {
+                continue;
+            }
+            file.rewind()?;
             let mut kept = Vec::new();
             let mut expired = false;
             let malformed = read(file, |record| {
@@ -134,6 +141,19 @@ impl Disk {
         }
         file.write_all(&bytes)
     }
+}
+
+/// Whether the file's first record is within the retention. Records are
+/// appended in time order, so the rest are too and the file needs no rewrite.
+/// A crash fragment later in it is skipped by every read and goes when the
+/// file expires.
+fn fresh(file: &File, cutoff: u64) -> io::Result<bool> {
+    let mut line = Vec::new();
+    BufReader::new(file)
+        .take(4097)
+        .read_until(b'\n', &mut line)?;
+    Ok(line.last() == Some(&b'\n')
+        && serde_json::from_slice::<Record>(&line).is_ok_and(|r| r.timestamp >= cutoff))
 }
 
 /// A bounded line read also tolerates a partial final write after a crash.

@@ -123,6 +123,43 @@ fn startup_after_a_truncated_write_remains_readable() {
 }
 
 #[test]
+fn maintenance_reads_no_further_than_an_unexpired_first_record() {
+    use std::os::unix::fs::MetadataExt;
+    let dir = tempfile::tempdir().unwrap();
+    let mut disk = Disk {
+        directory: dir.path().to_owned(),
+        limit: 4096,
+    };
+    disk.write(&record(1)).unwrap();
+    // A full read would find this and rewrite the file without it.
+    OpenOptions::new()
+        .append(true)
+        .open(path(dir.path(), 0))
+        .unwrap()
+        .write_all(b"{fragment\n")
+        .unwrap();
+    disk.write(&record(2)).unwrap();
+    let before = fs::metadata(path(dir.path(), 0)).unwrap().ino();
+    disk.prune(super::super::now()).unwrap();
+    assert_eq!(fs::metadata(path(dir.path(), 0)).unwrap().ino(), before);
+}
+
+#[test]
+fn records_from_hubs_that_wrote_numbers_as_text_still_read() {
+    let line = br#"{"timestamp":1,"run_id":"r","version":"0.10.0","sequence":0,"level":"INFO","target":"t","line":1,"fields":{"status":"200","route":"/api/inbox"},"dropped":0}"#;
+    let mut file = tempfile::tempfile().unwrap();
+    file.write_all(line).unwrap();
+    file.write_all(b"\n").unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    let mut found = Vec::new();
+    read(file, |r| found.push(r)).unwrap();
+    assert_eq!(
+        found[0].fields["status"],
+        api::diagnostics::Field::Text("200".into())
+    );
+}
+
+#[test]
 fn maintenance_drops_crash_fragments_even_without_valid_timestamps() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(path(dir.path(), 0), b"{partial private detail").unwrap();
