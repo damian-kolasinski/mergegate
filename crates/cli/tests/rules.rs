@@ -161,6 +161,81 @@ fn f12_rules_sort_files_into_review_and_trusted() {
 }
 
 #[test]
+fn f12_trusted_scripts_need_no_guide_files_on_new_or_repeated_submits() {
+    let env = env();
+    let repo = project(&env);
+    apply_rules(
+        &env,
+        "[[rule]]\nid = \"R1\"\ntier = \"trusted\"\npath = \"Scripts/**\"\nreason = \"maintenance scripts\"\n",
+    );
+    let rules = env
+        .mg_at(repo.root(), &["--json", "rules", "list"])
+        .assert_code(0)
+        .json();
+    assert_eq!(rules["rules"][0]["path"], "Scripts/**");
+    assert_eq!(rules["rules"][0]["tier"], "trusted");
+    repo.git(["switch", "--quiet", "-c", "scripts"]);
+    repo.commit_files(
+        "Update scripts",
+        &[
+            ("Scripts/check.py", "print('check')\n"),
+            ("Scripts/build.py", "print('build')\n"),
+        ],
+    );
+    let guide = repo.sibling("guide.md");
+    fs::write(&guide, "Updates the maintenance scripts.").unwrap();
+    let text = env
+        .mg_at(repo.root(), &["submit", "--guide", guide.to_str().unwrap()])
+        .assert_code(0)
+        .stdout;
+    assert!(text.contains("0 of 2 files to review"), "{text}");
+    assert!(!text.contains("warning:"), "{text}");
+    assert!(triage(&env).iter().all(|file| file["tier"] == "trusted"));
+
+    for text in [
+        "Updates the maintenance scripts.",
+        "Updates the maintenance scripts.\n\n## Files\n",
+    ] {
+        fs::write(&guide, text).unwrap();
+        let repeated = env
+            .mg_at(
+                repo.root(),
+                &["--json", "submit", "--guide", guide.to_str().unwrap()],
+            )
+            .assert_code(0)
+            .json();
+        assert_eq!(repeated["new_revision"], false);
+        assert_eq!(repeated["warnings"], json!([]));
+        assert_eq!(repeated["item"]["revision"]["review_files"], 0);
+    }
+
+    repo.commit_files(
+        "Update implementation",
+        &[("src/main.rs", "fn main() {}\n")],
+    );
+    let mixed = env
+        .mg_at(repo.root(), &["submit", "--guide", guide.to_str().unwrap()])
+        .assert_code(0)
+        .stdout;
+    assert!(mixed.contains("1 of 3 files to review"), "{mixed}");
+    assert!(mixed.contains("list names no `path`"), "{mixed}");
+    fs::write(
+        &guide,
+        "Updates the implementation and scripts.\n\n## Files\n- `src/main.rs` — implementation\n",
+    )
+    .unwrap();
+    let fixed = env
+        .mg_at(
+            repo.root(),
+            &["--json", "submit", "--guide", guide.to_str().unwrap()],
+        )
+        .assert_code(0)
+        .json();
+    assert_eq!(fixed["new_revision"], false);
+    assert_eq!(fixed["warnings"], json!([]));
+}
+
+#[test]
 fn f12_without_rules_every_file_is_reviewed() {
     let env = env();
     let repo = project(&env);

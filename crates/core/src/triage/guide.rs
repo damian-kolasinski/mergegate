@@ -192,14 +192,15 @@ impl Guide {
     /// lines that name no path.
     pub fn warnings(&self, text: &str, files: &[FileStat]) -> Vec<String> {
         let mut warnings = Vec::new();
-        if !self.listed && !text.trim().is_empty() {
+        let reviewing = files.iter().any(|file| file.triage.tier == Tier::Review);
+        if reviewing && !self.listed && !text.trim().is_empty() {
             warnings.push(
                 "the guide has no `## Files` list, so the files stay in path order; \
                  add that heading with one bullet per file to review: - `path` — reason; \
                  then run mg submit --guide FILE again without --attach"
                     .into(),
             );
-        } else if self.listed && self.files.is_empty() {
+        } else if reviewing && self.listed && self.files.is_empty() {
             warnings.push(
                 "the guide's `## Files` list names no `path` before the next heading, \
                  so the files stay in path order"

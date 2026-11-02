@@ -1,4 +1,4 @@
-use super::JudgeStore;
+use super::{JudgeStore, Verdict};
 use crate::project::{ProjectName, ProjectStore};
 use crate::store::StoreError;
 use crate::triage::OrderBy;
@@ -40,6 +40,11 @@ impl Provider {
 }
 
 impl JudgeSetting {
+    /// Whether this verdict pulls a rule-trusted file back into review.
+    pub fn promotes(&self, verdict: &Verdict) -> bool {
+        verdict.promote.is_some_and(|p| p >= self.threshold)
+    }
+
     /// What the verdicts are cached under: another model or command judges
     /// again, another threshold or order doesn't, since both are applied on
     /// read.
