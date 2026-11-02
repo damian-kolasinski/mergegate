@@ -204,6 +204,27 @@ fn f12_the_judge_ranks_files_and_promotes_a_trusted_one() {
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     assert_eq!(inbox["needs_you"][0]["review_files"], 4);
 
+    fs::write(
+        repo.root().join("guide.md"),
+        format!("{GUIDE}- `config/prod.toml` — authentication configuration\n"),
+    )
+    .unwrap();
+    let repeated = env
+        .mg_at(repo.root(), &["--json", "submit", "--guide", "guide.md"])
+        .assert_code(0)
+        .json();
+    assert_eq!(repeated["new_revision"], false);
+    assert_eq!(repeated["item"]["revision"]["review_files"], 4);
+    assert_eq!(repeated["warnings"], json!([]));
+    let listed = item(&env);
+    let config = listed["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|file| file["path"] == "config/prod.toml")
+        .unwrap();
+    assert_eq!(config["reason"], "authentication configuration");
+
     // One call for the whole change, which it sees in full.
     let requests = jev.requests();
     assert_eq!(requests.len(), 1);

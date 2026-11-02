@@ -1,5 +1,7 @@
 //! Registering pushed work as an item or a new revision.
 
+use std::collections::BTreeSet;
+
 use super::diff_files::diff_files;
 use super::priority::note_of;
 use super::publish::{Revision, describe, description, publish};
@@ -14,11 +16,12 @@ use crate::feedback::FeedbackStore;
 use crate::git::Upstream;
 use crate::github::Github;
 use crate::interdiff::{InterdiffGit, Recorded, record};
+use crate::judge::JudgeStore;
 use crate::module::{self, ModuleGit};
 use crate::project::{Backend, ProjectError, ProjectStore, find};
 use crate::review::{CommentId, ReviewStore};
 use crate::store::StoreError;
-use crate::triage::{Guide, RulesStore, TriageGit, triage_files};
+use crate::triage::{Guide, RulesStore, Tier, TriageGit, triage_files};
 use crate::viewed::ViewedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +81,7 @@ pub fn submit<
         + ViewedStore
         + AgentStore
         + RulesStore
+        + JudgeStore
         + ReviewStore
         + FeedbackStore,
 >(
@@ -374,7 +378,7 @@ fn kept(item: &Item) -> String {
 /// What the agent should fix in the guide of revision `revision`, of `item`
 /// or of a new item when none.
 fn warnings(
-    store: &impl ReviewStore,
+    store: &(impl ReviewStore + JudgeStore),
     item: Option<&Item>,
     revision: u32,
     guide: Option<&str>,
@@ -383,7 +387,24 @@ fn warnings(
     let Some(text) = guide else {
         return Ok(Vec::new());
     };
-    let mut warnings = Guide::parse(text).warnings(text, files);
+    let mut files = files.to_vec();
+    if let Some(item) = item
+        && let Some(setting) = store.judge_setting(item.id.project())?
+    {
+        let promoted: BTreeSet<_> = store
+            .verdicts(&item.id, revision, &setting.key())?
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|verdict| setting.promotes(verdict))
+            .map(|verdict| verdict.path)
+            .collect();
+        for file in &mut files {
+            if promoted.contains(&file.file.path) {
+                file.triage.tier = Tier::Review;
+            }
+        }
+    }
+    let mut warnings = Guide::parse(text).warnings(text, &files);
     let comments: Vec<CommentId> = match item {
         // A draft's ID is the operator's until a review sends it.
         Some(item) => store

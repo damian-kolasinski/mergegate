@@ -104,7 +104,7 @@ fn warns_about_what_it_cannot_place() {
 fn warns_when_there_is_no_list() {
     let text = "Just a summary.";
     assert_eq!(
-        Guide::parse(text).warnings(text, &[]),
+        Guide::parse(text).warnings(text, &[stat("src/a.rs", Tier::Review)]),
         [
             "the guide has no `## Files` list, so the files stay in path order; \
           add that heading with one bullet per file to review: - `path` — reason; \
@@ -122,7 +122,7 @@ fn warns_when_the_list_names_no_files() {
         "## Files\n### Core\n- `z.rs` — the heart of it\n",
     ] {
         assert_eq!(
-            Guide::parse(text).warnings(text, &[]),
+            Guide::parse(text).warnings(text, &[stat("src/a.rs", Tier::Review)]),
             [
                 "the guide's `## Files` list names no `path` before the next heading, \
                  so the files stay in path order"
@@ -130,6 +130,28 @@ fn warns_when_the_list_names_no_files() {
             "{text}"
         );
     }
+}
+
+#[test]
+fn needs_no_files_list_when_every_file_is_trusted() {
+    let changed = [
+        stat("Scripts/check.py", Tier::Trusted),
+        stat("Scripts/build.py", Tier::Trusted),
+    ];
+    for text in ["Updates the scripts.", "Updates the scripts.\n\n## Files\n"] {
+        assert!(Guide::parse(text).warnings(text, &changed).is_empty());
+        assert!(Guide::parse(text).warnings(text, &[]).is_empty());
+        let mixed = [changed[0].clone(), stat("src/a.rs", Tier::Review)];
+        assert_eq!(Guide::parse(text).warnings(text, &mixed).len(), 1);
+    }
+    let text = "Updates the scripts.\n\n## Files\n- `Scripts/check.py`\n- `gone.py`\n";
+    assert_eq!(
+        Guide::parse(text).warnings(text, &changed),
+        [
+            "`Scripts/check.py` is trusted by R2, and the guide only orders the files to review",
+            "`gone.py` isn't changed in this revision",
+        ]
+    );
 }
 
 #[test]

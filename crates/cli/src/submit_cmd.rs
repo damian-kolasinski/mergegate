@@ -210,16 +210,14 @@ fn describe(submitted: &Submitted, guided: bool) -> String {
             Some(parent) => format!("on {parent}"),
             None => format!("onto {}", item.target),
         };
+        let files = if r.review_files == r.files {
+            files(r.files)
+        } else {
+            format!("{} of {} to review", r.review_files, files(r.files))
+        };
         let mut text = format!(
             "submitted {} r{}: {}\n  {} {} · {}, +{} -{}",
-            item.name,
-            r.number,
-            item.title,
-            item.branch,
-            onto,
-            files(r.files),
-            r.additions,
-            r.deletions
+            item.name, r.number, item.title, item.branch, onto, files, r.additions, r.deletions
         );
         if let Some(link) = &item.link {
             text.push_str(&format!("\n  {} {}", link.label, link.url));

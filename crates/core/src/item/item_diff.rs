@@ -191,12 +191,9 @@ pub fn item_diff<
         let verdict = verdicts.remove(&stat.file.path);
         let mut triage = stat.triage;
         let promoted = triage.tier == Tier::Trusted
-            && setting.as_ref().is_some_and(|s| {
-                verdict
-                    .as_ref()
-                    .and_then(|v| v.promote)
-                    .is_some_and(|p| p >= s.threshold)
-            });
+            && setting
+                .as_ref()
+                .is_some_and(|s| verdict.as_ref().is_some_and(|v| s.promotes(v)));
         if promoted {
             triage.tier = Tier::Review;
         }

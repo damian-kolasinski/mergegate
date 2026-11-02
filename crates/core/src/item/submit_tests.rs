@@ -3,6 +3,7 @@ use crate::diff::Content;
 use crate::fake::{FakeGit, FakeGithub, FakeStore, commit};
 use crate::github::{GithubError, GithubRepo, Pull};
 use crate::item::{DiffStat, ItemId};
+use crate::judge::{JudgeSetting, JudgeStore, Provider, Verdict as JudgeVerdict};
 use crate::project::{Backend, Project, ProjectError, ProjectName};
 use crate::review::{NewComment, NewReview, Side, Verdict};
 use crate::triage::{RulesStore, Tier};
@@ -786,6 +787,91 @@ fn triages_each_file_by_the_applied_rules() {
     );
     let stat = item.revision.stat;
     assert_eq!((stat.review_files, stat.files), (1, 2));
+}
+
+#[test]
+fn guide_warnings_follow_cached_promotions_for_the_current_revision_and_judge() {
+    let (mut store, git) = setup();
+    let app = ProjectName::parse("app").unwrap();
+    let rules = crate::fake::rules(&[(Tier::Trusted, "**")]);
+    store.set_applied_rules(&app, &rules, None).unwrap();
+    let mut setting = JudgeSetting {
+        provider: Provider::Command {
+            command: "judge".into(),
+        },
+        threshold: 0.8,
+        order: Default::default(),
+    };
+    store.set_judge_setting(&app, Some(&setting)).unwrap();
+    git.push("app", "login", &commit(3));
+    let send = |store: &mut FakeStore, head, guide: &str| {
+        submit(
+            store,
+            &git,
+            &FakeGithub::default(),
+            Submit {
+                guide: Some(guide.into()),
+                ..request("app", "login", head)
+            },
+        )
+        .unwrap()
+    };
+    let summary = "Updates the login flow.";
+    let first = send(&mut store, 3, summary);
+    assert!(first.warnings.is_empty(), "not judged yet");
+    store
+        .insert_verdicts(
+            &first.item.id,
+            1,
+            &setting.key(),
+            &[JudgeVerdict {
+                path: "src/login.rs".into(),
+                importance: 90,
+                reason: Some("needs a look".into()),
+                promote: Some(0.8),
+            }],
+        )
+        .unwrap();
+    for guide in [summary, "Updates the login flow.\n\n## Files\n"] {
+        let again = send(&mut store, 3, guide);
+        assert!(!again.new_revision);
+        assert_eq!(again.warnings.len(), 1, "a promoted file needs a list");
+        assert!(
+            again.warnings[0].contains("## Files") || again.warnings[0].contains("names no `path`")
+        );
+    }
+    let listed = "Updates the login flow.\n\n## Files\n- `src/login.rs` — login\n";
+    assert!(send(&mut store, 3, listed).warnings.is_empty());
+    let both = format!("{listed}- `README.md` — docs\n");
+    assert_eq!(
+        send(&mut store, 3, &both).warnings,
+        ["`README.md` is trusted by R1, and the guide only orders the files to review"]
+    );
+
+    setting.threshold = 0.9;
+    store.set_judge_setting(&app, Some(&setting)).unwrap();
+    assert!(
+        send(&mut store, 3, summary).warnings.is_empty(),
+        "below threshold"
+    );
+    assert_eq!(send(&mut store, 3, listed).warnings.len(), 1);
+    setting.threshold = 0.8;
+    setting.provider = Provider::Command {
+        command: "another judge".into(),
+    };
+    store.set_judge_setting(&app, Some(&setting)).unwrap();
+    assert!(
+        send(&mut store, 3, summary).warnings.is_empty(),
+        "another judge's verdicts"
+    );
+    setting.provider = Provider::Command {
+        command: "judge".into(),
+    };
+    store.set_judge_setting(&app, Some(&setting)).unwrap();
+    git.push("app", "login", &commit(4));
+    let next = send(&mut store, 4, summary);
+    assert!(next.new_revision);
+    assert!(next.warnings.is_empty(), "previous revision's verdicts");
 }
 
 #[test]
