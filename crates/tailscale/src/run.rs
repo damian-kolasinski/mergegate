@@ -1,11 +1,14 @@
 //! Running the `tailscale` CLI.
 
 use std::io::{ErrorKind, Read};
+use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use mergegate_core::device::TailnetError;
+use nix::sys::signal::{Signal, killpg};
+use nix::unistd::Pid;
 
 /// Where the Mac app keeps its CLI when the operator never put it on `PATH`.
 const MAC_APP: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
@@ -30,7 +33,7 @@ fn answer(args: &[&str], output: std::io::Result<Output>) -> Result<Vec<u8>, Tai
     let output = output.map_err(|e| {
         let why = match e.kind() {
             ErrorKind::NotFound => "Tailscale isn't installed: no tailscale on PATH".to_owned(),
-            _ => format!("can't run tailscale: {e}"),
+            _ => format!("can't run tailscale {}: {e}", args[0]),
         };
         TailnetError::Unavailable(why)
     })?;
@@ -51,7 +54,9 @@ fn answer(args: &[&str], output: std::io::Result<Output>) -> Result<Vec<u8>, Tai
 /// `attempt`, made once more if it timed out.
 fn retried(mut attempt: impl FnMut() -> std::io::Result<Output>) -> std::io::Result<Output> {
     match attempt() {
-        Err(e) if e.kind() == ErrorKind::TimedOut => attempt(),
+        Err(first) if first.kind() == ErrorKind::TimedOut => attempt().map_err(|last| {
+            std::io::Error::new(last.kind(), format!("after 2 attempts: {first}; {last}"))
+        }),
         output => output,
     }
 }
@@ -68,27 +73,57 @@ fn run(args: &[&str], timeout: Duration) -> std::io::Result<Output> {
 fn spawn(program: &str, args: &[&str], timeout: Duration) -> std::io::Result<Output> {
     let mut child = Command::new(program)
         .args(args)
+        // The macOS app otherwise guesses GUI vs CLI from shell variables
+        // that a launchd service need not have.
+        .env("TAILSCALE_BE_CLI", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()?;
     // Read while it runs: the status of a large tailnet outgrows the pipe,
     // and the CLI would block writing it.
     let stdout = drain(child.stdout.take());
     let stderr = drain(child.stderr.take());
-    let Some(status) = wait(&mut child, timeout)? else {
-        let _ = child.kill();
+    let status = wait(&mut child, timeout);
+    // PATH may name a shell launcher. Killing just that shell leaves its
+    // Tailscale child alive, holding the pipes and overlapping the retry.
+    kill_group(&mut child);
+    if !matches!(status, Ok(Some(_))) {
         let _ = child.wait();
+    }
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = stderr.join().unwrap_or_default();
+    let Some(status) = status? else {
+        let tail = &stderr[stderr.len().saturating_sub(2048)..];
+        let detail = String::from_utf8_lossy(tail);
+        let detail = detail.trim();
+        let detail = if detail.is_empty() {
+            String::new()
+        } else {
+            format!("; stderr: {detail}")
+        };
         return Err(std::io::Error::new(
             ErrorKind::TimedOut,
-            format!("no answer within {}s", timeout.as_secs_f32()),
+            format!(
+                "{program}: no answer within {}s{detail}",
+                timeout.as_secs_f32()
+            ),
         ));
     };
     Ok(Output {
         status,
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
+        stdout,
+        stderr,
     })
+}
+
+fn kill_group(child: &mut Child) {
+    // Unix process IDs fit pid_t. The child's own group was set at spawn;
+    // signal it directly so cleanup also works with a minimal service PATH.
+    if killpg(Pid::from_raw(child.id() as i32), Signal::SIGKILL).is_err() {
+        let _ = child.kill();
+    }
 }
 
 fn wait(child: &mut Child, timeout: Duration) -> std::io::Result<Option<ExitStatus>> {
