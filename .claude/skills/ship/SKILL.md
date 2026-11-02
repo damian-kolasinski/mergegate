@@ -34,9 +34,9 @@ Split the work into parts only when it holds parts the operator would rather rev
 
 ## Review
 
-Use one independent read-only review subagent when available, without inherited conversation history. Give it the exact checkout, base, and review target, including uncommitted changes if that is what will be shipped. Ask it to read repository guidance and report concrete bugs or regressions with paths, lines, impact, and evidence.
+Use one independent read-only review subagent when available, without inherited conversation history. Write the review target to files first in a task-specific temporary directory: `git diff <merge-base>` to `diff.patch` (run `git add -N` on new files first when uncommitted changes will ship) and `git diff --name-only <merge-base>` to `files.txt`. Give the reviewer the exact checkout, base, and those absolute paths. Ask it to read repository guidance, to use plain single commands rather than loops or pipelines around `git`, to quote globs (`--glob='*.rs'`) because commands run in zsh where an unmatched glob fails, to search inside the checkout rather than from `/` or `~`, and to report concrete bugs or regressions with paths, lines, impact, and evidence, followed by one line on any tooling friction it hit.
 
-The review should check affected behavior, error boundaries, established architecture, and unnecessary new machinery. Focus on realistic callers and lifecycle paths, not hypothetical races or stylistic preferences. If delegation is unavailable, review the diff directly and disclose that limitation.
+The review should check affected behavior, error boundaries, established architecture, and unnecessary new machinery, including methods that only forward a call to another object and tests that cannot fail when the behavior breaks. Focus on realistic callers and lifecycle paths, not hypothetical races or stylistic preferences. If delegation is unavailable, review the diff directly and disclose that limitation.
 
 Evaluate findings against the code before fixing. Fix supported issues within scope and rerun checks affected by those fixes. Re-review only where a fix introduces new uncertainty.
 
