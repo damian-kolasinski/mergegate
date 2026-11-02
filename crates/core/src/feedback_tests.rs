@@ -171,3 +171,116 @@ fn a_wait_for_the_operator_ends_on_an_operator_event() {
     assert!(Wake::Any.by(&events));
     assert!(Wake::Operator.by(&events));
 }
+
+#[test]
+fn automatic_wakes_skip_empty_approvals_but_keep_their_feedback() {
+    use crate::review::{Author, Comment, CommentId, Reply};
+    let mut review = Review {
+        id: 1,
+        item: id("app#1"),
+        revision: 1,
+        verdict: Verdict::Approved,
+        carried_from: None,
+        summary: " \n".into(),
+        comments: vec![],
+        replies: vec![],
+        submitted_at: String::new(),
+    };
+    let event = |review| Event {
+        cursor: 7,
+        kind: EventKind::ReviewSubmitted(review),
+    };
+    assert!(!event(review.clone()).needs_attention());
+    review.summary = "Please fix the follow-up".into();
+    assert!(event(review.clone()).needs_attention());
+    review.carried_from = Some(1);
+    assert!(
+        !event(review.clone()).needs_attention(),
+        "automatic reapproval summary is informational"
+    );
+    review.summary.clear();
+    review.comments.push(Comment {
+        id: CommentId(1),
+        item: id("app#1"),
+        revision: 1,
+        anchor: None,
+        body: "Follow up".into(),
+        review: Some(1),
+        external: None,
+        created_at: String::new(),
+    });
+    assert!(event(review.clone()).needs_attention());
+    review.comments.clear();
+    review.replies.push(Reply {
+        id: 1,
+        comment: CommentId(1),
+        item: id("app#1"),
+        author: Author::Operator,
+        status: None,
+        body: "Use the other approach".into(),
+        revision: 1,
+        review: Some(1),
+        overrides: false,
+        created_at: String::new(),
+    });
+    assert!(event(review.clone()).needs_attention());
+    review.replies.clear();
+    review.verdict = Verdict::ChangesRequested;
+    assert!(event(review.clone()).needs_attention());
+    review.verdict = Verdict::Comment;
+    assert!(event(review).needs_attention());
+}
+
+#[test]
+fn automatic_wakes_keep_failures_and_stack_work_but_not_a_successful_merge() {
+    let kinds = [
+        NoticeKind::MergeHeld {
+            reason: "dirty checkout".into(),
+        },
+        NoticeKind::MergeCancelled,
+        NoticeKind::MergeConflict {
+            target_commit: "abc".into(),
+            paths: vec!["a".into()],
+        },
+        NoticeKind::ParentUpdated {
+            parent: id("app#2"),
+            merged: true,
+            onto: "abc".into(),
+            upstream: "def".into(),
+        },
+        NoticeKind::ParentAbandoned {
+            parent: id("app#2"),
+            upstream: "def".into(),
+        },
+        NoticeKind::Abandoned {
+            reason: Some("no longer needed".into()),
+        },
+    ];
+    for kind in kinds {
+        let event = Event {
+            cursor: 3,
+            kind: EventKind::Notice(Notice {
+                revision: 1,
+                source: Source::Operator,
+                kind,
+            }),
+        };
+        assert!(event.needs_attention(), "{event:?}");
+        assert_eq!(
+            attention(ItemState::NeedsReview, std::slice::from_ref(&event)),
+            Some(3)
+        );
+        assert_eq!(attention(ItemState::Merged, &[event]), None);
+    }
+    let merged = Event {
+        cursor: 4,
+        kind: EventKind::Notice(Notice {
+            revision: 1,
+            source: Source::Operator,
+            kind: NoticeKind::Merged {
+                commit: "abc".into(),
+            },
+        }),
+    };
+    assert!(!merged.needs_attention());
+}

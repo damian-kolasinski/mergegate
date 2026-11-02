@@ -5,6 +5,7 @@
 //! know.
 
 mod agents;
+mod claude_watch;
 mod install;
 mod session_start;
 mod show;
@@ -17,6 +18,8 @@ use crate::output::{CliError, Outcome};
 
 #[derive(Subcommand)]
 pub enum SkillCommand {
+    #[command(hide = true)]
+    ClaudeWatch,
     /// Install the skill and session hook into the agents on this machine,
     /// or those named with --agent; again, update what an older mg installed
     Setup {
@@ -92,6 +95,7 @@ impl From<AgentArg> for skill::Agent {
 
 pub fn run(command: SkillCommand) -> Result<Outcome, CliError> {
     match command {
+        SkillCommand::ClaudeWatch => claude_watch::run(),
         SkillCommand::Setup {
             agents: named,
             project,

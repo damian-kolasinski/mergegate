@@ -10,6 +10,7 @@ use crate::json::Json;
 /// What every command this hook ran contains, however an older `mg` spelled
 /// the rest, so setup finds its own among the operator's.
 const MARKER: &str = "mergegate skill session-start";
+const CLAUDE_WATCH: &str = "mergegate skill claude-watch";
 
 /// Seconds an agent gives the hook; `session-start` keeps within it.
 const TIMEOUT: u64 = 5;
@@ -40,7 +41,17 @@ pub(crate) fn state(settings: &Json, agent: Agent) -> HookState {
     let ours = groups.iter().filter(|group| has_ours(group)).count();
     match ours {
         0 => HookState::Missing,
-        1 if groups.contains(&group(agent)) => HookState::Current,
+        1 if groups.contains(&group(agent))
+            && (agent != Agent::Claude
+                || event_groups(settings, "Stop")
+                    .iter()
+                    .filter(|g| has_ours(g))
+                    .count()
+                    == 1
+                    && event_groups(settings, "Stop").contains(&claude_watch())) =>
+        {
+            HookState::Current
+        }
         _ => HookState::Outdated,
     }
 }
@@ -50,20 +61,9 @@ pub(crate) fn state(settings: &Json, agent: Agent) -> HookState {
 /// is left as it was.
 pub(crate) fn install(settings: &mut Json, agent: Agent) -> Result<(), &'static str> {
     remove(settings)?;
-    let hooks = settings
-        .entry("hooks")
-        .ok_or("the settings aren't a JSON object")?;
-    let start = hooks
-        .entry("SessionStart")
-        .ok_or("`hooks` isn't an object")?;
-    if let Json::Object(fields) = start
-        && fields.is_empty()
-    {
-        *start = Json::Array(Vec::new());
-    }
-    match start {
-        Json::Array(groups) => groups.push(group(agent)),
-        _ => return Err("`hooks.SessionStart` isn't a list"),
+    append(settings, "SessionStart", group(agent))?;
+    if agent == Agent::Claude {
+        append(settings, "Stop", claude_watch())?;
     }
     Ok(())
 }
@@ -77,35 +77,74 @@ pub(crate) fn remove(settings: &mut Json) -> Result<bool, &'static str> {
     let Some(hooks) = settings.get("hooks") else {
         return Ok(false);
     };
-    let Some(start) = hooks.get("SessionStart") else {
-        return Ok(false);
-    };
-    let Some(groups) = start.as_array() else {
-        return Err("`hooks.SessionStart` isn't a list");
-    };
-    if !groups.iter().any(has_ours) {
-        return Ok(false);
+    for event in ["SessionStart", "Stop"] {
+        if let Some(groups) = hooks.get(event)
+            && groups.as_array().is_none()
+        {
+            return Err("a hook event isn't a list");
+        }
     }
-    let kept: Vec<Json> = groups
-        .iter()
-        .filter_map(|group| without_ours(group.clone()))
-        .collect();
-    // Every lookup above found these.
-    let hooks = settings.entry("hooks").expect("an object");
-    match kept.is_empty() {
-        true => hooks.remove("SessionStart"),
-        false => *hooks.entry("SessionStart").expect("an object") = Json::Array(kept),
+    let mut removed = false;
+    for event in ["SessionStart", "Stop"] {
+        let groups = event_groups(settings, event);
+        if !groups.iter().any(has_ours) {
+            continue;
+        }
+        let kept: Vec<Json> = groups
+            .iter()
+            .filter_map(|group| without_ours(group.clone()))
+            .collect();
+        let hooks = settings.entry("hooks").expect("an object");
+        if kept.is_empty() {
+            hooks.remove(event);
+        } else {
+            *hooks.entry(event).expect("an object") = Json::Array(kept);
+        }
+        removed = true;
     }
-    if hooks.is_empty_container() {
+    if settings.get("hooks").is_some_and(Json::is_empty_container) {
         settings.remove("hooks");
     }
-    Ok(true)
+    Ok(removed)
+}
+
+fn append(settings: &mut Json, event: &str, group: Json) -> Result<(), &'static str> {
+    let hooks = settings
+        .entry("hooks")
+        .ok_or("the settings aren't a JSON object")?;
+    let groups = hooks.entry(event).ok_or("`hooks` isn't an object")?;
+    if let Json::Object(fields) = groups
+        && fields.is_empty()
+    {
+        *groups = Json::Array(Vec::new());
+    }
+    match groups {
+        Json::Array(groups) => groups.push(group),
+        _ => return Err("a hook event isn't a list"),
+    }
+    Ok(())
+}
+
+fn claude_watch() -> Json {
+    Json::Object(vec![(
+        "hooks".into(),
+        Json::Array(vec![Json::Object(vec![
+            ("type".into(), Json::String("command".into())),
+            ("command".into(), Json::String(CLAUDE_WATCH.into())),
+            ("asyncRewake".into(), Json::Bool(true)),
+            ("timeout".into(), Json::Number(604_860.into())),
+        ])]),
+    )])
 }
 
 fn session_start(settings: &Json) -> &[Json] {
+    event_groups(settings, "SessionStart")
+}
+
+fn event_groups<'a>(settings: &'a Json, event: &str) -> &'a [Json] {
     settings
         .get("hooks")
-        .and_then(|hooks| hooks.get("SessionStart"))
+        .and_then(|hooks| hooks.get(event))
         .and_then(Json::as_array)
         .unwrap_or_default()
 }
@@ -134,7 +173,7 @@ fn is_ours(handler: &Json) -> bool {
     handler
         .get("command")
         .and_then(Json::as_str)
-        .is_some_and(|command| command.contains(MARKER))
+        .is_some_and(|command| command.contains(MARKER) || command.contains(CLAUDE_WATCH))
 }
 
 fn has_ours(group: &Json) -> bool {

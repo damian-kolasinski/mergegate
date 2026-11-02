@@ -62,7 +62,7 @@ fn context(agent: Agent) -> Option<String> {
 }
 
 /// `app` of `http://127.0.0.1:7800/git/app`, the remote `mg init` adds.
-fn project(url: &str) -> Option<&str> {
+pub(super) fn project(url: &str) -> Option<&str> {
     match url.trim_end_matches('/').rsplit_once("/git/") {
         Some((_, project)) if !project.is_empty() && !project.contains('/') => Some(project),
         _ => None,
@@ -107,9 +107,9 @@ fn state(state: ItemState) -> &'static str {
 fn waiting(agent: Agent) -> &'static str {
     match agent {
         Agent::Claude => {
-            "After `mg submit`, wait for the review with `mg wait ITEM` run in the background \
-             (the Bash tool's `run_in_background`); when it exits, read what came with \
-             `mg feedback ITEM`. `mg skill show waiting` has the rest."
+            "Submit with `mg submit --wake \"\"`, then end your turn. The installed Stop hook \
+             watches this worktree and wakes this session for actionable feedback or failures. \
+             Do not start a background `mg wait`. `mg skill show waiting` has the rest."
         }
         Agent::Codex => {
             "Never run `mg wait` here, not even in the background: Codex spends a turn on every \

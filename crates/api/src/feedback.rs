@@ -22,6 +22,18 @@ pub struct Feedback {
     pub cursor: u64,
 }
 
+/// `GET /api/items/{id}/attention`: a read-only automatic wake decision.
+/// Unlike feedback, observing this never hands events to an agent or releases
+/// held external comments.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attention {
+    /// This worktree on the calling device owns the item and has no explicit wake.
+    pub watching: bool,
+    pub name: String,
+    pub state: ItemState,
+    pub cursor: Option<u64>,
+}
+
 /// `GET /api/events`: every item's events after `since`, which
 /// `mg events --follow` streams. Without `since`, none and the newest cursor,
 /// to start from now. With `wait` (seconds), the hub holds the request until

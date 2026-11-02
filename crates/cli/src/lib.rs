@@ -251,7 +251,9 @@ pub fn main() -> ExitCode {
     // what the session hook prints stays text whatever `MG_JSON` says.
     let hook = matches!(
         cli.command,
-        Command::Skill(skill_cmd::SkillCommand::SessionStart { .. })
+        Command::Skill(
+            skill_cmd::SkillCommand::SessionStart { .. } | skill_cmd::SkillCommand::ClaudeWatch
+        )
     );
     let json = (cli.json || json_env) && !hook;
     output::emit(json, dispatch(cli.command, json))

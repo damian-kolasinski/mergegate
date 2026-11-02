@@ -4,7 +4,7 @@
 //! signal that stops it says how to resume.
 
 mod notify;
-mod session;
+pub(crate) mod session;
 mod stop;
 
 use std::time::{Duration, Instant};

@@ -11,7 +11,7 @@ const THEIRS: &str = r#"{
         ]
       }
     ],
-    "Stop": []
+    "Stop": [{"hooks": [{"type": "command", "command": "other-tool stop"}]}]
   }
 }"#;
 
@@ -93,4 +93,17 @@ fn leaves_settings_of_another_shape() {
     assert!(install(&mut settings, Agent::Claude).is_err());
     let mut settings = Json::parse("[]").unwrap();
     assert!(install(&mut settings, Agent::Claude).is_err());
+}
+
+#[test]
+fn claude_needs_the_rewake_hook_and_removal_handles_it_alone() {
+    let mut settings = Json::parse("{}").unwrap();
+    install(&mut settings, Agent::Claude).unwrap();
+    assert_eq!(event_groups(&settings, "Stop"), &[claude_watch()]);
+    settings.entry("hooks").unwrap().remove("Stop");
+    assert_eq!(state(&settings, Agent::Claude), HookState::Outdated);
+    install(&mut settings, Agent::Claude).unwrap();
+    settings.entry("hooks").unwrap().remove("SessionStart");
+    assert!(remove(&mut settings).unwrap());
+    assert_eq!(settings, Json::parse("{}").unwrap());
 }

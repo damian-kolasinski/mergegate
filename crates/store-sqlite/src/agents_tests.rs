@@ -125,9 +125,10 @@ fn a_wake_is_due_for_events_its_agent_has_neither_read_nor_been_woken_for() {
 }
 
 #[test]
-fn a_closed_items_last_events_still_wake_its_agent() {
+fn a_successful_merge_silences_pending_wakes_without_acknowledging_events() {
     let (_dir, mut store) = store();
     store.set_agent(&id("app#1"), &waking("a")).unwrap();
+    review(&mut store, "app#1");
     let merged = Notice {
         revision: 1,
         source: Source::Operator,
@@ -138,7 +139,9 @@ fn a_closed_items_last_events_still_wake_its_agent() {
     store
         .notify(&id("app#1"), ItemState::Merged, merged)
         .unwrap();
-    assert_eq!(due(&store), [("app#1".into(), "a".into(), 1)]);
+    assert_eq!(due(&store), []);
+    assert_eq!(store.delivered(&id("app#1")).unwrap(), 0);
+    assert_eq!(store.events(&id("app#1"), 0).unwrap().len(), 2);
 }
 
 #[test]
@@ -234,4 +237,42 @@ fn a_wake_names_a_github_item_by_its_pull_request() {
             ("app#3".into(), "app#84".into())
         ]
     );
+}
+
+#[test]
+fn approval_only_does_not_repeat_an_earlier_wake_or_consume_feedback() {
+    let (_dir, mut store) = store();
+    store.set_agent(&id("app#1"), &waking("a")).unwrap();
+    review(&mut store, "app#1");
+    store.set_woken(&id("app#1"), 1).unwrap();
+    store
+        .insert_review(
+            NewReview {
+                item: id("app#1"),
+                revision: 1,
+                verdict: Verdict::Approved,
+                summary: String::new(),
+                moved: Vec::new(),
+                carried_from: None,
+            },
+            ItemState::Merging,
+        )
+        .unwrap();
+    assert_eq!(due(&store), []);
+    assert_eq!(store.delivered(&id("app#1")).unwrap(), 0);
+    assert_eq!(store.events(&id("app#1"), 0).unwrap().len(), 2);
+    store
+        .notify(
+            &id("app#1"),
+            ItemState::Merging,
+            Notice {
+                revision: 1,
+                source: Source::Operator,
+                kind: NoticeKind::MergeHeld {
+                    reason: "dirty checkout".into(),
+                },
+            },
+        )
+        .unwrap();
+    assert_eq!(due(&store), [("app#1".into(), "a".into(), 3)]);
 }
