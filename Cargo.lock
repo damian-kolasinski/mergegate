@@ -2183,6 +2183,7 @@ name = "mergegate-tailscale"
 version = "0.11.0"
 dependencies = [
  "mergegate-core",
+ "nix",
  "serde",
  "serde_json",
 ]
