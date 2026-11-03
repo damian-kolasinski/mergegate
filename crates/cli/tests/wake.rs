@@ -254,8 +254,18 @@ struct Hook(Option<std::process::Child>);
 
 impl Hook {
     fn start(env: &Env, repo: &TestRepo, session: &str) -> Self {
+        Self::spawn(env, repo, session, None)
+    }
+
+    /// A hook that reports a lost hub after `ms`, not after a restart's time.
+    fn reporting_a_lost_hub_after(env: &Env, repo: &TestRepo, session: &str, ms: &str) -> Self {
+        Self::spawn(env, repo, session, Some(ms))
+    }
+
+    fn spawn(env: &Env, repo: &TestRepo, session: &str, reconnect_ms: Option<&str>) -> Self {
         use std::io::Write;
-        let mut child = Command::new(env!("CARGO_BIN_EXE_mg"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mg"));
+        command
             .args(["skill", "claude-watch"])
             .current_dir(repo.root())
             .env("MERGEGATE_HOME", env.home())
@@ -264,9 +274,12 @@ impl Hook {
             .env_remove("CODEX_THREAD_ID")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
+            .stderr(Stdio::piped());
+        match reconnect_ms {
+            Some(ms) => command.env("MG_WATCH_RECONNECT_MS", ms),
+            None => command.env_remove("MG_WATCH_RECONNECT_MS"),
+        };
+        let mut child = command.spawn().unwrap();
         writeln!(
             child.stdin.take().unwrap(),
             "{}",
@@ -469,7 +482,7 @@ fn claude_hook_wakes_once_on_a_watcher_failure_then_reconnects() {
     let (env, repo) = setup();
     env.mg_at(repo.root(), &["submit", "--wake", ""])
         .assert_code(0);
-    let hook = Hook::start(&env, &repo, "session-failure");
+    let hook = Hook::reporting_a_lost_hub_after(&env, &repo, "session-failure", "0");
     armed(&env, "session-failure");
     env.mg(&["hub", "stop"]).assert_code(0);
     assert!(hook.finish(2).contains("hub"));
@@ -478,6 +491,21 @@ fn claude_hook_wakes_once_on_a_watcher_failure_then_reconnects() {
     hook.running();
     env.start_hub();
     review(&env, "After reconnect.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+}
+
+#[test]
+fn claude_hook_rides_out_a_hub_restart_without_a_turn() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let mut hook = Hook::start(&env, &repo, "session-restart");
+    armed(&env, "session-restart");
+    env.mg(&["hub", "stop"]).assert_code(0);
+    settle();
+    hook.running();
+    env.start_hub();
+    review(&env, "After the restart.");
     assert!(hook.finish(2).contains("mg feedback app#1"));
 }
 

@@ -80,6 +80,8 @@ fn run_hook() -> Result<Outcome, CliError> {
     };
     crate::wait_cmd::session::watch();
     let deadline = Instant::now() + LIFETIME;
+    let grace = reconnect();
+    let mut lost_since = None;
     let mut cursor = None;
     let mut known = checkpoint.known.clone();
     loop {
@@ -97,6 +99,7 @@ fn run_hook() -> Result<Outcome, CliError> {
             &checkpoint.notified,
         ) {
             Ok((notifications, open)) => {
+                lost_since = None;
                 checkpoint.known.clone_from(&known);
                 checkpoint.failed = false;
                 if !notifications.is_empty() {
@@ -120,7 +123,12 @@ fn run_hook() -> Result<Outcome, CliError> {
             }
             Err(error) => {
                 checkpoint.known.clone_from(&known);
-                if !checkpoint.failed {
+                // A hub restart, as on every upgrade, takes seconds and would
+                // otherwise cost each watching session a turn; `mg wait`
+                // rides one out the same way.
+                let lost_for = crate::wait_cmd::lost(&error)
+                    .then(|| lost_since.get_or_insert_with(Instant::now).elapsed());
+                if !checkpoint.failed && lost_for.is_none_or(|lost| lost >= grace) {
                     checkpoint.failed = true;
                     save(&path, &checkpoint)?;
                     return Err(error.hint(
@@ -194,6 +202,15 @@ fn save(path: &Path, checkpoint: &Checkpoint) -> Result<(), CliError> {
     file.flush().map_err(failed)?;
     file.persist(path).map_err(failed)?;
     Ok(())
+}
+
+/// How long a lost hub may stay away before the session hears of it. Tests
+/// shorten it with `MG_WATCH_RECONNECT_MS`.
+fn reconnect() -> Duration {
+    std::env::var("MG_WATCH_RECONNECT_MS")
+        .ok()
+        .and_then(|ms| ms.parse().ok())
+        .map_or(crate::wait_cmd::RECONNECT, Duration::from_millis)
 }
 
 fn silent() -> Outcome {
