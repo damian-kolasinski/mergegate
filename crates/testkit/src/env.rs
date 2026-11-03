@@ -117,6 +117,9 @@ impl Env {
             // Nor does it deliver in a Claude Code session.
             .env_remove("CLAUDECODE")
             .env_remove("CLAUDE_PID")
+            // And `mg submit` there notes what it sent for the session's hook.
+            .env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("CLAUDE_CODE_ENTRYPOINT")
             .envs(self.vars.iter().map(|(k, v)| (k, v)))
             .env("PATH", self.path());
         cmd

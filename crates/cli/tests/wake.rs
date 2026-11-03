@@ -254,19 +254,20 @@ struct Hook(Option<std::process::Child>);
 
 impl Hook {
     fn start(env: &Env, repo: &TestRepo, session: &str) -> Self {
-        Self::spawn(env, repo, session, &[])
+        Self::spawn(env, repo.root(), session, &[])
     }
 
     /// A hook that reports a lost hub after `ms`, not after a restart's time.
     fn reporting_a_lost_hub_after(env: &Env, repo: &TestRepo, session: &str, ms: &str) -> Self {
-        Self::spawn(env, repo, session, &[("MG_WATCH_RECONNECT_MS", ms)])
+        Self::spawn(env, repo.root(), session, &[("MG_WATCH_RECONNECT_MS", ms)])
     }
 
-    fn spawn(env: &Env, repo: &TestRepo, session: &str, vars: &[(&str, &str)]) -> Self {
+    /// A hook for `session`, whose turn ended in `dir`.
+    fn spawn(env: &Env, dir: &Path, session: &str, vars: &[(&str, &str)]) -> Self {
         use std::io::Write;
         let mut child = Command::new(env!("CARGO_BIN_EXE_mg"))
             .args(["skill", "claude-watch"])
-            .current_dir(repo.root())
+            .current_dir(dir)
             .env("MERGEGATE_HOME", env.home())
             .env_remove("MG_JSON")
             .env_remove("CLAUDE_PID")
@@ -282,7 +283,7 @@ impl Hook {
         writeln!(
             child.stdin.take().unwrap(),
             "{}",
-            json!({"session_id": session, "cwd": repo.root()})
+            json!({"session_id": session, "cwd": dir})
         )
         .unwrap();
         Self(Some(child))
@@ -500,11 +501,33 @@ fn claude_hook_stays_out_of_print_mode_runs() {
         .assert_code(0);
     let hook = Hook::spawn(
         &env,
-        &repo,
+        repo.root(),
         "session-print",
         &[("CLAUDE_CODE_ENTRYPOINT", "sdk-cli")],
     );
     assert!(hook.finish(0).is_empty());
+}
+
+#[test]
+fn claude_hook_watches_what_its_session_submitted_from_another_directory() {
+    let (env, repo) = setup_in(env().with_vars(vec![(
+        "CLAUDE_CODE_SESSION_ID".into(),
+        "session-elsewhere".into(),
+    )]));
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let elsewhere = tempfile::tempdir().unwrap();
+    let mut hook = Hook::spawn(&env, elsewhere.path(), "session-elsewhere", &[]);
+    armed(&env, "session-elsewhere");
+    hook.running();
+    review(&env, "Seen from elsewhere.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+    assert!(
+        Hook::spawn(&env, elsewhere.path(), "session-other", &[])
+            .finish(0)
+            .is_empty(),
+        "another session's hook doesn't watch it"
+    );
 }
 
 #[test]

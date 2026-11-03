@@ -54,7 +54,7 @@ Use a Claude Code version supporting command hooks with `asyncRewake` (verified 
 mg submit --wake ""
 ```
 
-The empty wake clears any old headless or Codex command. The hook runs `mergegate skill claude-watch` outside the model, watches the open items submitted from this worktree on this device, and exits 2 with a short `mg feedback ITEM` instruction only for actionable events. It rearms when the next turn ends. An approval-only event keeps it waiting; once all watched items close successfully it exits 0 silently. Use one active Claude session per worktree. Items with an explicit `--wake` command remain that command's responsibility.
+The empty wake clears any old headless or Codex command. The hook runs `mergegate skill claude-watch` outside the model, watches the open items this session submitted, from whichever worktree, and those submitted from the worktree the session ends its turn in, on this device, and exits 2 with a short `mg feedback ITEM` instruction only for actionable events. It rearms when the next turn ends. An approval-only event keeps it waiting; once all watched items close successfully it exits 0 silently. Use one active Claude session per worktree. Items with an explicit `--wake` command remain that command's responsibility.
 
 Do not launch a background `mg wait` alongside the hook: its completion still wakes Claude for informational events. Stop an old wait when migrating. The hook does not acknowledge feedback, and remembers which cursors it has already notified this session about. Read `mg feedback ITEM` on a wake; use `mg resume ITEM` when picking up work again. Separate submits in the same worktree are watched together, including stacked items that need a rebase after their parent merges.
 

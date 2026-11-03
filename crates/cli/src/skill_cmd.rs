@@ -10,6 +10,8 @@ mod install;
 mod session_start;
 mod show;
 
+pub(crate) use claude_watch::remember;
+
 use std::path::PathBuf;
 
 use clap::{Subcommand, ValueEnum};

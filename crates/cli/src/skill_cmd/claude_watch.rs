@@ -24,6 +24,14 @@ struct Input {
     cwd: PathBuf,
 }
 
+/// One line of a session's `.items` file: an item `mg submit` sent from the
+/// session, and the worktree it was sent from, which the hub matches.
+#[derive(Deserialize, Serialize)]
+struct Submitted {
+    id: String,
+    worktree: String,
+}
+
 #[derive(Default, Deserialize, Serialize)]
 struct Checkpoint {
     #[serde(default)]
@@ -36,37 +44,57 @@ pub(super) fn run() -> Result<Outcome, CliError> {
     run_hook().map_err(|error| error.exit(2))
 }
 
+/// Notes an item `mg submit` sent from a Claude Code session, so that the
+/// session's hook watches it from wherever the session ends its turns: the
+/// shell's directory then, which the hook is given, needn't be `worktree`.
+/// Outside a session it hooks, it does nothing.
+pub(crate) fn remember(home: &hub::Home, id: &str, worktree: &str) -> Result<(), CliError> {
+    let Some(session) = std::env::var("CLAUDE_CODE_SESSION_ID")
+        .ok()
+        .filter(|session| valid(session))
+    else {
+        return Ok(());
+    };
+    if print_mode() {
+        return Ok(());
+    }
+    let directory = home.root().join("claude-hooks");
+    fs::create_dir_all(&directory).map_err(failed)?;
+    let mut line = serde_json::to_string(&Submitted {
+        id: id.to_owned(),
+        worktree: worktree.to_owned(),
+    })
+    .map_err(failed)?;
+    line.push('\n');
+    // One short append per submit, so concurrent submits don't interleave
+    // and the hook, which only reads, needs no lock with them.
+    File::options()
+        .create(true)
+        .append(true)
+        .open(directory.join(format!("{session}.items")))
+        .and_then(|mut file| file.write_all(line.as_bytes()))
+        .map_err(failed)
+}
+
 fn run_hook() -> Result<Outcome, CliError> {
     let input: Input = serde_json::from_reader(std::io::stdin().take(65_536)).map_err(failed)?;
-    if input.session_id.is_empty()
-        || input.session_id.len() > 128
-        || !input
-            .session_id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
-    {
+    if !valid(&input.session_id) {
         return Err(failed("invalid Claude session ID"));
     }
-    // Claude Code backgrounds an asyncRewake hook only in an interactive
-    // session or one with streaming input; `claude -p` runs it in line, so
-    // watching there would hold the run open until the review comes. Print
-    // mode is the entrypoint `sdk-cli`; the SDKs name themselves.
-    if std::env::var_os("CLAUDE_CODE_ENTRYPOINT").is_some_and(|entry| entry == "sdk-cli") {
+    if print_mode() {
         return Ok(silent());
     }
     std::env::set_current_dir(&input.cwd).map_err(failed)?;
-    let Some(remote) = repo::read(&["remote", "get-url", repo::REMOTE])? else {
-        return Ok(silent());
-    };
-    let Some(project) = super::session_start::project(&remote) else {
-        return Ok(silent());
-    };
-    let Some(root) = repo::read(&["rev-parse", "--show-toplevel"])? else {
-        return Ok(silent());
-    };
-    let root = Path::new(&root).canonicalize().map_err(failed)?;
+    let local = local()?;
     let home = crate::home()?;
     let directory = home.root().join("claude-hooks");
+    let items = directory.join(format!("{}.items", input.session_id));
+    if local.is_none() && !items.exists() {
+        return Ok(silent());
+    }
+    let local = local
+        .as_ref()
+        .map(|(project, root)| (project.as_str(), root.as_path()));
     fs::create_dir_all(&directory).map_err(failed)?;
     let lock = File::options()
         .create(true)
@@ -99,8 +127,8 @@ fn run_hook() -> Result<Outcome, CliError> {
         }
         match poll(
             &home,
-            project,
-            &root,
+            local,
+            &items,
             &mut cursor,
             &mut known,
             &checkpoint.notified,
@@ -150,10 +178,40 @@ fn run_hook() -> Result<Outcome, CliError> {
     }
 }
 
+/// The project and worktree of the session's directory, when it is a
+/// mergegate clone.
+fn local() -> Result<Option<(String, PathBuf)>, CliError> {
+    let Some(remote) = repo::read(&["remote", "get-url", repo::REMOTE])? else {
+        return Ok(None);
+    };
+    let Some(project) = super::session_start::project(&remote) else {
+        return Ok(None);
+    };
+    let Some(root) = repo::read(&["rev-parse", "--show-toplevel"])? else {
+        return Ok(None);
+    };
+    let root = Path::new(&root).canonicalize().map_err(failed)?;
+    Ok(Some((project.to_owned(), root)))
+}
+
+/// Every item the session submitted, by ID, with the worktree of its latest
+/// submit. A line cut short by a crash is skipped.
+fn submitted(items: &Path) -> Result<BTreeMap<String, String>, CliError> {
+    match fs::read_to_string(items) {
+        Ok(text) => Ok(text
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Submitted>(line).ok())
+            .map(|entry| (entry.id, entry.worktree))
+            .collect()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
+        Err(error) => Err(failed(error)),
+    }
+}
+
 fn poll(
     home: &hub::Home,
-    project: &str,
-    root: &Path,
+    local: Option<(&str, &Path)>,
+    items: &Path,
     cursor: &mut Option<u64>,
     known: &mut BTreeSet<String>,
     notified: &BTreeMap<String, u64>,
@@ -163,27 +221,32 @@ fn poll(
     // cannot fall between the snapshot and the next long poll.
     let log = events_cmd::read(&client, *cursor, if cursor.is_some() { 30 } else { 0 })?;
     *cursor = Some(log.cursor);
-    let inbox: Inbox = client.get("/api/inbox")?;
-    for item in inbox
-        .needs_you
-        .into_iter()
-        .chain(inbox.with_agents)
-        .chain(inbox.merging)
-        .chain(inbox.closed)
-    {
-        if item.name.split_once('#').map(|(name, _)| name) == Some(project) {
-            known.insert(item.id);
+    let mut watched = BTreeMap::new();
+    if let Some((project, root)) = local {
+        let inbox: Inbox = client.get("/api/inbox")?;
+        for item in inbox
+            .needs_you
+            .into_iter()
+            .chain(inbox.with_agents)
+            .chain(inbox.merging)
+            .chain(inbox.closed)
+        {
+            if item.name.split_once('#').map(|(name, _)| name) == Some(project) {
+                known.insert(item.id);
+            }
         }
+        let root = root.to_string_lossy();
+        watched.extend(known.iter().map(|id| (id.clone(), root.to_string())));
     }
+    // The session's own submits name their worktree, wherever it ends turns.
+    watched.extend(submitted(items)?);
     let mut notifications = Vec::new();
     let mut open = false;
     let mut remove = Vec::new();
-    for id in known.iter() {
+    for (id, worktree) in &watched {
         let prefix = format!("/api/items/{}", segment(id));
-        let attention: Attention = client.get_query(
-            &format!("{prefix}/attention"),
-            &[("worktree", root.to_string_lossy().as_ref())],
-        )?;
+        let attention: Attention =
+            client.get_query(&format!("{prefix}/attention"), &[("worktree", worktree)])?;
         if !attention.watching {
             remove.push(id.clone());
             continue;
@@ -218,6 +281,22 @@ fn reconnect() -> Duration {
         .ok()
         .and_then(|ms| ms.parse().ok())
         .map_or(crate::wait_cmd::RECONNECT, Duration::from_millis)
+}
+
+fn valid(session: &str) -> bool {
+    !session.is_empty()
+        && session.len() <= 128
+        && session
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
+/// Claude Code backgrounds an asyncRewake hook only in an interactive
+/// session or one with streaming input; `claude -p` runs it in line, so
+/// watching there would hold the run open until the review comes. Print
+/// mode is the entrypoint `sdk-cli`; the SDKs name themselves.
+fn print_mode() -> bool {
+    std::env::var_os("CLAUDE_CODE_ENTRYPOINT").is_some_and(|entry| entry == "sdk-cli")
 }
 
 fn silent() -> Outcome {
