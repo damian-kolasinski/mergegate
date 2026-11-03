@@ -60,6 +60,7 @@ impl ReviewStore for Store {
             item: review.item,
             revision: review.revision,
             verdict: review.verdict,
+            carried_from: review.carried_from,
             summary: review.summary,
             comments: sent,
             replies: answers,
@@ -150,6 +151,7 @@ pub(crate) fn review(
         item: item.clone(),
         revision: row.revision,
         verdict: verdict_named(&row.verdict)?,
+        carried_from: row.carried_from,
         summary: row.summary,
         comments: comments::of_item(conn, item, Some(row.id as u64))?,
         replies: replies::of_item(conn, item, Some(row.id as u64))?,
@@ -162,6 +164,7 @@ pub(crate) struct ReviewRow {
     pub id: i64,
     pub revision: u32,
     pub verdict: String,
+    pub carried_from: Option<u32>,
     pub summary: String,
     pub submitted_at: String,
 }

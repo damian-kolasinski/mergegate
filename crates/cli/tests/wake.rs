@@ -249,3 +249,351 @@ fn f3_the_wakes_mg_is_the_hubs_whatever_mg_came_first_on_its_path() {
         Path::new(env!("CARGO_BIN_EXE_mg")).canonicalize().unwrap()
     );
 }
+
+struct Hook(Option<std::process::Child>);
+
+impl Hook {
+    fn start(env: &Env, repo: &TestRepo, session: &str) -> Self {
+        Self::spawn(env, repo.root(), session, &[])
+    }
+
+    /// A hook that reports a lost hub after `ms`, not after a restart's time.
+    fn reporting_a_lost_hub_after(env: &Env, repo: &TestRepo, session: &str, ms: &str) -> Self {
+        Self::spawn(env, repo.root(), session, &[("MG_WATCH_RECONNECT_MS", ms)])
+    }
+
+    /// A hook for `session`, whose turn ended in `dir`.
+    fn spawn(env: &Env, dir: &Path, session: &str, vars: &[(&str, &str)]) -> Self {
+        use std::io::Write;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_mg"))
+            .args(["skill", "claude-watch"])
+            .current_dir(dir)
+            .env("MERGEGATE_HOME", env.home())
+            .env_remove("MG_JSON")
+            .env_remove("CLAUDE_PID")
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("CLAUDE_CODE_ENTRYPOINT")
+            .env_remove("MG_WATCH_RECONNECT_MS")
+            .envs(vars.iter().copied())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        writeln!(
+            child.stdin.take().unwrap(),
+            "{}",
+            json!({"session_id": session, "cwd": dir})
+        )
+        .unwrap();
+        Self(Some(child))
+    }
+
+    fn running(&mut self) {
+        assert!(
+            self.0.as_mut().unwrap().try_wait().unwrap().is_none(),
+            "hook exited early"
+        );
+    }
+
+    fn finish(mut self, code: i32) -> String {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while self.0.as_mut().unwrap().try_wait().unwrap().is_none() {
+            assert!(Instant::now() < deadline, "hook did not finish");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let output = self.0.take().unwrap().wait_with_output().unwrap();
+        assert_eq!(output.status.code(), Some(code), "{output:?}");
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+}
+
+impl Drop for Hook {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+fn armed(env: &Env, session: &str) {
+    let path = env
+        .home()
+        .join("claude-hooks")
+        .join(format!("{session}.json"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !path.exists() {
+        assert!(Instant::now() < deadline, "hook did not arm");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn claude_hook_rearms_without_redelivering_and_preserves_feedback() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let mut hook = Hook::start(&env, &repo, "session-review");
+    armed(&env, "session-review");
+    hook.running();
+    let addr = env.hub_addr();
+    let response = http_reply(
+        &addr,
+        &format!("GET /api/items/app%231 HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"),
+    );
+    assert_eq!(response.status, 200);
+    let item: Value = serde_json::from_str(&response.body).unwrap();
+    assert_eq!(item["agent"], "waiting");
+    assert!(
+        Hook::start(&env, &repo, "session-review")
+            .finish(0)
+            .is_empty(),
+        "duplicate hook is silent"
+    );
+    review(&env, "Fix the first issue.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+
+    let mut hook = Hook::start(&env, &repo, "session-review");
+    settle();
+    hook.running();
+    review(&env, "Fix the second issue.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(
+        feedback["events"].as_array().unwrap().len(),
+        2,
+        "the hook acknowledged nothing"
+    );
+}
+
+#[test]
+fn claude_hook_and_hub_wakes_leave_a_successful_merge_silent() {
+    for adapter in ["claude", "hub"] {
+        let (env, repo) = setup();
+        let log = log_path(&env);
+        let wake = if adapter == "hub" {
+            logging(&log)
+        } else {
+            String::new()
+        };
+        env.mg_at(repo.root(), &["submit", "--wake", &wake])
+            .assert_code(0);
+        let hook = if adapter == "claude" {
+            let hook = Hook::start(&env, &repo, "session-merge");
+            armed(&env, "session-merge");
+            Some(hook)
+        } else {
+            None
+        };
+        post(
+            &env,
+            "/api/items/app%231/approve",
+            &json!({"revision": 1, "summary": ""}),
+        );
+        if let Some(hook) = hook {
+            assert!(hook.finish(0).is_empty());
+        }
+        settle();
+        assert!(lines(&log).is_empty());
+        let feedback = env
+            .mg(&["--json", "feedback", "app#1"])
+            .assert_code(0)
+            .json();
+        assert_eq!(feedback["state"], "merged");
+        assert_eq!(feedback["events"][0]["verdict"], "approved");
+        assert_eq!(feedback["events"][1]["type"], "item.merged");
+        assert!(
+            !feedback["events"][1]["commands"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn claude_hook_and_hub_wakes_report_merge_conflicts() {
+    for adapter in ["claude", "hub"] {
+        let (env, repo) = setup_in(env().with_vars(vec![("MG_TARGET_WATCH".into(), "off".into())]));
+        let log = log_path(&env);
+        let wake = if adapter == "hub" {
+            logging(&log)
+        } else {
+            String::new()
+        };
+        env.mg_at(repo.root(), &["submit", "--wake", &wake])
+            .assert_code(0);
+        repo.checkout("main");
+        repo.commit_files(
+            "Conflicting change",
+            &[("src/login.rs", "fn login(x: u8) {}\n")],
+        );
+        repo.checkout("feature");
+        let hook = if adapter == "claude" {
+            let hook = Hook::start(&env, &repo, "session-conflict");
+            armed(&env, "session-conflict");
+            Some(hook)
+        } else {
+            None
+        };
+        post(
+            &env,
+            "/api/items/app%231/approve",
+            &json!({"revision": 1, "summary": ""}),
+        );
+        if let Some(hook) = hook {
+            assert!(hook.finish(2).contains("mg feedback app#1"));
+        } else {
+            assert_eq!(await_lines(&log, 1)[0].split(' ').nth(2), Some("2"));
+        }
+        let feedback = env
+            .mg(&["--json", "feedback", "app#1"])
+            .assert_code(0)
+            .json();
+        assert_eq!(feedback["events"][1]["type"], "merge.conflict");
+    }
+}
+
+#[test]
+fn claude_hook_does_not_take_over_an_explicit_wake() {
+    let (env, repo) = setup();
+    let log = log_path(&env);
+    env.mg_at(repo.root(), &["submit", "--wake", &logging(&log)])
+        .assert_code(0);
+    assert!(
+        Hook::start(&env, &repo, "session-other")
+            .finish(0)
+            .is_empty()
+    );
+    review(&env, "Still use the registered wake.");
+    await_lines(&log, 1);
+}
+
+#[test]
+fn claude_hook_wakes_once_on_a_watcher_failure_then_reconnects() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let hook = Hook::reporting_a_lost_hub_after(&env, &repo, "session-failure", "0");
+    armed(&env, "session-failure");
+    env.mg(&["hub", "stop"]).assert_code(0);
+    assert!(hook.finish(2).contains("hub"));
+    let mut hook = Hook::start(&env, &repo, "session-failure");
+    settle();
+    hook.running();
+    env.start_hub();
+    review(&env, "After reconnect.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+}
+
+#[test]
+fn claude_hook_stays_out_of_print_mode_runs() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let hook = Hook::spawn(
+        &env,
+        repo.root(),
+        "session-print",
+        &[("CLAUDE_CODE_ENTRYPOINT", "sdk-cli")],
+    );
+    assert!(hook.finish(0).is_empty());
+}
+
+#[test]
+fn claude_hook_watches_what_its_session_submitted_from_another_directory() {
+    let (env, repo) = setup_in(env().with_vars(vec![(
+        "CLAUDE_CODE_SESSION_ID".into(),
+        "session-elsewhere".into(),
+    )]));
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let elsewhere = tempfile::tempdir().unwrap();
+    let mut hook = Hook::spawn(&env, elsewhere.path(), "session-elsewhere", &[]);
+    armed(&env, "session-elsewhere");
+    hook.running();
+    review(&env, "Seen from elsewhere.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+    assert!(
+        Hook::spawn(&env, elsewhere.path(), "session-other", &[])
+            .finish(0)
+            .is_empty(),
+        "another session's hook doesn't watch it"
+    );
+}
+
+#[test]
+fn claude_hook_rides_out_a_hub_restart_without_a_turn() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let mut hook = Hook::start(&env, &repo, "session-restart");
+    armed(&env, "session-restart");
+    env.mg(&["hub", "stop"]).assert_code(0);
+    settle();
+    hook.running();
+    env.start_hub();
+    review(&env, "After the restart.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+}
+
+#[test]
+fn claude_hook_discovers_an_abandonment_before_its_first_stop() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    post(
+        &env,
+        "/api/items/app%231/abandon",
+        &json!({"source": "operator", "reason": "Stop this work."}),
+    );
+    assert!(
+        Hook::start(&env, &repo, "session-abandoned")
+            .finish(2)
+            .contains("mg feedback app#1")
+    );
+    assert!(
+        Hook::start(&env, &repo, "session-abandoned")
+            .finish(0)
+            .is_empty()
+    );
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["events"][0]["type"], "item.abandoned");
+}
+
+#[test]
+fn claude_hook_remembers_owned_items_across_turns() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let hook = Hook::start(&env, &repo, "session-between-turns");
+    armed(&env, "session-between-turns");
+    review(&env, "Review first.");
+    assert!(hook.finish(2).contains("mg feedback app#1"));
+    let checkpoint: Value = serde_json::from_slice(
+        &std::fs::read(env.home().join("claude-hooks/session-between-turns.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(checkpoint["known"], json!(["app#1"]));
+    post(
+        &env,
+        "/api/items/app%231/abandon",
+        &json!({"source": "operator", "reason": "Stop this work."}),
+    );
+    assert!(
+        Hook::start(&env, &repo, "session-between-turns")
+            .finish(2)
+            .contains("mg feedback app#1")
+    );
+}

@@ -252,10 +252,7 @@ fn session_start_tells_a_session_its_item_and_how_to_wait() {
     );
     assert!(before.contains("as project app."), "{before}");
     assert!(!before.contains("is open on this branch"), "{before}");
-    assert!(
-        before.contains("`mg wait ITEM` run in the background"),
-        "{before}"
-    );
+    assert!(before.contains("The installed Stop hook"), "{before}");
     // An agent would take JSON on a hook's stdout for its own control format.
     let json = env
         .mg_at(

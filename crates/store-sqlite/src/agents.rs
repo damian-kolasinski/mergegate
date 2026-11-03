@@ -1,7 +1,8 @@
 //! The `item_agents` table.
 
 use mergegate_core::agent::{Agent, AgentStore, DueWake};
-use mergegate_core::item::ItemId;
+use mergegate_core::feedback::{FeedbackStore, attention};
+use mergegate_core::item::{ItemId, ItemStore};
 use mergegate_core::project::ProjectName;
 use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, params};
@@ -57,7 +58,7 @@ impl AgentStore for Store {
         let mut stmt = self
             .conn
             .prepare_cached(
-                "SELECT p.name, i.number, a.wake, a.worktree, e.cursor,
+                "SELECT p.name, i.number, a.wake, a.worktree, max(i.delivered, a.woken),
                         coalesce(i.pull_number, i.number), a.device
                  FROM item_agents a
                  JOIN items i ON i.id = a.item_id
@@ -65,7 +66,8 @@ impl AgentStore for Store {
                  JOIN (SELECT item_id, max(cursor) AS cursor FROM events
                        WHERE source <> 'agent' GROUP BY item_id) e
                      ON e.item_id = a.item_id
-                 WHERE a.wake IS NOT NULL AND e.cursor > max(i.delivered, a.woken)
+                 WHERE a.wake IS NOT NULL AND i.state <> 'merged'
+                   AND e.cursor > max(i.delivered, a.woken)
                  ORDER BY a.item_id",
             )
             .map_err(StoreError::new)?;
@@ -82,21 +84,26 @@ impl AgentStore for Store {
                 ))
             })
             .map_err(StoreError::new)?;
-        rows.map(|row| {
-            let (project, number, command, worktree, cursor, name, device) =
+        let mut due = Vec::new();
+        for row in rows {
+            let (project, number, command, worktree, after, name, device) =
                 row.map_err(StoreError::new)?;
             let project = ProjectName::parse(&project).map_err(StoreError::new)?;
-            Ok(DueWake {
-                // A local item has no pull request, so it's named by its ID.
-                name: ItemId::new(project.clone(), name as u64),
-                item: ItemId::new(project, number as u64),
-                command,
-                worktree,
-                device,
-                cursor: cursor as u64,
-            })
-        })
-        .collect()
+            let id = ItemId::new(project.clone(), number as u64);
+            let item = self.item(&id)?.expect("selected item exists");
+            let events = self.events(&id, after as u64)?;
+            if let Some(cursor) = attention(item.state, &events) {
+                due.push(DueWake {
+                    name: ItemId::new(project, name as u64),
+                    item: id,
+                    command,
+                    worktree,
+                    device,
+                    cursor,
+                });
+            }
+        }
+        Ok(due)
     }
 
     fn set_woken(&mut self, id: &ItemId, cursor: u64) -> Result<(), StoreError> {

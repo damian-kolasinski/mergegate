@@ -9,7 +9,7 @@ pub use log::{Log, log};
 
 use crate::external::{Batch, Override};
 use crate::item::{Item, ItemId, ItemState, ItemStore};
-use crate::review::Review;
+use crate::review::{Review, Verdict};
 use crate::store::StoreError;
 
 pub trait FeedbackStore {
@@ -122,7 +122,39 @@ impl Source {
     }
 }
 
+/// The newest unread event worth waking an automatic agent for. A completed
+/// merge supersedes feedback that was pending while it was still open.
+pub fn attention(state: ItemState, events: &[Event]) -> Option<u64> {
+    if state == ItemState::Merged {
+        return None;
+    }
+    events
+        .iter()
+        .rev()
+        .find(|event| event.needs_attention())
+        .map(|event| event.cursor)
+}
+
 impl Event {
+    pub fn needs_attention(&self) -> bool {
+        if self.source() == Source::Agent {
+            return false;
+        }
+        match &self.kind {
+            EventKind::ReviewSubmitted(review) => {
+                review.verdict != Verdict::Approved
+                    || (review.carried_from.is_none() && !review.summary.trim().is_empty())
+                    || !review.comments.is_empty()
+                    || !review.replies.is_empty()
+            }
+            EventKind::Notice(Notice {
+                kind: NoticeKind::Merged { .. },
+                ..
+            }) => false,
+            _ => true,
+        }
+    }
+
     pub fn source(&self) -> Source {
         match &self.kind {
             EventKind::ReviewSubmitted(_) | EventKind::Override(_) => Source::Operator,

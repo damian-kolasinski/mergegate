@@ -23,7 +23,7 @@ impl FeedbackStore for Store {
             .prepare_cached(&format!(
                 "SELECT e.cursor, e.type, e.revision, e.source, e.body, e.commit_id, e.paths,
                         r.id, r.revision, r.verdict, r.summary, r.submitted_at, e.reply_id,
-                        parent.number, e.upstream, e.merged
+                        parent.number, e.upstream, e.merged, r.carried_from
                  FROM events e LEFT JOIN reviews r ON r.id = e.review_id
                  LEFT JOIN items parent ON parent.id = e.parent_id
                  WHERE e.item_id = ({ITEM}) AND e.cursor > ?3
@@ -224,6 +224,7 @@ impl EventRow {
                 verdict: row.get(9)?,
                 summary: row.get(10)?,
                 submitted_at: row.get(11)?,
+                carried_from: row.get(16)?,
             }),
             None => None,
         };

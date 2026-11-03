@@ -46,7 +46,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 - **Demos next to the diff.** Agents attach screenshots and screen recordings with `mg submit --attach`.
 - **Agents across machines.** Workers on other machines connect over Tailscale. No tokens, no ports opened beyond your tailnet.
 - **Keyboard-first UI.** `j`/`k`, `n`/`p`, `v` to mark viewed, `c` to comment, `a` to approve; `?` lists every shortcut.
-- **Token-cheap waiting.** `mg wait` blocks without a model in the loop, and `mg submit --wake` can resume an agent session only when there is feedback.
+- **Token-cheap waiting.** Claude Code uses an asynchronous Stop hook and Codex uses `mg submit --wake`; both stay silent for approval-only reviews and successful merges, and wake for actionable feedback or failures. `mg wait` remains available for other harnesses and explicit CLI use.
 
 <p align="center">
   <img src="readme/review-screen.png" alt="The mergegate review screen: the agent's intent at the top, files to review ordered by importance with a reason for each, lockfile and translations trusted by rules and folded away, and a review bot's GitHub comment the agent rejected, with Accept rejection and Override buttons." width="900">
@@ -111,7 +111,7 @@ mg hub start        # run the hub as a user service (launchd or systemd)
 mg skill setup      # set up Claude Code, Codex and OpenCode, whichever are installed
 ```
 
-`mg skill setup` puts a small skill where each agent loads skills from, which reads its guide from the installed `mg`, so upgrading `mg` updates what agents are told; nothing needs running again. In Claude Code and Codex it also adds a session hook that tells each session in a mergegate repo which item is open on its branch and how that agent should wait for your review. Codex runs a new hook once you trust it with `/hooks`. The inbox offers the same setup with one click, `mg skill status` shows what's installed, and `mg skill remove` takes it out again. For another agent, `mg skill install` writes the whole skill folder for you to link where it loads skills from.
+`mg skill setup` puts a small skill where each agent loads skills from, which reads its guide from the installed `mg`, so upgrading `mg` updates what agents are told; nothing needs running again. In Claude Code and Codex it also adds a session hook that tells each session in a mergegate repo which item is open on its branch and how that agent should wait for your review. Claude Code also gets an `asyncRewake` Stop hook (verified with 2.1.316) that watches its worktree after the turn ends. Codex runs a new hook once you trust it with `/hooks`. The inbox offers the same setup with one click, `mg skill status` shows what's installed, and `mg skill remove` takes it out again. For another agent, `mg skill install` writes the whole skill folder for you to link where it loads skills from.
 
 Then, in a repository, tell your agent:
 

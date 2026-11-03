@@ -4,7 +4,7 @@
 //! signal that stops it says how to resume.
 
 mod notify;
-mod session;
+pub(crate) mod session;
 mod stop;
 
 use std::time::{Duration, Instant};
@@ -59,7 +59,7 @@ const ANSWER: Duration = Duration::from_secs(60);
 
 /// How long a wait without a timeout keeps reconnecting to a hub it lost.
 /// A restart, as on an upgrade, takes seconds; past this the hub is down.
-const RECONNECT: Duration = Duration::from_secs(120);
+pub(crate) const RECONNECT: Duration = Duration::from_secs(120);
 
 /// The first pause before reconnecting, doubled after each failure up to
 /// [`BACKOFF_MAX`].
@@ -234,7 +234,7 @@ fn connect(home: &Home) -> Result<Client, CliError> {
 
 /// The hub went away or answered as one does while it restarts, rather
 /// than refusing the wait.
-fn lost(e: &CliError) -> bool {
+pub(crate) fn lost(e: &CliError) -> bool {
     matches!(
         e.body.code.as_str(),
         "hub_unavailable"

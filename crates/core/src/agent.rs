@@ -31,7 +31,7 @@ pub struct DueWake {
     pub worktree: Option<String>,
     /// As in [`Agent::device`].
     pub device: Option<String>,
-    /// The item's newest event from the operator.
+    /// The item's newest actionable event.
     pub cursor: u64,
 }
 
@@ -41,7 +41,7 @@ pub trait AgentStore {
 
     fn set_agent(&mut self, id: &ItemId, agent: &Agent) -> Result<(), StoreError>;
 
-    /// Every item's, open or closed: closing logs an event its agent reads.
+    /// Items with unread actionable events; successful merges are silent.
     fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError>;
 
     /// The agent was woken for, or has read, the events up to `cursor`.

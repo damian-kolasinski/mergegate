@@ -1944,6 +1944,7 @@ impl ReviewStore for FakeStore {
             item: review.item,
             revision: review.revision,
             verdict: review.verdict,
+            carried_from: review.carried_from,
             summary: review.summary,
             comments,
             replies,

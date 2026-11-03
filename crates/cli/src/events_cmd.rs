@@ -46,7 +46,7 @@ pub fn run(since: Option<u64>, follow: bool, json: bool) -> Result<Outcome, CliE
     }
 }
 
-fn read(client: &Client, since: Option<u64>, wait: u64) -> Result<Log, CliError> {
+pub(crate) fn read(client: &Client, since: Option<u64>, wait: u64) -> Result<Log, CliError> {
     let since = since.map(|cursor| cursor.to_string());
     let wait = wait.to_string();
     let mut query = vec![("wait", wait.as_str())];

@@ -13,8 +13,9 @@ const CLAUDE_PID: &str = "CLAUDE_PID";
 /// How often the session is looked for.
 const EVERY: Duration = Duration::from_secs(5);
 
-/// Watches the session named by `CLAUDE_PID`, if any. Call it after
-/// [`super::stop::watch`], so the SIGHUP goes to its thread.
+/// Watches the session named by `CLAUDE_PID`, if any. A wait calls this after
+/// [`super::stop::watch`] to report SIGHUP; a hook leaves its default action
+/// in place and simply terminates when its owning session disappears.
 pub(crate) fn watch() {
     let Some(pid) = std::env::var(CLAUDE_PID)
         .ok()

@@ -52,7 +52,8 @@ pub fn run(
     let attach = attach_cmd::check(&attach)?;
     let guide = guide.as_deref().map(read_guide).transpose()?;
     let guided = guide.is_some();
-    let client = Client::connect(&crate::home()?)?;
+    let home = crate::home()?;
+    let client = Client::connect(&home)?;
     let project = remote_project()?;
     let switch = "git switch -c NAME";
     // The full ref: `--short` gives `heads/NAME` when a tag shares the name.
@@ -108,6 +109,13 @@ pub fn run(
         Reply::Decide(decision) => return Ok(Outcome::NeedsDecision(decision)),
     };
     let item = &submitted.item;
+    // A Claude Code session's hook watches what the session submitted, even
+    // once its shell is back in another directory.
+    let remembered = request
+        .worktree
+        .as_deref()
+        .map(|worktree| crate::skill_cmd::remember(&home, &item.id, worktree))
+        .transpose();
     let attachments = attach_cmd::upload(&client, item, Some(item.revision.number), &attach)
         .map_err(|e| {
             let message = format!(
@@ -120,6 +128,12 @@ pub fn run(
             }
         })?;
     let mut text = describe(&submitted, guided);
+    if let Err(e) = remembered {
+        text.push_str(&format!(
+            "\nwarning: this Claude Code session's Stop hook won't wake you for {} from another directory: {}",
+            item.name, e.body.message
+        ));
+    }
     if !attachments.is_empty() {
         text.push('\n');
         text.push_str(&attach_cmd::describe(&item.name, &attachments));

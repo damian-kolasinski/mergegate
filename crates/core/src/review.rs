@@ -44,6 +44,8 @@ pub struct Review {
     /// item's newest.
     pub revision: u32,
     pub verdict: Verdict,
+    /// An earlier approval carried automatically onto an unchanged diff.
+    pub carried_from: Option<u32>,
     /// Empty when the operator wrote none.
     pub summary: String,
     /// The drafts the review sent, oldest first.
