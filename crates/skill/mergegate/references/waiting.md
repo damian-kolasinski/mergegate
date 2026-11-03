@@ -48,7 +48,7 @@ The latest submit that passes `--wake` sets it; `--wake ""` removes it. Read wha
 
 ## Claude Code
 
-Use a Claude Code version supporting command hooks with `asyncRewake` (verified with 2.1.316). `mg skill setup --agent claude` installs the Stop hook, and hub upgrades refresh an existing installation. After submitting, end your turn:
+Use a Claude Code version supporting command hooks with `asyncRewake` (verified with 2.1.316). `mg skill setup --agent claude` installs the Stop hook, and hub upgrades refresh an existing installation. If `mg skill status` shows Claude Code's hook missing or outdated, ask the operator to run `mg skill setup`, and until then wait with `mg wait app#3` in the background. The hook stays off in `claude -p` runs, where Claude Code would run it in line and hold the run open; a print-mode session loops `mg wait app#3 --timeout N` instead. After submitting, end your turn:
 
 ```
 mg submit --wake ""

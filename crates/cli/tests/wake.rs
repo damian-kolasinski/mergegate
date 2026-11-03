@@ -254,32 +254,31 @@ struct Hook(Option<std::process::Child>);
 
 impl Hook {
     fn start(env: &Env, repo: &TestRepo, session: &str) -> Self {
-        Self::spawn(env, repo, session, None)
+        Self::spawn(env, repo, session, &[])
     }
 
     /// A hook that reports a lost hub after `ms`, not after a restart's time.
     fn reporting_a_lost_hub_after(env: &Env, repo: &TestRepo, session: &str, ms: &str) -> Self {
-        Self::spawn(env, repo, session, Some(ms))
+        Self::spawn(env, repo, session, &[("MG_WATCH_RECONNECT_MS", ms)])
     }
 
-    fn spawn(env: &Env, repo: &TestRepo, session: &str, reconnect_ms: Option<&str>) -> Self {
+    fn spawn(env: &Env, repo: &TestRepo, session: &str, vars: &[(&str, &str)]) -> Self {
         use std::io::Write;
-        let mut command = Command::new(env!("CARGO_BIN_EXE_mg"));
-        command
+        let mut child = Command::new(env!("CARGO_BIN_EXE_mg"))
             .args(["skill", "claude-watch"])
             .current_dir(repo.root())
             .env("MERGEGATE_HOME", env.home())
             .env_remove("MG_JSON")
             .env_remove("CLAUDE_PID")
             .env_remove("CODEX_THREAD_ID")
+            .env_remove("CLAUDE_CODE_ENTRYPOINT")
+            .env_remove("MG_WATCH_RECONNECT_MS")
+            .envs(vars.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        match reconnect_ms {
-            Some(ms) => command.env("MG_WATCH_RECONNECT_MS", ms),
-            None => command.env_remove("MG_WATCH_RECONNECT_MS"),
-        };
-        let mut child = command.spawn().unwrap();
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
         writeln!(
             child.stdin.take().unwrap(),
             "{}",
@@ -492,6 +491,20 @@ fn claude_hook_wakes_once_on_a_watcher_failure_then_reconnects() {
     env.start_hub();
     review(&env, "After reconnect.");
     assert!(hook.finish(2).contains("mg feedback app#1"));
+}
+
+#[test]
+fn claude_hook_stays_out_of_print_mode_runs() {
+    let (env, repo) = setup();
+    env.mg_at(repo.root(), &["submit", "--wake", ""])
+        .assert_code(0);
+    let hook = Hook::spawn(
+        &env,
+        &repo,
+        "session-print",
+        &[("CLAUDE_CODE_ENTRYPOINT", "sdk-cli")],
+    );
+    assert!(hook.finish(0).is_empty());
 }
 
 #[test]

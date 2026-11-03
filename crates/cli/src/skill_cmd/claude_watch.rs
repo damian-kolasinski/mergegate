@@ -47,6 +47,13 @@ fn run_hook() -> Result<Outcome, CliError> {
     {
         return Err(failed("invalid Claude session ID"));
     }
+    // Claude Code backgrounds an asyncRewake hook only in an interactive
+    // session or one with streaming input; `claude -p` runs it in line, so
+    // watching there would hold the run open until the review comes. Print
+    // mode is the entrypoint `sdk-cli`; the SDKs name themselves.
+    if std::env::var_os("CLAUDE_CODE_ENTRYPOINT").is_some_and(|entry| entry == "sdk-cli") {
+        return Ok(silent());
+    }
     std::env::set_current_dir(&input.cwd).map_err(failed)?;
     let Some(remote) = repo::read(&["remote", "get-url", repo::REMOTE])? else {
         return Ok(silent());

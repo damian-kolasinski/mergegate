@@ -16,12 +16,12 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 - A review's summary, its body, has no ID and takes no reply: your next `mg submit` answers it, so make the changes it asks for in that revision. Anything in it you won't do or have to ask about, put to the operator in your session.
 - Weigh each comment before acting on it. Reject one that would make the code worse, and say why.
 - When a command exits 2 with `needs_decision`, put its question and options to the operator and run the command again with the flag they choose. Don't choose for them.
-- After `item.merged`, clean up the way you agreed with the operator (below).
+- When you read `item.merged`, clean up the way you agreed with the operator (below).
 
 ## The loop
 
 1. Commit on a branch of your own, in a clone where `mg init` ran ([references/setup.md](references/setup.md)). Start it from the target as the hub has it, `git fetch mergegate` then `git switch -c <branch> mergegate/<target>`: nothing keeps the clone's own `<target>` branch current.
-2. `mg submit --title "Short summary" --guide guide.md`, the guide saying what the change is for and which files to read first ([references/authoring.md](references/authoring.md)). It prints the item's name, as in `app#3`: on GitHub that's its pull request's number, as in `app#84`, and every command takes it. With `--json`, pass its `name` back, never its `id`, which can be another item's name. Running it again from the same branch adds a revision.
+2. `mg submit --title "Short summary" --guide guide.md`, with the `--wake` step 3 names for your agent, the guide saying what the change is for and which files to read first ([references/authoring.md](references/authoring.md)). It prints the item's name, as in `app#3`: on GitHub that's its pull request's number, as in `app#84`, and every command takes it. With `--json`, pass its `name` back, never its `id`, which can be another item's name. Running it again from the same branch adds a revision.
 3. Wait for the item's events as [references/waiting.md](references/waiting.md) describes. In Claude Code, submit with `--wake ""` and end your turn: the Stop hook `mg skill setup` installed wakes you. If `mg skill status` shows Claude Code's hook missing or outdated, ask the operator to run `mg skill setup`, and until then run `mg wait app#3` in the background. In Codex, submit with `--wake "mg wakes codex $CODEX_THREAD_ID"` and end your turn. Neither wakes you for an approval without feedback or for a successful merge. Elsewhere, loop `mg wait app#3 --timeout N` in the foreground, N just under your tool-call time limit, and run it again on exit 75. On a wake, run `mg feedback app#3` and act on what it returns.
 4. Act on them (table below), then go back to 2 or 3.
 
@@ -35,7 +35,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 | `merge.cancelled` | The item needs review again; keep waiting. |
 | `parent.updated` | The item this one is stacked on has a new revision, or merged without this one. Run the commands it lists, which move only your own commits, resolve any conflicts, `mg submit`. |
 | `parent.abandoned` | The item this one is stacked on was abandoned. Run the commands it lists to move your own commits onto the target, or ask the operator first if your work needs the abandoned one, then `mg submit`. |
-| `item.merged` | The work landed. Clean up as agreed, then stop. |
+| `item.merged` | The work landed. Clean up as agreed, then stop. Claude Code and Codex aren't woken for it; see "After a merge". |
 | `item.abandoned` | Stop work on the item. Ask the operator before deleting its branch. |
 
 `mg wait` prints each event headed by its cursor and type, as in `[7] review.submitted app#3 r2: the operator approved`, and marks them delivered; in Claude Code it only names them and leaves them for `mg feedback`. It exits 0 with events, even when they closed the item, 75 when it timed out with none (wait again), and 3 when the item is merged or abandoned and nothing new is left. Stopped by a signal, it exits 143, 130 or 129 after a line that names the command resuming it; see [references/waiting.md](references/waiting.md), "When a wait ends early". `mg feedback app#3` does the same without waiting, and `--since CURSOR` reads the events after any cursor, delivered ones too.
