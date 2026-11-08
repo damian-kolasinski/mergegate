@@ -68,7 +68,7 @@ pub struct Submitted {
 /// the open item's head still records its worktree, wake, guide and title.
 ///
 /// A `github` item is published before it's recorded: its branch pushed and
-/// its pull request opened or updated, described by the item's ID and guide.
+/// its pull request opened or updated, described by its public name and guide.
 /// If GitHub fails, the submit fails and nothing is recorded.
 ///
 /// A stacked item's revision is diffed against the newest parent revision
@@ -152,7 +152,7 @@ pub fn submit<
             && (retitle.is_some() || reguide.is_some())
         {
             let title = retitle.unwrap_or(&item.title);
-            let body = reguide.map(|guide| description(&item.id, guide.as_deref()));
+            let body = reguide.map(|guide| description(&item.name(), guide.as_deref()));
             describe(github, repo, pull.number, title, body.as_deref())?;
         }
         if let Some(title) = retitle {
@@ -277,10 +277,6 @@ pub fn submit<
     let mut warnings = warnings(store, existing.as_ref(), number, guide.as_deref(), &files)?;
     let backend = match (&upstream, github_repo) {
         (Upstream::Remote(remote), Some(repo)) => {
-            let id = match &existing {
-                Some(item) => item.id.clone(),
-                None => store.next_id(&project.name)?,
-            };
             let pull = publish(
                 git,
                 github,
@@ -288,7 +284,6 @@ pub fn submit<
                 (&repo, remote),
                 existing.as_ref().map(|item| (item, described.as_deref())),
                 Revision {
-                    id: &id,
                     branch: &branch,
                     head: &head,
                     base: pull_base(&target, parent.as_ref()),

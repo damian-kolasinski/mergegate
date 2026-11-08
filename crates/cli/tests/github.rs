@@ -287,6 +287,7 @@ fn f4_an_item_goes_by_its_pull_request() {
     github.open_elsewhere(ACME, 83);
     let (env, repo) = submitted(&github);
     assert_eq!(pull(&github).number, 84);
+    assert_eq!(pull(&github).body, "Reviewed in mergegate as app#84.");
     let inbox = env.mg(&["--json", "inbox"]).assert_code(0).json();
     let entry = &inbox["needs_you"][0];
     assert_eq!(
