@@ -7,8 +7,6 @@ use crate::project::ProjectName;
 use crate::triage::Guide;
 
 pub(super) struct Revision<'a> {
-    /// The item's, or the one it will get.
-    pub id: &'a ItemId,
     pub branch: &'a str,
     pub head: &'a str,
     /// The branch the pull request merges into: the target, or the
@@ -40,7 +38,6 @@ pub(super) fn publish(
     revision: Revision,
 ) -> Result<Pull, ItemError> {
     let Revision {
-        id,
         branch,
         head,
         base,
@@ -68,7 +65,7 @@ pub(super) fn publish(
         }
     }
     if let Some((item, described, pull)) = open {
-        let body = (described != guide).then(|| description(id, guide));
+        let body = (described != guide).then(|| description(&item.name(), guide));
         if item.title != title || body.is_some() {
             describe(github, repo, pull.number, title, body.as_deref())?;
         }
@@ -77,14 +74,16 @@ pub(super) fn publish(
         }
         return Ok(pull.clone());
     }
-    let body = description(id, guide);
-    match github.find_pull(repo, branch, base)? {
-        Some(pull) => {
-            describe(github, repo, pull.number, title, Some(&body))?;
-            Ok(pull)
-        }
-        None => Ok(github.open_pull(repo, branch, base, title, &body)?),
-    }
+    // GitHub assigns the public number when opening the pull request. Write
+    // its description only once that name is known; a retry adopts the PR.
+    let pull = match github.find_pull(repo, branch, base)? {
+        Some(pull) => pull,
+        None => github.open_pull(repo, branch, base, title, "")?,
+    };
+    let name = ItemId::new(project.clone(), pull.number);
+    let body = description(&name, guide);
+    describe(github, repo, pull.number, title, Some(&body))?;
+    Ok(pull)
 }
 
 /// How every description the hub writes starts, which tells it apart from
@@ -117,8 +116,8 @@ pub(super) fn describe(
 /// The pull request's description: the item it's reviewed as, then the
 /// agent's guide, so a reader on GitHub learns what the change is for. A
 /// guide too long for GitHub gives only its intent, cut short if need be.
-pub(super) fn description(id: &ItemId, guide: Option<&str>) -> String {
-    let named = format!("{NAMED} {id}.");
+pub(super) fn description(name: &ItemId, guide: Option<&str>) -> String {
+    let named = format!("{NAMED} {name}.");
     let Some(guide) = guide.map(str::trim).filter(|guide| !guide.is_empty()) else {
         return named;
     };
