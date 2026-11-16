@@ -105,7 +105,7 @@ fn state(state: ItemState) -> &'static str {
 /// How this agent waits for the operator's review: what `mg skill show
 /// waiting` says for it, so the session needn't work out which agent it is.
 fn waiting(agent: Agent) -> &'static str {
-    if crate::wakes_cmd::t3::detected() {
+    if crate::wakes_cmd::t3::host_detected() {
         return "You are running inside T3 Code. Submit with `mg submit`, then end your turn: \
                 it automatically captures the T3 thread, CLI path and data directory and registers \
                 a T3 wake, regardless of your model or provider. Do not pass the standalone \

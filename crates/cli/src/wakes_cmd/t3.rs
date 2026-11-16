@@ -14,6 +14,13 @@ pub(crate) fn detected() -> bool {
     std::env::var("T3CODE_THREAD_ID").is_ok_and(|thread| !thread.is_empty())
 }
 
+// T3's shared Codex process runs session hooks before the per-thread shell
+// environment exists. Its CLI path identifies the host for guidance only;
+// registration still requires the actual thread ID from a command shell.
+pub(crate) fn host_detected() -> bool {
+    detected() || std::env::var("T3CODE_CLI_PATH").is_ok_and(|cli| !cli.is_empty())
+}
+
 pub(crate) fn registration(wake: Option<String>) -> Option<String> {
     if wake.is_some() {
         return wake;
