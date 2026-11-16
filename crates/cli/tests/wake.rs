@@ -215,6 +215,15 @@ fn t3_submit_captures_the_host_and_delivers_feedback_without_a_provider_session(
 }
 
 #[test]
+fn t3_cli_marker_alone_does_not_register_a_thread_wake() {
+    let (env, repo) = setup();
+    let env = env.with_vars(vec![("T3CODE_CLI_PATH".into(), "/fixture/t3".into())]);
+    env.mg_at(repo.root(), &["submit"]).assert_code(0);
+    let resume = env.mg(&["--json", "resume", "app#1"]).assert_code(0).json();
+    assert!(resume["wake"].is_null(), "{resume}");
+}
+
+#[test]
 fn t3_submit_preserves_explicit_wake_overrides_and_removal() {
     for explicit in [true, false] {
         let (env, repo) = setup();

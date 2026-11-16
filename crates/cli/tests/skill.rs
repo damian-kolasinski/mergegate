@@ -252,6 +252,26 @@ fn t3_session_guidance_takes_precedence_for_every_provider() {
 }
 
 #[test]
+fn t3_session_guidance_recognizes_the_host_before_a_thread_shell_exists() {
+    let env = env().with_vars(vec![
+        ("T3CODE_CLI_PATH".into(), "/fixture/t3".into()),
+        ("CODEX_THREAD_ID".into(), "provider-session".into()),
+    ]);
+    env.start_hub();
+    let repo = TestRepo::new("app");
+    repo.commit_files("Base", &[("README", "title\n")]);
+    env.mg_at(repo.root(), &["project", "add"]).assert_code(0);
+    env.mg_at(repo.root(), &["init"]).assert_code(0);
+    let text = env
+        .mg_at(repo.root(), &["skill", "session-start", "--agent", "codex"])
+        .assert_code(0)
+        .stdout;
+    assert!(text.contains("inside T3 Code"), "{text}");
+    assert!(text.contains("Submit with `mg submit`"), "{text}");
+    assert!(!text.contains("mg wakes codex"), "{text}");
+}
+
+#[test]
 fn session_start_tells_a_session_its_item_and_how_to_wait() {
     let env = env();
     env.start_hub();
