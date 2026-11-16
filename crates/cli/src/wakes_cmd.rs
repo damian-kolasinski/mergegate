@@ -5,6 +5,7 @@
 //! service. `mg wakes codex` is a wake command itself, for Codex agents.
 
 mod codex;
+pub(crate) mod t3;
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -51,6 +52,17 @@ pub enum WakesCommand {
         /// The thread's ID, as `$CODEX_THREAD_ID` gives it
         thread: String,
     },
+    /// Wake a T3 Code thread, regardless of its model or provider
+    T3 {
+        /// The thread's ID, as `$T3CODE_THREAD_ID` gives it
+        thread: String,
+        /// T3's CLI, captured from `$T3CODE_CLI_PATH` when submitting
+        #[arg(long, default_value = "t3")]
+        cli: PathBuf,
+        /// T3's data directory, captured from `$T3CODE_HOME` when submitting
+        #[arg(long)]
+        base_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Serialize)]
@@ -62,6 +74,11 @@ pub fn run(command: WakesCommand) -> Result<Outcome, CliError> {
     match command {
         WakesCommand::Run => run_wakes(&crate::home()?),
         WakesCommand::Codex { thread } => codex::run(thread),
+        WakesCommand::T3 {
+            thread,
+            cli,
+            base_dir,
+        } => t3::run(thread, cli, base_dir),
     }
 }
 

@@ -46,7 +46,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 - **Demos next to the diff.** Agents attach screenshots and screen recordings with `mg submit --attach`.
 - **Agents across machines.** Workers on other machines connect over Tailscale. No tokens, no ports opened beyond your tailnet.
 - **Keyboard-first UI.** `j`/`k`, `n`/`p`, `v` to mark viewed, `c` to comment, `a` to approve; `?` lists every shortcut.
-- **Token-cheap waiting.** Claude Code uses an asynchronous Stop hook and Codex uses `mg submit --wake`; both stay silent for approval-only reviews and successful merges, and wake for actionable feedback or failures. `mg wait` remains available for other harnesses and explicit CLI use.
+- **Token-cheap waiting.** Inside T3 Code, `mg submit` automatically registers a persistent T3 thread wake for any model or provider. Standalone Claude Code uses an asynchronous Stop hook and Codex uses `mg submit --wake`; these adapters stay silent for approval-only reviews and successful merges, and wake for actionable feedback or failures. `mg wait` remains available for other harnesses and explicit CLI use.
 
 <p align="center">
   <img src="readme/review-screen.png" alt="The mergegate review screen: the agent's intent at the top, files to review ordered by importance with a reason for each, lockfile and translations trusted by rules and folded away, and a review bot's GitHub comment the agent rejected, with Accept rejection and Override buttons." width="900">

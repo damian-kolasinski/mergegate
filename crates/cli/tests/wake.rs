@@ -181,6 +181,109 @@ fn f3_its_own_abandon_does_not_wake_the_agent() {
 }
 
 #[test]
+fn t3_submit_captures_the_host_and_delivers_feedback_without_a_provider_session() {
+    let (env, repo) = setup();
+    let log = log_path(&env);
+    let cli = env.home().join("T3 Code's CLI");
+    let base_dir = env.home().join("T3 instance's data");
+    std::fs::write(
+        &cli,
+        format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&cli, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    // The hub predates the provider session; only submit can capture its host.
+    let env = env.with_vars(vec![
+        ("T3CODE_THREAD_ID".into(), "mcp:launch:t3-thread".into()),
+        ("T3CODE_CLI_PATH".into(), cli.display().to_string()),
+        ("T3CODE_HOME".into(), base_dir.display().to_string()),
+        ("CODEX_THREAD_ID".into(), "provider-session".into()),
+    ]);
+    env.mg_at(repo.root(), &["submit"]).assert_code(0);
+    review(&env, "Please fix this.");
+    let sent = await_lines(&log, 6);
+    assert_eq!(&sent[..3], ["thread", "send", "mcp:launch:t3-thread"]);
+    assert!(sent[3].contains("mg feedback app#1"), "{sent:?}");
+    assert!(sent[3].contains("newest cursor 1"), "{sent:?}");
+    assert!(!sent[3].contains("provider-session"), "{sent:?}");
+    assert_eq!(&sent[4..], ["--base-dir", base_dir.to_str().unwrap()]);
+    let feedback = env
+        .mg(&["--json", "feedback", "app#1"])
+        .assert_code(0)
+        .json();
+    assert_eq!(feedback["events"][0]["summary"], "Please fix this.");
+}
+
+#[test]
+fn t3_submit_preserves_explicit_wake_overrides_and_removal() {
+    for explicit in [true, false] {
+        let (env, repo) = setup();
+        let log = log_path(&env);
+        env.mg_at(repo.root(), &["submit", "--wake", &logging(&log)])
+            .assert_code(0);
+        let env = env.with_vars(vec![("T3CODE_THREAD_ID".into(), "t3-thread".into())]);
+        let wake = if explicit {
+            logging(&log)
+        } else {
+            String::new()
+        };
+        env.mg_at(repo.root(), &["submit", "--wake", &wake])
+            .assert_code(0);
+        review(&env, "Feedback.");
+        if explicit {
+            await_lines(&log, 1);
+        } else {
+            settle();
+            assert!(lines(&log).is_empty());
+        }
+    }
+}
+
+#[test]
+fn t3_wake_reports_a_failed_or_missing_cli() {
+    let env = env();
+    for cli in ["/usr/bin/false", "/nonexistent/t3"] {
+        let failed = env
+            .mg(&["--json", "wakes", "t3", "t3-thread", "--cli", cli])
+            .assert_code(1)
+            .json();
+        assert_eq!(failed["error"]["code"], "wake_failed");
+    }
+}
+
+#[test]
+fn t3_wake_does_not_inherit_the_runners_instance() {
+    let env = env();
+    let cli = env.home().join("t3");
+    std::fs::write(&cli, "#!/bin/sh\ntest -z \"${T3CODE_HOME+x}\"\n").unwrap();
+    std::fs::set_permissions(&cli, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    env.mg_with_env(
+        &["wakes", "t3", "t3-thread", "--cli", cli.to_str().unwrap()],
+        &[("T3CODE_HOME", "/another/t3-instance")],
+    )
+    .assert_code(0);
+}
+
+#[test]
+fn t3_resume_replaces_standalone_wake_guidance() {
+    let (env, repo) = setup();
+    env.mg_at(
+        repo.root(),
+        &["submit", "--wake", "mg wakes codex old-session"],
+    )
+    .assert_code(0);
+    let env = env.with_vars(vec![("T3CODE_THREAD_ID".into(), "t3-thread".into())]);
+    let prompt = env.mg(&["resume", "app#1"]).assert_code(0).stdout;
+    let head = prompt
+        .split("--- How to work with mergegate ---")
+        .next()
+        .unwrap();
+    assert!(head.contains("Run `mg submit` without `--wake`"), "{head}");
+    assert!(head.contains("end your turn"), "{head}");
+    assert!(!head.contains("mg wait"), "{head}");
+}
+
+#[test]
 fn f3_a_wake_commands_stderr_goes_to_a_log_in_the_home() {
     let (env, repo) = setup();
     env.mg_at(
@@ -206,17 +309,18 @@ fn f3_the_wake_runs_outside_the_agent_session_that_started_the_hub() {
         ("CLAUDECODE".into(), "1".into()),
         ("CODEX_THREAD_ID".into(), "t".into()),
         ("CODEX_HOME".into(), "/codex".into()),
+        ("T3CODE_THREAD_ID".into(), "t3-thread".into()),
     ]));
     let log = log_path(&env);
     let wake = format!(
-        "printf '%s %s %s\\n' \"${{CLAUDECODE-unset}}\" \"${{CODEX_THREAD_ID-unset}}\" \
-         \"${{CODEX_HOME-unset}}\" >> {}",
+        "printf '%s %s %s %s\\n' \"${{CLAUDECODE-unset}}\" \"${{CODEX_THREAD_ID-unset}}\" \
+         \"${{CODEX_HOME-unset}}\" \"${{T3CODE_THREAD_ID-unset}}\" >> {}",
         log.display()
     );
     env.mg_at(repo.root(), &["submit", "--wake", &wake])
         .assert_code(0);
     review(&env, "First.");
-    assert_eq!(await_lines(&log, 1), ["unset unset /codex"]);
+    assert_eq!(await_lines(&log, 1), ["unset unset /codex unset"]);
 }
 
 #[test]

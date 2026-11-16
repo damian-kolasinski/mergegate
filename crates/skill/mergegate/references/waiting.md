@@ -4,6 +4,7 @@ The automatic adapters wait outside the model and wake only for actionable feedb
 
 | If you can… | Do this | Tokens while waiting |
 |---|---|---|
+| run inside T3 Code (`T3CODE_THREAD_ID` set), with any model or provider | `mg submit`, then end your turn; its T3 wake is automatic | none |
 | run Claude Code with the installed Stop hook (see below) | `mg submit --wake ""`, then end your turn | none |
 | be resumed by a shell command, as Codex is (see Codex below) | `mg submit --wake "<command that resumes you>"`, then end your turn | none |
 | neither | loop `mg wait app#3 --timeout N`, N just under your tool-call time limit | one short turn per timeout |
@@ -45,6 +46,34 @@ The command should start a session that runs `mg wait {item}` or `mg feedback {i
 On the hub's machine the hub runs the command. On a machine `mg connect` points at another hub, that machine's `mg wakes run` does: the hub hands it the commands left from there, and it runs them as the hub would. `mg connect` installs it as a service, so it already runs; when `mg submit --wake` warns that no `mg wakes run` polls from the machine, the wake waits until one does, so ask the operator to run `mg connect HUB` there again, and wait with `mg wait` meanwhile. A submit from another machine than the last one removes the wake the last one left, since it would start a session in a worktree the item's agent left.
 
 The latest submit that passes `--wake` sets it; `--wake ""` removes it. Read what's new with `mg feedback` before you set it from a live session, or the hub wakes you for it at once. When you pick up an item with `mg resume`, it shows the wake an earlier session left: replace it with yours or remove it, or it keeps starting that session.
+
+## T3 Code
+
+Inside T3 Code, use `mg submit` without `--wake`, then end your turn. It captures
+`T3CODE_THREAD_ID`, `T3CODE_CLI_PATH` and, when set, `T3CODE_HOME` in a persistent
+`mg wakes t3` command.
+When actionable feedback arrives, the command runs `t3 thread send` to start a
+turn in that T3 thread, or queue its next turn if it is busy. This works for
+Claude, Codex and other providers, including after T3 closes an idle provider
+session. If `T3CODE_CLI_PATH` is absent, it uses `t3` on the wake runner's PATH.
+
+T3 takes precedence over the standalone Claude Code and Codex instructions below.
+Do not use the Claude Stop hook, `mg wakes codex`, or an `mg wait` loop for a T3
+thread. Those provider session mechanisms cannot durably schedule a T3 turn.
+The message asks you to run `mg feedback ITEM`; sending it acknowledges no events.
+Approval-only reviews and successful merges remain silent.
+
+An explicit `--wake CMD` still overrides automatic registration, and `--wake ""`
+still removes it. For an open item left with an old provider wake, run `mg submit`
+again from its branch inside the owning T3 thread to replace the wake; at the same
+head this adds no revision. The hub doesn't retry a wake already attempted, so
+read `mg feedback ITEM` when recovering missed feedback.
+
+`mg wakes t3 THREAD --cli /path/to/t3 --base-dir /path/to/t3-data` is also available
+for an explicit wake; omit `--base-dir` to use the CLI's default data directory.
+Capture the T3 thread ID and CLI path at submission time, since a later wake runs
+outside the submitting session. The T3 server must be reachable when it runs;
+CLI failures return a nonzero status and go to the item's wake log.
 
 ## Claude Code
 

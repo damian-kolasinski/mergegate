@@ -120,6 +120,9 @@ impl Env {
             // And `mg submit` there notes what it sent for the session's hook.
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CLAUDE_CODE_ENTRYPOINT")
+            .env_remove("T3CODE_THREAD_ID")
+            .env_remove("T3CODE_CLI_PATH")
+            .env_remove("T3CODE_HOME")
             .envs(self.vars.iter().map(|(k, v)| (k, v)))
             .env("PATH", self.path());
         cmd

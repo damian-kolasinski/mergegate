@@ -143,6 +143,7 @@ pub const SESSION_MARKERS: &[&str] = &[
     "CODEX_SESSION_ID",
     "CODEX_APP_TOOLS_PIPE_PATH",
     "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+    "T3CODE_THREAD_ID",
 ];
 
 /// `command` with `{item}` replaced by the item's name. Names are a project
