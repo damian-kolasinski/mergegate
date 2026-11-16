@@ -98,7 +98,7 @@ pub fn run(
         title,
         // Where `mg resume` sends a new session, and the wake command runs.
         worktree: repo::read(&["rev-parse", "--show-toplevel"])?,
-        wake,
+        wake: crate::wakes_cmd::t3::registration(wake),
         guide,
         priority,
         note,

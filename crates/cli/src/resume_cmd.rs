@@ -53,11 +53,18 @@ fn prompt(resume: &Resume) -> String {
         (None, true) => out.push_str("- Worktree: not recorded\n"),
     }
     if let (Some(wake), false) = (&resume.wake, closed) {
-        out.push_str(&format!(
-            "- Wake: `{wake}`, left by the session that ended. It would start that session, \
-             not you: replace it with `mg submit --wake CMD` from the worktree, or remove it \
-             with `mg submit --wake \"\"`.\n"
-        ));
+        if crate::wakes_cmd::t3::detected() {
+            out.push_str(&format!(
+                "- Wake: `{wake}`, left by an earlier session. Run `mg submit` without \
+                 `--wake` from the worktree to register this T3 thread's wake.\n"
+            ));
+        } else {
+            out.push_str(&format!(
+                "- Wake: `{wake}`, left by the session that ended. It would start that session, \
+                 not you: replace it with `mg submit --wake CMD` from the worktree, or remove it \
+                 with `mg submit --wake \"\"`.\n"
+            ));
+        }
     }
 
     if let Some(review) = &resume.review {
@@ -168,7 +175,11 @@ fn next(resume: &Resume) -> String {
             } else if state == ItemState::ChangesRequested {
                 steps.push("`mg submit` the changes from the worktree".to_owned());
             }
-            steps.push(format!("wait with `mg wait {id}`"));
+            steps.push(if crate::wakes_cmd::t3::detected() {
+                "register this T3 thread's wake with `mg submit` and end your turn".to_owned()
+            } else {
+                format!("wait with `mg wait {id}`")
+            });
             let last = steps.pop().unwrap_or_default();
             format!("Next: {}, then {last}.", steps.join(", "))
         }

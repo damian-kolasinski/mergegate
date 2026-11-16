@@ -103,7 +103,8 @@ enum Command {
         /// Shell command run in this worktree when the item has events from
         /// the operator you haven't read; `{item}` becomes its name, "" removes
         /// it. The hub runs it, or on a machine connected to another hub its
-        /// `mg wakes run` service
+        /// `mg wakes run` service. Inside T3 Code, omitting this registers
+        /// a wake for the current T3 thread automatically
         #[arg(long, value_name = "CMD")]
         wake: Option<String>,
         /// Screenshot or recording of the change for the operator: PNG,
