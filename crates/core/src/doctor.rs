@@ -6,8 +6,7 @@ pub use languages::languages;
 
 use crate::git::{self, Git, GitError};
 use crate::github::{Github, GithubError};
-use crate::project::{Backend, Project, ProjectStore};
-use crate::store::StoreError;
+use crate::project::{Backend, Project};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckStatus {
@@ -27,13 +26,10 @@ pub struct Check {
     pub fix: Option<String>,
 }
 
-pub fn checks(
-    store: &impl ProjectStore,
-    git: &impl Git,
-    github: &impl Github,
-) -> Result<Vec<Check>, StoreError> {
+/// Takes the projects rather than the store, so the hub can read them and
+/// let go of the store before these call git and GitHub.
+pub fn checks(projects: &[Project], git: &impl Git, github: &impl Github) -> Vec<Check> {
     let mut checks = vec![git_version(git)];
-    let projects = store.projects()?;
     if projects.is_empty() {
         checks.push(check(
             "projects",
@@ -43,7 +39,7 @@ pub fn checks(
         ));
     }
     checks.extend(projects.iter().map(|p| project(git, github, p)));
-    Ok(checks)
+    checks
 }
 
 fn git_version(git: &impl Git) -> Check {

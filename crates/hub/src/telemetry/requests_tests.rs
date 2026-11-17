@@ -62,6 +62,7 @@ async fn serve(records: &Records) -> (std::net::SocketAddr, tracing::subscriber:
             get(|| async { StatusCode::INTERNAL_SERVER_ERROR }),
         )
         .route("/api/items/{id}", get(|| async { "item" }))
+        .route("/api/items/{id}/attention", get(|| async { "attention" }))
         .route("/api/items/{id}/feedback", get(|| async { "events" }))
         .route("/api/wakes", get(|| async { StatusCode::BAD_REQUEST }))
         .route("/api/stuck", get(std::future::pending::<String>))
@@ -102,6 +103,7 @@ async fn polled_routes_are_recorded_only_when_they_fail() {
     let (addr, _guard) = serve(&records).await;
     get_path(addr, "/api/health").await;
     get_path(addr, "/api/inbox").await;
+    get_path(addr, "/api/items/7/attention?worktree=/src/app").await;
     get_path(addr, "/api/items/7").await;
     assert_eq!(
         codes(&records),

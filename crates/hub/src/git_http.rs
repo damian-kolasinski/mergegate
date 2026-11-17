@@ -54,13 +54,21 @@ async fn serve(
     } else {
         None
     };
-    let command = state
-        .blocking_github(move |store, git, github| {
-            let _landing = landing;
+    let project = state
+        .blocking(move |store, _| {
             let name = ProjectName::parse(&name).map_err(|_| ProjectError::NotFound(name))?;
-            let project = store
+            store
                 .project(&name)?
-                .ok_or_else(|| ProjectError::NotFound(name.to_string()))?;
+                .ok_or_else(|| ProjectError::NotFound(name.to_string()))
+        })
+        .await
+        .map_err(projects::failure)?;
+    // The fetch goes to the upstream and back, so it runs with the store
+    // unlocked, under the landing alone, which every sync of staging's target
+    // takes: with the store held, every other request waited on the network.
+    let command = state
+        .unlocked(move |git, github| {
+            let _landing = landing;
             let fetched = || {
                 let upstream = project::fetch_from(&project, project.backend, github)?;
                 git.fetch_target(&project.name, &upstream, &project.target)?;
@@ -80,10 +88,9 @@ async fn serve(
                 content_encoding: header("content-encoding"),
                 git_protocol: header("git-protocol"),
             };
-            Ok::<_, ProjectError>(git.http_backend(&project.name, &request))
+            git.http_backend(&project.name, &request)
         })
-        .await
-        .map_err(projects::failure)?;
+        .await;
     run(Command::from(command), req.into_body()).await
 }
 
