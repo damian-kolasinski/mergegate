@@ -4,6 +4,19 @@ mergegate is a local, agent-operated code review hub: coding agents submit work 
 
 Commits and PRs carry only the operator's authorship: no AI co-author trailers, session links, or mentions of models, agents, or AI tools in commit messages or PR descriptions.
 
+## This repo is public
+
+Everything that reaches GitHub stays public in history: code, tests, docs, branch names, every commit and its message, the item's title (the pull request's title and the squash commit's subject), and the guide (the pull request's description and the squash commit's body). Keep these out of all of them:
+
+- secrets, tokens and credential file contents;
+- real home and temp paths, machine names, tailnet hostnames and tailnet IPs. Write repo-relative paths, and in tests use `/Users/op`, `<name>.tail0.ts.net`, `100.64.0.N` and `acme/app`;
+- session IDs and links, and quotes from private sessions, chats or calls;
+- other people's names attached to their plans, opinions or internal discussions, and private repositories, branches or commits;
+- quotes of, or citations to, private guides and rules. Say what the change does and why on its own terms;
+- hub logs, databases and other raw dumps.
+
+Before submitting, write the branch's commits to a file with `git log -p mergegate/<target>..HEAD --output=<file>`, run `grep -nE '/Users/|/var/folders/|/tmp/|~/|\.ts\.net|100\.[0-9]+\.[0-9]+\.[0-9]+' <file> <guide>`, and read the title. No output means clean; a hit on a fictional placeholder is fine.
+
 ## Working
 
 - Run checks with `.claude/scripts/check.sh` (usage at its top), not cargo directly.
