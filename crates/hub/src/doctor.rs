@@ -22,19 +22,8 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 }
 
 async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::Report>, Failure> {
-    let languages = Arc::clone(&state);
-    let checks = state
-        .blocking_github(move |store, git, github| {
-            let mut checks = mergegate_core::doctor::checks(store, git, github)?;
-            checks.extend(mergegate_core::doctor::languages(
-                git,
-                &store.projects()?,
-                &languages.known_packs,
-                &languages.languages.installed(),
-                languages.releases.releases(),
-            ));
-            Ok::<_, mergegate_core::store::StoreError>(checks)
-        })
+    let projects = state
+        .blocking(|store, _| store.projects())
         .await
         .map_err(|e| {
             tracing::error!("{e}");
@@ -45,6 +34,24 @@ async fn doctor(State(state): State<Arc<AppState>>) -> Result<Json<api::doctor::
                 None,
             )
         })?;
+    // The project checks reach GitHub once per project, which takes seconds,
+    // so they run with the store unlocked: every other request waited on
+    // them while they held it. A project changed meanwhile is checked as it
+    // was read, which the next doctor corrects.
+    let languages = Arc::clone(&state);
+    let checks = state
+        .unlocked(move |git, github| {
+            let mut checks = mergegate_core::doctor::checks(&projects, git, github);
+            checks.extend(mergegate_core::doctor::languages(
+                git,
+                &projects,
+                &languages.known_packs,
+                &languages.languages.installed(),
+                languages.releases.releases(),
+            ));
+            checks
+        })
+        .await;
     let tailnet = tailnet_check(&state).await;
     // Only a listener on the tailnet takes connections the firewall filters.
     let firewall = match state.tailnet.listening() {

@@ -71,29 +71,23 @@ pub(crate) struct AppState {
     pub stopping: Arc<AtomicBool>,
     pub rules: rules::RulesFiles,
     pub tailnet: tailnet::Tailnet,
-    /// Held for a whole request, which also keeps two requests from syncing
-    /// the same staging repo at once. A merge holds it a step at a time and
-    /// syncs staging between steps, under [`Self::landing`] instead, as is
-    /// every other sync of staging's target.
+    /// Held for a whole request. Syncs of staging's target go under
+    /// [`Self::landing`], which keeps two from running at once: a merge holds
+    /// the store a step at a time and syncs between steps, and a worker's
+    /// fetch syncs without it, so neither holds up other requests on the
+    /// network.
     store: Mutex<Store>,
     git: HubGit,
     github: GithubClient,
 }
 
 impl AppState {
-    /// Runs `f` off the async workers: SQLite and git block.
+    /// Runs `f` off the async workers: SQLite and git block. Every other
+    /// request waits while `f` runs, so network calls go in
+    /// [`Self::stepwise`] or [`Self::unlocked`] instead.
     pub(crate) async fn blocking<T: Send + 'static>(
         self: &Arc<Self>,
         f: impl FnOnce(&mut Store, &HubGit) -> T + Send + 'static,
-    ) -> T {
-        self.blocking_github(|store, git, _| f(store, git)).await
-    }
-
-    /// [`Self::blocking`], with GitHub too. Its calls go over the network
-    /// while the store is held, so other requests wait on GitHub.
-    pub(crate) async fn blocking_github<T: Send + 'static>(
-        self: &Arc<Self>,
-        f: impl FnOnce(&mut Store, &HubGit, &GithubClient) -> T + Send + 'static,
     ) -> T {
         let state = Arc::clone(self);
         let span = tracing::Span::current();
@@ -102,13 +96,13 @@ impl AppState {
             // A panic mid-request leaves nothing half-applied: every write is
             // a single statement.
             let mut store = state.store.lock().unwrap_or_else(|e| e.into_inner());
-            f(&mut store, &state.git, &state.github)
+            f(&mut store, &state.git)
         })
         .await
         .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
 
-    /// [`Self::blocking_github`], but `f` takes the store a step at a time,
+    /// [`Self::blocking`] with GitHub, but `f` takes the store a step at a time,
     /// so requests go on between its steps, as while a merge calls GitHub.
     /// Under [`Self::landing`] throughout.
     pub(crate) async fn stepwise<T: Send + 'static>(
@@ -176,8 +170,9 @@ impl AppState {
             .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     }
 
-    /// [`Self::blocking_git`], with GitHub too, for the target watch: its
-    /// fetch writes only the watch's own refs, which nothing else touches.
+    /// [`Self::blocking_git`], with GitHub too, for fetches: the target
+    /// watch's writes only the watch's own refs, which nothing else touches,
+    /// and a worker's fetch of staging's target holds [`Self::landing`].
     pub(crate) async fn unlocked<T: Send + 'static>(
         self: &Arc<Self>,
         f: impl FnOnce(&HubGit, &GithubClient) -> T + Send + 'static,
@@ -195,7 +190,7 @@ pub(crate) struct Steps<'a>(&'a Mutex<Store>);
 
 impl Shared<Store> for Steps<'_> {
     fn with<T>(&self, step: impl FnOnce(&mut Store) -> T) -> T {
-        // As in `blocking_github`: a panicked step left nothing half-applied.
+        // As in `blocking`: a panicked step left nothing half-applied.
         step(&mut self.0.lock().unwrap_or_else(|e| e.into_inner()))
     }
 }

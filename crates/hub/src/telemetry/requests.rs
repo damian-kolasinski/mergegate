@@ -12,8 +12,14 @@ pub(crate) const TARGET: &str = module_path!();
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 /// Routes clients poll many times an hour, recorded only when they fail or
-/// are slow, as otherwise they bury every other record.
-const POLLED: [&str; 3] = ["/api/health", "/api/inbox", "/api/names/{name}"];
+/// are slow, as otherwise they bury every other record. The Claude Stop
+/// hook asks for each item it watches at least every 30 seconds.
+const POLLED: [&str; 4] = [
+    "/api/health",
+    "/api/inbox",
+    "/api/items/{id}/attention",
+    "/api/names/{name}",
+];
 const SLOW: Duration = Duration::from_secs(1);
 
 pub(crate) async fn record_request(request: Request, next: Next) -> Response {
