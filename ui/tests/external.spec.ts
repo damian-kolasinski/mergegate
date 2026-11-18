@@ -1,11 +1,15 @@
 // External review from the UI: comments on an item's pull request show on the review
-// screen as they arrive, held until the reviewers go quiet or the operator
-// syncs, and only once the operator votes them up; the operator agrees with or
-// overrides the agent's rejection of one.
+// screen as they arrive, held until the reviewers go quiet, and only once the
+// operator votes them up; the operator agrees with or overrides the agent's
+// rejection of one.
 
 import { expect, test } from "./hub";
 
-test("f5 shows comments from GitHub and syncs them to the agent", async ({
+// Short, so what's voted up goes while a test waits; nothing goes while a
+// comment still waits for a vote.
+test.use({ quietMs: "1000" });
+
+test("f5 shows comments from GitHub and holds them for the operator", async ({
   page,
   github,
 }) => {
@@ -47,17 +51,6 @@ test("f5 shows comments from GitHub and syncs them to the agent", async ({
   ).toBeVisible();
   await entry.getByRole("button", { name: "Send to agent" }).click();
   await expect(entry.getByText("Not sent yet", { exact: true })).toBeVisible();
-
-  // A sync hands over the one voted up; the other still waits for a vote.
-  await screen.getByRole("button", { name: "More actions" }).click();
-  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
-  await expect(
-    screen.getByText("Up to date, 1 sent to the agent"),
-  ).toBeVisible();
-  await expect(entry.getByText("Not sent yet", { exact: true })).toHaveCount(0);
-  await expect(
-    inline.getByText("Needs your vote", { exact: true }),
-  ).toBeVisible();
 });
 
 test("a comment from GitHub reaches the agent only once the operator votes it up", async ({
@@ -134,11 +127,7 @@ test("a comment from GitHub reaches the agent only once the operator votes it up
   );
   await page.keyboard.press("Escape");
 
-  await screen.getByRole("button", { name: "More actions" }).click();
-  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
-  await expect(
-    screen.getByText("Up to date, 2 sent to the agent"),
-  ).toBeVisible();
+  // Every vote cast and the reviewers quiet, the batch goes.
   await expect(hash.getByText("Sent to agent", { exact: true })).toBeVisible();
   await expect(hash.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
 
@@ -173,11 +162,10 @@ test("the operator agrees with a rejection or overrides it", async ({
     screen.getByRole("button", { name: /^Conversation/ }),
   ).not.toContainText("to vote on");
   await page.keyboard.press("Escape");
-  await screen.getByRole("button", { name: "More actions" }).click();
-  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
-  await expect(screen.getByText(/sent to the agent$/)).toBeVisible();
-  await page.keyboard.press("Escape");
-  hub.mg(["feedback", "app#1"]);
+  // The agent reads the batch once the reviewers go quiet.
+  await expect
+    .poll(() => (hub.mg(["feedback", "app#1"]) as { events: [] }).events)
+    .toHaveLength(1);
   for (const comment of ["c_1", "c_2"]) {
     hub.mg(["reply", comment, "--status", "rejected", "--body", "No."]);
   }
@@ -237,10 +225,8 @@ test("a bot's comment a later revision outdated stops waiting for a vote", async
   // voted; the bot will say it again if it still holds.
   app.revise("Drop the check", { "src/login.rs": "fn login() {\n}\n" });
   await page.reload();
-  await screen.getByRole("button", { name: "More actions" }).click();
-  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
+  // The poller lapses it once it reads the comments again.
   await expect(conversation).toContainText("1 to vote on");
-  await page.keyboard.press("Escape");
 
   // The person's comment still waits, first and open; the lapsed one is
   // folded with the rest.

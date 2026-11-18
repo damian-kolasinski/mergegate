@@ -48,7 +48,6 @@ import { PriorityPicker } from "../priority/priority";
 import styles from "./item.module.css";
 import { useNavigation } from "./navigation";
 import { ReviewBar } from "./review-bar";
-import { SyncGithub } from "./sync-github";
 import { treeOrder } from "./tree";
 import { useReviewTime } from "./review-time";
 import { useViewed } from "./viewed";
@@ -312,8 +311,8 @@ function Review(props: {
   onMerge: () => void;
 }) {
   // As the operator's review moved it, until the hub says where it is:
-  // Request changes hands the item back, and so does Send comments with new
-  // comments on the newest revision.
+  // Send comments hands the item back when it carries new comments or a
+  // summary on the newest revision.
   const [moved, setMoved] = createSignal<ItemState>();
   createEffect(
     on(
@@ -652,25 +651,18 @@ function Review(props: {
               toggle = element;
             }}
           />
-          <Show when={props.diff.item.backend === "github" || open(state())}>
+          <Show when={open(state())}>
             <MoreMenu>
               {(close) => (
-                <>
-                  <Show when={props.diff.item.backend === "github"}>
-                    <SyncGithub item={props.diff.item.id} />
-                  </Show>
-                  <Show when={open(state())}>
-                    <Button
-                      variant="danger"
-                      onClick={() => {
-                        close();
-                        setAbandoning(true);
-                      }}
-                    >
-                      Abandon…
-                    </Button>
-                  </Show>
-                </>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    close();
+                    setAbandoning(true);
+                  }}
+                >
+                  Abandon…
+                </Button>
               )}
             </MoreMenu>
           </Show>
@@ -819,11 +811,9 @@ function Review(props: {
           revision={props.diff.item.revision.number}
           target={props.diff.item.target}
           state={state()}
-          pullRequest={pullRequest(props.diff.item)}
           blocked={props.blocked?.kind}
           after={openParent(props.diff)}
           newest={props.newest}
-          unviewed={own().filter((file) => !done().has(file.path)).length}
           changed={props.diff.changed_since}
           drafts={comments.drafts.list().length}
           unplaced={comments.drafts.flagged().length}

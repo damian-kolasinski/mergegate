@@ -18,18 +18,9 @@ test("f8 approving merges the item", async ({ page, hub }) => {
   const screen = page.getByRole("region", { name: "app#1" });
   await expect(screen.getByText("Needs review")).toBeVisible();
 
-  // `a` asks first, and Escape backs out without leaving the item.
-  await page.keyboard.press("a");
-  const confirm = page.getByRole("group", { name: "Confirm merge" });
-  await expect(confirm.getByText("1 file not reviewed yet")).toBeVisible();
-  await expect(confirm.getByRole("button", { name: "Merge" })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(confirm).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/items\/app%231(\?.*)?$/);
-
+  // One step: no confirm, though no file is marked viewed.
   await page.getByRole("textbox", { name: "Review summary" }).fill("Ship it.");
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await confirm.getByRole("button", { name: "Merge" }).click();
 
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
   await expect(page.getByRole("form", { name: "Review" })).toHaveCount(0);
@@ -37,6 +28,30 @@ test("f8 approving merges the item", async ({ page, hub }) => {
   await expect(screen.getByText("fn login() {}")).toBeVisible();
   expect(events(hub)).toMatchObject([
     { type: "review.submitted", verdict: "approved", summary: "Ship it." },
+    { type: "item.merged" },
+  ]);
+});
+
+test("f8 a merges at once", async ({ page, hub }) => {
+  const app = hub.project("app");
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await expect(screen.getByText("fn login() {}")).toBeVisible();
+
+  // A held key's repeats don't approve: only a fresh press does.
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "a", repeat: true, bubbles: true }),
+    ),
+  );
+  await expect(screen.getByText("Needs review")).toBeVisible();
+  expect(events(hub)).toEqual([]);
+
+  await page.keyboard.press("a");
+  await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
+  expect(events(hub)).toMatchObject([
+    { type: "review.submitted", verdict: "approved" },
     { type: "item.merged" },
   ]);
 });
@@ -53,7 +68,6 @@ test("f9 a conflict shows what to rebase", async ({ page }) => {
     await page.goto(`${hub.url}#/items/app%231`);
     const screen = page.getByRole("region", { name: "app#1" });
     await page.getByRole("button", { name: "Approve & merge" }).click();
-    await page.getByRole("button", { name: "Merge", exact: true }).click();
 
     const conflict = screen.getByRole("region", { name: "Merge conflict" });
     await expect(conflict.getByText("README", { exact: true })).toBeVisible();
@@ -84,7 +98,6 @@ test("f8 a held merge waits for a retry or a cancel", async ({ page, hub }) => {
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
 
   const held = screen.getByRole("region", { name: "Merge held" });
   await expect(held).toContainText("refused main");
@@ -121,7 +134,6 @@ test("f8 cancelling a held merge puts the item back in review", async ({
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   const held = screen.getByRole("region", { name: "Merge held" });
   await held.getByRole("button", { name: "Cancel merge" }).click();
 
@@ -135,22 +147,14 @@ test("f8 cancelling a held merge puts the item back in review", async ({
   ]);
 });
 
-test("f8 the merge confirm waits for an open comment", async ({
-  page,
-  hub,
-}) => {
+test("f8 an open comment holds the merge", async ({ page, hub }) => {
   const app = hub.project("app");
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
   await expect(screen.getByText("fn login() {}")).toBeVisible();
+  const merge = page.getByRole("button", { name: "Approve & merge" });
   await page.keyboard.press("j");
-  await page.keyboard.press("a");
-  const merge = page
-    .getByRole("group", { name: "Confirm merge" })
-    .getByRole("button", { name: "Merge" });
-  await expect(merge).toBeFocused();
-
   await page.keyboard.press("c");
   const editor = page.getByRole("textbox", {
     name: "Comment on src/login.rs line 1",
@@ -174,20 +178,14 @@ test("f8 the merge confirm waits for an open comment", async ({
   ]);
 });
 
-test("f8 a newer revision takes the merge away from the confirm", async ({
-  page,
-  hub,
-}) => {
+test("f8 a newer revision takes the merge away", async ({ page, hub }) => {
   const app = hub.project("app");
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
   await expect(screen.getByText("fn login() {}")).toBeVisible();
-  await page.keyboard.press("a");
-  const merge = page
-    .getByRole("group", { name: "Confirm merge" })
-    .getByRole("button", { name: "Merge" });
-  await expect(merge).toBeFocused();
+  const merge = page.getByRole("button", { name: "Approve & merge" });
+  await expect(merge).toBeEnabled();
 
   app.revise("Log in", { "src/login.rs": "fn login() { todo!() }\n" });
   const banner = screen.getByRole("region", { name: "Newer revision" });
@@ -225,7 +223,6 @@ test("f8 a held merge cancelled after a reload takes comments again", async ({
 
   // Held again, the gutter stops offering it.
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(held).toBeVisible();
   await line.getByText("fn login() {}").hover();
   await expect(line.locator("[data-utility-button]")).toHaveCount(0);

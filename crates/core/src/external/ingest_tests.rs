@@ -390,7 +390,7 @@ fn the_operator_s_own_and_empty_comments_are_not_fetched() {
         github.comment("o/app", 1, comment);
     }
     let repo = GithubRepo::parse("o/app").unwrap();
-    let fetched = fetch(&github, &repo, 1, false).unwrap();
+    let fetched = fetch(&github, &repo, 1).unwrap();
     assert_eq!(fetched, [issue(1, "alice", "Hi")]);
 }
 

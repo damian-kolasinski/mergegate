@@ -36,7 +36,6 @@ test("weekly closures count merges and abandons per repository and update live",
   });
   await page.goto(`${hub.url}#/items/app%231`);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "Merged", exact: true }),
   ).toBeVisible();

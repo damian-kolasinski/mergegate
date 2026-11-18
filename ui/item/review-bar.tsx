@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, onCleanup, Show } from "solid-js";
 import type { Approve } from "../api/Approve";
 import type { Blocked } from "../api/Blocked";
 import type { ChangedSince } from "../api/ChangedSince";
@@ -6,20 +6,20 @@ import type { ItemState } from "../api/ItemState";
 import type { Merge } from "../api/Merge";
 import type { Review } from "../api/Review";
 import type { SubmitReview } from "../api/SubmitReview";
-import type { Verdict } from "../api/Verdict";
 import { type Failure, failureOf, HubError, postJson } from "../app/hub";
 import { isEditable, isSubmitKey, useKeys } from "../app/keys";
-import { Button, ErrorNote, Meta, Mono, TextArea } from "../design-system";
+import { Button, ErrorNote, Meta, TextArea } from "../design-system";
 import { NextItem } from "./next";
 import { leaveReview, settleReviewTime } from "./review-time";
 import styles from "./review-bar.module.css";
 
 /**
  * Sends the operator's review of one revision to its agent, with every draft
- * comment and reply on the item. Request changes hands it back; so does Send
- * comments with new comments on the newest revision, which the agent acts on,
- * while one with only a summary or replies leaves it with the operator;
- * Approve & merge lands it on the target, after a confirm step.
+ * comment and reply on the item. Send comments hands the item back when it
+ * carries new comments or a summary on the newest revision, which the agent
+ * acts on, while one with only replies, or only comments on an older
+ * revision, leaves it with the operator. Approve & merge lands it on the
+ * target in one step: the button is only enabled while that can go through.
  */
 export function ReviewBar(props: {
   item: string;
@@ -27,11 +27,6 @@ export function ReviewBar(props: {
   target: string;
   /** The item's state on the hub, which the Approve button follows. */
   state: ItemState;
-  /**
-   * Set for an item on GitHub, whose merge also closes its pull request:
-   * its number, as `#42`, and branch.
-   */
-  pullRequest: { label: string; branch: string } | undefined;
   /** Why the newest revision's merge didn't land, while it stands. */
   blocked: Blocked["kind"] | undefined;
   /**
@@ -46,8 +41,6 @@ export function ReviewBar(props: {
    * stands, the bar says so, so approving again is the one step left.
    */
   changed: ChangedSince | null;
-  /** Files not marked viewed, which the confirm step warns about. */
-  unviewed: number;
   drafts: number;
   /**
    * Drafts from earlier revisions whose lines changed: the review waits until
@@ -77,7 +70,6 @@ export function ReviewBar(props: {
   const [failure, setFailure] = createSignal<Failure>();
   // What the last review that went out carried, with the way on.
   const [sent, setSent] = createSignal<string>();
-  const [confirming, setConfirming] = createSignal(false);
   let field: HTMLTextAreaElement | undefined;
 
   const failed = (error: unknown) => {
@@ -87,11 +79,11 @@ export function ReviewBar(props: {
     }
   };
 
-  const submit = (verdict: Verdict) => {
+  const submit = () => {
     if (held() || empty()) return;
     const body: SubmitReview = {
       revision: props.revision,
-      verdict,
+      verdict: "comment",
       summary: summary().trim(),
     };
     setSending("review");
@@ -127,9 +119,7 @@ export function ReviewBar(props: {
   const held = () =>
     sending() !== undefined || props.holding || props.unplaced > 0;
   const behind = () => props.newest !== undefined;
-  // Either can come after the confirm opens, which then stays without its
-  // Merge: a comment started from it, or a newer revision. A held merge
-  // waits on Retry or Cancel above, not on a second approve.
+  // A held merge waits on Retry or Cancel above, not on a second approve.
   const mergeable = () => !held() && !behind() && props.blocked !== "held";
 
   const approve = () => {
@@ -138,7 +128,6 @@ export function ReviewBar(props: {
       revision: props.revision,
       summary: summary().trim(),
     };
-    setConfirming(false);
     setSending("merge");
     setFailure(undefined);
     setSent(undefined);
@@ -151,12 +140,6 @@ export function ReviewBar(props: {
       }, failed)
       .finally(() => setSending(undefined));
   };
-  const confirm = () => {
-    if (!mergeable()) return;
-    // The way on takes Enter, which is the confirm step's too.
-    setSent(undefined);
-    setConfirming(true);
-  };
   const approvedBefore = () =>
     props.changed?.approved ? props.changed : undefined;
   const unlessWriting = (action: () => void) => () => {
@@ -164,13 +147,20 @@ export function ReviewBar(props: {
   };
 
   useKeys(
-    { r: unlessWriting(() => field?.focus()), a: unlessWriting(confirm) },
+    {
+      r: unlessWriting(() => field?.focus()),
+      // `a` merges at once, so a held key's repeats mustn't approve again
+      // once a quick merge or conflict hands the button back.
+      a: (event) => {
+        if (!event.repeat) unlessWriting(approve)();
+      },
+    },
     {
       group: "Review",
       keys: [
         ["r", "Write the review's summary"],
         ["⌘↩", "Send comments"],
-        ["a", "Approve & merge, after a confirm"],
+        ["a", "Approve & merge"],
       ],
     },
   );
@@ -180,7 +170,7 @@ export function ReviewBar(props: {
   // a comment's) comes first and takes it.
   const onSubmitKey = (event: KeyboardEvent) => {
     if (!isSubmitKey(event) || event.defaultPrevented || event.repeat) return;
-    if (isEditable(event.target) || props.writing || confirming()) return;
+    if (isEditable(event.target) || props.writing) return;
     // `⌘↩` on a focused link opens it in a new tab.
     if (event.target instanceof Element && event.target.closest("a[href]")) {
       return;
@@ -188,24 +178,10 @@ export function ReviewBar(props: {
     // A dialog over the screen, such as the demo viewer, keeps its keys.
     if (document.querySelector("[role=dialog][aria-modal=true]")) return;
     event.preventDefault();
-    submit("comment");
+    submit();
   };
   window.addEventListener("keydown", onSubmitKey);
   onCleanup(() => window.removeEventListener("keydown", onSubmitKey));
-  // Escape backs out of the confirm step rather than leaving the item; the
-  // screen binds its Escape first, so this one listens ahead of it.
-  createEffect(() => {
-    if (!confirming()) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      // A dialog over the screen, such as the demo viewer, closes first.
-      if (document.querySelector("[role=dialog][aria-modal=true]")) return;
-      event.preventDefault();
-      setConfirming(false);
-    };
-    window.addEventListener("keydown", onKey, true);
-    onCleanup(() => window.removeEventListener("keydown", onKey, true));
-  });
 
   const disabledWhy = () =>
     props.holding
@@ -280,102 +256,36 @@ export function ReviewBar(props: {
             // What's typed while sending would be cleared with the rest.
             disabled={sending() !== undefined}
             onInput={setSummary}
-            onSubmit={() => submit("comment")}
+            onSubmit={() => submit()}
             ref={(element) => {
               field = element;
             }}
           />
         </div>
         <div class={styles.actions}>
-          <Show
-            when={confirming()}
-            fallback={
-              <>
-                <Button
-                  disabled={held() || empty()}
-                  busy={sending() === "review"}
-                  title={disabledWhy()}
-                  keyHint="⌘↩"
-                  onClick={() => submit("comment")}
-                >
-                  {sending() === "review" ? "Sending…" : "Send comments"}
-                </Button>
-                <Button
-                  // The hub refuses changes requested on a revision the
-                  // agent already replaced.
-                  disabled={held() || empty() || behind()}
-                  title={
-                    behind()
-                      ? `Show r${props.newest} to request changes`
-                      : disabledWhy()
-                  }
-                  onClick={() => submit("changes_requested")}
-                >
-                  Request changes
-                </Button>
-                <Button
-                  variant={leadsWithApprove() ? "solid" : "outline"}
-                  disabled={!mergeable()}
-                  busy={sending() === "merge"}
-                  title={approveWhy()}
-                  keyHint="a"
-                  onClick={confirm}
-                >
-                  {sending() === "merge"
-                    ? "Merging…"
-                    : props.after
-                      ? `Approve, merge after ${props.after}`
-                      : "Approve & merge"}
-                </Button>
-              </>
-            }
+          <Button
+            disabled={held() || empty()}
+            busy={sending() === "review"}
+            title={disabledWhy()}
+            keyHint="⌘↩"
+            onClick={() => submit()}
           >
-            <fieldset class={styles.confirm} aria-label="Confirm merge">
-              <span class={styles.question}>
-                <Show when={props.after}>
-                  {(after) => (
-                    <Meta>
-                      Stacked on {after()}: this waits for it, then lands right
-                      after it.
-                    </Meta>
-                  )}
-                </Show>
-                <Show
-                  when={props.pullRequest}
-                  fallback={
-                    <>
-                      Squash r{props.revision} onto <Mono>{props.target}</Mono>?
-                    </>
-                  }
-                >
-                  {(pull) => (
-                    <>
-                      Squash-merge PR {pull().label} into{" "}
-                      <Mono>{props.target}</Mono> on GitHub and delete{" "}
-                      <Mono>{pull().branch}</Mono>?
-                    </>
-                  )}
-                </Show>
-                <Show when={props.unviewed}>
-                  <Meta tone="removed">
-                    {plural(props.unviewed, "file")} not reviewed yet.
-                  </Meta>
-                </Show>
-              </span>
-              <Button onClick={() => setConfirming(false)} keyHint="Esc">
-                Cancel
-              </Button>
-              <Button
-                variant="solid"
-                disabled={!mergeable()}
-                onClick={approve}
-                keyHint="↵"
-                ref={(element) => requestAnimationFrame(() => element.focus())}
-              >
-                {props.after ? "Approve" : "Merge"}
-              </Button>
-            </fieldset>
-          </Show>
+            {sending() === "review" ? "Sending…" : "Send comments"}
+          </Button>
+          <Button
+            variant={leadsWithApprove() ? "solid" : "outline"}
+            disabled={!mergeable()}
+            busy={sending() === "merge"}
+            title={approveWhy()}
+            keyHint="a"
+            onClick={approve}
+          >
+            {sending() === "merge"
+              ? "Merging…"
+              : props.after
+                ? `Approve, merge after ${props.after}`
+                : "Approve & merge"}
+          </Button>
         </div>
       </div>
     </form>

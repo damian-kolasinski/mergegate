@@ -160,6 +160,35 @@ impl Env {
             .json()
     }
 
+    /// Restarts the hub, whose poller reads every open item's pull request on
+    /// GitHub as it starts: a test's way to have it poll now, rather than
+    /// shortening the interval for the whole test.
+    #[track_caller]
+    pub fn restart_hub(&self) -> Value {
+        self.mg(&["hub", "stop"]).assert_code(0);
+        self.start_hub()
+    }
+
+    /// Polls `read` until `done` holds for what it returns; `what` says what
+    /// never happened when it times out.
+    #[track_caller]
+    pub fn until<T: std::fmt::Debug>(
+        &self,
+        what: &str,
+        read: impl Fn() -> T,
+        done: impl Fn(&T) -> bool,
+    ) -> T {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            let value = read();
+            if done(&value) {
+                return value;
+            }
+            assert!(std::time::Instant::now() < deadline, "{what}: {value:?}");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
     /// The running hub's `host:port`, from its `hub.json`.
     #[track_caller]
     pub fn hub_addr(&self) -> String {

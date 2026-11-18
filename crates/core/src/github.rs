@@ -103,13 +103,11 @@ pub trait Github {
 
     /// Every comment on the pull request: inline ones, the conversation's,
     /// and the reviews' bodies, empty ones included. The adapter may answer
-    /// from what it read last when GitHub says nothing changed, unless
-    /// `fresh`.
+    /// from what it read last when GitHub says nothing changed.
     fn pull_comments(
         &self,
         repo: &GithubRepo,
         number: u64,
-        fresh: bool,
     ) -> Result<Vec<PullComment>, GithubError>;
 
     /// One comment of the pull request, asked for by itself; none when

@@ -123,20 +123,3 @@ test("f10 shift-p sets the priority from the item's header", async ({
   await expect(picker).toHaveCount(0);
   await expect(header).toContainText("p3");
 });
-
-test("f10 the picker over the merge confirm closes first", async ({
-  page,
-  hub,
-}) => {
-  three(hub);
-  await page.goto(`${hub.url}#/items/app%231`);
-  await page.keyboard.press("a");
-  const confirm = page.getByRole("group", { name: "Confirm merge" });
-  await expect(confirm).toBeVisible();
-  await page.keyboard.press("P");
-  const picker = page.getByRole("dialog", { name: "Priority of app#1" });
-  await expect(picker).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(picker).toHaveCount(0);
-  await expect(confirm).toBeVisible();
-});

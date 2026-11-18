@@ -12,7 +12,12 @@ import { expect, test } from "./hub";
 const out = process.env.MG_SHOTS_DIR ?? "";
 
 test.skip(!out, "MG_SHOTS_DIR is unset");
-test.use({ viewport: { width: 1280, height: 980 }, deviceScaleFactor: 2 });
+// Short, so the comment voted up goes to the agent while the test waits.
+test.use({
+  viewport: { width: 1280, height: 980 },
+  deviceScaleFactor: 2,
+  quietMs: "1000",
+});
 
 const login = (check: boolean) =>
   [
@@ -46,6 +51,37 @@ test("conversation list screenshots", async ({ page, github }) => {
     "src/session.rs":
       "pub struct Session {\n    pub name: String,\n    pub started: u64,\n}\n",
   });
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  const conversation = screen.getByRole("button", { name: /^Conversation/ });
+  const list = page.getByRole("complementary", { name: "Conversation" });
+
+  // A person's comment goes to the agent once the reviewers go quiet, and
+  // the agent asks about it.
+  await github.github.comment(1, {
+    login: "alice",
+    body: "Should login and session handling live apart?",
+  });
+  await expect(conversation).toContainText("1 to vote on");
+  await conversation.click();
+  await list
+    .getByRole("article", { name: "Comment c_1" })
+    .getByRole("button", { name: "Send to agent" })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => (hub.mg(["feedback", "app#1"]) as { events: [] }).events)
+    .toHaveLength(1);
+  hub.mg([
+    "reply",
+    "c_1",
+    "--status",
+    "question",
+    "--body",
+    "Into a `session` module of its own, or only a file apart?",
+  ]);
+
+  // Then the bots review.
   await github.github.comment(1, {
     login: "codex[bot]",
     body: "**P1** `unwrap` panics on an unknown user; return an error instead.",
@@ -65,48 +101,16 @@ test("conversation list screenshots", async ({ page, github }) => {
     line: 3,
   });
   await github.github.comment(1, {
-    login: "alice",
-    body: "Should login and session handling live apart?",
-  });
-  await github.github.comment(1, {
     login: "coderabbitai[bot]",
     body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough\n\nAdds login and sessions.",
   });
-
-  await page.goto(`${hub.url}#/items/app%231`);
-  const screen = page.getByRole("region", { name: "app#1" });
-  const conversation = screen.getByRole("button", { name: /^Conversation/ });
-  await expect(conversation).toContainText("4 to vote on");
-  const list = page.getByRole("complementary", { name: "Conversation" });
-
-  // The person's comment goes to the agent, who asks about it.
-  await conversation.click();
-  await list
-    .getByRole("article", { name: "Comment c_4" })
-    .getByRole("button", { name: "Send to agent" })
-    .click();
-  await page.keyboard.press("Escape");
-  await screen.getByRole("button", { name: "More actions" }).click();
-  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
-  await expect(screen.getByText(/sent to the agent$/)).toBeVisible();
-  await page.keyboard.press("Escape");
-  hub.mg(["feedback", "app#1"]);
-  hub.mg([
-    "reply",
-    "c_4",
-    "--status",
-    "question",
-    "--body",
-    "Into a `session` module of its own, or only a file apart?",
-  ]);
+  await expect(conversation).toContainText("3 to vote on");
 
   // The agent's next revision drops the line the first finding was on.
   app.revise("Look the user up once", { "src/login.rs": login(false) });
   await page.reload();
-  await screen.getByRole("button", { name: "More actions" }).click();
-  await screen.getByRole("button", { name: "Fetch GitHub comments" }).click();
+  // The poller lapses it once it reads the comments again.
   await expect(conversation).toContainText("2 to vote on");
-  await page.keyboard.press("Escape");
 
   await conversation.click();
   await expect(
@@ -117,9 +121,9 @@ test("conversation list screenshots", async ({ page, github }) => {
   await shoot(page, "conversation-needs-you");
 
   await list.getByRole("button", { name: /Everything else/ }).click();
-  await list.getByRole("button", { name: "Open comment c_1" }).click();
+  await list.getByRole("button", { name: "Open comment c_2" }).click();
   await expect(
-    list.getByRole("article", { name: "Comment c_1" }),
+    list.getByRole("article", { name: "Comment c_2" }),
   ).toContainText("Lapsed");
   await shoot(page, "conversation-everything-else");
 });

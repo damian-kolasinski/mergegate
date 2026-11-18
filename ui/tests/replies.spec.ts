@@ -22,7 +22,7 @@ test("f7 the agent's replies show on the comment", async ({ page, hub }) => {
   await page.keyboard.type("Reject an empty password.");
   await page.keyboard.press("ControlOrMeta+Enter");
   const review = page.getByRole("form", { name: "Review" });
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
 
   const comment = page.getByRole("article", { name: "Comment c_1" });
@@ -68,7 +68,7 @@ test("f7 the operator's reply goes out with the next review", async ({
   await page.keyboard.type("Reject an empty password.");
   await page.keyboard.press("ControlOrMeta+Enter");
   const review = page.getByRole("form", { name: "Review" });
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText("Sent to the agent on r1 with 1 comment"),
   ).toBeVisible();

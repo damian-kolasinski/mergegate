@@ -20,7 +20,8 @@ const packs = process.env.MG_SHOTS_PACKS;
 test.skip(!out, "MG_SHOTS_DIR is unset");
 test.describe.configure({ mode: "serial" });
 // Sharp on retina screens, which show the README's 900px images at 2x.
-test.use({ deviceScaleFactor: 2 });
+// A short quiet window, so a comment voted up reaches the agent at once.
+test.use({ deviceScaleFactor: 2, quietMs: "500" });
 
 const ui = { "x-mergegate-client": "ui", "content-type": "application/json" };
 
@@ -420,8 +421,11 @@ async function approve(hub: Hub, item: string) {
   expect(merged.ok).toBe(true);
 }
 
-/** Votes up every comment from GitHub on `item` that awaits a vote. */
-async function voteUp(hub: Hub, item: string) {
+/**
+ * Votes up every comment from GitHub on `item` that awaits a vote; how many
+ * it voted on.
+ */
+async function voteUp(hub: Hub, item: string): Promise<number> {
   const shown = await fetch(
     `${hub.url}api/items/${encodeURIComponent(item)}/conversation`,
     { headers: ui },
@@ -437,11 +441,12 @@ async function voteUp(hub: Hub, item: string) {
     });
     expect(voted.ok).toBe(true);
   }
+  return comments.filter((c) => c.external?.pending).length;
 }
 
-/** The IDs of the comments in `item`'s unread events, oldest first. */
+/** Every comment sent to `item`'s agent, whether its wait took them or not. */
 function commentIds(hub: Hub, item: string): string[] {
-  const feedback = hub.mg(["feedback", item]) as {
+  const feedback = hub.mg(["feedback", item, "--since", "0"]) as {
     events: { comments?: { id: string }[] }[];
   };
   return feedback.events.flatMap((e) => (e.comments ?? []).map((c) => c.id));
@@ -549,10 +554,15 @@ export function limited(key: string, max = 5, windowMs = 60_000): boolean {
     path: "src/auth/tokenStore.ts",
     line: lineOf(tokenStoreR1, '.post<Tokens>("/auth/refresh"'),
   });
-  hub.mg(["sync", "app#1"]);
-  await voteUp(hub, "app#1");
-  hub.mg(["sync", "app#1"]);
-  const [bot] = commentIds(hub, "app#1");
+  // The poller brings it in; voted up, it goes once the reviewers are quiet.
+  await expect.poll(() => voteUp(hub, "app#1")).toBe(1);
+  let bot: string | undefined;
+  await expect
+    .poll(() => {
+      [bot] = commentIds(hub, "app#1");
+      return bot;
+    })
+    .toBeDefined();
   hub.mg([
     "reply",
     bot ?? "",
@@ -802,7 +812,7 @@ test("readme loop recording", async ({ browser }, info) => {
     await page.keyboard.type("One race left; the rest looks right.", {
       delay: 18,
     });
-    await screen.getByRole("button", { name: "Request changes" }).click();
+    await screen.getByRole("button", { name: "Send comments" }).click();
     await caption("…and it goes straight back to the agent");
     await pause(2500);
 
@@ -819,13 +829,10 @@ test("readme loop recording", async ({ browser }, info) => {
     await pause(3500);
     // The other files kept their viewed marks: only this one changed.
     await page.keyboard.press("v");
-    await expect(page.getByText("4 files not reviewed yet")).toHaveCount(0);
     await pause(600);
 
     await page.keyboard.press("a");
     await caption("Approve & merge: one squash commit, authored by you");
-    await pause(1500);
-    await page.keyboard.press("Enter");
     await expect(page.getByText(/Merged into main/)).toBeVisible();
     await pause(2500);
 

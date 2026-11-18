@@ -470,10 +470,13 @@ fn f8_a_pull_request_merged_on_github_merges_the_item() {
     let (env, _repo) = submitted(&github);
     let commit = github.merge_on_github(ACME, 1);
 
-    // The poller finds it in time; a sync finds it at once.
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    // The poller finds it, as it does when the hub starts.
+    env.restart_hub();
+    let wait = env
+        .mg(&["wait", "app#1", "--timeout", "20"])
+        .assert_code(0)
+        .stdout;
     assert_eq!(item(&env)["state"], "merged");
-    let wait = env.mg(&["wait", "app#1"]).assert_code(0).stdout;
     assert!(
         wait.contains(&format!(
             "item.merged app#1 r1: it was merged on GitHub as {commit}"
@@ -505,9 +508,12 @@ fn f14_a_pull_request_closed_on_github_abandons_the_item() {
     let (env, repo) = submitted(&github);
     github.close_on_github(ACME, 1);
 
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    env.restart_hub();
+    let wait = env
+        .mg(&["wait", "app#1", "--timeout", "20"])
+        .assert_code(0)
+        .stdout;
     assert_eq!(item(&env)["state"], "abandoned");
-    let wait = env.mg(&["wait", "app#1"]).assert_code(0).stdout;
     assert!(
         wait.contains(
             "item.abandoned app#1 r1: GitHub abandoned it\n  \

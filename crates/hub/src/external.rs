@@ -1,7 +1,6 @@
 //! External review: comments on a github item's pull request. The poller
 //! brings them in, and closes an item whose pull request was merged or
-//! closed on GitHub; `POST /api/items/{id}/sync` does both at once, for when
-//! polling missed something. `POST /api/comments/{comment}/vote` is the
+//! closed on GitHub. `POST /api/comments/{comment}/vote` is the
 //! operator's vote on a comment before the agent gets it, and
 //! `.../agree` and `.../override` their say on the agent's rejection of one.
 
@@ -19,7 +18,6 @@ use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
 use mergegate_core::external::{self, Batch, ExternalError, Ingested, Vote};
-use mergegate_core::feedback::{Event, EventKind};
 use mergegate_core::github::PullCommentKind;
 use mergegate_core::item::{ItemId, ItemStore};
 use mergegate_core::review::{Comment, ReviewError, ReviewStore};
@@ -32,41 +30,9 @@ pub(crate) use poll::run;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/api/items/{id}/sync", post(sync))
         .route("/api/comments/{comment}/vote", post(vote))
         .route("/api/comments/{comment}/agree", post(agree))
         .route("/api/comments/{comment}/override", post(override_rejection))
-}
-
-async fn sync(
-    State(state): State<Arc<AppState>>,
-    id: Result<Path<String>, PathRejection>,
-) -> Result<Json<api::review::Synced>, Failure> {
-    let Path(id) = id?;
-    let id = ItemId::parse(&id)
-        .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))?;
-    let ingested = pull(&state, &id, true).await.map_err(failure)?;
-    let released = {
-        let id = id.clone();
-        state
-            .blocking(move |store, _| external::release(store, &id))
-            .await
-            .map_err(failure)?
-    };
-    changed(&state, &id, ingested, released.is_some());
-    // The comments went either way; the next poll follows the pull request
-    // again.
-    if let Err(e) = follow::follow(&state, &id).await {
-        tracing::warn!("following {id}'s pull request: {e}");
-    }
-    if let Err(e) = bots::watch(&state, &id).await {
-        tracing::warn!("reading {id}'s reactions on GitHub: {e}");
-    }
-    Ok(Json(api::review::Synced {
-        new: ingested.new as u32,
-        edited: ingested.edited as u32,
-        released: released.as_ref().map_or(0, carried) as u32,
-    }))
 }
 
 async fn vote(
@@ -145,8 +111,7 @@ async fn override_rejection(
 
 /// Brings `id`'s pull request comments in. GitHub is asked with the store
 /// unlocked: a slow GitHub mustn't hold up every other request.
-async fn pull(state: &Arc<AppState>, id: &ItemId, fresh: bool) -> Result<Ingested, ExternalError> {
-    let _pulling = state.pulling.lock().await;
+async fn pull(state: &Arc<AppState>, id: &ItemId) -> Result<Ingested, ExternalError> {
     let pull = {
         let id = id.clone();
         state
@@ -163,7 +128,7 @@ async fn pull(state: &Arc<AppState>, id: &ItemId, fresh: bool) -> Result<Ingeste
     let (repo, number, held) = pull;
     let (found, gone) = state
         .github(move |github| {
-            let mut found = external::fetch(github, &repo, number, fresh)?;
+            let mut found = external::fetch(github, &repo, number)?;
             let gone = external::confirm_gone(github, &repo, number, &held, &mut found)?;
             Ok::<_, ExternalError>((found, gone))
         })
@@ -243,14 +208,6 @@ pub(crate) fn batch_to_api(batch: &Batch) -> api::feedback::EventBody {
             .filter(|d| d.edited)
             .map(|d| d.comment.id.to_string())
             .collect(),
-    }
-}
-
-/// How many comments `event` handed over, if it's a batch.
-fn carried(event: &Event) -> usize {
-    match &event.kind {
-        EventKind::ExternalComments(batch) => batch.comments.len(),
-        _ => 0,
     }
 }
 

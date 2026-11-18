@@ -45,7 +45,7 @@ async fn submit(
             let reviewed = review::submit(store, git, request)?;
             let review = &reviewed.review;
             // The review went; a reply's comment left behind still reaches
-            // the agent through `mg sync` once voted up.
+            // the agent with the next batch once voted up.
             let released =
                 send_answered(store, &review.item, &review.replies, crate::external::now())
                     .unwrap_or_else(|e| {

@@ -60,6 +60,17 @@ fn paths(shown: &Value) -> Vec<&str> {
     files.iter().map(|f| f["path"].as_str().unwrap()).collect()
 }
 
+/// Has the hub's poller follow `id`'s pull request until the item is `state`.
+fn settled(env: &Env, id: &str, state: &str) {
+    env.restart_hub();
+    until_state(env, id, state);
+}
+
+fn until_state(env: &Env, id: &str, state: &str) {
+    let read = || shown(env, id)["item"]["state"].clone();
+    env.until(&format!("{id} never became {state}"), read, |s| s == state);
+}
+
 /// Every event `id`'s agent has heard, whatever it's read already.
 fn events(env: &Env, id: &str) -> Vec<Value> {
     let feedback = env.mg(&["--json", "feedback", id, "--since", "0"]).json();
@@ -572,9 +583,9 @@ fn f16_a_parent_merged_on_github_moves_its_child_as_the_hubs_own_merge_would() {
     approve(&env, "app#2", 1);
     github.merge_on_github("acme/app", 1);
 
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
-    assert_eq!(shown(&env, "app#1")["item"]["state"], "merged");
-    assert_eq!(shown(&env, "app#2")["item"]["state"], "merged");
+    settled(&env, "app#1", "merged");
+    // The approved child lands right after it.
+    until_state(&env, "app#2", "merged");
     // Retargeted before its parent's branch went, which would close it.
     assert_eq!(github.pulls()[1].base, "main");
     assert_eq!(github.rev("acme/app", "login"), None);
@@ -587,8 +598,7 @@ fn f16_a_child_merged_on_github_into_its_parents_branch_did_not_land() {
     let (github, env, _repo) = on_github();
     github.merge_on_github("acme/app", 2);
 
-    env.mg(&["--json", "sync", "app#2"]).assert_code(0);
-    assert_eq!(shown(&env, "app#2")["item"]["state"], "abandoned");
+    settled(&env, "app#2", "abandoned");
     let notice = events(&env, "app#2").pop().unwrap();
     let reason = notice["reason"].as_str().unwrap_or_default();
     assert!(reason.contains("into login, not main"), "{notice}");
@@ -600,7 +610,7 @@ fn f16_a_parent_closed_on_github_hands_its_child_back() {
     let (github, env, repo) = on_github();
     github.close_on_github("acme/app", 1);
 
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    settled(&env, "app#1", "abandoned");
     let child = shown(&env, "app#2");
     assert_eq!(child["item"]["state"], "changes_requested");
     let notice = events(&env, "app#2").pop().unwrap();

@@ -153,9 +153,6 @@ test("stacked items recording", async ({ browser, hub }, info) => {
   await page
     .getByRole("button", { name: "Approve, merge after app#1" })
     .click();
-  const confirm = page.getByRole("group", { name: "Confirm merge" });
-  await pause(1200);
-  await confirm.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(
     child.getByRole("region", { name: "Merge waiting" }),
   ).toBeVisible();
@@ -168,8 +165,6 @@ test("stacked items recording", async ({ browser, hub }, info) => {
   await page
     .getByRole("button", { name: "Approve, merge after app#2" })
     .click();
-  await pause(800);
-  await confirm.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(
     top.getByRole("region", { name: "Merge waiting" }),
   ).toBeVisible();
@@ -184,8 +179,6 @@ test("stacked items recording", async ({ browser, hub }, info) => {
   await caption("Merging the bottom lands the whole stack, bottom first");
   await pause(2500);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await pause(800);
-  await confirm.getByRole("button", { name: "Merge" }).click();
   await expect(bottom.getByText(/Merged into main/)).toBeVisible();
   await pause(2500);
 

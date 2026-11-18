@@ -46,11 +46,10 @@ pub fn fetch(
     github: &impl Github,
     repo: &GithubRepo,
     number: u64,
-    fresh: bool,
 ) -> Result<Vec<PullComment>, GithubError> {
     let viewer = github.viewer()?;
     Ok(github
-        .pull_comments(repo, number, fresh)?
+        .pull_comments(repo, number)?
         .into_iter()
         .filter(|c| kept(c, &viewer))
         .collect())

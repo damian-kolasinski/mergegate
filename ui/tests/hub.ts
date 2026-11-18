@@ -206,7 +206,13 @@ export class Project {
 export const test = base.extend<{
   hub: Hub;
   github: { hub: Hub; github: FakeGithub };
+  /**
+   * How long the `github` hub waits for reviewers to go quiet before it
+   * hands voted comments to the agent; the hub's own default unless set.
+   */
+  quietMs: string | undefined;
 }>({
+  quietMs: [undefined, { option: true }],
   hub: async ({}, use) => {
     const hub = new Hub();
     try {
@@ -216,11 +222,15 @@ export const test = base.extend<{
     }
   },
   /** A hub signed in to a fake GitHub, which starts first. */
-  github: async ({}, use) => {
+  github: async ({ quietMs }, use) => {
     const github = await FakeGithub.start();
     try {
       // Polled often, so comments posted there show up while a test waits.
-      const hub = new Hub({ ...github.env, MG_GITHUB_POLL_MS: "200" });
+      const hub = new Hub({
+        ...github.env,
+        MG_GITHUB_POLL_MS: "200",
+        ...(quietMs === undefined ? {} : { MG_EXTERNAL_QUIET_MS: quietMs }),
+      });
       try {
         await use({ hub, github });
       } finally {

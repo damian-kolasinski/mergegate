@@ -1,7 +1,8 @@
 import { type Accessor, createSignal, onCleanup } from "solid-js";
 
 /** Actions by `KeyboardEvent.key`, e.g. `j` or `Enter`. */
-export type Keymap = Readonly<Record<string, () => void>>;
+/** Each key's action, given its event, as to tell a held key's repeats. */
+export type Keymap = Readonly<Record<string, (event: KeyboardEvent) => void>>;
 
 /**
  * What a screen's keys do, for the `?` overlay: a heading, then each key as
@@ -75,7 +76,7 @@ function listen(keymap: Keymap, modal: boolean, first = modal): void {
     const action = keymap[event.key];
     if (!action) return;
     event.preventDefault();
-    action();
+    action(event);
   };
   // Captured, it runs before the screens', and its `preventDefault` turns
   // them away.

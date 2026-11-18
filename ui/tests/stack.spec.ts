@@ -37,16 +37,12 @@ test("f16 a stacked item is reviewed on its own and lands after its parent", asy
   await page
     .getByRole("button", { name: "Approve, merge after app#1" })
     .click();
-  const confirm = page.getByRole("group", { name: "Confirm merge" });
-  await expect(confirm.getByText("Stacked on app#1")).toBeVisible();
-  await confirm.getByRole("button", { name: "Approve", exact: true }).click();
   const waiting = screen.getByRole("region", { name: "Merge waiting" });
   await expect(waiting.getByText(/Merges right after/)).toBeVisible();
 
   await stack.getByRole("link", { name: /app#1 Add login/ }).click();
   const parent = page.getByRole("region", { name: "app#1" });
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await confirm.getByRole("button", { name: "Merge" }).click();
   await expect(parent.getByText("Merged", { exact: true })).toBeVisible();
 
   await page.goto(`${hub.url}#/items/app%232`);
