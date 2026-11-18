@@ -54,7 +54,11 @@ let project = Project(
                 .target(name: "HubConnection"), .target(name: "Inbox"), .target(name: "Review"),
                 .target(name: "CodeStyling"), .target(name: "Conversation"),
                 .target(name: "ReviewSubmission"), .target(name: "ProjectRules"),
-            ]
+            ],
+            settings: .settings(base: [
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
+            ])
         ),
         .target(
             name: "HubConnectionInterface", destinations: [.iPhone, .iPad], product: .framework,
