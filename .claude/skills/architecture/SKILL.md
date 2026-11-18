@@ -20,8 +20,7 @@ mergegate is one Rust binary, `mg` (hub daemon and CLI), with a web UI embedded 
 - Expensive work runs when data arrives and is cached; request paths only read.
 - Build a new slice the way existing slices are built.
 - Web features own their behavior; the application shell wires features without owning them. Styling uses the shared design system.
-- Native features own their wire subsets, services, refresh policy, and persistence; `crates/api` remains the wire authority. Cross-feature dependencies use `<Feature>Interface`, with the app composing implementations. Add native feature modules only as their delivery slice needs them; no shared API, store, cache, or design-system module.
-- Edit shared colors and typography in `appearance/tokens.json`, then run `python3 appearance/generate.py`; generated web and native values must stay in sync.
+- Edit colors and typography in `appearance/tokens.json` and syntax colors in `appearance/syntax.json`, then run `python3 appearance/generate.py` to regenerate the web's tokens.
 
 ## Dependencies
 
