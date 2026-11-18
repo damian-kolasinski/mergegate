@@ -29,10 +29,6 @@
   color: var(--text-primary);
 }
 
-.logo {
-  color: var(--background-brand);
-}
-
 .trail {
   display: flex;
   align-items: baseline;
