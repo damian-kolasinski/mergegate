@@ -1,5 +1,5 @@
 import { Badge, Meta, Mono } from "../design-system";
-import styles from "./agent-away.module.css";
+import { Note } from "./notice";
 
 /**
  * No agent reads the item's feedback and none is woken for it, so what the
@@ -8,14 +8,17 @@ import styles from "./agent-away.module.css";
  */
 export function AgentAway(props: { name: string }) {
   return (
-    <section class={styles.notice} aria-label="No agent">
-      <Badge tone="warning" solid>
+    <Note label="No agent">
+      <Badge
+        tone="warning"
+        solid
+        title="Nothing is waiting on this item, so what you send stays here until a session picks it up."
+      >
         No agent
       </Badge>
       <Meta>
-        Nothing is waiting on this item, so what you send stays here until a
-        session picks it up with <Mono>mg resume {props.name}</Mono>.
+        What you send waits for <Mono>mg resume {props.name}</Mono>
       </Meta>
-    </section>
+    </Note>
   );
 }

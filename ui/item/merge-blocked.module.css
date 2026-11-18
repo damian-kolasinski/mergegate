@@ -1,20 +1,3 @@
-/* A strip under the header, tinted so a merge that's waiting on the operator
-   reads before the diff does. */
-.notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-container);
-  background: var(--background-tint-warning);
-  animation: var(--motion-arrive);
-}
-
-.notice > :not(:first-child) {
-  white-space: normal;
-}
-
 .reason {
   display: flex;
   flex-direction: column;
@@ -41,14 +24,6 @@
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-left: auto;
 }
 
 .paths {

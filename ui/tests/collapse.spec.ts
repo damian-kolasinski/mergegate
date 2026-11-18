@@ -1,5 +1,5 @@
 // The operator folds comment threads to a line, one at a time or all at
-// once, as GitHub folds a conversation, and the tab remembers them.
+// once with `z`, as GitHub folds a conversation, and the tab remembers them.
 
 import { expect, test } from "./hub";
 
@@ -43,16 +43,15 @@ test("a thread folds to a line and back", async ({ page, hub }) => {
   await expect(excerpt).toBeVisible();
   await expect(replies).toBeHidden();
 
-  // Every thread is folded, so the header's button and `z` unfold them.
-  const all = page.getByRole("button", { name: "Expand comments" });
-  await expect(all).toBeVisible();
+  // Every thread is folded, so `z` unfolds them, and again folds them all.
+  // The header has no button for it: the key and each thread's chevron do.
   await page.keyboard.press("z");
   await expect(replies).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Collapse comments" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Collapse comments" }).click();
+  await page.keyboard.press("z");
   await expect(replies).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: /^(Collapse|Expand) comments$/ }),
+  ).toHaveCount(0);
 
   // Clicking the line unfolds it.
   await excerpt.click();
@@ -70,7 +69,6 @@ test("a thread folds to a line and back", async ({ page, hub }) => {
   await expect(
     comment.getByRole("button", { name: "Collapse comment c_1" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Collapse comments" }).click();
   await expect(reply).toBeVisible();
 });
 
@@ -95,20 +93,20 @@ test("the header's controls share one height", async ({ page, hub }) => {
   await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
 
-  // Collapse comments' key hint once made it taller than the rest.
+  // A key hint once made one taller than the rest.
   // The first header is the item's; comments have their own.
   const header = page
     .getByRole("region", { name: "app#1" })
     .locator("header")
     .first();
   await expect(
-    header.getByRole("button", { name: "Collapse comments" }),
+    header.getByRole("button", { name: /^Conversation/ }),
   ).toBeVisible();
   const heights = await header
     .locator("button:visible, select:visible")
     .evaluateAll((controls) =>
       controls.map((control) => control.getBoundingClientRect().height),
     );
-  expect(heights.length).toBeGreaterThan(2);
+  expect(heights.length).toBeGreaterThan(1);
   expect(new Set(heights)).toEqual(new Set([32]));
 });

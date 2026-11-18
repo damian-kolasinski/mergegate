@@ -169,7 +169,7 @@ test("the operator abandons an item whose repository GitHub deleted", async ({
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
   await page.goto(`${github.hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
   await github.github.deleteRepo();
 
   await screen.getByRole("button", { name: "More actions" }).click();
@@ -177,7 +177,7 @@ test("the operator abandons an item whose repository GitHub deleted", async ({
   const confirm = page.getByRole("form", { name: "Abandon" });
   await confirm.getByRole("button", { name: "Abandon app#1" }).click();
   await expect(confirm).toContainText("doesn't exist on GitHub");
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await confirm
     .getByRole("button", { name: "Abandon in mergegate only" })

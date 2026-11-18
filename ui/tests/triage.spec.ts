@@ -32,8 +32,9 @@ test("f12 trusted files fold into a group of their own", async ({
   await expect(
     files.getByRole("group", { name: "src" }).getByRole("listitem"),
   ).toHaveText([/^main\.rs/]);
-  // Out of the count, so only the file to review is left.
-  await expect(screen).toContainText("0 of 1 reviewed · 1 trusted");
+  // Trusted, not one to review, which the header counts once one is marked.
+  await expect(screen.locator("header").first()).toContainText("1 trusted");
+  await expect(screen.locator("header").first()).not.toContainText("reviewed");
   const diff = screen.getByRole("region", { name: "Diff" });
   await expect(diff.getByText("fn main() {}", { exact: true })).toBeVisible();
   await expect(diff.getByText("parser = 2", { exact: true })).toHaveCount(0);
@@ -85,9 +86,9 @@ test("f12 v skips trusted files", async ({ page, hub }) => {
   await page.goto(`${hub.url}#/items/app%231`);
 
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen).toContainText("0 of 1 reviewed");
+  await expect(screen.getByText("main.rs").first()).toBeVisible();
   await page.keyboard.press("v");
-  await expect(screen).toContainText("1 of 1 reviewed");
+  await expect(screen).toContainText("1 of 1 reviewed · 1 trusted");
   // Marking the last file to review leaves the trusted one out of reach.
   const current = screen
     .getByRole("navigation", { name: "Files" })

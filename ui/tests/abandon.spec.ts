@@ -15,7 +15,7 @@ test("f14 the operator abandons an item with a reason", async ({
   submitLogin(hub);
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
   const more = screen.getByRole("button", { name: "More actions" });
   const open = async () => {
     await more.click();
@@ -63,7 +63,7 @@ test("f14 an item its agent abandons closes on screen", async ({
   submitLogin(hub);
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   hub.mg(["abandon", "app#1", "--reason", "Moved elsewhere."]);
   await expect(screen.getByRole("region", { name: "Abandoned" })).toBeVisible();

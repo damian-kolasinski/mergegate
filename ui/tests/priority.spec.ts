@@ -87,7 +87,7 @@ test("f10 shift-p sets the priority from the item's header", async ({
   three(hub);
   await page.goto(`${hub.url}#/items/app%231`);
   const header = page.getByRole("region", { name: "app#1" }).locator("header");
-  await expect(header).toContainText("Needs review");
+  await expect(header).toContainText("Add the parser");
   await expect(header).not.toContainText("p2");
 
   await page.keyboard.press("P");

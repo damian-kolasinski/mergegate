@@ -79,7 +79,7 @@ test("a merge reports the time the operator was active, per turn", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   // Twenty seconds reading between two moves counts whole.
   await page.mouse.move(10, 10);
@@ -129,7 +129,7 @@ test("a review waits for the time reports still on their way", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.mouse.move(10, 10);
   await page.clock.fastForward(20_000);
@@ -163,7 +163,7 @@ test("a review waits for a report sent while it waits", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.mouse.move(10, 10);
   await page.clock.fastForward(20_000);
@@ -197,7 +197,7 @@ test("a review waits for the reports of an earlier visit", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.mouse.move(10, 10);
   await page.clock.fastForward(10_000);
@@ -206,7 +206,7 @@ test("a review waits for the reports of an earlier visit", async ({
   await page.goto(`${hub.url}#/`);
   await expect.poll(reports.count).toBe(1);
   await page.goto(`${hub.url}#/items/app%231`);
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
   await page.mouse.move(30, 30);
   await page.clock.fastForward(5_000);
   await page
@@ -229,7 +229,7 @@ test("time while the window has no focus counts for nothing", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.mouse.move(10, 10);
   await page.clock.fastForward(10_000);
@@ -262,7 +262,7 @@ test("an abandon reports the turn under way first", async ({ page, hub }) => {
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.mouse.move(10, 10);
   await page.clock.fastForward(15_000);
@@ -290,7 +290,7 @@ test("time goes to the revision on screen, not the newest", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.mouse.move(10, 10);
   await page.clock.fastForward(10_000);
@@ -342,7 +342,7 @@ test("time while a merge runs counts for nothing, even when it conflicts", async
     await page.clock.install();
     await page.goto(`${hub.url}#/items/app%231`);
     const screen = page.getByRole("region", { name: "app#1" });
-    await expect(screen.getByText("Needs review")).toBeVisible();
+    await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
     await page.mouse.move(10, 10);
     await page.clock.fastForward(10_000);
@@ -389,7 +389,7 @@ test("watching a demo counts, though nothing is touched", async ({
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.getByRole("button", { name: /^Demo \(/ }).click();
   await expect(page.getByRole("dialog").locator("video")).toBeVisible();
@@ -412,7 +412,7 @@ test("a demo left looping counts only its length", async ({ page, hub }) => {
   await page.clock.install();
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   await page.getByRole("button", { name: /^Demo \(/ }).click();
   await expect(page.getByRole("dialog").locator("video")).toBeVisible();
