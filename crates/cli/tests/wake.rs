@@ -446,6 +446,61 @@ fn armed(env: &Env, session: &str) {
     }
 }
 
+/// The requests the hub has answered, this one included.
+fn served(env: &Env) -> u64 {
+    let addr = env.hub_addr();
+    let reply = http_reply(
+        &addr,
+        &format!("GET /api/health HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"),
+    );
+    reply
+        .header("x-mergegate-request-id")
+        .and_then(|id| id.rsplit_once('-'))
+        .and_then(|(_, n)| n.parse().ok())
+        .expect("a request ID")
+}
+
+/// The requests the hub answered while `run` ran.
+fn requests_during(env: &Env, run: impl FnOnce()) -> u64 {
+    let before = served(env);
+    run();
+    served(env) - before - 1
+}
+
+#[test]
+fn claude_hook_asks_once_however_many_items_the_project_has() {
+    let (env, repo) = setup();
+    let idle = || {
+        assert!(
+            Hook::start(&env, &repo, "session-idle")
+                .finish(0)
+                .is_empty()
+        );
+    };
+    let alone = requests_during(&env, idle);
+    let worktrees = tempfile::tempdir().unwrap();
+    for n in 0..3 {
+        let dir = worktrees.path().join(format!("other-{n}"));
+        let branch = format!("other-{n}");
+        repo.git([
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            &branch,
+            dir.to_str().unwrap(),
+            "main",
+        ]);
+        testkit::commit_files(&dir, "Other work", &[("src/other.rs", "fn other() {}\n")]);
+        env.mg_at(&dir, &["submit", "--wake", ""]).assert_code(0);
+    }
+    assert_eq!(
+        requests_during(&env, idle),
+        alone,
+        "the hook asked about other sessions' items"
+    );
+}
+
 #[test]
 fn claude_hook_rearms_without_redelivering_and_preserves_feedback() {
     let (env, repo) = setup();

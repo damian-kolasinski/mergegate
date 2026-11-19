@@ -2368,6 +2368,22 @@ impl AgentStore for FakeStore {
         Ok(())
     }
 
+    fn watched_from(
+        &self,
+        worktree: &str,
+        device: Option<&str>,
+    ) -> Result<Vec<ItemId>, StoreError> {
+        // Every closed item counts as closed today, as in `closed_today`.
+        Ok(self
+            .agents
+            .iter()
+            .filter(|(id, agent)| {
+                agent.watched_from(worktree, device) && self.items.iter().any(|i| &i.id == *id)
+            })
+            .map(|(id, _)| id.clone())
+            .collect())
+    }
+
     fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError> {
         let mut due = Vec::new();
         for (id, agent) in &self.agents {

@@ -3,6 +3,7 @@
 pub mod agent;
 pub mod agent_setup;
 pub mod attachment;
+pub mod attention;
 pub mod bot;
 pub mod decision;
 pub mod device;

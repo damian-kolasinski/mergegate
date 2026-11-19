@@ -8,6 +8,7 @@ use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, params};
 
 use crate::Store;
+use crate::items::TODAY;
 
 const ITEM: &str = "SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
                     WHERE p.name = ?1 AND i.number = ?2";
@@ -52,6 +53,36 @@ impl AgentStore for Store {
             )
             .map_err(StoreError::new)?;
         Ok(())
+    }
+
+    fn watched_from(
+        &self,
+        worktree: &str,
+        device: Option<&str>,
+    ) -> Result<Vec<ItemId>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!(
+                "SELECT p.name, i.number
+                 FROM item_agents a
+                 JOIN items i ON i.id = a.item_id
+                 JOIN projects p ON p.id = i.project_id
+                 WHERE a.worktree = ?1 AND a.device IS ?2 AND a.wake IS NULL
+                   AND (i.state NOT IN ('merged', 'abandoned') OR i.closed_at >= {TODAY})
+                 ORDER BY p.name, i.number"
+            ))
+            .map_err(StoreError::new)?;
+        let rows = stmt
+            .query_map(params![worktree, device], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(StoreError::new)?;
+        rows.map(|row| {
+            let (project, number) = row.map_err(StoreError::new)?;
+            let project = ProjectName::parse(&project).map_err(StoreError::new)?;
+            Ok(ItemId::new(project, number as u64))
+        })
+        .collect()
     }
 
     fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError> {

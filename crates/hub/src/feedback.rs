@@ -10,7 +10,6 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use mergegate_core::agent::AgentStore;
 use mergegate_core::feedback::{
     self, Event, EventKind, Feedback, FeedbackError, NoticeKind, Source, Wake,
 };
@@ -31,7 +30,6 @@ const MAX_WAIT: Duration = Duration::from_secs(3600);
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/items/{id}/feedback", get(read))
-        .route("/api/items/{id}/attention", get(attention))
         .route("/api/items/{id}/feedback/ack", post(acknowledge))
 }
 
@@ -125,47 +123,6 @@ async fn read(
     }
 }
 
-#[derive(Deserialize)]
-struct AttentionQuery {
-    worktree: String,
-}
-
-async fn attention(
-    State(state): State<Arc<AppState>>,
-    Extension(caller): Extension<Caller>,
-    id: Result<Path<String>, PathRejection>,
-    query: Result<Query<AttentionQuery>, QueryRejection>,
-) -> Result<Json<api::feedback::Attention>, Failure> {
-    let Path(id) = id?;
-    let Query(query) = query?;
-    let id = parse(&id)?;
-    let device = match caller {
-        Caller::Local => None,
-        Caller::Device(device, ..) => Some(device.name),
-    };
-    let lookup = id.clone();
-    let (read, watching) = state
-        .blocking(move |store, _| {
-            let read = feedback::feedback(store, &lookup, None)?;
-            let agent = store.agent(&lookup)?;
-            let watching = agent.device == device
-                && agent.wake.is_none()
-                && agent.worktree.as_deref() == Some(query.worktree.as_str());
-            Ok::<_, FeedbackError>((read, watching))
-        })
-        .await
-        .map_err(failure)?;
-    // The hook checks in at most every 30 seconds, within presence's grace.
-    // Unlike feedback reads, this never suppresses or acknowledges a wake.
-    let _present = watching.then(|| presence::reading(&state, &id));
-    Ok(Json(api::feedback::Attention {
-        watching,
-        name: read.item.name().to_string(),
-        state: items::state_to_api(read.item.state),
-        cursor: feedback::attention(read.item.state, &read.events),
-    }))
-}
-
 async fn acknowledge(
     State(state): State<Arc<AppState>>,
     id: Result<Path<String>, PathRejection>,
@@ -200,7 +157,7 @@ fn handing(
     }
 }
 
-fn parse(id: &str) -> Result<ItemId, Failure> {
+pub(crate) fn parse(id: &str) -> Result<ItemId, Failure> {
     ItemId::parse(id)
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
 }

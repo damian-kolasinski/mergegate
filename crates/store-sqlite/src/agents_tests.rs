@@ -276,3 +276,52 @@ fn approval_only_does_not_repeat_an_earlier_wake_or_consume_feedback() {
         .unwrap();
     assert_eq!(due(&store), [("app#1".into(), "a".into(), 3)]);
 }
+
+#[test]
+fn a_worktree_watches_its_items_without_a_wake_while_open_or_closed_today() {
+    let (_dir, mut store) = store();
+    let watched = |store: &Store, device: Option<&str>| -> Vec<String> {
+        store
+            .watched_from("/work", device)
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    };
+    let here = Agent {
+        worktree: Some("/work".into()),
+        wake: None,
+        device: None,
+    };
+    store.set_agent(&id("app#1"), &here).unwrap();
+    let laptop = Agent {
+        device: Some("laptop".into()),
+        ..here.clone()
+    };
+    store.set_agent(&id("app#2"), &laptop).unwrap();
+    assert_eq!(watched(&store, None), ["app#1"]);
+    assert_eq!(watched(&store, Some("laptop")), ["app#2"]);
+    assert!(store.watched_from("/other", None).unwrap().is_empty());
+
+    let close = |store: &Store, at: &str| {
+        store
+            .conn
+            .execute(
+                &format!("UPDATE items SET state = 'merged', closed_at = {at} WHERE number = 1"),
+                [],
+            )
+            .unwrap();
+    };
+    close(&store, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
+    assert_eq!(watched(&store, None), ["app#1"]);
+    // Before the operator's midnight, whatever their timezone.
+    close(&store, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days')");
+    assert!(watched(&store, None).is_empty());
+
+    let woken = Agent {
+        wake: Some("resume".into()),
+        ..laptop
+    };
+    store.set_agent(&id("app#2"), &woken).unwrap();
+    assert!(watched(&store, Some("laptop")).is_empty());
+}

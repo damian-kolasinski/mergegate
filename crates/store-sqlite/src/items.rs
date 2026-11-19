@@ -52,6 +52,10 @@ const OPEN: &str = "i.state IN ('needs_review', 'changes_requested', 'merging')"
 
 pub(crate) const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
+/// When today began, at the operator's midnight, in UTC as `closed_at` is.
+pub(crate) const TODAY: &str =
+    "strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'localtime', 'start of day', 'utc')";
+
 impl ItemStore for Store {
     fn weekly_closures(&self) -> Result<WeeklyClosures, StoreError> {
         self.weekly_closures_at("now")
@@ -98,7 +102,7 @@ impl ItemStore for Store {
             .conn
             .prepare_cached(&format!(
                 "{SELECT} WHERE i.state IN ('merged', 'abandoned')
-                   AND i.closed_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'localtime', 'start of day', 'utc')
+                   AND i.closed_at >= {TODAY}
                  ORDER BY i.closed_at DESC, i.id DESC"
             ))
             .map_err(StoreError::new)?;

@@ -36,6 +36,10 @@ impl AgentStore for Store {
         unreachable!()
     }
 
+    fn watched_from(&self, _: &str, _: Option<&str>) -> Result<Vec<ItemId>, StoreError> {
+        unreachable!()
+    }
+
     fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError> {
         let item = id();
         let woken = self.woken.get(&item).copied().unwrap_or(0);
