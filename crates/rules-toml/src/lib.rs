@@ -23,22 +23,29 @@ impl RulesToml {
     fn path(&self, project: &ProjectName) -> PathBuf {
         self.projects.join(project.as_str()).join("rules.toml")
     }
-}
 
-impl RulesFile for RulesToml {
-    fn read(&self, project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+    /// The file's text, none when there's no file, without parsing it: the
+    /// hub's poll compares it with the text it synced last.
+    pub fn text(&self, project: &ProjectName) -> Result<Option<String>, RulesFileError> {
         let path = self.path(project);
         match std::fs::read_to_string(&path) {
-            Ok(text) => {
-                let rules = parse(&text).map_err(RulesFileError::Invalid)?;
-                Ok(Some(RulesText { text, rules }))
-            }
+            Ok(text) => Ok(Some(text)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(RulesFileError::Io(format!(
                 "reading {} failed: {e}",
                 path.display()
             ))),
         }
+    }
+}
+
+impl RulesFile for RulesToml {
+    fn read(&self, project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+        let Some(text) = self.text(project)? else {
+            return Ok(None);
+        };
+        let rules = parse(&text).map_err(RulesFileError::Invalid)?;
+        Ok(Some(RulesText { text, rules }))
     }
 
     fn write(&self, project: &ProjectName, text: &str) -> Result<(), RulesFileError> {
