@@ -24,7 +24,10 @@ import { StackTrail } from "./stack";
 
 /**
  * What the item is on a line of its own, then where it stands and how much
- * of it is reviewed, with the screen's controls at the end.
+ * of it is reviewed, with the screen's controls at the end. Only what tells
+ * the operator something shows: the state once it isn't the usual Needs
+ * review, the reviewed count once a file is marked; the branch is in the
+ * name's tooltip.
  */
 export function ItemHeader(props: {
   item: Item;
@@ -50,11 +53,14 @@ export function ItemHeader(props: {
   /** At the end of the second line, which the Conversation list hangs below. */
   children?: JSX.Element;
 }) {
+  const branch = () => `${props.item.branch} → ${props.item.target}`;
   return (
     <header class={styles.header}>
       <div class={styles.name}>
-        <Mono>{props.item.name}</Mono>
-        <h1 class={styles.title} title={props.item.title}>
+        <span title={branch()}>
+          <Mono>{props.item.name}</Mono>
+        </span>
+        <h1 class={styles.title} title={`${props.item.title}\n${branch()}`}>
           {props.item.title}
         </h1>
       </div>
@@ -62,7 +68,11 @@ export function ItemHeader(props: {
         <Badge tone="brand" title={`Revision ${props.item.revision.number}`}>
           r{props.item.revision.number}
         </Badge>
-        <Badge tone={stateTone[props.state]}>{stateLabel[props.state]}</Badge>
+        <Show when={told(props.state)}>
+          {(state) => (
+            <Badge tone={stateTone[state()]}>{stateLabel[state()]}</Badge>
+          )}
+        </Show>
         <MergeableBadge
           mergeable={props.mergeable}
           blocked={props.blocked}
@@ -73,9 +83,6 @@ export function ItemHeader(props: {
           note={props.note}
           keyHint="P"
         />
-        <Meta>
-          <Mono>{props.item.branch}</Mono> → <Mono>{props.item.target}</Mono>
-        </Meta>
         <Show when={props.item.link}>
           {(link) => (
             <ExternalLink href={link().url} title={link().title}>
@@ -88,10 +95,15 @@ export function ItemHeader(props: {
           additions={props.item.revision.additions}
           deletions={props.item.revision.deletions}
         />
-        <Meta>
-          {props.reviewed} of {props.review} reviewed
-          <Show when={props.trusted}> · {props.trusted} trusted</Show>
-        </Meta>
+        <Show when={props.reviewed || props.trusted}>
+          <Meta>
+            <Show when={props.reviewed}>
+              {props.reviewed} of {props.review} reviewed
+            </Show>
+            <Show when={props.reviewed && props.trusted}> · </Show>
+            <Show when={props.trusted}>{props.trusted} trusted</Show>
+          </Meta>
+        </Show>
         <Show when={props.failure}>
           {(failure) => <ErrorNote failure={failure()} />}
         </Show>
@@ -108,16 +120,21 @@ export function ItemHeader(props: {
   );
 }
 
-const stateLabel: Record<ItemState, string> = {
-  needs_review: "Needs review",
+/** A state the header names: all but the one nearly every review is in. */
+type Told = Exclude<ItemState, "needs_review">;
+
+function told(state: ItemState): Told | undefined {
+  return state === "needs_review" ? undefined : state;
+}
+
+const stateLabel: Record<Told, string> = {
   changes_requested: "Changes requested",
   merging: "Merging",
   merged: "Merged",
   abandoned: "Abandoned",
 };
 
-const stateTone: Record<ItemState, Tone> = {
-  needs_review: "brand",
+const stateTone: Record<Told, Tone> = {
   changes_requested: "warning",
   merging: "brand",
   merged: "success",

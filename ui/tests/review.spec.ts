@@ -220,7 +220,8 @@ test("f6 v marks the current file viewed and moves on", async ({
   await expect(screen.getByLabel("Viewed a.txt")).not.toBeChecked();
   await expect(changed).toBeVisible();
   await expect(current).toContainText("a.txt");
-  await expect(screen.getByText("0 of 4 reviewed")).toBeVisible();
+  // With none marked, the header leaves the count out.
+  await expect(screen.getByText(/of 4 reviewed/)).toHaveCount(0);
 });
 
 test("f6 v right after moving to a file still moves on", async ({
@@ -276,7 +277,7 @@ test("f6 a file's header marks it viewed", async ({ page, hub }) => {
   await page.reload();
   // Its box unmarks it.
   await diff.getByLabel("Viewed new.txt").uncheck();
-  await expect(page.getByText("0 of 4 reviewed")).toBeVisible();
+  await expect(page.getByText(/of 4 reviewed/)).toHaveCount(0);
   await expect(page.getByText("hello", { exact: true })).toBeVisible();
 });
 

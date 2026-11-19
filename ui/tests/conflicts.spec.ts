@@ -51,7 +51,7 @@ test("f9 an open item's page shows the conflict the watch finds", async ({
     app.submit("readme", "Greet", { README: "hello, login\n" });
     await page.goto(`${hub.url}#/items/app%231`);
     const screen = page.getByRole("region", { name: "app#1" });
-    await expect(screen.getByText("Needs review")).toBeVisible();
+    await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
     app.seed({ README: "hi there\n" });
     const conflict = screen.getByRole("region", { name: "Merge conflict" });

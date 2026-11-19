@@ -1,6 +1,8 @@
 // The review screen warns when no agent will read what the operator sends:
 // none waits on the item, and it left no wake command.
 
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, type Hub, test } from "./hub";
 
 function submitChange(hub: Hub) {
@@ -46,4 +48,26 @@ test("a closed item doesn't warn", async ({ page, hub }) => {
 
   await expect(page.getByText("Abandoned").first()).toBeVisible();
   await expect(page.getByRole("region", { name: "No agent" })).toHaveCount(0);
+});
+
+test("a merging item warns above the diff, with no review bar to hold it", async ({
+  page,
+  hub,
+}) => {
+  const app = hub.project("app");
+  app.seed({ README: "hello\n" });
+  app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
+  // An edit on the checked-out target holds the merge, which stays Merging.
+  app.seed({ NOTES: "notes\n" });
+  writeFileSync(join(app.dir, "README"), "edited\n");
+  await page.goto(`${hub.url}#/items/app%231`);
+  const screen = page.getByRole("region", { name: "app#1" });
+  await page.getByRole("button", { name: "Approve & merge" }).click();
+
+  await expect(
+    screen.getByRole("region", { name: "Merge held" }),
+  ).toBeVisible();
+  await expect(page.getByRole("form", { name: "Review" })).toHaveCount(0);
+  const away = screen.getByRole("region", { name: "No agent" });
+  await expect(away.getByText("mg resume app#1")).toBeVisible();
 });

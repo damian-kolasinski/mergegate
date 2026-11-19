@@ -1,4 +1,5 @@
 import { createSignal, onCleanup, Show } from "solid-js";
+import type { JSX } from "solid-js";
 import type { Approve } from "../api/Approve";
 import type { Blocked } from "../api/Blocked";
 import type { ChangedSince } from "../api/ChangedSince";
@@ -63,6 +64,11 @@ export function ReviewBar(props: {
   /** The hub held the review over drafts that can't move to this revision. */
   onHeld: () => void;
   onMerged: (merge: Merge) => void;
+  /**
+   * Notes on the item that only inform, first in the status row: no agent
+   * to read what's sent, a newer revision to switch to.
+   */
+  notes?: JSX.Element;
 }) {
   const summary = () => props.summary;
   const setSummary = (summary: string) => props.onSummary(summary);
@@ -208,6 +214,7 @@ export function ReviewBar(props: {
   return (
     <form class={styles.bar} aria-label="Review">
       <div class={styles.status}>
+        {props.notes}
         <p role="status" class={styles.said}>
           <Show when={failure()}>
             {(current) => <ErrorNote failure={current()} />}

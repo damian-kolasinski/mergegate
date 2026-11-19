@@ -25,7 +25,6 @@ test("f6 a summary alone hands the item to the agent", async ({
   await page.goto(`${hub.url}#/items/app%231`);
 
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
   const review = screen.getByRole("form", { name: "Review" });
   const send = review.getByRole("button", { name: "Send comments" });
   await expect(send).toBeDisabled();
@@ -106,7 +105,7 @@ test("f6 a newer revision takes the approval away, not comments", async ({
   const app = submitChange(hub);
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   app.revise("Log in", { "login.rs": "fn login(password: String) {}\n" });
   const banner = screen.getByRole("region", { name: "Newer revision" });
@@ -127,7 +126,7 @@ test("f6 a newer revision takes the approval away, not comments", async ({
   // A summary on r1 doesn't hand back r3, which the operator hasn't read.
   await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByText("Changes requested")).toHaveCount(0);
   const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
   expect(feedback.state).toBe("needs_review");
 });

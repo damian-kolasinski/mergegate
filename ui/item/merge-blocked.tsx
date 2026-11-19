@@ -4,6 +4,7 @@ import type { Merge } from "../api/Merge";
 import { deleteJson, type Failure, failureOf, postJson } from "../app/hub";
 import { Badge, Button, ErrorNote, Meta, Mono } from "../design-system";
 import styles from "./merge-blocked.module.css";
+import { Notice } from "./notice";
 
 /**
  * Why the newest revision's merge didn't land. A held merge waits for the
@@ -41,7 +42,33 @@ export function MergeBlocked(props: {
           // there for whoever wants it.
           const reason = () => split(held().reason);
           return (
-            <section class={styles.notice} aria-label="Merge held">
+            <Notice
+              label="Merge held"
+              tone="warning"
+              actions={
+                <>
+                  <Show when={failure()}>
+                    {(failure) => <ErrorNote failure={failure()} />}
+                  </Show>
+                  <Button
+                    variant="danger"
+                    disabled={sending() !== undefined}
+                    busy={sending() === "cancel"}
+                    onClick={cancel}
+                  >
+                    {sending() === "cancel" ? "Cancelling…" : "Cancel merge"}
+                  </Button>
+                  <Button
+                    variant="solid"
+                    disabled={sending() !== undefined}
+                    busy={sending() === "retry"}
+                    onClick={retry}
+                  >
+                    {sending() === "retry" ? "Retrying…" : "Retry merge"}
+                  </Button>
+                </>
+              }
+            >
               <Badge tone="warning" solid>
                 Merge held
               </Badge>
@@ -56,34 +83,24 @@ export function MergeBlocked(props: {
                   )}
                 </Show>
               </span>
-              <span class={styles.actions}>
-                <Show when={failure()}>
-                  {(failure) => <ErrorNote failure={failure()} />}
-                </Show>
-                <Button
-                  variant="danger"
-                  disabled={sending() !== undefined}
-                  busy={sending() === "cancel"}
-                  onClick={cancel}
-                >
-                  {sending() === "cancel" ? "Cancelling…" : "Cancel merge"}
-                </Button>
-                <Button
-                  variant="solid"
-                  disabled={sending() !== undefined}
-                  busy={sending() === "retry"}
-                  onClick={retry}
-                >
-                  {sending() === "retry" ? "Retrying…" : "Retry merge"}
-                </Button>
-              </span>
-            </section>
+            </Notice>
           );
         }}
       </Match>
       <Match when={props.blocked.kind === "waiting" && props.blocked}>
         {(waiting) => (
-          <section class={styles.notice} aria-label="Merge waiting">
+          <Notice
+            label="Merge waiting"
+            tone="warning"
+            actions={
+              <>
+                <Show when={failure()}>
+                  {(failure) => <ErrorNote failure={failure()} />}
+                </Show>
+                <CancelMerge sending={sending()} onCancel={cancel} />
+              </>
+            }
+          >
             <Badge tone="brand" solid>
               Approved
             </Badge>
@@ -91,18 +108,23 @@ export function MergeBlocked(props: {
               Merges right after <Mono>{waiting().parent}</Mono>, which it's
               stacked on, lands.
             </Meta>
-            <span class={styles.actions}>
-              <Show when={failure()}>
-                {(failure) => <ErrorNote failure={failure()} />}
-              </Show>
-              <CancelMerge sending={sending()} onCancel={cancel} />
-            </span>
-          </section>
+          </Notice>
         )}
       </Match>
       <Match when={props.blocked.kind === "behind" && props.blocked}>
         {(behind) => (
-          <section class={styles.notice} aria-label="Merge behind">
+          <Notice
+            label="Merge behind"
+            tone="warning"
+            actions={
+              <>
+                <Show when={failure()}>
+                  {(failure) => <ErrorNote failure={failure()} />}
+                </Show>
+                <CancelMerge sending={sending()} onCancel={cancel} />
+              </>
+            }
+          >
             <Badge tone="warning" solid>
               Behind
             </Badge>
@@ -112,18 +134,12 @@ export function MergeBlocked(props: {
               rebase: it merges on this approval if its diff comes back
               unchanged.
             </Meta>
-            <span class={styles.actions}>
-              <Show when={failure()}>
-                {(failure) => <ErrorNote failure={failure()} />}
-              </Show>
-              <CancelMerge sending={sending()} onCancel={cancel} />
-            </span>
-          </section>
+          </Notice>
         )}
       </Match>
       <Match when={props.blocked.kind === "conflict" && props.blocked}>
         {(conflict) => (
-          <section class={styles.notice} aria-label="Merge conflict">
+          <Notice label="Merge conflict" tone="warning">
             <Badge tone="warning" solid>
               Conflict
             </Badge>
@@ -141,7 +157,7 @@ export function MergeBlocked(props: {
               </For>
             </ul>
             <Meta>Sent back to the agent to rebase.</Meta>
-          </section>
+          </Notice>
         )}
       </Match>
     </Switch>

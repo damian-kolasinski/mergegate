@@ -1,6 +1,5 @@
-import { createEffect, createSignal, on, Show } from "solid-js";
+import { createEffect, createSignal, on } from "solid-js";
 import type { Comment } from "../../api/Comment";
-import { Button } from "../../design-system";
 import styles from "./collapse.module.css";
 import type { Comments } from "./comments";
 import type { CommentEditor } from "./editor";
@@ -85,23 +84,9 @@ export function FoldButton(props: { comments: Comments; comment: Comment }) {
 }
 
 /**
- * The header's button that folds every thread, or unfolds them once all
- * are: GitHub's "Hide comments" for the whole item.
+ * `z`: folds every thread, or unfolds them once all are, as GitHub's "Hide
+ * comments" does for the whole item.
  */
-export function CollapseAll(props: { comments: Comments }) {
-  const all = () => props.comments.threads.all();
-  const folded = () =>
-    all().every((comment) => props.comments.collapse.folded(comment));
-  return (
-    <Show when={all().length}>
-      <Button keyHint="z" onClick={() => toggleAll(props.comments)}>
-        {folded() ? "Expand comments" : "Collapse comments"}
-      </Button>
-    </Show>
-  );
-}
-
-/** `z`: what the header's button does. */
 export function toggleAll(comments: Comments) {
   const all = comments.threads.all();
   comments.collapse.all(

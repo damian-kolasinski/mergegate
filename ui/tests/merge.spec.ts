@@ -16,7 +16,7 @@ test("f8 approving merges the item", async ({ page, hub }) => {
   app.submit("login", "Add login", { "src/login.rs": "fn login() {}\n" });
   await page.goto(`${hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   // One step: no confirm, though no file is marked viewed.
   await page.getByRole("textbox", { name: "Review summary" }).fill("Ship it.");
@@ -45,7 +45,7 @@ test("f8 a merges at once", async ({ page, hub }) => {
       new KeyboardEvent("keydown", { key: "a", repeat: true, bubbles: true }),
     ),
   );
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(page.getByRole("form", { name: "Review" })).toBeVisible();
   expect(events(hub)).toEqual([]);
 
   await page.keyboard.press("a");
@@ -137,7 +137,7 @@ test("f8 cancelling a held merge puts the item back in review", async ({
   const held = screen.getByRole("region", { name: "Merge held" });
   await held.getByRole("button", { name: "Cancel merge" }).click();
 
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByText("Merging", { exact: true })).toHaveCount(0);
   await expect(held).toHaveCount(0);
   await expect(page.getByRole("form", { name: "Review" })).toBeVisible();
   expect(events(hub).map((event) => event.type)).toEqual([
@@ -215,7 +215,7 @@ test("f8 a held merge cancelled after a reload takes comments again", async ({
   const screen = page.getByRole("region", { name: "app#1" });
   const held = screen.getByRole("region", { name: "Merge held" });
   await held.getByRole("button", { name: "Cancel merge" }).click();
-  await expect(screen.getByText("Needs review")).toBeVisible();
+  await expect(screen.getByRole("form", { name: "Review" })).toBeVisible();
 
   const line = screen.getByRole("code").filter({ hasText: "fn login" });
   await line.getByText("fn login() {}").hover();

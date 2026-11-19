@@ -28,7 +28,7 @@ import {
   type Span,
 } from "../diff-view/diff-view";
 import { Button, Empty, ErrorNote } from "../design-system";
-import { CollapseAll, toggleAll } from "./comments/collapse";
+import { toggleAll } from "./comments/collapse";
 import { useComments } from "./comments/comments";
 import { DeletedDraft } from "./comments/drafts";
 import { ComparePicker } from "./compare";
@@ -612,6 +612,27 @@ function Review(props: {
     },
   );
 
+  // What only informs: in the review bar's status while it's there, else,
+  // as while a merge is under way, on a line under the header. A merging
+  // item can still get a revision, or need an agent to rebase it.
+  const notes = () => (
+    <>
+      <Show when={props.agent === "away"}>
+        <AgentAway name={props.latest.name} />
+      </Show>
+      <Show when={props.newest}>
+        {(newest) => (
+          <NewerRevision
+            newest={newest()}
+            shown={props.diff.item.revision.number}
+            holding={comments.editor.holding()}
+            onSwitch={() => props.onCompare("all")}
+          />
+        )}
+      </Show>
+    </>
+  );
+
   return (
     <>
       <div class={styles.top}>
@@ -641,7 +662,6 @@ function Review(props: {
             holding={comments.editor.holding()}
             onChange={props.onCompare}
           />
-          <CollapseAll comments={comments} />
           <Conversation
             comments={comments}
             open={talking()}
@@ -710,6 +730,9 @@ function Review(props: {
         <Show when={props.diff.guide}>
           {(guide) => <Intent guide={guide()} />}
         </Show>
+        <Show when={!reviewable(state())}>
+          <div class={styles.notes}>{notes()}</div>
+        </Show>
         <Show when={props.blocked}>
           {(blocked) => (
             <MergeBlocked
@@ -717,19 +740,6 @@ function Review(props: {
               target={props.diff.item.target}
               blocked={blocked()}
               onChanged={props.onMerge}
-            />
-          )}
-        </Show>
-        <Show when={props.agent === "away"}>
-          <AgentAway name={props.latest.name} />
-        </Show>
-        <Show when={props.newest}>
-          {(newest) => (
-            <NewerRevision
-              newest={newest()}
-              shown={props.diff.item.revision.number}
-              holding={comments.editor.holding()}
-              onSwitch={() => props.onCompare("all")}
             />
           )}
         </Show>
@@ -827,6 +837,7 @@ function Review(props: {
           onSubmitted={reviewed}
           onHeld={comments.held}
           onMerged={props.onMerge}
+          notes={notes()}
         />
       </Show>
       <DeletedDraft comments={comments} />
