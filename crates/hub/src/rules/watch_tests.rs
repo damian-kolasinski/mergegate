@@ -55,8 +55,11 @@ fn retries_a_failed_sync_and_an_unreadable_file_every_poll() {
     assert_eq!(stale(&mut seen, vec![("app", text("a"))]), ["app"]);
 
     let unreadable = || Err(RulesFileError::Io("denied".into()));
+    synced(&mut seen, vec![("app", text("a"))]);
     synced(&mut seen, vec![("app", unreadable())]);
     assert_eq!(stale(&mut seen, vec![("app", unreadable())]), ["app"]);
+    // Readable again as the text synced before it wasn't, it syncs again.
+    assert_eq!(stale(&mut seen, vec![("app", text("a"))]), ["app"]);
 }
 
 #[test]

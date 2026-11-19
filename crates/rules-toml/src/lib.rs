@@ -37,15 +37,46 @@ impl RulesToml {
             ))),
         }
     }
+
+    /// One project's file as `text`, read earlier, which reads as that text
+    /// rather than the file: the hub's poll syncs exactly what it compared.
+    pub fn snapshot(&self, text: Option<String>) -> Snapshot<'_> {
+        Snapshot { file: self, text }
+    }
+}
+
+/// See [`RulesToml::snapshot`]. Writes go to the file.
+pub struct Snapshot<'a> {
+    file: &'a RulesToml,
+    text: Option<String>,
+}
+
+impl RulesFile for Snapshot<'_> {
+    fn read(&self, _: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+        self.text.clone().map(rules_text).transpose()
+    }
+
+    fn write(&self, project: &ProjectName, text: &str) -> Result<(), RulesFileError> {
+        self.file.write(project, text)
+    }
+
+    fn insert(&self, text: &str, rule: &Rule, at: Place) -> Result<String, RulesFileError> {
+        self.file.insert(text, rule, at)
+    }
+
+    fn location(&self, project: &ProjectName) -> String {
+        self.file.location(project)
+    }
+}
+
+fn rules_text(text: String) -> Result<RulesText, RulesFileError> {
+    let rules = parse(&text).map_err(RulesFileError::Invalid)?;
+    Ok(RulesText { text, rules })
 }
 
 impl RulesFile for RulesToml {
     fn read(&self, project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
-        let Some(text) = self.text(project)? else {
-            return Ok(None);
-        };
-        let rules = parse(&text).map_err(RulesFileError::Invalid)?;
-        Ok(Some(RulesText { text, rules }))
+        self.text(project)?.map(rules_text).transpose()
     }
 
     fn write(&self, project: &ProjectName, text: &str) -> Result<(), RulesFileError> {

@@ -215,3 +215,23 @@ fn writes_a_location_under_home_with_a_tilde() {
         "/home/op/.mergegate/projects/app/rules.toml"
     );
 }
+
+#[test]
+fn a_snapshot_reads_the_text_it_was_given_not_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = RulesToml::new(dir.path().to_owned());
+    file.write(&app(), "").unwrap();
+    let text = "[[rule]]\nid = \"R1\"\ntier = \"review\"\npath = \"src/**\"\nreason = \"code\"\n";
+    let read = file
+        .snapshot(Some(text.into()))
+        .read(&app())
+        .unwrap()
+        .unwrap();
+    assert_eq!(read.text, text);
+    assert_eq!(read.rules.len(), 1);
+    assert_eq!(file.snapshot(None).read(&app()).unwrap(), None);
+    assert!(matches!(
+        file.snapshot(Some("[[rule]]\n".into())).read(&app()),
+        Err(RulesFileError::Invalid(_))
+    ));
+}

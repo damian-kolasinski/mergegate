@@ -68,7 +68,27 @@ impl RulesFiles {
         store: &mut Store,
         project: &ProjectName,
     ) -> Result<Changes, StoreError> {
-        let synced = triage::sync(store, &self.file, project)?;
+        self.sync_with(store, project, &self.file)
+    }
+
+    /// [`Self::sync`] from `text`, which the poll read: what the poll keeps
+    /// as synced is then what was, even if the file moved on since.
+    fn sync_from(
+        &self,
+        store: &mut Store,
+        project: &ProjectName,
+        text: Option<String>,
+    ) -> Result<Changes, StoreError> {
+        self.sync_with(store, project, &self.file.snapshot(text))
+    }
+
+    fn sync_with(
+        &self,
+        store: &mut Store,
+        project: &ProjectName,
+        file: &impl RulesFile,
+    ) -> Result<Changes, StoreError> {
+        let synced = triage::sync(store, file, project)?;
         let (error, items) = match synced {
             Synced::Invalid(error) => (Some(error), None),
             Synced::Unchanged => (None, None),
@@ -156,7 +176,13 @@ pub(crate) async fn run(state: Arc<AppState>) {
                 let mut synced = Vec::new();
                 // One project's failure leaves the others' edits applying.
                 for (project, text) in stale {
-                    match app.rules.sync(store, &project) {
+                    // A file that couldn't be read is read again, for the
+                    // sync to report why.
+                    let applied = match &text {
+                        Ok(read) => app.rules.sync_from(store, &project, read.clone()),
+                        Err(_) => app.rules.sync(store, &project),
+                    };
+                    match applied {
                         Ok(applied) => {
                             changes.extend(applied);
                             synced.push((project, text));
@@ -202,9 +228,8 @@ impl Seen {
             .collect()
     }
 
-    /// The files synced, each from the text the poll read before its sync,
-    /// which read it again: an edit in between is newer than the text kept,
-    /// so the next poll syncs it.
+    /// The files synced, each from the text the poll read: an edit since
+    /// differs from the text kept, so the next poll syncs it.
     fn synced(&mut self, synced: Vec<(ProjectName, Read)>) {
         for (project, text) in synced {
             match text {
