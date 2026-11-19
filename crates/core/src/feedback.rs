@@ -4,8 +4,10 @@
 //! agent saw its events returns them again.
 
 mod log;
+mod watch;
 
 pub use log::{Log, log};
+pub use watch::{Watch, Watched, Watching, watch};
 
 use crate::external::{Batch, Override};
 use crate::item::{Item, ItemId, ItemState, ItemStore};

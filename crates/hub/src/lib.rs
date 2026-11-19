@@ -3,6 +3,7 @@
 mod abandon;
 pub mod agents;
 mod attachments;
+mod attention;
 mod branches;
 mod comments;
 mod conflicts;

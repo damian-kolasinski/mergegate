@@ -21,11 +21,12 @@ use rules_toml::RulesToml;
 use store_sqlite::Store;
 
 use crate::{
-    Home, HubError, HubInfo, abandon, agents, attachments, branches, comments, conflicts,
-    conversation, demo_zip, devices, diagnostics, diff, doctor, draft_replies, event_log, events,
-    external, feedback, git_http, guard, highlights, io, items, judge, languages, lifecycle, merge,
-    names, phone_link, presence, priority, projects, remote_wakes, replies, reply, resume,
-    review_time, reviews, rules, settings, tailnet, telemetry, ui, viewed, wake,
+    Home, HubError, HubInfo, abandon, agents, attachments, attention, branches, comments,
+    conflicts, conversation, demo_zip, devices, diagnostics, diff, doctor, draft_replies,
+    event_log, events, external, feedback, git_http, guard, highlights, io, items, judge,
+    languages, lifecycle, merge, names, phone_link, presence, priority, projects, remote_wakes,
+    replies, reply, resume, review_time, reviews, rules, settings, tailnet, telemetry, ui, viewed,
+    wake,
 };
 
 pub(crate) struct AppState {
@@ -268,6 +269,7 @@ pub(crate) async fn serve(
         .merge(viewed::routes())
         .merge(review_time::routes())
         .merge(attachments::routes())
+        .merge(attention::routes())
         .merge(demo_zip::routes())
         .merge(settings::routes())
         .merge(phone_link::routes())

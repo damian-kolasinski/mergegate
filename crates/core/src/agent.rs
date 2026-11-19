@@ -18,6 +18,17 @@ pub struct Agent {
     pub device: Option<String>,
 }
 
+impl Agent {
+    /// Whether a session's Stop hook in `worktree` on `device` watches the
+    /// item: its newest submit came from there and left no wake command,
+    /// which would wake the agent instead.
+    pub fn watched_from(&self, worktree: &str, device: Option<&str>) -> bool {
+        self.wake.is_none()
+            && self.device.as_deref() == device
+            && self.worktree.as_deref() == Some(worktree)
+    }
+}
+
 /// An item whose agent is to be woken: it has a wake command and an event
 /// from the operator newer than both the one its agent acknowledged and the
 /// one that woke it last. The agent's own events, like its `mg abandon`,
@@ -40,6 +51,12 @@ pub trait AgentStore {
     fn agent(&self, id: &ItemId) -> Result<Agent, StoreError>;
 
     fn set_agent(&mut self, id: &ItemId, agent: &Agent) -> Result<(), StoreError>;
+
+    /// The items whose agent is [`Agent::watched_from`] `worktree` on
+    /// `device`, while they're open or closed today as
+    /// [`crate::item::ItemStore::closed_today`] counts it, ordered by ID.
+    fn watched_from(&self, worktree: &str, device: Option<&str>)
+    -> Result<Vec<ItemId>, StoreError>;
 
     /// Items with unread actionable events; successful merges are silent.
     fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError>;

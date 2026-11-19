@@ -8,13 +8,13 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use api::feedback::Attention;
-use api::item::{Inbox, ItemState};
+use api::attention::{Watch, Watched, Watching};
+use api::item::ItemState;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{Client, segment};
+use crate::client::Client;
 use crate::output::{CliError, Outcome};
-use crate::{events_cmd, repo};
+use crate::repo;
 
 const LIFETIME: Duration = Duration::from_secs(604_800);
 
@@ -92,9 +92,7 @@ fn run_hook() -> Result<Outcome, CliError> {
     if local.is_none() && !items.exists() {
         return Ok(silent());
     }
-    let local = local
-        .as_ref()
-        .map(|(project, root)| (project.as_str(), root.as_path()));
+    let local = local.as_deref();
     fs::create_dir_all(&directory).map_err(failed)?;
     let lock = File::options()
         .create(true)
@@ -139,14 +137,14 @@ fn run_hook() -> Result<Outcome, CliError> {
                 checkpoint.failed = false;
                 if !notifications.is_empty() {
                     let mut text = Vec::new();
-                    for (id, attention) in notifications {
-                        checkpoint
-                            .notified
-                            .insert(id, attention.cursor.expect("actionable"));
+                    for watched in notifications {
                         text.push(format!(
                             "Run `mg feedback {}` and act on the feedback.",
-                            attention.name
+                            watched.name
                         ));
+                        checkpoint
+                            .notified
+                            .insert(watched.id, watched.cursor.expect("actionable"));
                     }
                     save(&path, &checkpoint)?;
                     return Ok(Outcome::done(&text, text.join("\n")).exit(2));
@@ -178,20 +176,18 @@ fn run_hook() -> Result<Outcome, CliError> {
     }
 }
 
-/// The project and worktree of the session's directory, when it is a
-/// mergegate clone.
-fn local() -> Result<Option<(String, PathBuf)>, CliError> {
+/// The worktree of the session's directory, when it is a mergegate clone.
+fn local() -> Result<Option<PathBuf>, CliError> {
     let Some(remote) = repo::read(&["remote", "get-url", repo::REMOTE])? else {
         return Ok(None);
     };
-    let Some(project) = super::session_start::project(&remote) else {
+    if super::session_start::project(&remote).is_none() {
         return Ok(None);
-    };
+    }
     let Some(root) = repo::read(&["rev-parse", "--show-toplevel"])? else {
         return Ok(None);
     };
-    let root = Path::new(&root).canonicalize().map_err(failed)?;
-    Ok(Some((project.to_owned(), root)))
+    Path::new(&root).canonicalize().map(Some).map_err(failed)
 }
 
 /// Every item the session submitted, by ID, with the worktree of its latest
@@ -208,60 +204,58 @@ fn submitted(items: &Path) -> Result<BTreeMap<String, String>, CliError> {
     }
 }
 
+/// One wait on the hub for every item the session watches: those its clone
+/// owns, the ones it found there before, and its own submits. Returns the
+/// items with something new worth a turn, and whether any is still open.
 fn poll(
     home: &hub::Home,
-    local: Option<(&str, &Path)>,
+    local: Option<&Path>,
     items: &Path,
     cursor: &mut Option<u64>,
     known: &mut BTreeSet<String>,
     notified: &BTreeMap<String, u64>,
-) -> Result<(Vec<(String, Attention)>, bool), CliError> {
+) -> Result<(Vec<Watched>, bool), CliError> {
     let client = Client::connect(home)?.time_limit(Duration::from_secs(40));
-    // Start the log before discovery so an event arriving during discovery
-    // cannot fall between the snapshot and the next long poll.
-    let log = events_cmd::read(&client, *cursor, if cursor.is_some() { 30 } else { 0 })?;
-    *cursor = Some(log.cursor);
-    let mut watched = BTreeMap::new();
-    if let Some((project, root)) = local {
-        let inbox: Inbox = client.get("/api/inbox")?;
-        for item in inbox
-            .needs_you
+    let root = local.map(|root| root.to_string_lossy().into_owned());
+    // An item found in the clone stays watched there once it's no longer
+    // open or closed today; the session's own submits name their worktree,
+    // wherever it ends turns.
+    let mut named = BTreeMap::new();
+    if let Some(root) = &root {
+        named.extend(known.iter().map(|id| (id.clone(), root.clone())));
+    }
+    named.extend(submitted(items)?);
+    let watch = Watch {
+        worktree: root.clone(),
+        items: named
             .into_iter()
-            .chain(inbox.with_agents)
-            .chain(inbox.merging)
-            .chain(inbox.closed)
-        {
-            if item.name.split_once('#').map(|(name, _)| name) == Some(project) {
-                known.insert(item.id);
-            }
-        }
-        let root = root.to_string_lossy();
-        watched.extend(known.iter().map(|id| (id.clone(), root.to_string())));
+            .map(|(id, worktree)| api::attention::Submitted { id, worktree })
+            .collect(),
+    };
+    // The first read starts from now, at once; later ones wait after it, so
+    // nothing logged between two reads goes unseen.
+    let since = cursor.map(|cursor| cursor.to_string());
+    let query = match &since {
+        Some(since) => vec![("since", since.as_str()), ("wait", "30")],
+        None => Vec::new(),
+    };
+    let watching: Watching = client.post_query("/api/attention", &query, &watch)?;
+    *cursor = Some(watching.cursor);
+    if root.is_some() {
+        *known = watching.items.iter().map(|w| w.id.clone()).collect();
     }
-    // The session's own submits name their worktree, wherever it ends turns.
-    watched.extend(submitted(items)?);
-    let mut notifications = Vec::new();
-    let mut open = false;
-    let mut remove = Vec::new();
-    for (id, worktree) in &watched {
-        let prefix = format!("/api/items/{}", segment(id));
-        let attention: Attention =
-            client.get_query(&format!("{prefix}/attention"), &[("worktree", worktree)])?;
-        if !attention.watching {
-            remove.push(id.clone());
-            continue;
-        }
-        open |= !matches!(attention.state, ItemState::Merged | ItemState::Abandoned);
-        if attention
-            .cursor
-            .is_some_and(|cursor| cursor > *notified.get(id).unwrap_or(&0))
-        {
-            notifications.push((id.clone(), attention));
-        }
-    }
-    for id in remove {
-        known.remove(&id);
-    }
+    let open = watching
+        .items
+        .iter()
+        .any(|w| !matches!(w.state, ItemState::Merged | ItemState::Abandoned));
+    let notifications = watching
+        .items
+        .into_iter()
+        .filter(|w| {
+            w.cursor
+                .is_some_and(|cursor| cursor > *notified.get(&w.id).unwrap_or(&0))
+        })
+        .collect();
     Ok((notifications, open))
 }
 

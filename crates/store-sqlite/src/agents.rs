@@ -54,6 +54,40 @@ impl AgentStore for Store {
         Ok(())
     }
 
+    fn watched_from(
+        &self,
+        worktree: &str,
+        device: Option<&str>,
+    ) -> Result<Vec<ItemId>, StoreError> {
+        // `closed_at` is UTC, and today starts at the operator's midnight,
+        // as in `closed_today`.
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT p.name, i.number
+                 FROM item_agents a
+                 JOIN items i ON i.id = a.item_id
+                 JOIN projects p ON p.id = i.project_id
+                 WHERE a.worktree = ?1 AND a.device IS ?2 AND a.wake IS NULL
+                   AND (i.state NOT IN ('merged', 'abandoned')
+                        OR i.closed_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'localtime',
+                                                   'start of day', 'utc'))
+                 ORDER BY p.name, i.number",
+            )
+            .map_err(StoreError::new)?;
+        let rows = stmt
+            .query_map(params![worktree, device], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(StoreError::new)?;
+        rows.map(|row| {
+            let (project, number) = row.map_err(StoreError::new)?;
+            let project = ProjectName::parse(&project).map_err(StoreError::new)?;
+            Ok(ItemId::new(project, number as u64))
+        })
+        .collect()
+    }
+
     fn due_wakes(&self) -> Result<Vec<DueWake>, StoreError> {
         let mut stmt = self
             .conn

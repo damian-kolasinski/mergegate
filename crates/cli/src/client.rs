@@ -116,6 +116,21 @@ impl Client {
         self.read(request.send_json(body))
     }
 
+    /// A read that takes a body, as a long poll whose `query` holds `wait`.
+    pub fn post_query<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+        body: &impl Serialize,
+    ) -> Result<T, CliError> {
+        let request = self
+            .agent
+            .post(self.url(path))
+            .query_pairs(query.iter().copied())
+            .header(api::CLIENT_HEADER, "mg");
+        done(self.read(request.send_json(body)))
+    }
+
     pub fn patch<T: DeserializeOwned>(
         &self,
         path: &str,
