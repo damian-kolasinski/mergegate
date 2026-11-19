@@ -23,22 +23,60 @@ impl RulesToml {
     fn path(&self, project: &ProjectName) -> PathBuf {
         self.projects.join(project.as_str()).join("rules.toml")
     }
-}
 
-impl RulesFile for RulesToml {
-    fn read(&self, project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+    /// The file's text, none when there's no file, without parsing it: the
+    /// hub's poll compares it with the text it synced last.
+    pub fn text(&self, project: &ProjectName) -> Result<Option<String>, RulesFileError> {
         let path = self.path(project);
         match std::fs::read_to_string(&path) {
-            Ok(text) => {
-                let rules = parse(&text).map_err(RulesFileError::Invalid)?;
-                Ok(Some(RulesText { text, rules }))
-            }
+            Ok(text) => Ok(Some(text)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(RulesFileError::Io(format!(
                 "reading {} failed: {e}",
                 path.display()
             ))),
         }
+    }
+
+    /// One project's file as `text`, read earlier, which reads as that text
+    /// rather than the file: the hub's poll syncs exactly what it compared.
+    pub fn snapshot(&self, text: Option<String>) -> Snapshot<'_> {
+        Snapshot { file: self, text }
+    }
+}
+
+/// See [`RulesToml::snapshot`]. Writes go to the file.
+pub struct Snapshot<'a> {
+    file: &'a RulesToml,
+    text: Option<String>,
+}
+
+impl RulesFile for Snapshot<'_> {
+    fn read(&self, _: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+        self.text.clone().map(rules_text).transpose()
+    }
+
+    fn write(&self, project: &ProjectName, text: &str) -> Result<(), RulesFileError> {
+        self.file.write(project, text)
+    }
+
+    fn insert(&self, text: &str, rule: &Rule, at: Place) -> Result<String, RulesFileError> {
+        self.file.insert(text, rule, at)
+    }
+
+    fn location(&self, project: &ProjectName) -> String {
+        self.file.location(project)
+    }
+}
+
+fn rules_text(text: String) -> Result<RulesText, RulesFileError> {
+    let rules = parse(&text).map_err(RulesFileError::Invalid)?;
+    Ok(RulesText { text, rules })
+}
+
+impl RulesFile for RulesToml {
+    fn read(&self, project: &ProjectName) -> Result<Option<RulesText>, RulesFileError> {
+        self.text(project)?.map(rules_text).transpose()
     }
 
     fn write(&self, project: &ProjectName, text: &str) -> Result<(), RulesFileError> {

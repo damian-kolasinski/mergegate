@@ -420,6 +420,42 @@ fn f12_the_largest_rule_id_only_stops_new_rules() {
     assert_eq!(refused["error"]["code"], "no_rule_id_left");
 }
 
+/// Waits for the hub's poll to give `path` in app#1's diff `rule`.
+#[track_caller]
+fn polled(env: &Env, path: &str, rule: &str) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    // Read without syncing, so only the poll can have applied it.
+    while !triage(env)
+        .iter()
+        .any(|file| file["path"] == path && file["rule"] == rule)
+    {
+        assert!(Instant::now() < deadline, "{rule} never applied to {path}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn f12_the_poll_applies_each_hand_edit() {
+    let env = env();
+    let repo = project(&env);
+    submit(
+        &env,
+        &repo,
+        &[("src/main.rs", "fn main() {}\n"), ("docs/a.md", "a\n")],
+    );
+    let first = "[[rule]]\nid = \"R1\"\ntier = \"review\"\npath = \"src/**\"\nreason = \"code\"\n";
+    write_rules(&env, first);
+    polled(&env, "src/main.rs", "R1");
+    // A later edit to the file the poll already applied.
+    write_rules(
+        &env,
+        &format!(
+            "{first}\n[[rule]]\nid = \"R2\"\ntier = \"review\"\npath = \"docs/**\"\nreason = \"docs\"\n"
+        ),
+    );
+    polled(&env, "docs/a.md", "R2");
+}
+
 fn rules_file(env: &Env) -> String {
     fs::read_to_string(env.home().join("projects").join("app").join("rules.toml")).unwrap()
 }
