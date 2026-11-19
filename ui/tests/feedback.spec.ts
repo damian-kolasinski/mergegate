@@ -17,7 +17,7 @@ type Feedback = {
   events: { revision: number; verdict: string; summary: string }[];
 };
 
-test("f6 request changes sends the summary to the agent", async ({
+test("f6 a summary alone hands the item to the agent", async ({
   page,
   hub,
 }) => {
@@ -27,14 +27,18 @@ test("f6 request changes sends the summary to the agent", async ({
   const screen = page.getByRole("region", { name: "app#1" });
   await expect(screen.getByText("Needs review")).toBeVisible();
   const review = screen.getByRole("form", { name: "Review" });
-  const request = review.getByRole("button", { name: "Request changes" });
-  await expect(request).toBeDisabled();
+  const send = review.getByRole("button", { name: "Send comments" });
+  await expect(send).toBeDisabled();
+  await expect(
+    review.getByRole("button", { name: "Request changes" }),
+  ).toHaveCount(0);
 
+  // No line to comment on, as for a rebase: the summary is the ask.
   await page.keyboard.press("r");
   const summary = review.getByRole("textbox", { name: "Review summary" });
   await expect(summary).toBeFocused();
-  await page.keyboard.type("Reject an empty password.");
-  await request.click();
+  await page.keyboard.type("Rebase onto main.");
+  await send.click();
 
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
   await expect(summary).toHaveValue("");
@@ -43,11 +47,7 @@ test("f6 request changes sends the summary to the agent", async ({
   const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
   expect(feedback.state).toBe("changes_requested");
   expect(feedback.events).toMatchObject([
-    {
-      revision: 1,
-      verdict: "changes_requested",
-      summary: "Reject an empty password.",
-    },
+    { revision: 1, verdict: "comment", summary: "Rebase onto main." },
   ]);
 });
 
@@ -70,22 +70,6 @@ test("f6 ⌘↩ sends comments from outside the summary", async ({ page, hub }) 
   expect(feedback.events).toMatchObject([
     { revision: 1, verdict: "comment", summary: "Looks close." },
   ]);
-});
-
-test("f6 comment leaves the item with the operator", async ({ page, hub }) => {
-  submitChange(hub);
-  await page.goto(`${hub.url}#/items/app%231`);
-
-  const review = page.getByRole("form", { name: "Review" });
-  await review
-    .getByRole("textbox", { name: "Review summary" })
-    .fill("Looking good so far.");
-  await review.getByRole("button", { name: "Comment" }).click();
-
-  await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
-  await expect(page.getByText("Needs review")).toBeVisible();
-  const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
-  expect(feedback.events).toMatchObject([{ verdict: "comment" }]);
 });
 
 test("f6 comments the agent acts on hand the item to it", async ({
@@ -115,7 +99,7 @@ test("f6 comments the agent acts on hand the item to it", async ({
   expect(feedback.events).toMatchObject([{ verdict: "comment" }]);
 });
 
-test("f6 a newer revision takes request changes away, not comments", async ({
+test("f6 a newer revision takes the approval away, not comments", async ({
   page,
   hub,
 }) => {
@@ -128,23 +112,24 @@ test("f6 a newer revision takes request changes away, not comments", async ({
   const banner = screen.getByRole("region", { name: "Newer revision" });
   await expect(banner.getByText("r2 submitted")).toBeVisible();
 
-  // The hub turns away changes requested on code the agent already replaced.
   const review = screen.getByRole("form", { name: "Review" });
   await review
     .getByRole("textbox", { name: "Review summary" })
     .fill("Reject an empty password.");
-  const request = review.getByRole("button", { name: "Request changes" });
-  await expect(request).toBeDisabled();
-  await expect(request).toHaveAttribute("title", "Show r2 to request changes");
+  const approve = review.getByRole("button", { name: "Approve & merge" });
+  await expect(approve).toBeDisabled();
+  await expect(approve).toHaveAttribute("title", "Show r2 to approve it");
   // The newest, however many revisions came after the one shown.
   app.revise("Log in again", { "login.rs": "fn login(password: &[u8]) {}\n" });
   await expect(banner.getByText("r3 submitted")).toBeVisible();
-  await expect(request).toHaveAttribute("title", "Show r3 to request changes");
-  await expect(
-    review.getByRole("button", { name: "Approve & merge" }),
-  ).toHaveAttribute("title", "Show r3 to approve it");
+  await expect(approve).toHaveAttribute("title", "Show r3 to approve it");
+
+  // A summary on r1 doesn't hand back r3, which the operator hasn't read.
   await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
+  await expect(screen.getByText("Needs review")).toBeVisible();
+  const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
+  expect(feedback.state).toBe("needs_review");
 });
 
 test("f6 the way on after a review reaches every item that needs the operator", async ({
@@ -157,20 +142,17 @@ test("f6 the way on after a review reaches every item that needs the operator", 
   app.submit("c", "Third", { "c.txt": "c\n" });
   await page.goto(`${hub.url}#/items/app%231`);
 
-  // A comment leaves each item in Needs you, where the way on goes past it
-  // rather than back to it, round after round.
+  // Each review hands its item back, and the way on goes to the next one
+  // still waiting, until none is.
   const review = page.getByRole("form", { name: "Review" });
   for (const [item, next] of [
-    ["app%231", "app#2"],
-    ["app%232", "app#3"],
-    ["app%233", "app#1"],
     ["app%231", "app#2"],
     ["app%232", "app#3"],
   ] as const) {
     await expect(page).toHaveURL(new RegExp(`#/items/${item}`));
     await review
       .getByRole("textbox", { name: "Review summary" })
-      .fill("Looking good so far.");
+      .fill("Name the files.");
     await review.getByRole("button", { name: "Send comments" }).click();
     await expect(review.getByRole("link", { name: /^Next:/ })).toContainText(
       next,
@@ -178,6 +160,11 @@ test("f6 the way on after a review reaches every item that needs the operator", 
     await page.keyboard.press("Enter");
   }
   await expect(page).toHaveURL(/#\/items\/app%233/);
+  await review
+    .getByRole("textbox", { name: "Review summary" })
+    .fill("Name the files.");
+  await review.getByRole("button", { name: "Send comments" }).click();
+  await expect(review.getByText("Nothing else needs you")).toBeVisible();
 });
 
 test("f6 an item revised after a review comes next again", async ({

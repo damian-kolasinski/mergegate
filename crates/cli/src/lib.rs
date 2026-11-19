@@ -25,7 +25,6 @@ mod resume_cmd;
 mod rules_cmd;
 mod skill_cmd;
 mod submit_cmd;
-mod sync_cmd;
 mod wait_cmd;
 mod wakes_cmd;
 
@@ -177,13 +176,6 @@ enum Command {
         #[arg(long)]
         body: Option<String>,
     },
-    /// Read the item's pull request comments on GitHub now and get those the
-    /// hub holds at once; the hub polls on its own, so only when it missed
-    /// some
-    Sync {
-        /// The item, as in app#42; on GitHub, by its pull request's number
-        item: String,
-    },
     /// Set how urgent an open item is, which orders the operator's inbox
     Prioritize {
         /// The item, as in app#42; on GitHub, by its pull request's number
@@ -294,7 +286,6 @@ fn dispatch(command: Command, json: bool) -> Result<Outcome, CliError> {
             status,
             body,
         } => reply_cmd::run(comment, status, body),
-        Command::Sync { item } => sync_cmd::run(item),
         Command::Prioritize {
             item,
             priority,

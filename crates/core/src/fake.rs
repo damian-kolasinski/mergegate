@@ -2785,7 +2785,6 @@ impl Github for FakeGithub {
         &self,
         repo: &GithubRepo,
         number: u64,
-        _fresh: bool,
     ) -> Result<Vec<PullComment>, GithubError> {
         self.signed_in()?;
         Ok(self

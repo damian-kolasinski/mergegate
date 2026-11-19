@@ -1,8 +1,8 @@
 //! External review, against a fake GitHub: comments on an item's pull
 //! request the operator votes up reach its agent in one batch once
 //! reviewers go quiet, expected bots hold the batch until they've
-//! commented, `mg sync` hands over what's held at once, and the
-//! operator agrees with or overrides the agent's rejection of one.
+//! commented, an edit asks for a new vote, and the operator agrees with or
+//! overrides the agent's rejection of one.
 
 use std::time::{Duration, Instant};
 
@@ -162,59 +162,48 @@ fn f5_expected_bots_hold_the_batch_until_they_have_commented() {
 }
 
 #[test]
-fn sync_hands_over_held_comments_at_once_and_edits_again() {
+fn an_edit_asks_for_a_new_vote_before_it_goes_again() {
     let github = FakeGithub::start();
-    let (env, _repo) = submitted(&github, [NEVER, NEVER, NEVER]);
+    let (env, _repo) = submitted(&github, ["100", "200", NEVER]);
     let posted = github.comment(ACME, 1, GithubNewComment::issue("alice", "Needs a test."));
-
-    // Brought in, it waits for the operator's vote.
-    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 1, "edited": 0, "released": 0 }));
+    let wait = |timeout: &str| env.mg(&["--json", "wait", "app#1", "--timeout", timeout]);
     vote(&env, "Needs a test.", "up");
-    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 1 }));
-    let feedback = env
-        .mg(&["--json", "feedback", "app#1"])
-        .assert_code(0)
-        .json();
-    let comment = &feedback["events"][0]["comments"][0];
-    assert_eq!(comment["body"], "Needs a test.", "{feedback}");
+    let first = wait("30").assert_code(0).json();
+    let comment = &first["events"][0]["comments"][0];
+    assert_eq!(comment["body"], "Needs a test.", "{first}");
 
-    // The edit asks for a new vote before it goes again.
     github.edit_comment(posted, "Needs two tests.");
-    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 0, "edited": 1, "released": 0 }));
+    until(&env, "the poller never saw the edit", |c| {
+        c[0]["body"] == "Needs two tests."
+    });
+    wait("1").assert_code(75);
     vote(&env, "Needs two tests.", "up");
-    let synced = env.mg(&["sync", "app#1"]).assert_code(0);
-    assert_eq!(
-        synced.stdout.trim(),
-        "synced app#1 with GitHub: 0 new, 0 edited\n\
-         1 comment is waiting for you: mg feedback app#1"
-    );
-    let feedback = env
-        .mg(&["--json", "feedback", "app#1"])
-        .assert_code(0)
-        .json();
-    let event = &feedback["events"][0];
-    assert_eq!(event["comments"][0]["body"], "Needs two tests.");
+    let edited = wait("30").assert_code(0).json();
+    let event = &edited["events"][0];
+    assert_eq!(event["comments"][0]["body"], "Needs two tests.", "{edited}");
     assert_eq!(event["edited"], json!([comment["id"]]));
+}
 
-    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 0 }));
+/// Starts the hub again with `quiet` as the quiet window, its poll as fast.
+fn quiet_after_restart(env: &Env, quiet: &str) {
+    env.mg(&["hub", "stop"]).assert_code(0);
+    env.mg_with_env(
+        &["--json", "hub", "start", "--port", "0"],
+        &[("MG_EXTERNAL_QUIET_MS", quiet)],
+    )
+    .assert_code(0);
 }
 
 #[test]
 fn the_operator_agrees_with_or_overrides_a_rejection() {
     let github = FakeGithub::start();
-    let (env, _repo) = submitted(&github, [NEVER, NEVER, NEVER]);
+    let (env, _repo) = submitted(&github, ["100", "200", NEVER]);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     vote(&env, "Rename it.", "up");
     vote(&env, "Split it.", "up");
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     let feedback = env
-        .mg(&["--json", "feedback", "app#1"])
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
         .assert_code(0)
         .json();
     let comments = &feedback["events"][0]["comments"];
@@ -315,10 +304,15 @@ fn conversation(env: &Env) -> Value {
 #[test]
 fn a_wait_for_the_operator_leaves_held_comments_held() {
     let github = FakeGithub::start();
-    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    // Reviewers going quiet hands over the first comment; the hub then
+    // starts again to hold the next one.
+    let (env, _repo) = submitted(&github, ["100", "200", NEVER]);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
     vote(&env, "Rename it.", "up");
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    until(&env, "the poller never handed it over", |c| {
+        c[0]["external"]["pending"] == false
+    });
+    quiet_after_restart(&env, NEVER);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
     vote(&env, "Split it.", "up");
 
@@ -354,11 +348,14 @@ fn a_wait_for_the_operator_leaves_held_comments_held() {
 #[test]
 fn a_wait_since_the_printed_cursor_takes_held_comments_along() {
     let github = FakeGithub::start();
-    let (env, _repo) = submitted(&github, ["100", NEVER, NEVER]);
+    let (env, _repo) = submitted(&github, ["100", "200", NEVER]);
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Rename it."));
     vote(&env, "Rename it.", "up");
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
-    let first = env.mg(&["--json", "wait", "app#1"]).assert_code(0).json();
+    let first = env
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
+        .assert_code(0)
+        .json();
+    quiet_after_restart(&env, NEVER);
     let cursor = first["cursor"].to_string();
     github.comment(ACME, 1, GithubNewComment::issue("alice", "Split it."));
     vote(&env, "Split it.", "up");
@@ -489,10 +486,12 @@ fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
     vote(&env, "Needs a test.", "up");
 
     github.delete_comment(doomed);
-    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 1 }));
+    until(&env, "the poller never dropped it", |c| {
+        c.as_array().unwrap().len() == 1
+    });
+    quiet_after_restart(&env, "200");
     let feedback = env
-        .mg(&["--json", "feedback", "app#1"])
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
         .assert_code(0)
         .json();
     let bodies: Vec<_> = feedback["events"][0]["comments"]
@@ -519,8 +518,9 @@ fn a_comment_deleted_on_github_is_dropped_unless_a_batch_carried_it() {
         c[0]["body"] == "Needs two tests."
     });
     github.delete_comment(kept);
-    let synced = env.mg(&["--json", "sync", "app#1"]).assert_code(0).json();
-    assert_eq!(synced, json!({ "new": 0, "edited": 0, "released": 0 }));
+    until(&env, "the poller never withdrew the edit", |c| {
+        c[0]["body"] == "Needs a test."
+    });
     let shown = conversation(&env);
     let comments = &shown["comments"];
     assert_eq!(comments.as_array().unwrap().len(), 1, "{comments}");
@@ -674,7 +674,7 @@ fn the_poller_closes_an_item_merged_on_github_and_wakes_its_agent() {
     vote(&env, "Merging it myself.", "up");
     let commit = github.merge_on_github(ACME, 1);
 
-    // No sync: the poller alone closes it, which ends the agent's wait. The
+    // The poller closes it, which ends the agent's wait. The
     // comment, though reviewers never went quiet, goes first.
     let wait = env.mg(&["wait", "app#1", "--timeout", "20"]);
     assert_eq!(wait.code, 0, "{}{}", wait.stdout, wait.stderr);

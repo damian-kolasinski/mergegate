@@ -19,7 +19,6 @@ async function heldThenRebased(page: Page, hub: Hub) {
   writeFileSync(join(app.dir, "README"), "edited\n");
   await page.goto(`${hub.url}#/items/app%231`);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   const screen = page.getByRole("region", { name: "app#1" });
   await expect(
     screen.getByRole("region", { name: "Merge held" }),

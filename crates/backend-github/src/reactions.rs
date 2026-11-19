@@ -14,7 +14,7 @@ pub(crate) fn of_pull(
     number: u64,
 ) -> Result<Vec<PullReaction>, GithubError> {
     let path = format!("/repos/{repo}/issues/{number}/reactions?per_page=100");
-    let items = comments::items(api, cache, &path, false)?;
+    let items = comments::items(api, cache, &path)?;
     Ok(items.iter().filter_map(reaction).collect())
 }
 

@@ -80,10 +80,6 @@ test("f8 approving merges the pull request", async ({ page, github }) => {
   await page.goto(`${github.hub.url}#/items/app%231`);
   const screen = page.getByRole("region", { name: "app#1" });
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page
-    .getByRole("group", { name: "Confirm merge" })
-    .getByRole("button", { name: "Merge" })
-    .click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   await page.goto(`${github.github.web}/acme/app/pull/1`);
@@ -97,10 +93,6 @@ test("f8 the inbox answers while GitHub merges", async ({ page, github }) => {
   await github.github.holdMerges(true);
   await page.goto(`${hub.url}#/items/app%231`);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page
-    .getByRole("group", { name: "Confirm merge" })
-    .getByRole("button", { name: "Merge" })
-    .click();
 
   // Asked with a short timeout: a hub that waits on GitHub doesn't answer.
   const merging = async () => {

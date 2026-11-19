@@ -99,25 +99,32 @@ fn a_review_sends_every_draft_on_the_item() {
 }
 
 #[test]
-fn a_comment_leaves_the_item_where_it_is() {
+fn a_summary_on_the_newest_revision_hands_the_item_to_its_agent() {
     let mut store = FakeStore::with_item(1);
-    submit(
+    let reviewed = submit(
         &mut store,
         &FakeGit::default(),
-        request(1, Verdict::Comment, "Looks close."),
+        request(1, Verdict::Comment, "Rebase onto main."),
     )
     .unwrap();
-    assert_eq!(state(&store), ItemState::NeedsReview);
-
-    store.set_state(&id("app#1"), ItemState::ChangesRequested);
-    submit(
-        &mut store,
-        &FakeGit::default(),
-        request(1, Verdict::Comment, "One more thing."),
-    )
-    .unwrap();
+    assert_eq!(reviewed.state, ItemState::ChangesRequested);
     assert_eq!(state(&store), ItemState::ChangesRequested);
-    assert_eq!(store.events(&id("app#1"), 0).unwrap().len(), 2);
+    let events = store.events(&id("app#1"), 0).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, EventKind::ReviewSubmitted(reviewed.review));
+}
+
+#[test]
+fn a_summary_on_an_older_revision_leaves_the_newest_for_review() {
+    let mut store = FakeStore::with_item(2);
+    let reviewed = submit(
+        &mut store,
+        &FakeGit::default(),
+        request(1, Verdict::Comment, "Looked at r1 too."),
+    )
+    .unwrap();
+    assert_eq!(reviewed.state, ItemState::NeedsReview);
+    assert_eq!(state(&store), ItemState::NeedsReview);
 }
 
 fn draft_on(store: &mut FakeStore, revision: u32) {

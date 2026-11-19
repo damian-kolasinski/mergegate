@@ -98,7 +98,6 @@ test("a merge reports the time the operator was active, per turn", async ({
   await page.clock.fastForward(10_000);
   await page.mouse.move(40, 40);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const stats = closing(hub, "item.merged");
@@ -148,7 +147,6 @@ test("a review waits for the time reports still on their way", async ({
   await expect(screen.getByText("Sent to the agent on r1")).toBeVisible();
   expect(reports.reviews).toEqual([[]]);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const stats = closing(hub, "item.merged");
@@ -251,7 +249,6 @@ test("time while the window has no focus counts for nothing", async ({
   await page.clock.fastForward(5_000);
   await page.mouse.move(50, 50);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const turn = closing(hub, "item.merged")?.turns[0];
@@ -310,7 +307,6 @@ test("time goes to the revision on screen, not the newest", async ({
   await page.clock.fastForward(20_000);
   await page.mouse.move(60, 60);
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const stats = closing(hub, "item.merged");
@@ -353,7 +349,6 @@ test("time while a merge runs counts for nothing, even when it conflicts", async
     await page.mouse.move(20, 20);
     app.seed({ README: "hi there\n" });
     await page.getByRole("button", { name: "Approve & merge" }).click();
-    await page.getByRole("button", { name: "Merge", exact: true }).click();
     // The merge takes a minute, with the operator moving about.
     for (const at of [30, 40, 50]) {
       await page.mouse.move(at, at);
@@ -367,7 +362,7 @@ test("time while a merge runs counts for nothing, even when it conflicts", async
     await page
       .getByRole("textbox", { name: "Review summary" })
       .fill("Rebase it.");
-    await page.getByRole("button", { name: "Request changes" }).click();
+    await page.getByRole("button", { name: "Send comments" }).click();
     await expect(screen.getByText("Sent to the agent on r1")).toBeVisible();
     hub.mg(["abandon", "app#1"]);
 
@@ -375,7 +370,7 @@ test("time while a merge runs counts for nothing, even when it conflicts", async
     expect(approved?.verdict).toBe("approved");
     expect(approved?.review_ms).toBeGreaterThanOrEqual(10_000);
     expect(approved?.review_ms).toBeLessThan(20_000);
-    expect(after?.verdict).toBe("changes_requested");
+    expect(after?.verdict).toBe("comment");
     expect(after?.review_ms).toBeGreaterThanOrEqual(5_000);
     expect(after?.review_ms).toBeLessThan(15_000);
   } finally {
@@ -402,7 +397,6 @@ test("watching a demo counts, though nothing is touched", async ({
   await watch(page, 5 * 60_000, 4 * 60_000);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const turn = closing(hub, "item.merged")?.turns[0];
@@ -426,7 +420,6 @@ test("a demo left looping counts only its length", async ({ page, hub }) => {
   await watch(page, 45_000, 5 * 60_000);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(screen.getByText("Merged", { exact: true })).toBeVisible();
 
   const turn = closing(hub, "item.merged")?.turns[0];

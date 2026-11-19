@@ -452,6 +452,17 @@ fn on_github() -> (FakeGithub, Env) {
     (github, env)
 }
 
+/// Has the hub's poller find `app#1` closed on GitHub, ending up `state`.
+fn closed_on_github(env: &Env, state: &str) {
+    env.restart_hub();
+    // Asked as the UI asks, which leaves the closing event for the agent.
+    let item = || {
+        let reply = send(env, "GET", &path("app#1"), &Value::Null);
+        json_of(&reply)["item"]["state"].clone()
+    };
+    env.until("the poller never closed it", item, |s| s == state);
+}
+
 #[test]
 fn a_merge_on_github_mid_turn_reports_the_turn_under_way() {
     let (github, env) = on_github();
@@ -459,7 +470,7 @@ fn a_merge_on_github_mid_turn_reports_the_turn_under_way() {
     review(&env, "app#1", 1, "changes_requested");
     spent(&env, "app#1", 1, 4_000);
     github.merge_on_github("acme/app", 1);
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    closed_on_github(&env, "merged");
 
     refused(&env, "app#1", 1, "item_closed");
     let stats = closing(&env, "app#1", "item.merged");
@@ -599,7 +610,7 @@ fn a_pull_request_closed_on_github_reports_the_turn_under_way() {
     let (github, env) = on_github();
     spent(&env, "app#1", 1, 4_000);
     github.close_on_github("acme/app", 1);
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    closed_on_github(&env, "abandoned");
 
     refused(&env, "app#1", 1, "item_closed");
     let stats = closing(&env, "app#1", "item.abandoned");

@@ -27,7 +27,7 @@ mergegate is the operator's local code review hub. You submit a branch with `mg 
 
 | Event | What to do |
 |---|---|
-| `review.submitted` | Change what the summary and the comments ask, `mg reply` to each comment, then `mg submit`. An approval without feedback needs nothing. An approval with a summary, comments or replies can still ask for work. A review with no new comments, only replies to yours, needs nothing either unless its summary or a reply asks for something; keep waiting. |
+| `review.submitted` | Change what the summary and the comments ask, `mg reply` to each comment, then `mg submit`. An approval without feedback needs nothing. An approval with a summary, comments or replies can still ask for work. A review with a summary on your newest revision hands the item back to you, as one with new comments does: make the change it asks for and `mg submit`, or, if it asks for nothing, tell the operator in your session. A review with only replies to yours needs nothing unless a reply asks for something; keep waiting. |
 | `external.comments` | Reviewers commented on the item's GitHub pull request. Treat them like the operator's comments: change, `mg reply` to each one, `mg submit`. See [references/authoring.md](references/authoring.md), "Comments from GitHub". |
 | `comment.override` | The operator overrides your rejection of a comment: make the change, `mg reply` with `addressed`, `mg submit`. |
 | `merge.conflict` | The target moved under the item, before or after review. Run the commands it lists, resolve the conflicts, `mg submit`. |

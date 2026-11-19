@@ -38,7 +38,7 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
   await page.keyboard.type("Reject an empty password.");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(review.getByText("1 draft")).toBeVisible();
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText("Sent to the agent on r1 with 1 comment"),
   ).toBeVisible();
@@ -48,7 +48,7 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
   expect(asked.events).toMatchObject([
     {
       revision: 1,
-      verdict: "changes_requested",
+      verdict: "comment",
       comments: [
         {
           id: "c_1",
@@ -140,7 +140,7 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
     .fill("Log the failure, please.");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(moved).toContainText("Log the failure, please.");
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText("Sent to the agent on r2 with 1 comment"),
   ).toBeVisible();
@@ -154,7 +154,7 @@ test("f6 f7 a review goes round between the operator and the agent", async ({
   expect(third.events).toMatchObject([
     {
       revision: 2,
-      verdict: "changes_requested",
+      verdict: "comment",
       comments: [
         {
           id: "c_2",

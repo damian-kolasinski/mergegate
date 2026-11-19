@@ -38,10 +38,6 @@ pub(crate) struct AppState {
     pub bots: external::bots::Bots,
     pub wake_logs: PathBuf,
     pub wake_bin: PathBuf,
-    /// Held across a pull of pull request comments, from asking GitHub to
-    /// storing what it said, so a slower poll can't store older bodies over
-    /// what a `mg sync` just brought in.
-    pub pulling: tokio::sync::Mutex<()>,
     /// Held across a merge, which lets go of the store while it lands, and
     /// by everything else that moves an item (a submit, an abandon, a close
     /// followed from GitHub) or syncs staging's target, so none moves one or
@@ -237,7 +233,6 @@ pub(crate) async fn serve(
         bots: external::bots::Bots::default(),
         wake_logs: home.wake_logs(),
         wake_bin: home.wake_bin(),
-        pulling: tokio::sync::Mutex::new(()),
         landing: Arc::default(),
         languages: Arc::new(languages),
         known_packs: highlight::known(),

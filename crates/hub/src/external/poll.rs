@@ -63,7 +63,7 @@ async fn once(state: &Arc<AppState>, timing: Timing, failing: &mut Failing) {
     failing.reactions.retain(|id, _| items.contains(id));
     state.bots.retain(&items);
     for id in items {
-        let ingested = match pull(state, &id, false).await {
+        let ingested = match pull(state, &id).await {
             Ok(ingested) => {
                 failing.comments.remove(&id);
                 ingested

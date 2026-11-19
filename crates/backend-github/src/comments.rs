@@ -45,7 +45,6 @@ pub(crate) fn of_pull(
     cache: &Cache,
     repo: &GithubRepo,
     number: u64,
-    fresh: bool,
 ) -> Result<Vec<PullComment>, GithubError> {
     let mut comments = Vec::new();
     for kind in PullCommentKind::ALL {
@@ -56,7 +55,7 @@ pub(crate) fn of_pull(
         }
         .replace("{n}", &number.to_string());
         let path = format!("/repos/{repo}/{list}?per_page={PER_PAGE}");
-        for value in items(api, cache, &path, fresh)? {
+        for value in items(api, cache, &path)? {
             if let Some(comment) = comment(kind, &value)? {
                 comments.push(comment);
             }
@@ -88,14 +87,9 @@ pub(crate) fn one(
 }
 
 /// Every item of the list at `path`, following its pages.
-pub(crate) fn items(
-    api: &Api,
-    cache: &Cache,
-    path: &str,
-    fresh: bool,
-) -> Result<Vec<Value>, GithubError> {
+pub(crate) fn items(api: &Api, cache: &Cache, path: &str) -> Result<Vec<Value>, GithubError> {
     let lists = || cache.lists.lock().unwrap_or_else(|e| e.into_inner());
-    let known = lists().get(path).filter(|_| !fresh).cloned();
+    let known = lists().get(path).cloned();
     let reply = api.get_if(path, known.as_ref().map(|(etag, _)| etag.as_str()))?;
     if reply.status == 304
         && let Some((_, items)) = known

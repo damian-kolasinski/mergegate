@@ -312,7 +312,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
         let comment = github.comments().into_iter().find(|c| c.id == id);
         comment.unwrap().updated_at * 1_000
     };
-    let comments = client.pull_comments(&acme(), 1, false).unwrap();
+    let comments = client.pull_comments(&acme(), 1).unwrap();
     let page = format!("{}/acme/app/pull/1", github.web_url());
     let expected = vec![
         PullComment {
@@ -359,7 +359,7 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
 
     // A push outdates the inline comment: it keeps where it was written.
     github.git("acme/app", ["update-ref", "refs/heads/login", "main"]);
-    let comments = client.pull_comments(&acme(), 1, false).unwrap();
+    let comments = client.pull_comments(&acme(), 1).unwrap();
     let lines = comments[0].lines.clone().unwrap();
     assert_eq!(
         (lines.original_commit, lines.original_line, lines.line),
@@ -368,21 +368,17 @@ fn lists_every_kind_of_comment_on_a_pull_request() {
 }
 
 #[test]
-fn asks_again_with_the_etag_unless_fresh() {
+fn asks_again_with_the_etag() {
     let (github, client, _repo) = with_pull();
     let id = github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?"));
-    let first = client.pull_comments(&acme(), 1, false).unwrap();
+    let first = client.pull_comments(&acme(), 1).unwrap();
     assert_eq!(github.not_modified(), 0);
 
-    assert_eq!(client.pull_comments(&acme(), 1, false).unwrap(), first);
-    assert_eq!(github.not_modified(), 3);
-
-    // A fresh read sends no ETag.
-    assert_eq!(client.pull_comments(&acme(), 1, true).unwrap(), first);
+    assert_eq!(client.pull_comments(&acme(), 1).unwrap(), first);
     assert_eq!(github.not_modified(), 3);
 
     github.edit_comment(id, "Why not?");
-    let edited = client.pull_comments(&acme(), 1, false).unwrap();
+    let edited = client.pull_comments(&acme(), 1).unwrap();
     assert_eq!(edited[0].body, "Why not?");
     assert_eq!(github.not_modified(), 5);
 }
@@ -402,14 +398,11 @@ fn follows_the_pages_of_a_long_list() {
         comments.into_iter().map(|c| c.body).collect()
     };
     let all = ["0", "1", "2", "3", "4"];
-    assert_eq!(
-        bodies(client.pull_comments(&acme(), 1, false).unwrap()),
-        all
-    );
+    assert_eq!(bodies(client.pull_comments(&acme(), 1).unwrap()), all);
     // A later page's change wouldn't show in the first's ETag, so a list
     // of pages is read whole every time.
     github.edit_comment(5, "Last");
-    let again = bodies(client.pull_comments(&acme(), 1, false).unwrap());
+    let again = bodies(client.pull_comments(&acme(), 1).unwrap());
     assert_eq!(again, ["0", "1", "2", "3", "Last"]);
     assert_eq!(github.not_modified(), 2);
 }
@@ -423,11 +416,11 @@ fn reads_one_comment_a_list_left_out_and_none_once_deleted() {
         github.comment("acme/app", 1, GithubNewComment::issue("ana", "Why?")),
         github.comment("acme/app", 1, GithubNewComment::review("ana", "Close")),
     ];
-    let listed = client.pull_comments(&acme(), 1, true).unwrap();
+    let listed = client.pull_comments(&acme(), 1).unwrap();
     for id in ids {
         github.unlist_comment(id);
     }
-    assert_eq!(client.pull_comments(&acme(), 1, true).unwrap(), []);
+    assert_eq!(client.pull_comments(&acme(), 1).unwrap(), []);
     for comment in &listed {
         let one = client.pull_comment(&acme(), 1, comment.kind, comment.id);
         assert_eq!(one.unwrap().as_ref(), Some(comment));
@@ -487,6 +480,6 @@ fn reads_reactions_on_the_description() {
 #[test]
 fn comments_on_a_missing_pull_request_are_an_error() {
     let (_github, client, _repo) = setup();
-    let err = client.pull_comments(&acme(), 9, false).unwrap_err();
+    let err = client.pull_comments(&acme(), 9).unwrap_err();
     assert!(matches!(err, GithubError::Failed(_)), "{err:?}");
 }

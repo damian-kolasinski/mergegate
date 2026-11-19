@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="readme/review-loop.gif" alt="The mergegate review loop: the operator opens an agent's item from the inbox, comments on a line, marks files viewed and requests changes; the agent submits revision 2, the operator reviews only what changed since revision 1 and approves, and the item merges." width="900">
+  <img src="readme/review-loop.gif" alt="The mergegate review loop: the operator opens an agent's item from the inbox, comments on a line, marks files viewed and sends the comments back; the agent submits revision 2, the operator reviews only what changed since revision 1 and approves, and the item merges." width="900">
 </p>
 
 **mergegate** is an open-source, self-hosted code review hub for agentic coding. Coding agents such as Claude Code, OpenAI Codex, opencode and Cursor submit their branches through the `mg` CLI instead of opening pull requests by hand. You review every agent's work in one local inbox, and your comments come back to the right agent as structured events it acts on. GitHub pull requests or plain git stay the system of record underneath.
@@ -69,7 +69,7 @@ mergegate closes that loop: agents submit, you review, the agent hears about it,
 1. **An agent finishes work** on its branch and runs `mg submit --guide guide.md`. The guide says what the change is for and which files to read first. The hub pushes the branch, opens or updates the GitHub PR with the guide as its description (on the `github` backend) and adds the item to your inbox.
 2. **The agent waits** with `mg wait`, a blocking command that costs no tokens while it blocks.
 3. **You review** at `http://127.0.0.1:7800`: files that matter first, trusted files folded away, bot comments inline.
-4. **You request changes** and the agent gets one `review.submitted` event with every comment anchored to its lines. It fixes, replies to each comment and submits a new revision. You review only the interdiff.
+4. **You send comments** and the agent gets one `review.submitted` event with your summary and every comment anchored to its lines. It fixes, replies to each comment and submits a new revision. You review only the interdiff.
 5. **You approve** and the hub squash-merges it. The agent gets `item.merged` and cleans up its branch.
 
 The hub is the only stateful component and the only part that talks to GitHub, using the token your `gh` CLI is signed in with. Worker machines need no GitHub credentials.

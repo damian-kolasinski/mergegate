@@ -272,20 +272,6 @@ pub struct CastVote {
     pub vote: Vote,
 }
 
-/// `POST /api/items/{id}/sync`: reads the pull request's comments again,
-/// whatever GitHub cached, and hands what's held to the agent now.
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Synced {
-    /// Comments the hub hadn't seen.
-    pub new: u32,
-    /// Comments edited since the hub last saw them.
-    pub edited: u32,
-    /// How many comments went to the agent, in an `external.comments` event;
-    /// one waits for the operator's vote.
-    pub released: u32,
-}
-
 /// `POST /api/comments/{comment}/replies`: the agent answers a sent comment.
 /// Answered with the [`Reply`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

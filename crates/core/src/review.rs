@@ -59,10 +59,13 @@ pub struct Review {
 /// What the operator decided about a revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// Feedback that leaves the item where it is, unless it sends new
-    /// comments on the newest revision, which hand it back to its agent.
+    /// Feedback that leaves the item where it is, unless it carries a summary
+    /// or new comments on the newest revision, which hand it back to its
+    /// agent.
     Comment,
-    /// Sends the item back to its agent.
+    /// Sends the item back to its agent. The UI no longer sends it, as a
+    /// comment with a summary or comments does the same; kept so reviews
+    /// stored with it still read back, and the API still takes it.
     ChangesRequested,
     /// Merges the revision; only [`crate::merge::approve`] sends it.
     Approved,

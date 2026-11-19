@@ -21,7 +21,7 @@ test("a thread folds to a line and back", async ({ page, hub }) => {
   await page.keyboard.type("Reject an empty password.");
   await page.keyboard.press("ControlOrMeta+Enter");
   const review = page.getByRole("form", { name: "Review" });
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
   hub.mg(["reply", "c_1", "--status", "question", "--body", "And missing?"]);
 
@@ -92,7 +92,7 @@ test("the header's controls share one height", async ({ page, hub }) => {
   await page.keyboard.type("Reject an empty password.");
   await page.keyboard.press("ControlOrMeta+Enter");
   const review = page.getByRole("form", { name: "Review" });
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(review.getByText("Sent to the agent on r1")).toBeVisible();
 
   // Collapse comments' key hint once made it taller than the rest.

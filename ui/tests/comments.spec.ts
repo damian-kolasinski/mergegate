@@ -69,7 +69,7 @@ test("f6 drafts written on the diff go out with the review", async ({
   const review = page.getByRole("form", { name: "Review" });
   await expect(review.getByText("1 draft comment")).toBeVisible();
   // A draft is enough to send without a summary.
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText("Sent to the agent on r1 with 1 comment"),
   ).toBeVisible();
@@ -80,7 +80,7 @@ test("f6 drafts written on the diff go out with the review", async ({
   const feedback = hub.mg(["feedback", "app#1"]) as Feedback;
   expect(feedback.events).toMatchObject([
     {
-      verdict: "changes_requested",
+      verdict: "comment",
       summary: "",
       comments: [{ id: "c_1", path: "login.rs", side: "new", line: 1 }],
     },
@@ -157,12 +157,12 @@ test("an open comment keeps what's typed in it", async ({ page, hub }) => {
     review.getByText("Save or cancel the open comment first"),
   ).toBeVisible();
   await expect(
-    review.getByRole("button", { name: "Request changes" }),
+    review.getByRole("button", { name: "Send comments" }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toHaveCount(0);
   await expect(
-    review.getByRole("button", { name: "Request changes" }),
+    review.getByRole("button", { name: "Send comments" }),
   ).toBeEnabled();
 });
 
@@ -265,7 +265,7 @@ test("a file marked viewed stays open while a comment is written on it", async (
   await expect(diff.getByText("fn login(password: &str) {}")).toHaveCount(0);
   const review = page.getByRole("form", { name: "Review" });
   await expect(
-    review.getByRole("button", { name: "Request changes" }),
+    review.getByRole("button", { name: "Send comments" }),
   ).toBeEnabled();
 });
 

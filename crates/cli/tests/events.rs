@@ -137,13 +137,12 @@ fn an_agents_question_tells_open_pages_the_inbox_changed() {
 fn agreeing_with_a_rejection_tells_open_pages_the_inbox_changed() {
     let github = FakeGithub::start();
     let mut vars = github.env();
-    // Long enough that only `mg sync` brings the comment in.
-    for name in [
-        "MG_GITHUB_POLL_MS",
-        "MG_EXTERNAL_QUIET_MS",
-        "MG_EXTERNAL_CAP_MS",
+    for (name, value) in [
+        ("MG_GITHUB_POLL_MS", "100"),
+        ("MG_EXTERNAL_QUIET_MS", "200"),
+        ("MG_EXTERNAL_CAP_MS", "600000"),
     ] {
-        vars.push((name.to_owned(), "600000".to_owned()));
+        vars.push((name.to_owned(), value.to_owned()));
     }
     let env = Env::new(env!("CARGO_BIN_EXE_mg")).with_vars(vars);
     env.start_hub();
@@ -162,11 +161,13 @@ fn agreeing_with_a_rejection_tells_open_pages_the_inbox_changed() {
     env.mg_at(repo.root(), &["--json", "submit"]).assert_code(0);
     let rename = GithubNewComment::issue("alice", "Rename it.");
     github.comment("acme/app", 1, rename);
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
+    let inbox = || env.mg(&["--json", "inbox"]).assert_code(0).json();
+    env.until("the poller never saw it", inbox, |inbox| {
+        inbox.to_string().contains("\"votes\":1")
+    });
     post(&env, "/api/comments/c_1/vote", &json!({ "vote": "up" }));
-    env.mg(&["--json", "sync", "app#1"]).assert_code(0);
     let feedback = env
-        .mg(&["--json", "feedback", "app#1"])
+        .mg(&["--json", "wait", "app#1", "--timeout", "30"])
         .assert_code(0)
         .json();
     let comment = feedback["events"][0]["comments"][0]["id"]

@@ -22,9 +22,10 @@ pub struct Reviewed {
     pub state: ItemState,
 }
 
-/// Request changes sends the item back to its agent. So does a comment that
-/// sends new comments on the newest revision, which the agent acts on
-/// whatever the verdict; any other comment leaves the item where it is.
+/// Request changes sends the item back to its agent. So does a comment on
+/// the newest revision with a summary, or one that sends new comments on it,
+/// which the agent acts on whatever the verdict; a comment with only replies,
+/// or only comments on an older revision, leaves the item where it is.
 /// Either way the agent gets the review, with every draft and draft reply on
 /// the item, as an event. Drafts from earlier revisions go on the
 /// review's revision when their lines didn't change; one from a later
@@ -72,11 +73,14 @@ pub fn submit<S: ItemStore + ReviewStore + DiffStore + InterdiffStore>(
     }
     // Every draft lands on the newest revision when the review is on it; on
     // an older one, only those written on the newest keep it. Comments on an
-    // older revision alone leave the newest waiting for review.
+    // older revision alone leave the newest waiting for review. A summary is
+    // the review's own ask, such as a rebase, so on the newest revision it
+    // hands the item back like a comment does; replies only answer the agent.
     let newest = item.revision.number;
-    let on_newest = drafts
-        .iter()
-        .any(|draft| revision == newest || draft.revision == newest);
+    let on_newest = (revision == newest && !summary.is_empty())
+        || drafts
+            .iter()
+            .any(|draft| revision == newest || draft.revision == newest);
     let state = match verdict {
         Verdict::ChangesRequested => ItemState::ChangesRequested,
         Verdict::Comment if on_newest => ItemState::ChangesRequested,

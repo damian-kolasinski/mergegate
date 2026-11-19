@@ -72,7 +72,6 @@ test("f16 Enter on the viewer's Close button closes it, not the item", async ({
 
   // Merged, the screen opens the next item on Enter.
   await page.getByRole("button", { name: "Approve & merge" }).click();
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
   const merged = page.getByRole("region", { name: "Merged" });
   await expect(merged).toContainText("Next: app#2");
 

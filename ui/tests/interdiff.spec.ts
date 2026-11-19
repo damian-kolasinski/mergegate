@@ -25,10 +25,10 @@ function reviewed(hub: Hub) {
   };
 }
 
-async function requestChanges(page: Page, revision = 1) {
+async function sendComments(page: Page, revision = 1) {
   const review = page.getByRole("form", { name: "Review" });
   await review.getByRole("textbox", { name: "Review summary" }).fill("Fix it.");
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText(`Sent to the agent on r${revision}`),
   ).toBeVisible();
@@ -48,7 +48,7 @@ test("f7 a new revision shows what changed since the review", async ({
   // It adds a declaration, which ranks it first.
   await expect(current).toContainText("login.rs");
   await diff.getByLabel("Viewed src/login.rs").check();
-  await requestChanges(page);
+  await sendComments(page);
 
   // r2 waits behind a banner, and only it can be approved.
   rebase();
@@ -120,7 +120,7 @@ test("f7 the inbox counts what changed since the review", async ({
 }) => {
   const rebase = reviewed(hub);
   await page.goto(`${hub.url}#/items/app%231`);
-  await requestChanges(page);
+  await sendComments(page);
   rebase();
 
   await page.goto(hub.url);
@@ -136,7 +136,7 @@ test("f7 a file new since the review says so", async ({ page, hub }) => {
   app.seed({ "src/lib.rs": "lib\n" });
   app.submit("login", "Add login", { "src/lib.rs": "lib\nmod login;\n" });
   await page.goto(`${hub.url}#/items/app%231`);
-  await requestChanges(page);
+  await sendComments(page);
   app.revise("Add tokens", { "src/token.rs": "fn token() {}\n" });
 
   const screen = page.getByRole("region", { name: "app#1" });
@@ -175,7 +175,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
   await page.keyboard.type("Add a test.");
   await page.keyboard.press("ControlOrMeta+Enter");
   await diff.getByLabel("Viewed src/greet.py").check();
-  await requestChanges(page);
+  await sendComments(page);
   hub.mg(["reply", "c_1", "--status", "addressed"]);
   app.revise("Test greet", { "tests/test_greet.py": "greet()\n" });
 
@@ -195,7 +195,7 @@ test("f7 an unchanged file keeps a thread that waits in the diff", async ({
 
   // Reviewed on r2, the thread is settled: r3 folds the file away again,
   // and the Conversation list holds the thread.
-  await requestChanges(page, 2);
+  await sendComments(page, 2);
   app.revise("Name it", { "src/name.py": "NAME = 'you'\n" });
   await page.reload();
   await screen.getByLabel("Compare").selectOption("2");
@@ -239,10 +239,10 @@ test("f7 an unchanged file stays in the diff once its thread is settled", async 
   ).toBeFocused();
   await page.keyboard.type("Why not None?");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await requestChanges(page);
+  await sendComments(page);
   app.revise("Test greet", { "tests/test_greet.py": "greet()\n" });
   await page.reload();
-  await requestChanges(page, 2);
+  await sendComments(page, 2);
   hub.mg(["reply", "c_1", "--status", "question", "--body", "Which inputs?"]);
   app.revise("Test more", { "tests/test_more.py": "greet()\n" });
 

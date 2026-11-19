@@ -81,7 +81,7 @@ fn a_person_s_comment_waits_for_a_vote_like_a_bot_s() {
 }
 
 #[test]
-fn a_read_or_sync_takes_what_was_voted_up_and_leaves_what_awaits_a_vote() {
+fn a_release_takes_what_was_voted_up_and_leaves_what_awaits_a_vote() {
     let mut store = FakeStore::with_item(1);
     let up = comment(&mut store, 1, "ana", 10);
     let unvoted = comment(&mut store, 2, "codex[bot]", 10);

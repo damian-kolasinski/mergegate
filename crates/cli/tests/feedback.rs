@@ -207,10 +207,11 @@ fn f7_a_replay_past_the_delivered_cursor_skips_nothing() {
 }
 
 #[test]
-fn f6_comment_keeps_the_item_waiting_for_the_operator() {
+fn f6_a_comments_summary_hands_the_item_back_to_its_agent() {
     let (env, _repo) = submitted();
-    review(&env, "comment", "Looks reasonable so far.");
-    assert_eq!(state(&env), "needs_review");
+    // With no line to comment on, as for a rebase, the summary is the ask.
+    review(&env, "comment", "Rebase onto main.");
+    assert_eq!(state(&env), "changes_requested");
 
     let run = env.mg(&["wait", "app#1"]).assert_code(0);
     assert!(
@@ -301,7 +302,7 @@ fn f3_wait_in_claude_code_names_the_pending_events_in_json() {
         json!({
             "item": "app#1",
             "name": "app#1",
-            "state": "needs_review",
+            "state": "changes_requested",
             "pending": [{ "cursor": 1, "type": "review.submitted" }],
             "read": "mg feedback app#1 --since 0",
         })

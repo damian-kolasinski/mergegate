@@ -143,9 +143,8 @@ impl Github for GithubClient {
         &self,
         repo: &GithubRepo,
         number: u64,
-        fresh: bool,
     ) -> Result<Vec<PullComment>, GithubError> {
-        comments::of_pull(&self.api, &self.comments, repo, number, fresh)
+        comments::of_pull(&self.api, &self.comments, repo, number)
     }
 
     fn pull_comment(

@@ -95,7 +95,7 @@ test("f13 comments follow their lines to the next revision", async ({
   // r1 is reviewed, and more is drafted on it before r2 comes in.
   await draft(page, 2, "Say what check does.");
   await draft(page, 4, "Log less.");
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText("Sent to the agent on r1 with 2 comments"),
   ).toBeVisible();
@@ -125,7 +125,7 @@ test("f13 comments follow their lines to the next revision", async ({
   await expect(
     review.getByText("3 drafts can't move to r2 — re-place or delete them"),
   ).toBeVisible();
-  for (const name of ["Comment", "Request changes", "Approve & merge"]) {
+  for (const name of ["Send comments", "Approve & merge"]) {
     await expect(review.getByRole("button", { name })).toBeDisabled();
   }
 
@@ -183,7 +183,7 @@ test("f13 comments follow their lines to the next revision", async ({
   await expect(review.getByText("can't move to r2")).toHaveCount(0);
 
   // The review sends every draft on r2's lines.
-  await review.getByRole("button", { name: "Request changes" }).click();
+  await review.getByRole("button", { name: "Send comments" }).click();
   await expect(
     review.getByText("Sent to the agent on r2 with 3 comments"),
   ).toBeVisible();
