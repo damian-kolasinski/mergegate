@@ -8,6 +8,7 @@ use mergegate_core::store::StoreError;
 use rusqlite::{OptionalExtension, params};
 
 use crate::Store;
+use crate::items::TODAY;
 
 const ITEM: &str = "SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
                     WHERE p.name = ?1 AND i.number = ?2";
@@ -59,21 +60,17 @@ impl AgentStore for Store {
         worktree: &str,
         device: Option<&str>,
     ) -> Result<Vec<ItemId>, StoreError> {
-        // `closed_at` is UTC, and today starts at the operator's midnight,
-        // as in `closed_today`.
         let mut stmt = self
             .conn
-            .prepare_cached(
+            .prepare_cached(&format!(
                 "SELECT p.name, i.number
                  FROM item_agents a
                  JOIN items i ON i.id = a.item_id
                  JOIN projects p ON p.id = i.project_id
                  WHERE a.worktree = ?1 AND a.device IS ?2 AND a.wake IS NULL
-                   AND (i.state NOT IN ('merged', 'abandoned')
-                        OR i.closed_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', 'localtime',
-                                                   'start of day', 'utc'))
-                 ORDER BY p.name, i.number",
-            )
+                   AND (i.state NOT IN ('merged', 'abandoned') OR i.closed_at >= {TODAY})
+                 ORDER BY p.name, i.number"
+            ))
             .map_err(StoreError::new)?;
         let rows = stmt
             .query_map(params![worktree, device], |row| {

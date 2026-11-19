@@ -217,9 +217,9 @@ fn poll(
 ) -> Result<(Vec<Watched>, bool), CliError> {
     let client = Client::connect(home)?.time_limit(Duration::from_secs(40));
     let root = local.map(|root| root.to_string_lossy().into_owned());
-    // An item found in the clone stays watched there once it's no longer
-    // open or closed today; the session's own submits name their worktree,
-    // wherever it ends turns.
+    // What the hub watched for the clone last time stays watched there once
+    // it's no longer open or closed today; the session's own submits name
+    // the worktree they came from, wherever it ends turns.
     let mut named = BTreeMap::new();
     if let Some(root) = &root {
         named.extend(known.iter().map(|id| (id.clone(), root.clone())));

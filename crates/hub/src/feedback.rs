@@ -157,7 +157,7 @@ fn handing(
     }
 }
 
-fn parse(id: &str) -> Result<ItemId, Failure> {
+pub(crate) fn parse(id: &str) -> Result<ItemId, Failure> {
     ItemId::parse(id)
         .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
 }

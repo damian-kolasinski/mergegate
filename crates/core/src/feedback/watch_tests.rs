@@ -95,7 +95,7 @@ fn watches_only_what_the_session_owns_without_a_wake() {
 }
 
 #[test]
-fn names_the_unread_event_worth_waking_for_and_skips_unknown_items() {
+fn names_the_unread_event_worth_waking_for() {
     let mut store = FakeStore::default();
     let own = add(&mut store, "own", "/Users/op/a", None);
     let mut session = at("/Users/op/a");

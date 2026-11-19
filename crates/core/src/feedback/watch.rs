@@ -62,10 +62,9 @@ pub fn watch<S: ItemStore + FeedbackStore + AgentStore>(
     };
     let mut items = Vec::with_capacity(ids.len());
     for id in ids {
-        // One the store no longer has, with its project removed, is gone.
-        let Some(item) = store.item(&id)? else {
-            continue;
-        };
+        let item = store
+            .item(&id)?
+            .ok_or_else(|| StoreError::new(format!("{id} has an agent but isn't stored")))?;
         let events = store.events(&id, store.delivered(&id)?)?;
         items.push(Watched {
             cursor: attention(item.state, &events),

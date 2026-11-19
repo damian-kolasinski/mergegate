@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Extension, Json, Router};
 use mergegate_core::feedback::{self, Watch, Watching};
@@ -17,7 +16,7 @@ use mergegate_core::item::ItemId;
 use serde::Deserialize;
 use tokio::time::Instant;
 
-use crate::feedback::failure;
+use crate::feedback::{failure, parse};
 use crate::guard::{self, Caller};
 use crate::reply::Failure;
 use crate::server::AppState;
@@ -97,11 +96,6 @@ async fn watch(
             guard::recheck(&state, &caller).await?;
         }
     }
-}
-
-fn parse(id: &str) -> Result<ItemId, Failure> {
-    ItemId::parse(id)
-        .map_err(|e| Failure::new(StatusCode::BAD_REQUEST, "invalid_item", e.to_string(), None))
 }
 
 fn to_api(watching: Watching) -> api::attention::Watching {
